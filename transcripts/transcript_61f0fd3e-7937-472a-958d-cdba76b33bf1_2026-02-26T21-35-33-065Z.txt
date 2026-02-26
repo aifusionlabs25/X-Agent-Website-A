@@ -1,0 +1,11 @@
+--- Anam Session Transcript ---
+Date: 2/26/2026, 2:35:33 PM
+Persona ID: 61f0fd3e-7937-472a-958d-cdba76b33bf1
+
+[Agent]: Hey, welcome. I am Danny. Thanks for dropping in. What can I help you with today?
+
+[User]: Hey, Danny, tell me what ex-agents are.
+
+[Agent]: X Agents are lifelike voice and video agents you can add to a website or app so customers can talk and get help. They capture intent
+
+--- End of Session ---
