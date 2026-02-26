@@ -153,7 +153,7 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
             />
 
             {/* Optional: Add a subtle animated grid overlay for the "HUD" feel */}
-            <div className="pointer-events-none absolute inset-0 bg-[url('/grid-overlay.png')] bg-repeat opacity-[0.03] mix-blend-overlay"></div>
+            <div className="pointer-events-none absolute inset-0 bg-white opacity-[0.03] mix-blend-overlay"></div>
         </div>
     );
 }
