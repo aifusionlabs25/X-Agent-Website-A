@@ -42,14 +42,24 @@ export async function POST(req: Request) {
         // ==========================================
         const formattedTranscript = transcript.map(entry => {
             const roleLabel = entry.role === 'user' ? 'User' : 'Agent';
-            return `[${roleLabel}]: ${entry.content}`;
+            return `**[${roleLabel}]**: ${entry.content}\n`;
         }).join('\n');
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `transcript_${personaId || 'unknown'}_${timestamp}.txt`;
+        const filename = `transcript_${personaId || 'unknown'}_${timestamp}.md`;
         let filePath = 'In-Memory (Vercel Production)';
         const sessionDate = new Date().toLocaleString();
-        const fileContent = `--- Anam Session Transcript ---\nDate: ${sessionDate}\nPersona ID: ${personaId || 'Unknown'}\n\n${formattedTranscript}\n\n--- End of Session ---`;
+
+        const fileContent = `# Anam Session Transcript
+**Date:** ${sessionDate}  
+**Persona ID:** ${personaId || 'Unknown'}
+
+## Conversation Log
+${formattedTranscript}
+
+---
+*Session Ended*
+`;
 
         try {
             const dirPath = path.join(process.cwd(), 'transcripts');
@@ -105,8 +115,8 @@ export async function POST(req: Request) {
 
         const dateSlug = timestamp.split('T')[0];
 
-        // Output format: 61f0fd3e_Dani_with_rob_at_ai_fusion_labs_2026-02-26.txt
-        const attachmentFilename = `${personaShortId}_${agentName}_with_${visitorNameSlug}_${dateSlug}.txt`;
+        // Output format: 61f0fd3e_Dani_with_rob_at_ai_fusion_labs_2026-02-26.md
+        const attachmentFilename = `${personaShortId}_${agentName}_with_${visitorNameSlug}_${dateSlug}.md`;
 
         const transcriptAttachment = {
             filename: attachmentFilename,
