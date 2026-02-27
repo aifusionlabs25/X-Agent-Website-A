@@ -20,18 +20,15 @@ export default function DemoPage({ params }: Props) {
 
     return (
         <main className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden">
-            {/* Minimal top nav just to return */}
-            <div className="absolute top-0 left-0 w-full p-6 z-20 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
+            {/* Minimal bottom nav to return - Centered and High Visibility */}
+            <div className="absolute bottom-10 left-0 w-full z-20 flex justify-center items-center pointer-events-none">
                 <Link
                     href={`/agents/${agent.slug}`}
-                    className="flex items-center gap-2 text-white/70 hover:text-white transition-colors text-sm font-semibold uppercase tracking-widest"
+                    className="pointer-events-auto flex items-center gap-2 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full transition-all text-sm font-bold uppercase tracking-widest hover:scale-105"
                 >
-                    <ArrowLeft size={16} />
+                    <ArrowLeft size={18} />
                     Back to {agent.name}
                 </Link>
-                <div className="text-white/50 text-xs font-mono tracking-widest uppercase">
-                    AI Fusion Labs • SECURE LINK
-                </div>
             </div>
 
             {/* The Anam Player takes over the screen */}
