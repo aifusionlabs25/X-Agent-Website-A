@@ -113,25 +113,25 @@ ${formattedTranscript}
         // A. Visitor Thank You (Client Email)
         if (visitorEmail) {
             const visitorHtml = `
-            <div style="font-family: sans-serif; padding: 25px; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #4F46E5; margin-top: 0;">Thanks for chatting!</h2>
-                <p style="white-space: pre-line; font-size: 16px;">
-                    ${escapeHtml(leadData.visitor_recap_message)}
-                </p>
-                <br>
-                <p style="text-align: center; margin-top: 25px;">
-                    <a href="https://aifusionlabs.com/book-demo" style="background-color: #4F46E5; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Schedule a Human Demo</a>
-                </p>
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0 20px 0;">
-                <p style="color: #555; font-size: 0.9em; margin: 0;">
-                    <strong>${agentName}</strong><br>
-                    ${agentRole}<br>
-                    AI Fusion Labs
-                </p>
-            </div>
-            `;
+        <div style="font-family: sans-serif; padding: 25px; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #4F46E5; margin-top: 0;">Thanks for chatting!</h2>
+            <p style="white-space: pre-line; font-size: 16px;">
+                ${escapeHtml(leadData.visitor_recap_message)}
+            </p>
+            <br>
+            <p style="text-align: center; margin-top: 25px;">
+                <a href="https://aifusionlabs.com/book-demo" style="background-color: #4F46E5; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Schedule a Human Demo</a>
+            </p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0 20px 0;">
+            <p style="color: #555; font-size: 0.9em; margin: 0;">
+                <strong>${agentName}</strong><br>
+                ${agentRole}<br>
+                AI Fusion Labs
+            </p>
+        </div>
+        `;
             await resend.emails.send({
-                from: `${agentName} at AI Fusion Labs <hello@aifusionlabs.app>`,
+                from: 'AI Fusion Labs <aifusionlabs@gmail.com>', // MUST BE verified domain
                 to: [visitorEmail],
                 subject: `Thanks for testing X-Agents!`,
                 html: visitorHtml,
