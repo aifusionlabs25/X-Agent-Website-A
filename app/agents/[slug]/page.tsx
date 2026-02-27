@@ -49,6 +49,22 @@ export default async function AgentDetailPage({ params }: Props) {
                             {agent.name}
                         </h1>
                         <p className="text-zinc-400 text-base">{agent.role}</p>
+
+                        <div className="mt-4 md:mt-6">
+                            {agent.liveUrl ? (
+                                <Link
+                                    href={agent.liveUrl}
+                                    className="inline-flex items-center gap-2 bg-white hover:bg-zinc-100 text-black font-bold px-6 py-2 md:px-7 md:py-3 rounded-md transition-colors text-sm"
+                                >
+                                    <Play size={16} fill="black" />
+                                    Launch Live Demo
+                                </Link>
+                            ) : (
+                                <div className="inline-flex items-center gap-2 bg-zinc-800/80 backdrop-blur-sm text-zinc-500 px-6 py-2 md:px-7 md:py-3 rounded-md cursor-not-allowed text-sm">
+                                    Coming Soon
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -60,7 +76,7 @@ export default async function AgentDetailPage({ params }: Props) {
                     <p className="text-zinc-400 leading-relaxed">
                         {agent.name} is a lifelike X Agent built by AI Fusion Labs. Trained on a
                         curated dataset and powered by real-time video synthesis, {agent.name}{' '}
-                        operates as a {agent.role.toLowerCase()} — always on, never off-script.
+                        operates as a {agent.role} — always on, never off-script.
                     </p>
                 </div>
 
@@ -80,21 +96,6 @@ export default async function AgentDetailPage({ params }: Props) {
                         </div>
                     ))}
                 </div>
-
-                {/* CTA */}
-                {agent.liveUrl ? (
-                    <Link
-                        href={agent.liveUrl}
-                        className="inline-flex items-center gap-2 bg-white hover:bg-zinc-100 text-black font-bold px-7 py-3 rounded-md transition-colors"
-                    >
-                        <Play size={16} fill="black" />
-                        Launch Live Demo
-                    </Link>
-                ) : (
-                    <div className="inline-flex items-center gap-2 bg-zinc-800 text-zinc-500 px-7 py-3 rounded-md cursor-not-allowed text-sm">
-                        Coming Soon
-                    </div>
-                )}
 
                 <div className="mt-6">
                     <Link href="/#agents" className="text-zinc-500 hover:text-white text-sm transition-colors">
