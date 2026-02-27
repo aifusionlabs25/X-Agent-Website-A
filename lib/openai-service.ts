@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 
 interface LeadData {
+    visitor_name: string | null;
     tldr_summary: string;
     top_questions: string[];
     objections: string[];
@@ -31,6 +32,7 @@ Your job is to read the raw transcript and extract exactly these data points as 
 # SCHEMA RULES
 Output exactly this JSON structure. Do not include markdown formatting or \`\`\`json wrappers.
 {
+  "visitor_name": "Extract the visitor's name or company name if mentioned, otherwise null.",
   "tldr_summary": "A 1-2 sentence high-level summary of who the user is and what they wanted.",
   "top_questions": ["What is an X Agent?", "How much does it cost?"],
   "objections": ["Worried about hallucination risk", "Not sure it fits their industry"],

@@ -49,13 +49,13 @@ export async function POST(req: Request) {
         const filename = `transcript_${personaId || 'unknown'}_${timestamp}.txt`;
         let filePath = 'In-Memory (Vercel Production)';
         const sessionDate = new Date().toLocaleString();
+        const fileContent = `--- Anam Session Transcript ---\nDate: ${sessionDate}\nPersona ID: ${personaId || 'Unknown'}\n\n${formattedTranscript}\n\n--- End of Session ---`;
 
         try {
             const dirPath = path.join(process.cwd(), 'transcripts');
             await fs.mkdir(dirPath, { recursive: true });
             filePath = path.join(dirPath, filename);
 
-            const fileContent = `--- Anam Session Transcript ---\nDate: ${sessionDate}\nPersona ID: ${personaId || 'Unknown'}\n\n${formattedTranscript}\n\n--- End of Session ---`;
             await fs.writeFile(filePath, fileContent, 'utf-8');
             console.log(`[Transcript Saved] -> ${filePath}`);
         } catch (fsError: any) {
@@ -93,6 +93,19 @@ export async function POST(req: Request) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const internalEmailAddress = 'aifusionlabs@gmail.com';
 
+        // Format a dynamic, descriptive filename for LLM data ingestion
+        const visitorNameSlug = leadData.visitor_name
+            ? leadData.visitor_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
+            : 'unknown_visitor';
+        const personaSlug = (personaId || 'unknown_agent').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const dateSlug = timestamp.split('T')[0];
+        const attachmentFilename = `${personaSlug}_with_${visitorNameSlug}_${dateSlug}.txt`;
+
+        const transcriptAttachment = {
+            filename: attachmentFilename,
+            content: Buffer.from(fileContent, 'utf-8')
+        };
+
         // A. Visitor Thank You (Client Email)
         if (visitorEmail) {
             const visitorHtml = `
@@ -117,7 +130,8 @@ export async function POST(req: Request) {
                 from: 'Dani at AI Fusion Labs <hello@aifusionlabs.app>',
                 to: [visitorEmail],
                 subject: `Thanks for testing X-Agents!`,
-                html: visitorHtml
+                html: visitorHtml,
+                attachments: [transcriptAttachment]
             });
             console.log('✅ [Route] Client Email Sent to', visitorEmail);
         }
@@ -146,7 +160,8 @@ export async function POST(req: Request) {
             from: 'Session Alerts <alerts@aifusionlabs.app>',
             to: internalEmailAddress,
             subject: `[SESSION END] X-Agent Chat Ended`,
-            html: summaryHtml
+            html: summaryHtml,
+            attachments: [transcriptAttachment]
         });
         console.log('✅ [Route] Session Summary Email Sent.');
 
