@@ -47,14 +47,20 @@ export async function POST(req: Request) {
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `transcript_${personaId || 'unknown'}_${timestamp}.txt`;
-        const dirPath = path.join(process.cwd(), 'transcripts');
-        await fs.mkdir(dirPath, { recursive: true });
-        const filePath = path.join(dirPath, filename);
-
+        let filePath = 'In-Memory (Vercel Production)';
         const sessionDate = new Date().toLocaleString();
-        const fileContent = `--- Anam Session Transcript ---\nDate: ${sessionDate}\nPersona ID: ${personaId || 'Unknown'}\n\n${formattedTranscript}\n\n--- End of Session ---`;
-        await fs.writeFile(filePath, fileContent, 'utf-8');
-        console.log(`[Transcript Saved] -> ${filePath}`);
+
+        try {
+            const dirPath = path.join(process.cwd(), 'transcripts');
+            await fs.mkdir(dirPath, { recursive: true });
+            filePath = path.join(dirPath, filename);
+
+            const fileContent = `--- Anam Session Transcript ---\nDate: ${sessionDate}\nPersona ID: ${personaId || 'Unknown'}\n\n${formattedTranscript}\n\n--- End of Session ---`;
+            await fs.writeFile(filePath, fileContent, 'utf-8');
+            console.log(`[Transcript Saved] -> ${filePath}`);
+        } catch (fsError: any) {
+            console.warn('[Transcript] ⚠️ Running in Vercel Serverless. Bypassing local filesystem write and proceeding with in-memory transcript.', fsError.message);
+        }
 
         // ==========================================
         // 2. OPENAI INTELLIGENCE EXTRACTION
