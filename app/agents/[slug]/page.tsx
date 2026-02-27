@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ALL_AGENTS } from '@/lib/agents';
-import { ExternalLink } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 interface Props {
     params: Promise<{ slug: string }>;
@@ -83,15 +83,13 @@ export default async function AgentDetailPage({ params }: Props) {
 
                 {/* CTA */}
                 {agent.liveUrl ? (
-                    <a
+                    <Link
                         href={agent.liveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 bg-white hover:bg-zinc-100 text-black font-bold px-7 py-3 rounded-md transition-colors"
                     >
-                        <ExternalLink size={16} />
+                        <Play size={16} fill="black" />
                         Launch Live Demo
-                    </a>
+                    </Link>
                 ) : (
                     <div className="inline-flex items-center gap-2 bg-zinc-800 text-zinc-500 px-7 py-3 rounded-md cursor-not-allowed text-sm">
                         Coming Soon

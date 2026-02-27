@@ -4,6 +4,7 @@ import path from 'path';
 import { Resend } from 'resend';
 import { OpenAIService } from '@/lib/openai-service';
 import { escapeHtml } from '@/lib/sanitize-html';
+import { ALL_AGENTS } from '@/lib/agents';
 
 // Allow route to run for up to 60 seconds (Vercel max duration)
 export const maxDuration = 60;
@@ -110,12 +111,13 @@ ${formattedTranscript}
 
         // Extract just the first section of the UUID for cleaner filenames (e.g. 61f0fd3e)
         const personaShortId = personaId ? personaId.split('-')[0] : 'unknown_id';
-        // Hardcoding the agent name 'Dani' for this specific campaign, but this could be dynamic in the future
-        const agentName = 'Dani';
+        const agent = ALL_AGENTS.find(a => a.personaId === personaId);
+        const agentName = agent ? agent.name : 'UnknownAgent';
+        const agentRole = agent ? agent.role : 'AI Representative';
 
         const dateSlug = timestamp.split('T')[0];
 
-        // Output format: 61f0fd3e_Dani_with_rob_at_ai_fusion_labs_2026-02-26.md
+        // Output format: 61f0fd3e_Dani_with_rob...2026-02-26.md
         const attachmentFilename = `${personaShortId}_${agentName}_with_${visitorNameSlug}_${dateSlug}.md`;
 
         const transcriptAttachment = {
@@ -137,14 +139,14 @@ ${formattedTranscript}
                 </p>
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0 20px 0;">
                 <p style="color: #555; font-size: 0.9em; margin: 0;">
-                    <strong>Dani</strong><br>
-                    X-Agent Director<br>
+                    <strong>${agentName}</strong><br>
+                    ${agentRole}<br>
                     AI Fusion Labs
                 </p>
             </div>
             `;
             await resend.emails.send({
-                from: 'Dani at AI Fusion Labs <hello@aifusionlabs.app>',
+                from: `${agentName} at AI Fusion Labs <hello@aifusionlabs.app>`,
                 to: [visitorEmail],
                 subject: `Thanks for testing X-Agents!`,
                 html: visitorHtml,

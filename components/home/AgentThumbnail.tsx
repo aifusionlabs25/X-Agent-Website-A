@@ -10,6 +10,7 @@ export interface AgentData {
     role: string;
     thumbnailSrc: string;
     accentColor: string; // e.g. '#6366f1'
+    personaId: string;
     liveUrl?: string;
 }
 
