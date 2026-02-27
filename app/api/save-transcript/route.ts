@@ -97,9 +97,16 @@ export async function POST(req: Request) {
         const visitorNameSlug = leadData.visitor_name
             ? leadData.visitor_name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
             : 'unknown_visitor';
-        const personaSlug = (personaId || 'unknown_agent').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+        // Extract just the first section of the UUID for cleaner filenames (e.g. 61f0fd3e)
+        const personaShortId = personaId ? personaId.split('-')[0] : 'unknown_id';
+        // Hardcoding the agent name 'Dani' for this specific campaign, but this could be dynamic in the future
+        const agentName = 'Dani';
+
         const dateSlug = timestamp.split('T')[0];
-        const attachmentFilename = `${personaSlug}_with_${visitorNameSlug}_${dateSlug}.txt`;
+
+        // Output format: 61f0fd3e_Dani_with_rob_at_ai_fusion_labs_2026-02-26.txt
+        const attachmentFilename = `${personaShortId}_${agentName}_with_${visitorNameSlug}_${dateSlug}.txt`;
 
         const transcriptAttachment = {
             filename: attachmentFilename,
