@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 
 interface LeadData {
     visitor_name: string | null;
+    visitor_email: string | null;
     tldr_summary: string;
     top_questions: string[];
     objections: string[];
@@ -33,13 +34,14 @@ Your job is to read the raw transcript and extract exactly these data points as 
 Output exactly this JSON structure. Do not include markdown formatting or \`\`\`json wrappers.
 {
   "visitor_name": "Extract the visitor's name or company name if mentioned, otherwise null.",
+  "visitor_email": "Extract the visitor's email address if they provided one, otherwise null.",
   "tldr_summary": "A 1-2 sentence high-level summary of who the user is and what they wanted.",
   "top_questions": ["What is an X Agent?", "How much does it cost?"],
   "objections": ["Worried about hallucination risk", "Not sure it fits their industry"],
   "intent_signals": ["Asked for a demo link", "Discussed a specific timeline", "Mentioned a current vendor they dislike"],
   "pain_points": ["Current chatbots are dumb", "Lead routing is too slow"],
   "lead_score": 7, // Integer from 1 (low) to 10 (high) based on buying readiness
-  "suggested_follow_up_draft": "Draft a short email for a human rep to send to the user based on their specific needs.",
+  "suggested_follow_up_draft": "Draft a short email for a human rep to send to the user based on their specific needs. Do not wrap this draft in quotation marks.",
   "visitor_recap_message": "Draft a short, warm 'thank you' message to the user recapping their main points. Keep it brief and friendly."
 }
 

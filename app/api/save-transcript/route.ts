@@ -9,22 +9,7 @@ import { ALL_AGENTS } from '@/lib/agents';
 // Allow route to run for up to 60 seconds (Vercel max duration)
 export const maxDuration = 60;
 
-// Voice Email Extraction Helper
-function extractConfirmedEmail(transcriptText: string): string | null {
-    const match = transcriptText.match(/I heard\s+(.*?)(?:is that right|\?|$)/i);
-    if (match && match[1]) {
-        let email = match[1].toLowerCase().trim();
-        email = email.replace(/^[.,!?]+|[.,!?]+$/g, '');
-        email = email.replace(/(?:\b|\s+)at(?:\b|\s+)/g, '@');
-        email = email.replace(/(?:\b|\s+)dot(?:\b|\s+)/g, '.');
-        email = email.replace(/\s+/g, '');
-        if (email.includes('@') && email.includes('.')) {
-            return email;
-        }
-    }
-    return null;
-}
-
+// Helper removed: We now rely on OpenAI to intelligently extract the visitor email.
 export async function POST(req: Request) {
     try {
         const body = await req.json();
@@ -90,8 +75,8 @@ ${formattedTranscript}
             return NextResponse.json({ success: true, file: filename, error: 'AI Extraction Failed' }, { status: 200 });
         }
 
-        const visitorEmail = extractConfirmedEmail(formattedTranscript);
-        console.log(`[Route] Extracted Visitor Email: ${visitorEmail || 'None'}`);
+        const visitorEmail = leadData.visitor_email;
+        console.log(`[Route] Extracted Visitor Email via AI: ${visitorEmail || 'None'}`);
 
         // ==========================================
         // 3. DISPATCH EMAILS (RESEND)
@@ -210,7 +195,7 @@ ${formattedTranscript}
             <div style="background: #fffbeb; border: 1px solid #fef08a; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
                 <h3 style="color: #b45309; font-size: 16px; margin-top: 0;">Suggested Sales Representative Outreach</h3>
                 <p style="white-space: pre-line; color: #78350f; font-style: italic;">
-                    "${escapeHtml(leadData.suggested_follow_up_draft)}"
+                    ${escapeHtml(leadData.suggested_follow_up_draft)}
                 </p>
             </div>
         </div>
