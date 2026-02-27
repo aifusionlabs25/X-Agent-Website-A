@@ -73,7 +73,7 @@ export default function HeroBillboard() {
                 <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/75 via-zinc-950/10 to-transparent" />
 
                 {/* Content layer */}
-                <div className="absolute bottom-0 left-0 p-8 md:p-16 max-w-2xl">
+                <div className="absolute bottom-0 left-0 p-6 md:p-16 max-w-2xl w-full">
 
                     <AnimatePresence>
                         {!isPlaying && (
@@ -84,12 +84,12 @@ export default function HeroBillboard() {
                                 transition={{ duration: 0.4 }}
                             >
                                 {/* Title */}
-                                <h1 className="text-white text-7xl md:text-9xl font-black tracking-widest mb-4 drop-shadow-lg">
+                                <h1 className="text-white text-5xl sm:text-7xl md:text-9xl font-black tracking-widest mb-2 md:mb-4 drop-shadow-lg">
                                     DANI
                                 </h1>
 
                                 {/* Subtitle */}
-                                <p className="text-zinc-300 text-base md:text-lg leading-relaxed mb-8 max-w-md">
+                                <p className="text-zinc-300 text-sm sm:text-base md:text-lg leading-relaxed mb-4 md:mb-8 max-w-[90%] md:max-w-md">
                                     X Agent. Lifelike. Real-time. Always on.<br />
                                     Meet Dani, our X Agent Director here at AI Fusion Labs, she never misses a beat.
                                 </p>
@@ -98,7 +98,7 @@ export default function HeroBillboard() {
                     </AnimatePresence>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-wrap gap-3 mt-4">
+                    <div className="flex flex-wrap gap-3 mt-2 md:mt-4">
                         {/* Play Demo → launches cinematic Anam session */}
                         {!isPlaying && (
                             <button
