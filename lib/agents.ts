@@ -33,15 +33,6 @@ export const ALL_AGENTS: AgentData[] = [
         tenant: 'Canyon Ridge Solutions',
     },
     {
-        slug: 'amy',
-        name: 'AMY',
-        role: 'Insight SDR',
-        personaId: '8c7d5b42-b17e-4321-8bfa-381c8d93820f',
-        thumbnailSrc: '/agents/thumbnails/Amy Insight SDR.jpg',
-        accentColor: '#ec4899',
-        liveUrl: '/demo/amy',
-    },
-    {
         slug: 'sarah-netic',
         name: 'SARAH',
         role: 'Netic SDR',
@@ -92,7 +83,6 @@ export const ALL_AGENTS: AgentData[] = [
 export const SALES_AGENTS: AgentData[] = [
     ALL_AGENTS.find(a => a.slug === 'dani')!,
     ALL_AGENTS.find(a => a.slug === 'taylor')!,
-    ALL_AGENTS.find(a => a.slug === 'amy')!,
     ALL_AGENTS.find(a => a.slug === 'sarah-netic')!,
 ];
 
@@ -103,4 +93,5 @@ export const SERVICE_AGENTS: AgentData[] = [
     ALL_AGENTS.find(a => a.slug === 'luke')!,
     ALL_AGENTS.find(a => a.slug === 'claire')!,
 ];
+
 
