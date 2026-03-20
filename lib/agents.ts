@@ -1,7 +1,16 @@
 // lib/agents.ts — Single source of truth for all X Agent display data.
 // Thumbnail paths match Nova's exact spec in /public/agents/thumbnails/
 
-import { AgentData } from '@/components/home/AgentThumbnail';
+export interface AgentData {
+    slug: string;
+    name: string;
+    role: string;
+    personaId: string;
+    thumbnailSrc: string;
+    accentColor: string;
+    liveUrl: string;
+    tenant?: string; // Fictional tenant name for demo agents
+}
 
 export const ALL_AGENTS: AgentData[] = [
     {
@@ -12,6 +21,16 @@ export const ALL_AGENTS: AgentData[] = [
         thumbnailSrc: '/agents/thumbnails/Dani landing page hero 1.png',
         accentColor: '#6366f1',
         liveUrl: '/demo/dani',
+    },
+    {
+        slug: 'taylor',
+        name: 'TAYLOR',
+        role: 'Generic SDR',
+        personaId: '4183f1fe-9922-4ef5-ad47-9b1949dfdaa4',
+        thumbnailSrc: '/agents/thumbnails/Taylor_Canyon_Ridge_thumb_512.png',
+        accentColor: '#10b981',
+        liveUrl: '/demo/taylor',
+        tenant: 'Canyon Ridge Solutions',
     },
     {
         slug: 'amy',
@@ -72,6 +91,7 @@ export const ALL_AGENTS: AgentData[] = [
 // Sales row
 export const SALES_AGENTS: AgentData[] = [
     ALL_AGENTS.find(a => a.slug === 'dani')!,
+    ALL_AGENTS.find(a => a.slug === 'taylor')!,
     ALL_AGENTS.find(a => a.slug === 'amy')!,
     ALL_AGENTS.find(a => a.slug === 'sarah-netic')!,
 ];
@@ -83,3 +103,4 @@ export const SERVICE_AGENTS: AgentData[] = [
     ALL_AGENTS.find(a => a.slug === 'luke')!,
     ALL_AGENTS.find(a => a.slug === 'claire')!,
 ];
+
