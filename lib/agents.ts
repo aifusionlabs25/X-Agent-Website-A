@@ -87,6 +87,16 @@ export const ALL_AGENTS: AgentData[] = [
         accentColor: '#f43f5e',
         liveUrl: '/demo/claire',
     },
+    {
+        slug: 'amy',
+        name: 'AMY',
+        role: 'Insight Enterprise SDR',
+        personaId: 'bdaaedfa-00f2-417a-8239-8bb89adec682',
+        thumbnailSrc: '/agents/thumbnails/Amy Insight SDR.jpg',
+        accentColor: '#ec4899',
+        liveUrl: '/demo/amy',
+        tenant: 'Insight Enterprises',
+    },
 ];
 
 // Sales row
@@ -95,6 +105,7 @@ export const SALES_AGENTS: AgentData[] = [
     ALL_AGENTS.find(a => a.slug === 'taylor')!,
     ALL_AGENTS.find(a => a.slug === 'michael')!,
     ALL_AGENTS.find(a => a.slug === 'sarah-netic')!,
+    ALL_AGENTS.find(a => a.slug === 'amy')!,
 ];
 
 // Service row
