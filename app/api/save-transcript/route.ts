@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { Resend } from 'resend';
 import { OpenAIService } from '@/lib/openai-service';
+import { GoogleSheetsService } from '@/lib/google-sheets';
 import { escapeHtml } from '@/lib/sanitize-html';
 import { ALL_AGENTS } from '@/lib/agents';
 
@@ -66,9 +67,13 @@ ${formattedTranscript}
             return NextResponse.json({ success: true, file: filename }, { status: 200 });
         }
 
+        const agent = ALL_AGENTS.find(a => a.personaId === personaId);
+        const agentName = agent ? agent.name : 'UnknownAgent';
+        const agentRole = agent ? agent.role : 'AI Representative';
+
         console.log(`[Route] Commencing AI Analysis on ${formattedTranscript.length} chars...`);
         const aiService = new OpenAIService();
-        const leadData = await aiService.analyzeTranscript(formattedTranscript);
+        const leadData = await aiService.analyzeTranscript(formattedTranscript, agentName);
 
         if (!leadData) {
             console.error('[Route] ❌ AI Extraction Failed.');
@@ -77,6 +82,31 @@ ${formattedTranscript}
 
         const visitorEmail = leadData.visitor_email;
         console.log(`[Route] Extracted Visitor Email via AI: ${visitorEmail || 'None'}`);
+
+        // ==========================================
+        // 2.5 GOOGLE SHEETS LOGGING
+        // ==========================================
+        if (process.env.GOOGLE_SHEET_ID) {
+            try {
+                const sheetsService = new GoogleSheetsService();
+                const success = await sheetsService.appendLead({
+                    conversation_id: personaId + '-' + Date.now().toString().slice(-6),
+                    lead_name: leadData.visitor_name,
+                    lead_email: leadData.visitor_email,
+                    lead_phone: leadData.visitor_phone,
+                    inquiry_type: leadData.inquiry_type,
+                    budget: leadData.budget,
+                    timeline: leadData.timeline,
+                    qualification_status: leadData.qualification_status,
+                    competitors_or_blockers: leadData.competitors_or_blockers,
+                    recommended_next_steps: leadData.recommended_next_steps,
+                    tavus_recording_url: 'Browser Session (No Video URL)'
+                });
+                console.log(`[Route] Sheet Append Result: ${success ? 'SUCCESS' : 'FAILURE'}`);
+            } catch (sheetErr) {
+                console.error('⚠️ [Route] Google Sheets Logging Failed:', sheetErr);
+            }
+        }
 
         // ==========================================
         // 3. DISPATCH EMAILS (RESEND)
@@ -96,9 +126,6 @@ ${formattedTranscript}
 
         // Extract just the first section of the UUID for cleaner filenames (e.g. 61f0fd3e)
         const personaShortId = personaId ? personaId.split('-')[0] : 'unknown_id';
-        const agent = ALL_AGENTS.find(a => a.personaId === personaId);
-        const agentName = agent ? agent.name : 'UnknownAgent';
-        const agentRole = agent ? agent.role : 'AI Representative';
 
         const dateSlug = timestamp.split('T')[0];
 
@@ -180,18 +207,52 @@ ${formattedTranscript}
                     <span style="font-size: 28px; font-weight: 900; color: ${scoreColor};">${leadData.lead_score}/10</span>
                 </div>
             </div>
-            <div style="margin-bottom: 25px;">
-                <h3 style="color: #111; font-size: 16px;">Intent Signals</h3>
-                <ul style="background: #fff; padding: 15px 15px 15px 35px; border-radius: 6px; border: 1px solid #dce2f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    ${leadData.intent_signals.length > 0 ? leadData.intent_signals.map((s: string) => `<li><strong>${escapeHtml(s)}</strong></li>`).join('') : '<li>Weak Intent</li>'}
-                </ul>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                <div>
+                    <h3 style="margin-bottom: 10px; color: #111; font-size: 16px;">👤 Contact Info</h3>
+                    <p style="margin: 5px 0;"><strong>Name:</strong> ${escapeHtml(leadData.visitor_name || 'Unknown')}</p>
+                    <p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(leadData.visitor_email || 'Unknown')}</p>
+                    <p style="margin: 5px 0;"><strong>Phone:</strong> ${escapeHtml(leadData.visitor_phone || 'Unknown')}</p>
+                </div>
+                <div>
+                    <h3 style="margin-bottom: 10px; color: #111; font-size: 16px;">💼 Project Specs</h3>
+                    <p style="margin: 5px 0;"><strong>Type:</strong> ${escapeHtml(leadData.inquiry_type || 'Unknown')}</p>
+                    <p style="margin: 5px 0;"><strong>Status:</strong> ${escapeHtml(leadData.qualification_status || 'Unknown')}</p>
+                    <p style="margin: 5px 0;"><strong>Current Infra:</strong> ${escapeHtml(leadData.current_infrastructure || 'Unknown')}</p>
+                </div>
             </div>
+            
+            <h3 style="color: #111; font-size: 16px;">📦 Hardware / Software Details</h3>
+            <div style="background: #f0fdf4; padding: 15px 20px; border-radius: 4px; border: 1px solid #bbf7d0; color: #166534; font-weight: bold; margin-bottom: 25px;">
+                ${escapeHtml(leadData.product_details || 'No specific units mentioned.')}
+            </div>
+
+            <h3 style="color: #111; font-size: 16px;">💰 Budget & Timeline</h3>
+            <ul style="background: #fff; padding: 15px 20px; border-radius: 4px; border: 1px solid #e5e5e5; margin-bottom: 25px;">
+                <li><strong>Budget:</strong> ${escapeHtml(leadData.budget || 'Unknown')}</li>
+                <li><strong>Timeline:</strong> ${escapeHtml(leadData.timeline || 'Unknown')}</li>
+            </ul>
+
+            <h3 style="color: #DC2626; font-size: 16px;">🚧 Blockers / Competitors</h3>
+            <ul style="background: #fee2e2; padding: 15px 20px; border-radius: 4px; border: 1px solid #fecaca; color: #991b1b; margin-bottom: 25px;">
+                ${leadData.competitors_or_blockers && leadData.competitors_or_blockers.length > 0 ? leadData.competitors_or_blockers.map((r: string) => `<li>${escapeHtml(r)}</li>`).join('') : '<li>No obvious blockers detected.</li>'}
+            </ul>
+
             <div style="margin-bottom: 25px;">
                 <h3 style="color: #111; font-size: 16px;">Core Pain Points</h3>
                 <ul style="background: #fff; padding: 15px 15px 15px 35px; border-radius: 6px; border: 1px solid #dce2f7; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     ${leadData.pain_points.length > 0 ? leadData.pain_points.map((s: string) => `<li>${escapeHtml(s)}</li>`).join('') : '<li>Unspecified</li>'}
                 </ul>
             </div>
+            
+            <div style="margin-bottom: 25px;">
+                <h3 style="color: #111; font-size: 16px;">📋 Recommended Next Steps</h3>
+                <ul style="background: #fffbeb; padding: 15px 15px 15px 35px; border-radius: 6px; border: 2px solid #EAB308;">
+                    ${leadData.recommended_next_steps && leadData.recommended_next_steps.length > 0 ? leadData.recommended_next_steps.map((step: string) => `<li><strong>${escapeHtml(step)}</strong></li>`).join('') : '<li>None</li>'}
+                </ul>
+            </div>
+
             <div style="background: #fffbeb; border: 1px solid #fef08a; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
                 <h3 style="color: #b45309; font-size: 16px; margin-top: 0;">Suggested Sales Representative Outreach</h3>
                 <p style="white-space: pre-line; color: #78350f; font-style: italic;">
@@ -204,7 +265,7 @@ ${formattedTranscript}
         await resend.emails.send({
             from: 'Lead Intel <intel@aifusionlabs.app>',
             to: internalEmailAddress,
-            subject: `[PROSPECT SCORE ${leadData.lead_score}/10] Intelligence Report`,
+            subject: `[PROSPECT SCORE ${leadData.lead_score}/10] Intelligence Report for ${escapeHtml(leadData.visitor_name || 'Unknown User')}`,
             html: intelHtml
         });
         console.log('✅ [Route] Lead Intel Email Sent.');

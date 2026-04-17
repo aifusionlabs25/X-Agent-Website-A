@@ -18,7 +18,7 @@ export default function SiteHeader() {
                     <Link href="#agents" className="hover:text-white transition-colors hidden sm:inline">Agents</Link>
                     <Link href="#specs" className="hover:text-white transition-colors hidden sm:inline">Technology</Link>
                     <Link href="#how-it-works" className="hover:text-white transition-colors hidden md:inline">How It Works</Link>
-                    <Link href="#pricing" className="hover:text-white transition-colors hidden md:inline">Pricing</Link>
+                    {/* <Link href="#pricing" className="hover:text-white transition-colors hidden md:inline">Pricing</Link> */}
                     <Link href="#faq" className="hover:text-white transition-colors hidden lg:inline">FAQ</Link>
                     <Link
                         href="#beta-signup"

@@ -48,8 +48,9 @@ export default function HomePage() {
       {/* How It Works */}
       <HowItWorksSection />
 
-      {/* Pricing */}
+      {/* Pricing - Hidden per user request for demo pilot
       <PricingSection />
+      */}
 
       {/* Testimonials */}
       <TestimonialsSection />

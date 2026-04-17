@@ -92,7 +92,7 @@ export const ALL_AGENTS: AgentData[] = [
         name: 'AMY',
         role: 'Insight Enterprise SDR',
         personaId: 'bdaaedfa-00f2-417a-8239-8bb89adec682',
-        thumbnailSrc: '/agents/thumbnails/Amy Insight SDR.jpg',
+        thumbnailSrc: '/agents/thumbnails/amy.png',
         accentColor: '#ec4899',
         liveUrl: '/demo/amy',
         tenant: 'Insight Enterprises',
@@ -101,7 +101,6 @@ export const ALL_AGENTS: AgentData[] = [
 
 // Sales row
 export const SALES_AGENTS: AgentData[] = [
-    ALL_AGENTS.find(a => a.slug === 'dani')!,
     ALL_AGENTS.find(a => a.slug === 'taylor')!,
     ALL_AGENTS.find(a => a.slug === 'michael')!,
     ALL_AGENTS.find(a => a.slug === 'sarah-netic')!,
