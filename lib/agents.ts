@@ -92,7 +92,7 @@ export const ALL_AGENTS: AgentData[] = [
         name: 'AMY',
         role: 'Insight Enterprise SDR',
         personaId: 'bdaaedfa-00f2-417a-8239-8bb89adec682',
-        thumbnailSrc: '/agents/thumbnails/amy.png',
+        thumbnailSrc: '/agents/thumbnails/Dani landing page hero 1.png',
         accentColor: '#ec4899',
         liveUrl: '/demo/amy',
         tenant: 'Insight Enterprises',
