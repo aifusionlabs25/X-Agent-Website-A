@@ -158,7 +158,7 @@ ${formattedTranscript}
         </div>
         `;
             await resend.emails.send({
-                from: 'AI Fusion Labs <aifusionlabs@gmail.com>', // MUST BE verified domain
+                from: 'AI Fusion Labs <hello@aifusionlabs.app>',
                 to: [visitorEmail],
                 subject: `Thanks for testing X-Agents!`,
                 html: visitorHtml,
