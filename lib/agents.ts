@@ -101,7 +101,7 @@ export const ALL_AGENTS: AgentData[] = [
     slug: "evan",
     name: "EVAN",
     role: "Moving Concierge",
-    personaId: "91db07c0-1eeb-40f4-b78c-d2b6e72928a9",
+    personaId: "4b7e933a-ea04-4b84-b418-72c0762545e6",
     thumbnailSrc: "/agents/thumbnails/Evan Mullins Moving.png",
     accentColor: "#f97316",
     liveUrl: "/demo/evan",
