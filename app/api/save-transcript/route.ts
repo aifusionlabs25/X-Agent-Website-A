@@ -23,8 +23,14 @@ export async function POST(req: Request) {
         if (transcript.length === 0) {
             return NextResponse.json({ message: 'Transcript was empty, nothing to save.' }, { status: 200 });
         }
-
-        // ==========================================
+        const agent = ALL_AGENTS.find(a => a.personaId === personaId);
+        const agentName = agent ? agent.name : 'UnknownAgent';
+        const agentRole = agent ? agent.role : 'AI Representative';
+        const tenantName = agent?.tenant || 'AI Fusion Labs';
+        const companyUrl = agent?.companyUrl || 'https://aifusionlabs.com/book-demo';
+        const logoSrc = agent?.logoSrc ? `https://raw.githubusercontent.com/aifusionlabs25/X-Agent-Website-A/main/public${encodeURI(agent.logoSrc)}` : null;
+        const msgCount = transcript.length;
+// ==========================================
         // 1. SAVE LOCAL TRANSCRIPT FILE
         // ==========================================
         const formattedTranscript = transcript.map(entry => {
@@ -35,7 +41,7 @@ export async function POST(req: Request) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `transcript_${personaId || 'unknown'}_${timestamp}.md`;
         let filePath = 'In-Memory (Vercel Production)';
-        const sessionDate = new Date().toLocaleString();
+        const sessionDate = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Phoenix', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).format(new Date());
 
         const fileContent = `# Anam Session Transcript
 **Date:** ${sessionDate}  
@@ -66,10 +72,6 @@ ${formattedTranscript}
             console.warn(`[Route] Transcript too short (${formattedTranscript.length} chars). Skipping AI/Email. `);
             return NextResponse.json({ success: true, file: filename }, { status: 200 });
         }
-
-        const agent = ALL_AGENTS.find(a => a.personaId === personaId);
-        const agentName = agent ? agent.name : 'UnknownAgent';
-        const agentRole = agent ? agent.role : 'AI Representative';
 
         console.log(`[Route] Commencing AI Analysis on ${formattedTranscript.length} chars...`);
         const aiService = new OpenAIService();
@@ -141,19 +143,20 @@ ${formattedTranscript}
         if (visitorEmail) {
             const visitorHtml = `
         <div style="font-family: sans-serif; padding: 25px; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
+            ${logoSrc ? `<img src="${logoSrc}" alt="${tenantName} Logo" style="max-height: 45px; margin-bottom: 15px;" /><br>` : ''}
             <h2 style="color: #4F46E5; margin-top: 0;">Thanks for chatting!</h2>
             <p style="white-space: pre-line; font-size: 16px;">
                 ${escapeHtml(leadData.visitor_recap_message)}
             </p>
             <br>
             <p style="text-align: center; margin-top: 25px;">
-                <a href="https://aifusionlabs.com/book-demo" style="background-color: #4F46E5; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Schedule a Human Demo</a>
+                <a href="${companyUrl}" style="background-color: #4F46E5; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Schedule a Human Demo</a>
             </p>
             <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0 20px 0;">
             <p style="color: #555; font-size: 0.9em; margin: 0;">
                 <strong>${agentName}</strong><br>
                 ${agentRole}<br>
-                AI Fusion Labs
+                ${tenantName}
             </p>
         </div>
         `;
@@ -175,7 +178,8 @@ ${formattedTranscript}
             </div>
             <div style="background: #fff; padding: 15px; border-radius: 6px; border: 1px solid #eee; margin-bottom: 20px;">
                 <p style="margin: 4px 0;"><strong>Date:</strong> ${sessionDate}</p>
-                <p style="margin: 4px 0;"><strong>File:</strong> ${filename}</p>
+                <p style="margin: 4px 0;"><strong>File:</strong> ${attachmentFilename}</p>
+                <p style="margin: 4px 0;"><strong>Session Length:</strong> ${msgCount} messages exchanged</p>
             </div>
             <h3 style="color: #111; font-size: 16px;">TL;DR</h3>
             <div style="background: #fff; padding: 15px; border-radius: 6px; border: 1px solid #eee; margin-bottom: 20px;">

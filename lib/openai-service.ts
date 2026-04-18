@@ -12,6 +12,8 @@ export interface LeadData {
     lead_score: number;
     suggested_follow_up_draft: string;
     visitor_recap_message: string;
+    tailor_made_sales_plan: string;
+    crm_action_plan: string;
 
     // B2B Insights
     inquiry_type: string;
@@ -55,7 +57,9 @@ Output exactly this JSON structure. Do not include markdown formatting or \`\`\`
   "pain_points": ["Current chatbots are dumb", "Lead routing is too slow"],
   "lead_score": 7, // Integer from 1 (low) to 10 (high) based on buying readiness
   "suggested_follow_up_draft": "Draft a short email for a human rep to send to the user based on their specific needs. Do not wrap this draft in quotation marks.",
-  "visitor_recap_message": "Draft a short, warm, consultative 'thank you' message to the user recapping their main points. Keep it professional.",
+  "visitor_recap_message": "Draft a warm, consultative 'thank you' message to the user recapping their main points. MUST use text bullet points (starting with dashes or dots) to clearly list specific details they shared. Do not use HTML tags.",
+  "tailor_made_sales_plan": "A detailed, step-by-step strategic approach for the human rep to close this deal. Reference specific pain points, known budget/timelines, and suggest the exact value proposition to lean into.",
+  "crm_action_plan": "A bulleted or numbered list of exactly what data should be entered into the CRM (e.g. 'Set primary objection to X', 'Update deal size to Y', 'Set follow-up task for Date').",
   "inquiry_type": "Classify accurately (e.g., General, Support, Hardware, AI).",
   "current_infrastructure": "Detail exactly what they are currently using, replacing or integrating with.",
   "product_details": "List EVERY specific piece of software, service, or product mentioned.",

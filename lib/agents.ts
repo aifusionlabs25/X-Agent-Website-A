@@ -10,6 +10,8 @@ export interface AgentData {
   accentColor: string;
   liveUrl: string;
   tenant?: string; // Fictional tenant name for demo agents
+  companyUrl?: string; // Target URL for follow-up
+  logoSrc?: string; // Dynamic path for logo
 }
 
 export const ALL_AGENTS: AgentData[] = [
@@ -106,6 +108,8 @@ export const ALL_AGENTS: AgentData[] = [
     accentColor: "#f97316",
     liveUrl: "/demo/evan",
     tenant: "Mullins Moving",
+    companyUrl: "https://www.mullins-moving.com/",
+    logoSrc: "/agents/thumbnails/Evan Mullins Moving logo.png",
   },
 ];
 
