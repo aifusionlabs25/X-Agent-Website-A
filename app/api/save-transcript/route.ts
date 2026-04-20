@@ -82,8 +82,16 @@ ${formattedTranscript}
             return NextResponse.json({ success: true, file: filename, error: 'AI Extraction Failed' }, { status: 200 });
         }
 
-        const visitorEmail = leadData.visitor_email;
-        console.log(`[Route] Extracted Visitor Email via AI: ${visitorEmail || 'None'}`);
+        const rawEmail = leadData.visitor_email;
+        let visitorEmail = rawEmail ? rawEmail.replace(/\s+/g, '').toLowerCase() : null;
+        
+        // Simple validation to ensure it looks like an email before trying to send
+        if (visitorEmail && !visitorEmail.includes('@')) {
+            console.warn(`[Route] ⚠️ Invalid email format extracted: ${visitorEmail}. Nullifying.`);
+            visitorEmail = null;
+        }
+
+        console.log(`[Route] Extracted/Sanitized Visitor Email: ${visitorEmail || 'None'} (Raw: ${rawEmail || 'None'})`);
 
         // ==========================================
         // 2.5 GOOGLE SHEETS LOGGING

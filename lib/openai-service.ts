@@ -73,6 +73,10 @@ Output exactly this JSON structure. Do not include markdown formatting or \`\`\`
 
 # EXTRACTION RULES
 - If a data point is missing or not mentioned, return an empty array [] or null/empty string.
+- **PHONETIC NORMALIZATION (CRITICAL)**: AI voice transcripts often contain spelled-out contact info (e.g., "r v i k s at gmail dot com"). You MUST normalize these:
+    - visitor_email: Remove ALL spaces. Convert "at" to "@". Convert "dot" to ".". Ensure it is a valid email format.
+    - visitor_phone: Convert to numeric format only (e.g., "+15550001234").
+    - visitor_name: Capitalize correctly and remove repetitive spelled-out letters.
 - The lead_score should be 1-3 for casual curiosity, 4-7 for specific use cases, and 8-10 for explicit demo requests or quotes.
 - The visitor_recap_message should be written from the perspective of ${agentName} thanking them for the chat.
 `;
