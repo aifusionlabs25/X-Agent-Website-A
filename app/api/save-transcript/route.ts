@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 import { Resend } from 'resend';
-import { OpenAIService } from '@/lib/openai-service';
+import { LLMService } from '@/lib/openai-service';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { escapeHtml } from '@/lib/sanitize-html';
 import { ALL_AGENTS } from '@/lib/agents';
@@ -74,8 +74,8 @@ ${formattedTranscript}
         }
 
         console.log(`[Route] Commencing AI Analysis on ${formattedTranscript.length} chars...`);
-        const aiService = new OpenAIService();
-        const leadData = await aiService.analyzeTranscript(formattedTranscript, agentName);
+        const llmService = new LLMService();
+        const leadData = await llmService.analyzeTranscript(formattedTranscript, agentName);
 
         if (!leadData) {
             console.error('[Route] ❌ AI Extraction Failed.');

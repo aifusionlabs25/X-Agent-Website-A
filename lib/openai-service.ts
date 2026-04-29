@@ -27,18 +27,48 @@ export interface LeadData {
     recommended_next_steps: string[];
 }
 
-export class OpenAIService {
-    private openai: OpenAI;
+export class LLMService {
+    private client: OpenAI;
+    private provider: 'openai' | 'nvidia' | 'local';
+    private model: string;
 
     constructor() {
-        if (!process.env.OPENAI_API_KEY) {
-            console.warn('[OpenAI] Missing API Key. Analysis will fail.');
+        // Priority: 1. NVIDIA (Free/High-Perf) -> 2. Local (5080) -> 3. OpenAI (Paid)
+        if (process.env.NVIDIA_API_KEY) {
+            console.log('[LLMService] Initializing with NVIDIA Build API (Hermes-capable)');
+            this.client = new OpenAI({
+                apiKey: process.env.NVIDIA_API_KEY,
+                baseURL: 'https://integrate.api.nvidia.com/v1'
+            });
+            this.provider = 'nvidia';
+            this.model = 'meta/llama-3.1-70b-instruct'; // Powerful model for extraction
+        } else if (process.env.LOCAL_LLM_URL) {
+            console.log(`[LLMService] Initializing with Local 5080 at ${process.env.LOCAL_LLM_URL}`);
+            this.client = new OpenAI({
+                apiKey: 'local-5080',
+                baseURL: process.env.LOCAL_LLM_URL
+            });
+            this.provider = 'local';
+            this.model = process.env.LOCAL_LLM_MODEL || 'llama3';
+        } else {
+            console.log('[LLMService] Initializing with OpenAI API');
+            this.client = new OpenAI({
+                apiKey: process.env.OPENAI_API_KEY
+            });
+            this.provider = 'openai';
+            this.model = 'gpt-4o';
         }
-        this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     }
 
-    async analyzeTranscript(transcriptText: string, agentName: string = 'the Agent'): Promise<LeadData | null> {
-        console.log('[OpenAI] Starting transcript analysis...');
+    async analyzeTranscript(
+        transcriptText: string,
+        agentName: string = 'the Agent',
+        options?: { model?: string; provider?: 'openai' | 'nvidia' | 'local' }
+    ): Promise<LeadData | null> {
+        const activeProvider = options?.provider || this.provider;
+        const activeModel = options?.model || this.model;
+
+        console.log(`[LLMService] Starting transcript analysis using ${activeProvider} (${activeModel})...`);
 
         const systemPrompt = `
 You are an expert Sales Intelligence Analyst evaluating a conversation between ${agentName} (an AI Technical Agent) and a website visitor.
@@ -82,9 +112,9 @@ Output exactly this JSON structure. Do not include markdown formatting or \`\`\`
 `;
 
         try {
-            const response = await this.openai.chat.completions.create({
-                model: "gpt-4o", // Strongest model for strict JSON output
-                response_format: { type: "json_object" },
+            const response = await this.client.chat.completions.create({
+                model: activeModel,
+                response_format: activeProvider === 'openai' ? { type: "json_object" } : undefined,
                 messages: [
                     { role: "system", content: systemPrompt },
                     { role: "user", content: `Here is the transcript to analyze:\n\n${transcriptText}` }
@@ -95,10 +125,11 @@ Output exactly this JSON structure. Do not include markdown formatting or \`\`\`
             const content = response.choices[0].message.content;
             if (!content) return null;
 
-            return JSON.parse(content) as LeadData;
+            const cleanJson = content.replace(/```json\n?|\n?```/g, '').trim();
+            return JSON.parse(cleanJson) as LeadData;
 
         } catch (error) {
-            console.error('[OpenAI] Analysis failed:', error);
+            console.error(`[LLMService] Analysis failed on ${activeProvider}:`, error);
             return null;
         }
     }
