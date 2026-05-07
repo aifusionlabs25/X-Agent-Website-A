@@ -33,6 +33,7 @@ export default function DemoPage({ params, searchParams }: Props) {
             const url = new URL(rawReturnUrl);
             const allowedHosts = new Set([
                 'x-agent-mullins-moving.vercel.app',
+                'insight-amy-a.vercel.app',
                 'localhost',
                 '127.0.0.1',
             ]);
@@ -68,7 +69,7 @@ export default function DemoPage({ params, searchParams }: Props) {
                     className="pointer-events-auto flex items-center gap-2 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full transition-all text-sm font-bold uppercase tracking-widest hover:scale-105"
                 >
                     <ArrowLeft size={18} />
-                    {isPrivateReturn ? 'Back to Evan Screening' : `Back to ${agent.name}`}
+                    {isPrivateReturn ? `Back to ${agent.name} Screening` : `Back to ${agent.name}`}
                 </Link>
             </div>
 
