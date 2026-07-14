@@ -3,10 +3,13 @@ import { createClient, AnamClient, AnamEvent, MessageStreamEvent } from '@anam-a
 
 interface AnamPlayerProps {
     personaId: string;
+    sessionVariant?: string;
     onClose?: () => void;
 }
 
-export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
+const transcriptRole = (role: string) => role === 'user' ? 'user' : 'agent';
+
+export default function AnamPlayer({ personaId, sessionVariant, onClose }: AnamPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [, setClient] = useState<AnamClient | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -19,6 +22,7 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
     useEffect(() => {
         let activeClient: AnamClient | null = null;
         let isMounted = true;
+        const videoElement = videoRef.current;
 
         const initializeAnam = async () => {
             try {
@@ -26,7 +30,7 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
                 const tokenRes = await fetch('/api/anam-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ personaId }),
+                    body: JSON.stringify({ personaId, variant: sessionVariant }),
                 });
 
                 if (!tokenRes.ok) {
@@ -50,7 +54,7 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
                 anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, (messageEvent: MessageStreamEvent) => {
                     if (messageEvent.role !== currentRoleRef.current) {
                         if (currentMessageRef.current) {
-                            transcriptRef.current.push({ role: currentRoleRef.current, content: currentMessageRef.current.trim() });
+                            transcriptRef.current.push({ role: transcriptRole(currentRoleRef.current), content: currentMessageRef.current.trim() });
                         }
                         currentRoleRef.current = messageEvent.role;
                         currentMessageRef.current = messageEvent.content;
@@ -60,7 +64,7 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
 
                     if (messageEvent.endOfSpeech) {
                         if (currentMessageRef.current) {
-                            transcriptRef.current.push({ role: messageEvent.role, content: currentMessageRef.current.trim() });
+                            transcriptRef.current.push({ role: transcriptRole(messageEvent.role), content: currentMessageRef.current.trim() });
                         }
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
@@ -73,7 +77,7 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
 
                     // Push any trailing un-ended speech chunks
                     if (currentMessageRef.current) {
-                        transcriptRef.current.push({ role: currentRoleRef.current, content: currentMessageRef.current.trim() });
+                        transcriptRef.current.push({ role: transcriptRole(currentRoleRef.current), content: currentMessageRef.current.trim() });
                         currentMessageRef.current = '';
                     }
 
@@ -81,7 +85,11 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
                         fetch('/api/save-transcript', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ personaId, transcript: transcriptRef.current }),
+                            body: JSON.stringify({
+                                personaId,
+                                variant: sessionVariant,
+                                transcript: transcriptRef.current,
+                            }),
                         }).catch(console.error);
                     }
 
@@ -115,12 +123,11 @@ export default function AnamPlayer({ personaId, onClose }: AnamPlayerProps) {
                 // Currently, `removeAllListeners` doesn't exist on `AnamClient` according to typings.
                 // We rely on stopStreaming to clean up resources.
             }
-            const currentVideo = videoRef.current;
-            if (currentVideo) {
-                currentVideo.srcObject = null;
+            if (videoElement) {
+                videoElement.srcObject = null;
             }
         };
-    }, [personaId, onClose]);
+    }, [personaId, sessionVariant, onClose]);
 
     return (
         <div className="relative w-full h-full bg-zinc-950 flex flex-col items-center justify-center">

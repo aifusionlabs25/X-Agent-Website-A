@@ -8,9 +8,10 @@ import { Send, Square, RefreshCcw, Hand } from 'lucide-react';
 interface AgentQaChatProps {
     personaId: string;
     agentName: string;
+    sessionVariant?: string;
 }
 
-export default function AgentQaChat({ personaId, agentName }: AgentQaChatProps) {
+export default function AgentQaChat({ personaId, agentName, sessionVariant }: AgentQaChatProps) {
     const [inputValue, setInputValue] = useState('');
     const [isSending, setIsSending] = useState(false);
     
@@ -22,7 +23,7 @@ export default function AgentQaChat({ personaId, agentName }: AgentQaChatProps) 
         sendUserMessage, 
         interrupt,
         clearMessages
-    } = useAnamQaSession({ personaId });
+    } = useAnamQaSession({ personaId, sessionVariant });
 
     const hasAttemptedConnect = useRef(false);
 
@@ -36,7 +37,7 @@ export default function AgentQaChat({ personaId, agentName }: AgentQaChatProps) 
             disconnect();
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [personaId]);
+    }, [personaId, sessionVariant]);
 
     const handleSend = async () => {
         if (!inputValue.trim() || connectionState !== 'streaming' || isSending) return;

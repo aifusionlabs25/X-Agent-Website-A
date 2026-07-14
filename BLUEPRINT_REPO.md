@@ -69,6 +69,7 @@ Unlike legacy iterations where each agent had its own standalone codebase (e.g.,
 | Variable | Description |
 | :--- | :--- |
 | `ANAM_API_KEY` | Used by `/api/anam-token` to authenticate with Anam's backend. Do not expose client-side. |
+| `ANAM_AMY_CARA4_PERSONA_ID` | Preview-only server-side ID for Amy's stable Cara 4 canary. When absent, the canary route fails closed and public Amy remains unchanged. |
 
 ---
 

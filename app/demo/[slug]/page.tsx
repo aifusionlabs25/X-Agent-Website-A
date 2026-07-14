@@ -3,6 +3,7 @@
 import { notFound, useRouter } from 'next/navigation';
 import { use } from 'react';
 import { ALL_AGENTS } from '@/lib/agents';
+import { AMY_CARA4_VARIANT } from '@/lib/anam/session-config';
 import AnamPlayer from '@/components/AnamPlayer';
 import AgentQaChat from '@/components/qa/AgentQaChat';
 import Link from 'next/link';
@@ -21,6 +22,12 @@ export default function DemoPage({ params, searchParams }: Props) {
 
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) return notFound();
+
+    const rawVariant = Array.isArray(resolvedSearchParams.variant)
+        ? resolvedSearchParams.variant[0]
+        : resolvedSearchParams.variant;
+    const isAmyCara4Canary = agent.slug === 'amy' && rawVariant === 'cara4';
+    const sessionVariant = isAmyCara4Canary ? AMY_CARA4_VARIANT : undefined;
 
     const rawReturnUrl = Array.isArray(resolvedSearchParams.returnUrl)
         ? resolvedSearchParams.returnUrl[0]
@@ -61,7 +68,10 @@ export default function DemoPage({ params, searchParams }: Props) {
     };
 
     return (
-        <main className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden">
+        <main
+            className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden"
+            data-anam-variant={sessionVariant ?? 'public'}
+        >
             {/* Minimal bottom nav to return - Centered and High Visibility */}
             <div className="absolute bottom-10 left-0 w-full z-20 flex justify-center items-center pointer-events-none">
                 <Link
@@ -77,9 +87,17 @@ export default function DemoPage({ params, searchParams }: Props) {
             <div className={`w-full h-full relative ${isQaMode ? 'z-30' : ''}`}>
                 {agent.personaId ? (
                     isQaMode ? (
-                        <AgentQaChat personaId={agent.personaId} agentName={agent.name} />
+                        <AgentQaChat
+                            personaId={agent.personaId}
+                            agentName={isAmyCara4Canary ? `${agent.name} · Cara 4 canary` : agent.name}
+                            sessionVariant={sessionVariant}
+                        />
                     ) : (
-                        <AnamPlayer personaId={agent.personaId} onClose={handleClose} />
+                        <AnamPlayer
+                            personaId={agent.personaId}
+                            sessionVariant={sessionVariant}
+                            onClose={handleClose}
+                        />
                     )
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center">

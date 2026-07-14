@@ -6,6 +6,7 @@ import { LLMService } from '@/lib/openai-service';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { escapeHtml } from '@/lib/sanitize-html';
 import { ALL_AGENTS } from '@/lib/agents';
+import { AMY_CARA4_VARIANT, isAmyCara4Variant } from '@/lib/anam/session-config';
 
 // Allow route to run for up to 60 seconds (Vercel max duration)
 export const maxDuration = 60;
@@ -14,7 +15,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { personaId, transcript } = body;
+        const { personaId, transcript, variant } = body;
 
         if (!transcript || !Array.isArray(transcript)) {
             return NextResponse.json({ error: 'Invalid transcript format.' }, { status: 400 });
@@ -24,8 +25,30 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Transcript was empty, nothing to save.' }, { status: 200 });
         }
         const agent = ALL_AGENTS.find(a => a.personaId === personaId);
-        const agentName = agent ? agent.name : 'UnknownAgent';
-        const agentRole = agent ? agent.role : 'AI Representative';
+        if (!agent) {
+            return NextResponse.json({ error: 'Persona is not available on this site.' }, { status: 403 });
+        }
+
+        if (variant && !isAmyCara4Variant(variant)) {
+            return NextResponse.json({ error: 'Unsupported Anam session variant.' }, { status: 400 });
+        }
+
+        if (isAmyCara4Variant(variant)) {
+            if (agent.slug !== 'amy') {
+                return NextResponse.json({ error: 'The Cara 4 canary is available only for Amy.' }, { status: 400 });
+            }
+
+            console.info(`[${AMY_CARA4_VARIANT}] Accepted ${transcript.length} transcript messages with outbound automations suppressed.`);
+            return NextResponse.json({
+                success: true,
+                canary: true,
+                outbound: false,
+                messageCount: transcript.length,
+            }, { status: 200 });
+        }
+
+        const agentName = agent.name;
+        const agentRole = agent.role;
         const tenantName = agent?.tenant || 'AI Fusion Labs';
         const companyUrl = agent?.companyUrl || 'https://aifusionlabs.com/book-demo';
         const logoSrc = agent?.logoSrc ? `https://raw.githubusercontent.com/aifusionlabs25/X-Agent-Website-A/main/public${encodeURI(agent.logoSrc)}` : null;

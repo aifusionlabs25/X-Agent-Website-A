@@ -9,9 +9,12 @@ export type TranscriptMessage = {
 
 interface UseAnamQaSessionProps {
     personaId: string;
+    sessionVariant?: string;
 }
 
-export function useAnamQaSession({ personaId }: UseAnamQaSessionProps) {
+const transcriptRole = (role: string): 'user' | 'agent' => role === 'user' ? 'user' : 'agent';
+
+export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSessionProps) {
     const [client, setClient] = useState<AnamClient | null>(null);
     const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'streaming' | 'error'>('idle');
     const [messages, setMessages] = useState<TranscriptMessage[]>([]);
@@ -37,7 +40,7 @@ export function useAnamQaSession({ personaId }: UseAnamQaSessionProps) {
             const tokenRes = await fetch('/api/anam-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ personaId }),
+                body: JSON.stringify({ personaId, variant: sessionVariant }),
             });
 
             if (!tokenRes.ok) throw new Error('Failed to fetch session token');
@@ -64,7 +67,7 @@ export function useAnamQaSession({ personaId }: UseAnamQaSessionProps) {
                 // If role changes, flush the previous message to state
                 if (messageEvent.role !== currentRoleRef.current && currentRoleRef.current) {
                     if (currentMessageRef.current) {
-                        appendMessage(currentRoleRef.current as 'user' | 'agent', currentMessageRef.current.trim());
+                        appendMessage(transcriptRole(currentRoleRef.current), currentMessageRef.current.trim());
                     }
                     currentMessageRef.current = '';
                 }
@@ -74,7 +77,7 @@ export function useAnamQaSession({ personaId }: UseAnamQaSessionProps) {
 
                 if (messageEvent.endOfSpeech) {
                     if (currentMessageRef.current) {
-                        appendMessage(messageEvent.role as 'user' | 'agent', currentMessageRef.current.trim());
+                        appendMessage(transcriptRole(messageEvent.role), currentMessageRef.current.trim());
                     }
                     currentMessageRef.current = '';
                     currentRoleRef.current = '';
@@ -88,7 +91,7 @@ export function useAnamQaSession({ personaId }: UseAnamQaSessionProps) {
                 
                 // Flush remaining chunks
                 if (currentMessageRef.current && currentRoleRef.current) {
-                    appendMessage(currentRoleRef.current as 'user' | 'agent', currentMessageRef.current.trim());
+                    appendMessage(transcriptRole(currentRoleRef.current), currentMessageRef.current.trim());
                     currentMessageRef.current = '';
                     currentRoleRef.current = '';
                 }
@@ -108,7 +111,7 @@ export function useAnamQaSession({ personaId }: UseAnamQaSessionProps) {
                 appendMessage('error', 'Failed to connect to the agent. Check console.');
             }
         }
-    }, [personaId, appendMessage]);
+    }, [personaId, sessionVariant, appendMessage]);
 
     const disconnect = useCallback(async () => {
         if (client) {

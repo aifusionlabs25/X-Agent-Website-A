@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server';
+import { ALL_AGENTS } from '@/lib/agents';
+import { resolveAnamSessionPersona } from '@/lib/anam/session-config';
 
 export async function POST(req: Request) {
     try {
-        const { personaId } = await req.json();
+        const { personaId, variant } = await req.json();
+        const resolution = resolveAnamSessionPersona({
+            requestedPersonaId: personaId,
+            requestedVariant: variant,
+            allowedPersonaIds: ALL_AGENTS.map(agent => agent.personaId),
+            amyCara4PersonaId: process.env.ANAM_AMY_CARA4_PERSONA_ID,
+        });
 
-        if (!personaId) {
+        if (!resolution.ok) {
             return NextResponse.json(
-                { error: 'Missing personaId in request body' },
-                { status: 400 }
+                { error: resolution.error },
+                { status: resolution.status }
             );
         }
 
@@ -29,7 +37,7 @@ export async function POST(req: Request) {
             },
             body: JSON.stringify({
                 personaConfig: {
-                    personaId: personaId
+                    personaId: resolution.personaId
                 }
             }),
         });
@@ -44,7 +52,10 @@ export async function POST(req: Request) {
         }
 
         const data = await response.json();
-        return NextResponse.json({ sessionToken: data.sessionToken });
+        return NextResponse.json({
+            sessionToken: data.sessionToken,
+            variant: resolution.variant,
+        });
     } catch (error) {
         console.error('Error in /api/anam-token:', error);
         return NextResponse.json(
