@@ -181,6 +181,8 @@ async function readValidatedOutput(outputDirectory, entry, now) {
     }
 
     return {
+        jobId: match[1],
+        outputSha256: match[2],
         observedAt,
         output,
     };

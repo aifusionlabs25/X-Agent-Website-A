@@ -66,6 +66,9 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
                 sessionToken?: string;
                 sessionSpineEnabled?: boolean;
                 launchId?: string;
+                memoryContextAvailable?: boolean;
+                memoryContext?: string;
+                returningMemoryCount?: number;
             };
             if (typeof tokenPayload.sessionToken !== 'string') {
                 throw new Error('Session token response was incomplete');
@@ -87,6 +90,37 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
             let completionPromise: Promise<void> | null = null;
             let closeHandled = false;
             let listenersRemoved = false;
+            let connectionEstablished = false;
+            let memoryContextInjected = false;
+            const memoryContext = tokenPayload.memoryContextAvailable === true
+                && typeof tokenPayload.memoryContext === 'string'
+                ? tokenPayload.memoryContext
+                : null;
+
+            const applyMemoryContext = () => {
+                if (
+                    !memoryContext
+                    || memoryContextInjected
+                    || !connectionEstablished
+                    || !providerSessionId
+                ) return;
+                try {
+                    anamClient.addContext(memoryContext);
+                    memoryContextInjected = true;
+                    appendMessage(
+                        'system',
+                        Number(tokenPayload.returningMemoryCount ?? 0) > 0
+                            ? `Applied ${Number(tokenPayload.returningMemoryCount)} approved prior-session note(s).`
+                            : 'Returning-memory identity linked; no approved prior-session notes found.',
+                    );
+                } catch {
+                    if (isMounted.current) {
+                        setConnectionState('error');
+                        appendMessage('error', 'Approved returning memory could not be applied safely. Restart the session.');
+                    }
+                    void anamClient.stopStreaming().catch(() => undefined);
+                }
+            };
 
             const completeOnce = (closeReason: string, maxAttempts?: number): Promise<void> => {
                 if (!sessionSpineActive || !launchId || !providerSessionId) {
@@ -120,6 +154,8 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
             // Set up event listeners BEFORE connecting
             const handleConnectionEstablished = () => {
                 if (!isMounted.current) return;
+                connectionEstablished = true;
+                applyMemoryContext();
                 setConnectionState('streaming');
                 appendMessage('system', 'Neural Link Established. Streaming ready.');
             };
@@ -128,6 +164,7 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
                 if (providerSessionId) return;
                 providerSessionId = readySessionId;
                 if (isMounted.current) setSessionId(readySessionId);
+                applyMemoryContext();
 
                 if (sessionSpineActive && launchId && !bindPromise) {
                     bindPromise = bindAmyAnamClientSession({

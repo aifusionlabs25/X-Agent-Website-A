@@ -7,6 +7,7 @@ import { AMY_CARA4_VARIANT } from '@/lib/anam/session-config';
 import { resolveAnamAudioBridge } from '@/lib/anam/audio-bridge';
 import AnamPlayer from '@/components/AnamPlayer';
 import AgentQaChat from '@/components/qa/AgentQaChat';
+import AmyMemoryAccessGate from '@/components/amy/AmyMemoryAccessGate';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -78,7 +79,7 @@ export default function DemoPage({ params, searchParams }: Props) {
         router.push(returnHref);
     };
 
-    return (
+    const experience = (
         <main
             className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden"
             data-anam-variant={sessionVariant ?? 'public'}
@@ -123,4 +124,8 @@ export default function DemoPage({ params, searchParams }: Props) {
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] z-10" />
         </main>
     );
+
+    return isAmyCara4Canary
+        ? <AmyMemoryAccessGate>{experience}</AmyMemoryAccessGate>
+        : experience;
 }

@@ -13,6 +13,10 @@ import {
     consumeAmyAnamDistributedRateLimit,
     readAmyAnamLaunch,
 } from '@/lib/anam/session-spine-store';
+import {
+    linkAmyAnamSessionMemoryIdentity,
+    readAmyAnamMemoryConfig,
+} from '@/lib/anam/user-memory';
 
 function noStoreJson(body: unknown, init?: ResponseInit) {
     const response = NextResponse.json(body, init);
@@ -70,10 +74,24 @@ export async function POST(request: Request) {
         });
 
         if (status === 'bound' || status === 'duplicate') {
+            const memoryConfig = readAmyAnamMemoryConfig();
+            let memoryIdentityLinked = false;
+            if (memoryConfig.gatesOpen) {
+                const memoryLinkStatus = await linkAmyAnamSessionMemoryIdentity({
+                    browserSessionId: browserSession.id,
+                    externalSessionId: sessionId,
+                });
+                if (memoryLinkStatus === 'conflict') {
+                    return noStoreJson({ error: 'Memory session identity conflicted' }, { status: 409 });
+                }
+                memoryIdentityLinked = memoryLinkStatus === 'linked'
+                    || memoryLinkStatus === 'duplicate';
+            }
             return noStoreJson({
                 bound: true,
                 duplicate: status === 'duplicate',
                 canary: true,
+                memoryIdentityLinked,
                 outbound: false,
             });
         }

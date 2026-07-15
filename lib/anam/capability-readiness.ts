@@ -1,6 +1,7 @@
 import { readAmyAnamHermesShadowConfig } from './hermes-shadow.ts';
 import { readAmyAnamRecoveryConfig } from './session-recovery.ts';
 import { readAmyAnamSpineConfig } from './session-spine.ts';
+import { readAmyAnamMemoryConfig } from './user-memory.ts';
 
 type DisabledCapabilityReadiness = {
     implemented: false;
@@ -20,7 +21,7 @@ function value(source: NodeJS.ProcessEnv, name: string): string {
 
 function disabledCapability(
     source: NodeJS.ProcessEnv,
-    prefix: 'AMY_ANAM_AGENTMAIL' | 'AMY_ANAM_MEMORY' | 'AMY_ANAM_TOOLS',
+    prefix: 'AMY_ANAM_AGENTMAIL' | 'AMY_ANAM_TOOLS',
 ): DisabledCapabilityReadiness {
     const enabled = value(source, `${prefix}_ENABLED`) === 'true';
     const killSwitchActive = value(source, `${prefix}_KILL_SWITCH`) !== 'false';
@@ -39,6 +40,7 @@ export function buildAmyAnamCapabilityReadiness(
     const spine = readAmyAnamSpineConfig(source);
     const recovery = readAmyAnamRecoveryConfig(source);
     const hermes = readAmyAnamHermesShadowConfig(source);
+    const memory = readAmyAnamMemoryConfig(source);
     const outboundEnabled = value(source, 'AMY_ANAM_OUTBOUND_ACTIONS_ENABLED') === 'true';
     const outboundKillSwitchActive = value(source, 'AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH') !== 'false';
 
@@ -82,9 +84,20 @@ export function buildAmyAnamCapabilityReadiness(
             cloudContentAllowed: false,
         },
         memory: {
-            ...disabledCapability(source, 'AMY_ANAM_MEMORY'),
-            consentBound: false,
-            writesPerformed: false,
+            implemented: true,
+            enabled: memory.enabled,
+            configured: memory.configured,
+            killSwitchActive: memory.killSwitchActive,
+            requestedGateOpen: memory.enabled && !memory.killSwitchActive,
+            effectiveGateOpen: memory.gatesOpen,
+            consentBound: true,
+            operatorApprovalRequired: true,
+            promotionEnabled: memory.promotionEnabled,
+            promotionKillSwitchActive: memory.promotionKillSwitchActive,
+            promotionConfigured: memory.promotionConfigured,
+            promotionGateOpen: memory.promotionGatesOpen,
+            rawEmailStored: false,
+            maxApprovedRecords: 8,
         },
         tools: {
             ...disabledCapability(source, 'AMY_ANAM_TOOLS'),

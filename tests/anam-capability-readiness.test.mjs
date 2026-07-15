@@ -67,11 +67,16 @@ test('recovery readiness reflects its fail-closed gate and production approval',
     assert.equal(approved.productionPromotionApproved, true);
 });
 
-test('memory, tools, AgentMail, and outbound stay effectively disabled even if requested', () => {
+test('memory opens only when configured while tools, AgentMail, and outbound stay disabled', () => {
     const readiness = buildAmyAnamCapabilityReadiness({
         ...BASE_ENV,
         AMY_ANAM_MEMORY_ENABLED: 'true',
         AMY_ANAM_MEMORY_KILL_SWITCH: 'false',
+        AMY_ANAM_MEMORY_ACCESS_CODE: 'fixture-access-code',
+        AMY_ANAM_MEMORY_IDENTITY_SALT: 'm'.repeat(48),
+        AMY_ANAM_MEMORY_PROMOTION_ENABLED: 'true',
+        AMY_ANAM_MEMORY_PROMOTION_KILL_SWITCH: 'false',
+        AMY_ANAM_MEMORY_OPERATOR_SECRET: 'o'.repeat(48),
         AMY_ANAM_TOOLS_ENABLED: 'true',
         AMY_ANAM_TOOLS_KILL_SWITCH: 'false',
         AMY_ANAM_AGENTMAIL_ENABLED: 'true',
@@ -80,8 +85,15 @@ test('memory, tools, AgentMail, and outbound stay effectively disabled even if r
         AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH: 'false',
     });
 
+    assert.equal(readiness.memory.requestedGateOpen, true);
+    assert.equal(readiness.memory.implemented, true);
+    assert.equal(readiness.memory.effectiveGateOpen, true);
+    assert.equal(readiness.memory.consentBound, true);
+    assert.equal(readiness.memory.operatorApprovalRequired, true);
+    assert.equal(readiness.memory.promotionGateOpen, true);
+    assert.equal(readiness.memory.rawEmailStored, false);
+
     for (const capability of [
-        readiness.memory,
         readiness.tools,
         readiness.agentMail,
         readiness.globalOutbound,
@@ -90,7 +102,6 @@ test('memory, tools, AgentMail, and outbound stay effectively disabled even if r
         assert.equal(capability.implemented, false);
         assert.equal(capability.effectiveGateOpen, false);
     }
-    assert.equal(readiness.memory.writesPerformed, false);
     assert.equal(readiness.tools.invocationsPerformed, 0);
     assert.equal(readiness.agentMail.emailsSent, 0);
     assert.equal(readiness.globalOutbound.actionsPerformed, 0);

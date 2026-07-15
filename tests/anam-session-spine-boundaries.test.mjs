@@ -35,7 +35,7 @@ const player = await readFile(new URL('../components/AnamPlayer.tsx', import.met
 const qaHook = await readFile(new URL('../hooks/useAnamQaSession.ts', import.meta.url), 'utf8');
 
 test('session-spine and Hermes shadow files do not import or invoke outbound automation services', () => {
-    const forbiddenImport = /(?:from|import\()\s*['"][^'"]*(?:openai-service|google-sheets|resend|agentmail|memory)[^'"]*['"]/i;
+    const forbiddenImport = /(?:from|import\()\s*['"][^'"]*(?:openai-service|google-sheets|resend|agentmail)[^'"]*['"]/i;
     const forbiddenInvocation = /\b(?:new\s+Resend|emails\.send|appendLead|analyzeTranscript|runAmyPostSessionAnalysis)\b/i;
 
     for (const [relativePath, source] of sources) {

@@ -797,3 +797,19 @@ export async function readAmyAnamHermesShadowReceipt(
     }
     return normalizeAmyAnamHermesShadowReceiptForCloud(parsed);
 }
+
+export async function readAmyAnamHermesShadowJobReceipt(
+    jobId: string,
+    options: StoreOptions = {},
+): Promise<AmyAnamHermesShadowReceipt | null> {
+    if (!/^[a-f0-9]{64}$/.test(jobId)) {
+        throw new Error('Amy Anam Hermes shadow job identity was invalid');
+    }
+    const raw = await redisCommand(['GET', amyAnamHermesShadowJobReceiptKey(jobId)], options);
+    const parsed = parseStoredJson(raw);
+    if (parsed === null) return null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Amy Anam Hermes shadow receipt is invalid');
+    }
+    return normalizeAmyAnamHermesShadowReceiptForCloud(parsed);
+}

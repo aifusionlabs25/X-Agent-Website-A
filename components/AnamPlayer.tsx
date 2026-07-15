@@ -123,6 +123,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     sessionToken?: string;
                     sessionSpineEnabled?: boolean;
                     launchId?: string;
+                    memoryContextAvailable?: boolean;
+                    memoryContext?: string;
+                    returningMemoryCount?: number;
                 };
                 if (!tokenPayload.sessionToken) {
                     throw new Error('Session token response was incomplete');
@@ -140,10 +143,41 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     : createClient(sessionToken);
 
                 activeClient = anamClient;
+                const memoryContext = tokenPayload.memoryContextAvailable === true
+                    && typeof tokenPayload.memoryContext === 'string'
+                    ? tokenPayload.memoryContext
+                    : null;
+                let connectionEstablished = false;
+                let memoryContextInjected = false;
+
+                const applyMemoryContext = () => {
+                    if (
+                        !memoryContext
+                        || memoryContextInjected
+                        || !connectionEstablished
+                        || !providerSessionId
+                    ) return;
+                    try {
+                        anamClient.addContext(memoryContext);
+                        memoryContextInjected = true;
+                        console.info('[Amy Anam Memory] Approved returning context applied', {
+                            approvedSessionCount: Number(tokenPayload.returningMemoryCount ?? 0),
+                            contentLogged: false,
+                        });
+                    } catch {
+                        if (isMounted) {
+                            setError('Amy could not safely apply returning memory. Please restart the session.');
+                            setIsConnecting(false);
+                        }
+                        void anamClient.stopStreaming().catch(() => undefined);
+                    }
+                };
 
                 // Set up event listeners BEFORE connecting
                 const handleConnectionEstablished = () => {
                     console.log('Anam connection established');
+                    connectionEstablished = true;
+                    applyMemoryContext();
                     if (isMounted) setIsConnecting(false);
                 };
 
@@ -163,6 +197,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleSessionReady = (sessionId: string) => {
                     if (providerSessionId) return;
                     providerSessionId = sessionId;
+                    applyMemoryContext();
                     if (sessionSpineActive && launchId) {
                         const binding = bindAmyAnamClientSession({
                             launchId,
