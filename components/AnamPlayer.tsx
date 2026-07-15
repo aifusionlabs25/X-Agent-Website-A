@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { createClient, AnamClient, AnamEvent, MessageStreamEvent } from '@anam-ai/js-sdk';
+import {
+    createClient,
+    AnamClient,
+    AnamEvent,
+    ConnectionClosedCode,
+    MessageStreamEvent,
+} from '@anam-ai/js-sdk';
 import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
 } from '@/lib/anam/audio-bridge';
+import {
+    bindAmyAnamClientSession,
+    completeAmyAnamClientSession,
+} from '@/lib/anam/session-spine-client';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -16,12 +26,17 @@ const transcriptRole = (role: string) => role === 'user' ? 'user' : 'agent';
 
 export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onClose }: AnamPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const [, setClient] = useState<AnamClient | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(true);
+    const [isFinalizing, setIsFinalizing] = useState(false);
     const [audioBridgeStatus, setAudioBridgeStatus] = useState<string | null>(
         audioBridge ? 'Finding VoiceMeeter Out B1...' : null,
     );
+
+    const onCloseRef = useRef(onClose);
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
 
     const transcriptRef = useRef<{ role: string; content: string }[]>([]);
     const currentMessageRef = useRef<string>('');
@@ -30,11 +45,56 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     useEffect(() => {
         let activeClient: AnamClient | null = null;
         let isMounted = true;
+        let closeHandled = false;
+        let sessionSpineActive = false;
+        let launchId: string | null = null;
+        let providerSessionId: string | null = null;
+        let completionPromise: Promise<void> | null = null;
+        let removeClientListeners: (() => void) | null = null;
         const videoElement = videoRef.current;
 
+        transcriptRef.current = [];
+        currentMessageRef.current = '';
+        currentRoleRef.current = '';
         setError(null);
         setIsConnecting(true);
+        setIsFinalizing(false);
         setAudioBridgeStatus(audioBridge ? 'Finding VoiceMeeter Out B1...' : null);
+
+        const completeOnce = (closeReason: string): Promise<void> => {
+            if (!sessionSpineActive || !launchId || !providerSessionId) {
+                return Promise.resolve();
+            }
+            if (completionPromise) return completionPromise;
+
+            const activeCompletion = (async () => {
+                const receipt = await completeAmyAnamClientSession({
+                    launchId: launchId as string,
+                    sessionId: providerSessionId as string,
+                    closeReason,
+                });
+                console.info('[Amy Anam Spine] Session completion accepted', {
+                    status: receipt.status,
+                    receiptPresent: Boolean(receipt.receiptId),
+                });
+            })();
+            completionPromise = activeCompletion;
+            activeCompletion.catch(() => {
+                if (completionPromise === activeCompletion) completionPromise = null;
+            });
+            return activeCompletion;
+        };
+
+        const handlePageHide = () => {
+            if (!sessionSpineActive || !launchId || !providerSessionId) return;
+            void completeAmyAnamClientSession({
+                launchId,
+                sessionId: providerSessionId,
+                closeReason: 'pagehide',
+                maxAttempts: 1,
+            }).catch(() => undefined);
+        };
+        window.addEventListener('pagehide', handlePageHide);
 
         const initializeAnam = async () => {
             try {
@@ -59,7 +119,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     throw new Error('Failed to fetch session token');
                 }
 
-                const { sessionToken } = await tokenRes.json();
+                const tokenPayload = await tokenRes.json() as {
+                    sessionToken?: string;
+                    sessionSpineEnabled?: boolean;
+                    launchId?: string;
+                };
+                if (!tokenPayload.sessionToken) {
+                    throw new Error('Session token response was incomplete');
+                }
+                const { sessionToken } = tokenPayload;
+                sessionSpineActive = tokenPayload.sessionSpineEnabled === true
+                    && typeof tokenPayload.launchId === 'string';
+                launchId = sessionSpineActive ? tokenPayload.launchId ?? null : null;
 
                 if (!isMounted) return;
 
@@ -71,26 +142,41 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 activeClient = anamClient;
 
                 // Set up event listeners BEFORE connecting
-                anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, () => {
+                const handleConnectionEstablished = () => {
                     console.log('Anam connection established');
-                    setIsConnecting(false);
-                });
+                    if (isMounted) setIsConnecting(false);
+                };
 
-                anamClient.addListener(AnamEvent.MIC_PERMISSION_GRANTED, () => {
+                const handleMicPermissionGranted = () => {
                     if (audioBridge && isMounted) {
                         setAudioBridgeStatus('VoiceMeeter Out B1 connected');
                     }
-                });
+                };
 
-                anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, (permissionError: string) => {
+                const handleMicPermissionDenied = (permissionError: string) => {
                     if (audioBridge && isMounted) {
                         setError(`VoiceMeeter bridge could not start: ${permissionError}`);
                         setIsConnecting(false);
                     }
-                });
+                };
+
+                const handleSessionReady = (sessionId: string) => {
+                    if (providerSessionId) return;
+                    providerSessionId = sessionId;
+                    if (sessionSpineActive && launchId) {
+                        const binding = bindAmyAnamClientSession({
+                            launchId,
+                            sessionId,
+                        });
+                        binding.catch(() => {
+                            console.error('[Amy Anam Spine] Session binding was not confirmed');
+                        });
+                    }
+                };
 
                 // Capture live conversation chunks
-                anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, (messageEvent: MessageStreamEvent) => {
+                const handleMessageStream = (messageEvent: MessageStreamEvent) => {
+                    if (sessionSpineActive) return;
                     if (messageEvent.role !== currentRoleRef.current) {
                         if (currentMessageRef.current) {
                             transcriptRef.current.push({ role: transcriptRole(currentRoleRef.current), content: currentMessageRef.current.trim() });
@@ -108,19 +194,31 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
                     }
-                });
+                };
 
-                // Save on close
-                anamClient.addListener(AnamEvent.CONNECTION_CLOSED, () => {
+                const handleConnectionClosed = async (reason: ConnectionClosedCode) => {
+                    if (closeHandled) return;
+                    closeHandled = true;
                     console.log('Anam connection closed');
 
+                    if (sessionSpineActive) {
+                        if (isMounted) setIsFinalizing(true);
+                        try {
+                            await completeOnce(String(reason));
+                        } catch {
+                            console.error('[Amy Anam Spine] Session completion was not confirmed');
+                        } finally {
+                            if (isMounted) setIsFinalizing(false);
+                        }
+                    }
+
                     // Push any trailing un-ended speech chunks
-                    if (currentMessageRef.current) {
+                    if (!sessionSpineActive && currentMessageRef.current) {
                         transcriptRef.current.push({ role: transcriptRole(currentRoleRef.current), content: currentMessageRef.current.trim() });
                         currentMessageRef.current = '';
                     }
 
-                    if (transcriptRef.current.length > 0) {
+                    if (!sessionSpineActive && transcriptRef.current.length > 0) {
                         fetch('/api/save-transcript', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -132,15 +230,26 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         }).catch(console.error);
                     }
 
-                    if (onClose) onClose();
-                });
+                    if (isMounted) onCloseRef.current?.();
+                };
+
+                anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
+                anamClient.addListener(AnamEvent.MIC_PERMISSION_GRANTED, handleMicPermissionGranted);
+                anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
+                anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
+                anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
+                anamClient.addListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
+                removeClientListeners = () => {
+                    anamClient.removeListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
+                    anamClient.removeListener(AnamEvent.MIC_PERMISSION_GRANTED, handleMicPermissionGranted);
+                    anamClient.removeListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
+                    anamClient.removeListener(AnamEvent.SESSION_READY, handleSessionReady);
+                    anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
+                    anamClient.removeListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
+                };
 
                 // 3. Connect and Stream directly to the video element
                 await anamClient.streamToVideoElement('persona-video');
-
-                if (isMounted) {
-                    setClient(anamClient);
-                }
 
             } catch (err) {
                 console.error('Anam Initialization Error:', err);
@@ -159,17 +268,19 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
         return () => {
             isMounted = false;
+            window.removeEventListener('pagehide', handlePageHide);
+            removeClientListeners?.();
             // Cleanup on unmount
             if (activeClient) {
-                activeClient.stopStreaming().catch(console.error);
-                // Currently, `removeAllListeners` doesn't exist on `AnamClient` according to typings.
-                // We rely on stopStreaming to clean up resources.
+                void completeOnce('unmount').catch(() => undefined);
+                void activeClient.stopStreaming()
+                    .catch(console.error);
             }
             if (videoElement) {
                 videoElement.srcObject = null;
             }
         };
-    }, [personaId, sessionVariant, audioBridge, onClose]);
+    }, [personaId, sessionVariant, audioBridge]);
 
     return (
         <div className="relative w-full h-full bg-zinc-950 flex flex-col items-center justify-center">
@@ -190,6 +301,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     <div className="flex flex-col items-center space-y-4">
                         <div className="w-12 h-12 border-4 border-zinc-700 border-t-white rounded-full animate-spin"></div>
                         <p className="text-white text-sm tracking-widest uppercase animate-pulse">Establishing Neural Link...</p>
+                    </div>
+                </div>
+            )}
+
+            {isFinalizing && !error && (
+                <div className="absolute inset-0 flex items-center justify-center z-30 bg-zinc-950/70 backdrop-blur-sm">
+                    <div className="flex flex-col items-center space-y-3">
+                        <div className="w-10 h-10 border-4 border-zinc-700 border-t-emerald-300 rounded-full animate-spin"></div>
+                        <p className="text-emerald-200 text-xs tracking-widest uppercase">Securing session record...</p>
                     </div>
                 </div>
             )}

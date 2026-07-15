@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:anam": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/anam-session-config.test.mjs tests/anam-audio-bridge.test.mjs",
+    "test:anam": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/anam-session-config.test.mjs tests/anam-audio-bridge.test.mjs tests/anam-session-spine-core.test.mjs tests/anam-session-spine-boundaries.test.mjs",
     "anam:create-amy-cara4-canary": "node scripts/anam/create-amy-cara4-canary.mjs"
   },
   "dependencies": {
