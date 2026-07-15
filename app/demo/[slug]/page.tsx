@@ -4,6 +4,7 @@ import { notFound, useRouter } from 'next/navigation';
 import { use } from 'react';
 import { ALL_AGENTS } from '@/lib/agents';
 import { AMY_CARA4_VARIANT } from '@/lib/anam/session-config';
+import { resolveAnamAudioBridge } from '@/lib/anam/audio-bridge';
 import AnamPlayer from '@/components/AnamPlayer';
 import AgentQaChat from '@/components/qa/AgentQaChat';
 import Link from 'next/link';
@@ -28,6 +29,16 @@ export default function DemoPage({ params, searchParams }: Props) {
         : resolvedSearchParams.variant;
     const isAmyCara4Canary = agent.slug === 'amy' && rawVariant === 'cara4';
     const sessionVariant = isAmyCara4Canary ? AMY_CARA4_VARIANT : undefined;
+
+    const rawAudioBridge = Array.isArray(resolvedSearchParams.audioBridge)
+        ? resolvedSearchParams.audioBridge[0]
+        : resolvedSearchParams.audioBridge;
+    const audioBridge = resolveAnamAudioBridge({
+        agentSlug: agent.slug,
+        isAmyCara4Canary,
+        isQaMode,
+        requestedAudioBridge: rawAudioBridge,
+    });
 
     const rawReturnUrl = Array.isArray(resolvedSearchParams.returnUrl)
         ? resolvedSearchParams.returnUrl[0]
@@ -71,6 +82,7 @@ export default function DemoPage({ params, searchParams }: Props) {
         <main
             className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden"
             data-anam-variant={sessionVariant ?? 'public'}
+            data-anam-audio-bridge={audioBridge ?? 'default'}
         >
             {/* Minimal bottom nav to return - Centered and High Visibility */}
             <div className="absolute bottom-10 left-0 w-full z-20 flex justify-center items-center pointer-events-none">
@@ -96,6 +108,7 @@ export default function DemoPage({ params, searchParams }: Props) {
                         <AnamPlayer
                             personaId={agent.personaId}
                             sessionVariant={sessionVariant}
+                            audioBridge={audioBridge}
                             onClose={handleClose}
                         />
                     )

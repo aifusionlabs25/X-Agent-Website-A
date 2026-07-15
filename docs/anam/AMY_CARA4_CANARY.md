@@ -8,8 +8,25 @@ The website keeps the normal public route:
 
 - Public/control: `/demo/amy?qa=1`
 - Cara 4 canary: `/demo/amy?qa=1&variant=cara4`
+- Cara 4 voice bridge: `/demo/amy?variant=cara4&audioBridge=voicemeeter`
 
 The `variant=cara4` request is resolved on the server. It works only for Amy and only when `ANAM_AMY_CARA4_PERSONA_ID` is configured. Unknown personas and variants fail closed.
+
+## Edge-to-Amy audio bridge
+
+The voice bridge is an explicit Amy Cara 4 test mode. It does not affect public Amy, other agents, or QA mode.
+
+Signal path:
+
+1. Microsoft Edge plays ChatGPT Live through `VoiceMeeter Input`.
+2. The VoiceMeeter virtual-input strip sends that audio to the B1 bus.
+3. Chrome opens the voice-bridge URL above.
+4. The page selects `VoiceMeeter Out B1` with Anam's native `audioDeviceId` option before starting Amy.
+5. Chrome plays Amy through `Speakers (Realtek(R) Audio)`, not back through the same VoiceMeeter input, to prevent a feedback loop.
+
+Verified Windows per-app routes on 2026-07-14: Edge output `VoiceMeeter Input`, Edge input `VoiceMeeter Out B1`, Chrome output `Speakers (Realtek(R) Audio)`. Windows may display Chrome's saved physical microphone in Volume mixer, but the bridge URL overrides the live Anam capture device to B1 through the SDK.
+
+Do not add `qa=1` to the bridge URL. QA mode intentionally sets `disableInputAudio: true` and remains text-only. If Chrome cannot see B1, the bridge stops with a visible error instead of falling back to a physical microphone. The green status badge changes from finding B1, to selected, to connected.
 
 ## Source Amy snapshot
 

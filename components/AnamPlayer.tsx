@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { createClient, AnamClient, AnamEvent, MessageStreamEvent } from '@anam-ai/js-sdk';
+import {
+    AnamAudioBridge,
+    selectVoiceMeeterB1DeviceId,
+} from '@/lib/anam/audio-bridge';
 
 interface AnamPlayerProps {
     personaId: string;
     sessionVariant?: string;
+    audioBridge?: AnamAudioBridge;
     onClose?: () => void;
 }
 
 const transcriptRole = (role: string) => role === 'user' ? 'user' : 'agent';
 
-export default function AnamPlayer({ personaId, sessionVariant, onClose }: AnamPlayerProps) {
+export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onClose }: AnamPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [, setClient] = useState<AnamClient | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(true);
+    const [audioBridgeStatus, setAudioBridgeStatus] = useState<string | null>(
+        audioBridge ? 'Finding VoiceMeeter Out B1...' : null,
+    );
 
     const transcriptRef = useRef<{ role: string; content: string }[]>([]);
     const currentMessageRef = useRef<string>('');
@@ -24,8 +32,22 @@ export default function AnamPlayer({ personaId, sessionVariant, onClose }: AnamP
         let isMounted = true;
         const videoElement = videoRef.current;
 
+        setError(null);
+        setIsConnecting(true);
+        setAudioBridgeStatus(audioBridge ? 'Finding VoiceMeeter Out B1...' : null);
+
         const initializeAnam = async () => {
             try {
+                const audioDeviceId = audioBridge
+                    ? await selectVoiceMeeterB1DeviceId()
+                    : undefined;
+
+                if (!isMounted) return;
+
+                if (audioDeviceId) {
+                    setAudioBridgeStatus('VoiceMeeter Out B1 selected');
+                }
+
                 // 1. Fetch Session Token
                 const tokenRes = await fetch('/api/anam-token', {
                     method: 'POST',
@@ -42,12 +64,29 @@ export default function AnamPlayer({ personaId, sessionVariant, onClose }: AnamP
                 if (!isMounted) return;
 
                 // 2. Initialize Anam Client
-                const anamClient = createClient(sessionToken);
+                const anamClient = audioDeviceId
+                    ? createClient(sessionToken, { audioDeviceId })
+                    : createClient(sessionToken);
+
+                activeClient = anamClient;
 
                 // Set up event listeners BEFORE connecting
                 anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, () => {
                     console.log('Anam connection established');
                     setIsConnecting(false);
+                });
+
+                anamClient.addListener(AnamEvent.MIC_PERMISSION_GRANTED, () => {
+                    if (audioBridge && isMounted) {
+                        setAudioBridgeStatus('VoiceMeeter Out B1 connected');
+                    }
+                });
+
+                anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, (permissionError: string) => {
+                    if (audioBridge && isMounted) {
+                        setError(`VoiceMeeter bridge could not start: ${permissionError}`);
+                        setIsConnecting(false);
+                    }
                 });
 
                 // Capture live conversation chunks
@@ -101,13 +140,16 @@ export default function AnamPlayer({ personaId, sessionVariant, onClose }: AnamP
 
                 if (isMounted) {
                     setClient(anamClient);
-                    activeClient = anamClient;
                 }
 
             } catch (err) {
                 console.error('Anam Initialization Error:', err);
                 if (isMounted) {
-                    setError('Failed to connect to the agent. Please try again later.');
+                    setError(
+                        audioBridge && err instanceof Error
+                            ? err.message
+                            : 'Failed to connect to the agent. Please try again later.',
+                    );
                     setIsConnecting(false);
                 }
             }
@@ -127,7 +169,7 @@ export default function AnamPlayer({ personaId, sessionVariant, onClose }: AnamP
                 videoElement.srcObject = null;
             }
         };
-    }, [personaId, sessionVariant, onClose]);
+    }, [personaId, sessionVariant, audioBridge, onClose]);
 
     return (
         <div className="relative w-full h-full bg-zinc-950 flex flex-col items-center justify-center">
@@ -149,6 +191,15 @@ export default function AnamPlayer({ personaId, sessionVariant, onClose }: AnamP
                         <div className="w-12 h-12 border-4 border-zinc-700 border-t-white rounded-full animate-spin"></div>
                         <p className="text-white text-sm tracking-widest uppercase animate-pulse">Establishing Neural Link...</p>
                     </div>
+                </div>
+            )}
+
+            {audioBridgeStatus && !error && (
+                <div
+                    className="absolute top-4 left-1/2 -translate-x-1/2 z-20 rounded-full border border-emerald-400/40 bg-black/70 px-4 py-2 text-xs font-mono text-emerald-300 backdrop-blur-sm"
+                    data-audio-bridge-status={audioBridgeStatus}
+                >
+                    Audio bridge: {audioBridgeStatus}
                 </div>
             )}
 
