@@ -7,8 +7,27 @@ import {
     parseAmyAnamHermesShadowOutput,
 } from '../../lib/anam/hermes-shadow.ts';
 
-export const AMY_ANAM_HERMES_LOCAL_REVIEW_VERSION = 'amy_anam_hermes_local_review_v1';
+export const AMY_ANAM_HERMES_LOCAL_REVIEW_VERSION = 'amy_anam_hermes_local_review_v2';
+export const AMY_ANAM_HERMES_REVIEW_PRIORITY_VERSION = 'amy_anam_hermes_review_priority_v1';
 export const AMY_ANAM_HERMES_LOCAL_REVIEW_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+const REVIEW_PRIORITY_REASONS = [
+    ['explicit_human_review', output => output.needs_human_review],
+    ['privacy_risk', output => output.quality_review.privacy_risk],
+    ['unsupported_claim_risk', output => output.quality_review.unsupported_claim_risk],
+    ['pricing_or_inventory_claim_risk', output => (
+        output.quality_review.pricing_or_inventory_claim_risk
+    )],
+    ['technical_term_risk', output => output.quality_review.technical_term_risk],
+    ['repeated_question_risk', output => output.quality_review.repeated_question_risk],
+];
+
+const HIGH_PRIORITY_REASONS = new Set([
+    'explicit_human_review',
+    'privacy_risk',
+    'unsupported_claim_risk',
+    'pricing_or_inventory_claim_risk',
+]);
 
 const DEFAULT_OUTPUT_DIR = resolve(tmpdir(), 'xagent-amy-anam-hermes-shadow');
 const MAX_LOCAL_OUTPUT_FILE_BYTES = 96 * 1024;
@@ -45,6 +64,40 @@ export function sanitizeAmyAnamHermesReviewText(value) {
         .replace(/\\\\.*$/g, '[path redacted]')
         .replace(/(^|\s)\/(?:Users|home|tmp|var|etc|opt|mnt|private|root)(?:\/|$).*$/gi, '$1[path redacted]')
         .trim();
+}
+
+export function deriveAmyAnamHermesReviewPriority(output) {
+    if (
+        !output
+        || typeof output !== 'object'
+        || typeof output.needs_human_review !== 'boolean'
+        || !output.quality_review
+        || typeof output.quality_review !== 'object'
+        || [
+            'repeated_question_risk',
+            'unsupported_claim_risk',
+            'pricing_or_inventory_claim_risk',
+            'technical_term_risk',
+            'privacy_risk',
+        ].some(key => typeof output.quality_review[key] !== 'boolean')
+    ) {
+        throw new LocalReviewError('Amy Anam Hermes review priority input was invalid');
+    }
+
+    const reasonCodes = REVIEW_PRIORITY_REASONS
+        .filter(([, applies]) => applies(output))
+        .map(([reasonCode]) => reasonCode);
+    const priority = reasonCodes.some(reasonCode => HIGH_PRIORITY_REASONS.has(reasonCode))
+        ? 'high'
+        : reasonCodes.length > 0
+            ? 'medium'
+            : 'low';
+
+    return {
+        schema_version: AMY_ANAM_HERMES_REVIEW_PRIORITY_VERSION,
+        priority,
+        reason_codes: reasonCodes,
+    };
 }
 
 async function resolveSafeOutputDirectory(outputDir) {
@@ -193,7 +246,10 @@ export function renderAmyAnamHermesLocalReviews(reviews) {
     reviews.forEach((review, index) => {
         const { output } = review;
         const risks = output.quality_review;
+        const reviewPriority = deriveAmyAnamHermesReviewPriority(output);
         lines.push(`REVIEW ${index + 1} OF ${reviews.length}`);
+        lines.push(`Suggested review priority (rule-based, no authority): ${reviewPriority.priority.toUpperCase()}`);
+        lines.push(`Model-flag reason codes: ${reviewPriority.reason_codes.join(', ') || 'none'}`);
         lines.push(`Inquiry type: ${sanitizeAmyAnamHermesReviewText(output.inquiry_type)}`);
         lines.push(`Summary: ${sanitizeAmyAnamHermesReviewText(output.summary)}`);
         lines.push(`Hermes requested human review: ${yesNo(output.needs_human_review)}`);

@@ -58,6 +58,7 @@ Canary created and verified on 2026-07-14:
 - Phase 1 performs no Hermes, memory, AgentMail, Resend, Google Sheets, OpenAI, or other outbound automation work.
 - Phase 2 may queue a pointer-only, post-session Hermes shadow review. The local worker fetches the authoritative transcript directly from Anam, redacts it in memory, and stores generated review content only in the operating-system temp directory. Vercel receives only status, hashes, and risk booleans.
 - Phase 2 still performs no memory writes, tool calls, AgentMail/Resend sends, CRM/calendar updates, or other outbound actions. Those capabilities remain unimplemented and fail closed even if an enable flag is accidentally changed.
+- Phase 4 adds only deterministic local review triage. It derives a suggested priority from the already validated human-review and quality-risk booleans; it does not make another model call, inspect generated prose, write a decision, or add a cloud field.
 - Anam may briefly return a valid ended transcript with zero messages. Amy keeps that record recoverable for at least 30 minutes from both the later valid provider end time and the locally persisted completion receipt. Only two consecutive successful, still-empty observations at or beyond that boundary become the inert `transcript_unavailable` receipt; open sessions, partial transcripts, single empty reads, and retryable provider errors never use the silent-session cutoff.
 - `cara-4-latest` is intentionally excluded because it is the experimental track.
 - Director Notes are deferred. Stable Cara 4 and the SDK upgrade are evaluated first without adding another variable.
@@ -139,6 +140,18 @@ This is intentionally a local, read-only terminal viewer. It accepts only the wo
 
 The read-only capability design is the boundary; the banner `ANALYSIS ONLY - NO AUTHORITY` makes that boundary visible. A person can inspect the summary, recommendations, risk flags, and zero-action safety proof, but nothing produced by the viewer can authorize memory, tools, AgentMail, email, or any outbound action. A future tracked decision workflow requires a separate design and explicit approval; it must not be inferred from viewing a result.
 
+## Phase 4 deterministic review triage
+
+The local viewer now shows `Suggested review priority (rule-based, no authority)`. The value is computed in memory from fixed booleans after the existing filename, hash, retention, and output-schema checks:
+
+- `HIGH`: Hermes explicitly requested human review, or the validated output flagged privacy, unsupported-claim, or pricing/inventory risk.
+- `MEDIUM`: no high-priority reason exists, but a technical-term or repeated-question risk is present.
+- `LOW`: none of those flags is present.
+
+Reason codes use a fixed enum and fixed order. Summary and recommendation strings are not read by the triage rule. Priority is derived solely from model-produced boolean flags and remains a non-authoritative suggestion. The derived result is never written to the local packet, acknowledged to the worker bridge, stored in Redis, returned by the session status route, or used to trigger an action. `HIGH` means review first; `LOW` does not mean approved, correct, or safe.
+
+The richer legacy intelligence fields such as top questions, pain points, and objections remain deferred. Adding them would require a versioned provider-output contract plus stronger provider-input redaction, egress enforcement, local-writer integrity, and independent physical retention before it can be considered safe.
+
 ## Validation ladder
 
 1. Run `npm run test:anam`.
@@ -154,9 +167,10 @@ The read-only capability design is the boundary; the banner `ANALYSIS ONLY - NO 
 11. Confirm `/api/anam/amy/readiness` reports Hermes shadow open only on the canary while memory, tools, AgentMail, and outbound actions remain effectively closed.
 12. Confirm an unauthenticated Hermes worker request returns `401`; then run `npm run hermes:amy-anam-shadow -- --once` with the isolated profile and verify a content-free `completed` or explicit retry result.
 13. Run `npm run hermes:amy-anam-review -- --latest` and confirm it shows the local `ANALYSIS ONLY - NO AUTHORITY` packet without identifiers or any action control.
-14. Confirm `/api/anam/session/status` reports `contentIncluded:false`, zero tools/emails/outbound actions, and no generated summary or transcript fields.
-15. Verify a synthetic ended, zero-message transcript remains pending before 30 minutes and becomes `transcript_unavailable` only at the grace boundary.
-16. Do not change the production Amy persona mapping until the comparison passes and an independent recovery schedule is configured and observed.
+14. Confirm the viewer shows the deterministic priority and fixed reason codes; generated summary/recommendation text must not affect that result.
+15. Confirm `/api/anam/session/status` reports `contentIncluded:false`, zero tools/emails/outbound actions, and no generated summary, priority, or transcript fields.
+16. Verify a synthetic ended, zero-message transcript remains pending before 30 minutes and becomes `transcript_unavailable` only at the grace boundary.
+17. Do not change the production Amy persona mapping until the comparison passes and an independent recovery schedule is configured and observed.
 
 ## Fleet sequence after Amy
 
