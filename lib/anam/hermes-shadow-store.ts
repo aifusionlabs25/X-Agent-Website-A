@@ -394,7 +394,73 @@ async function leaseJobById(
     const leaseToken = randomUUID();
     const prefetched = await redisCommand(['GET', amyAnamHermesShadowJobKey(jobId)], options);
     if (!prefetched) {
-        await redisCommand(['ZREM', AMY_ANAM_HERMES_SHADOW_DUE_KEY, jo÷ž-¢G§²ÚîÆ­yÕy(jobId)], options);
+        await redisCommand(['ZREM', AMY_ANAM_HERMES_SHADOW_DUE_KEY, jobId], options);
+        return null;
+    }
+    const prefetchedJob = normalizeAmyAnamHermesShadowJob(prefetched);
+    if (prefetchedJob.pointer.jobId !== jobId) {
+        throw new Error('Amy Anam Hermes shadow job identity did not match its queue entry');
+    }
+    const script = [
+        "local score = redis.call('ZSCORE', KEYS[2], ARGV[1])",
+        'if not score or tonumber(score) > tonumber(ARGV[2]) then return nil end',
+        "if not redis.call('SET', KEYS[3], ARGV[3], 'NX', 'EX', ARGV[4]) then return nil end",
+        "local raw = redis.call('GET', KEYS[1])",
+        "if not raw then redis.call('DEL', KEYS[3]); redis.call('ZREM', KEYS[2], ARGV[1]); return nil end",
+        'local job = cjson.decode(raw)',
+        "if job.pointer.jobId ~= ARGV[1] or job.pointer.externalSessionId ~= ARGV[8] then redis.call('DEL', KEYS[3]); return nil end",
+        'job.attempts = (tonumber(job.attempts) or 0) + 1',
+        'local updated = cjson.encode(job)',
+        "redis.call('SET', KEYS[1], updated, 'EX', ARGV[5])",
+        "redis.call('ZADD', KEYS[2], ARGV[6], ARGV[1])",
+        "redis.call('EXPIRE', KEYS[2], ARGV[5])",
+        "local receiptRaw = redis.call('GET', KEYS[4])",
+        'if receiptRaw then',
+        '  local receipt = cjson.decode(receiptRaw)',
+        "  receipt.status = 'leased'",
+        '  receipt.attempts = job.attempts',
+        '  receipt.updatedAt = ARGV[7]',
+        '  receipt.nextAttemptAt = cjson.null',
+        '  local encodedReceipt = cjson.encode(receipt)',
+        "  redis.call('SET', KEYS[4], encodedReceipt, 'EX', ARGV[5])",
+        "  redis.call('SET', KEYS[5], encodedReceipt, 'EX', ARGV[5])",
+        'end',
+        'return updated',
+    ].join(' ');
+    const raw = await redisCommand([
+        'EVAL',
+        script,
+        5,
+        amyAnamHermesShadowJobKey(jobId),
+        AMY_ANAM_HERMES_SHADOW_DUE_KEY,
+        amyAnamHermesShadowLeaseKey(jobId),
+        amyAnamHermesShadowJobReceiptKey(jobId),
+        amyAnamHermesShadowSessionReceiptKey(prefetchedJob.pointer.externalSessionId),
+        jobId,
+        now,
+        leaseToken,
+        config.leaseSeconds,
+        config.ttlSeconds,
+        leaseUntil,
+        new Date(now).toISOString(),
+        prefetchedJob.pointer.externalSessionId,
+    ], options);
+    if (!raw) return null;
+    const job = normalizeAmyAnamHermesShadowJob(raw);
+
+    return { job, leaseToken, leaseUntil };
+}
+
+async function deadLetterDurablyStartedJobById(
+    jobId: string,
+    options: StoreOptions = {},
+): Promise<boolean> {
+    const executionKey = amyAnamHermesShadowExecutionKey(jobId);
+    const executionStarted = await redisCommand(['GET', executionKey], options);
+    if (!executionStarted) return false;
+
+    const config = readAmyAnamHermesShadowConfig(options.env ?? process.env);
+    const stored = await redisCommand(['GET', amyAnamHermesShadowJobKey(jobId)], options);
     if (!stored) {
         await redisCommand([
             'EVAL',
