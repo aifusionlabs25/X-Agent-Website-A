@@ -313,6 +313,45 @@ test('closed session metadata remains pending while the transcript end time is n
     assert.equal(fetchCount, 2);
 });
 
+test('an enabled zero-message transcript remains pending even when its end time is present', async () => {
+    const launch = createAmyAnamLaunch('browser-session-empty-transcript', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const responses = [
+        jsonResponse({
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: { zeroDataRetention: false },
+        }),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+    ];
+    let fetchCount = 0;
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0],
+        sleep: async () => undefined,
+        fetchImpl: async url => {
+            fetchCount += 1;
+            const response = responses.shift();
+            assert.ok(response, `Unexpected fetch: ${url}`);
+            return response;
+        },
+    });
+
+    assert.deepEqual(result, { status: 'pending' });
+    assert.equal(fetchCount, 2);
+});
+
 test('zero-data-retention sessions terminate polling without requesting a transcript', async () => {
     const launch = createAmyAnamLaunch('browser-session-zdr', PERSONA_ID, 1_900_000_000_000);
     let fetchCount = 0;

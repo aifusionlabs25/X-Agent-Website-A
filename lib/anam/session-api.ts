@@ -339,6 +339,7 @@ export async function fetchCompletedAnamTranscript(
                 return { status: 'unavailable', reason: 'transcripts_disabled', metadata };
             }
             if (!transcript.endTime || !Number.isFinite(Date.parse(transcript.endTime))) continue;
+            if (transcript.turns.length === 0) continue;
             return { status: 'ready', metadata, turns: transcript.turns };
         } catch (error) {
             if (!(error instanceof AnamSessionApiError) || !error.retryable) throw error;
