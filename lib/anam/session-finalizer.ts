@@ -4,7 +4,16 @@ import {
     fetchCompletedAnamTranscript,
     verifyAnamSessionForLaunch,
 } from './session-api.ts';
+import {
+    createAmyAnamHermesShadowPointer,
+    readAmyAnamHermesShadowConfig,
+} from './hermes-shadow.ts';
+import {
+    buildAmyAnamHermesShadowQueuedEnvelope,
+    enqueueAmyAnamHermesShadowPointer,
+} from './hermes-shadow-store.ts';
 import { buildAmyAnamReceipt } from './session-spine.ts';
+import type { AmyAnamSessionReceipt, AmyAnamSessionRecord } from './session-spine.ts';
 import {
     acquireAmyAnamCompletionLock,
     bindAmyAnamLaunch,
@@ -27,6 +36,42 @@ export type AmyAnamFinalizationResult =
     | 'missing'
     | 'pending';
 
+function buildHermesShadowEnvelope(
+    session: AmyAnamSessionRecord,
+    receipt: AmyAnamSessionReceipt,
+) {
+    try {
+        const config = readAmyAnamHermesShadowConfig();
+        if (!config.gatesOpen || receipt.status !== 'completed') return undefined;
+        const pointer = createAmyAnamHermesShadowPointer({ session, receipt });
+        return buildAmyAnamHermesShadowQueuedEnvelope(pointer);
+    } catch {
+        return undefined;
+    }
+}
+
+export async function ensureAmyAnamHermesShadowQueued(
+    session: AmyAnamSessionRecord,
+    receipt: AmyAnamSessionReceipt,
+): Promise<'closed' | 'duplicate' | 'ineligible' | 'queued'> {
+    let config;
+    try {
+        config = readAmyAnamHermesShadowConfig();
+    } catch {
+        return 'closed';
+    }
+    if (!config.gatesOpen) return 'closed';
+    if (receipt.status !== 'completed') return 'ineligible';
+
+    try {
+        const pointer = createAmyAnamHermesShadowPointer({ session, receipt });
+        const result = await enqueueAmyAnamHermesShadowPointer(pointer);
+        return result.queued ? 'queued' : 'duplicate';
+    } catch {
+        return 'closed';
+    }
+}
+
 export async function finalizeAmyAnamSession(
     externalSessionId: string,
 ): Promise<AmyAnamFinalizationResult> {
@@ -35,7 +80,13 @@ export async function finalizeAmyAnamSession(
 
     try {
         const existingReceipt = await readAmyAnamReceipt(externalSessionId);
-        if (existingReceipt) return 'completed';
+        if (existingReceipt) {
+            const existingSession = await readAmyAnamSession(externalSessionId);
+            if (existingSession) {
+                await ensureAmyAnamHermesShadowQueued(existingSession, existingReceipt);
+            }
+            return 'completed';
+        }
 
         const initialState = await Promise.all([
             readAmyAnamSession(externalSessionId),
@@ -159,7 +210,8 @@ export async function finalizeAmyAnamSession(
                 source: transcript.status === 'ready' ? 'anam_api' : 'unavailable',
                 turns: transcript.status === 'ready' ? transcript.turns : [],
             });
-            await writeAmyAnamReceipt(session, finalization, receipt);
+            const hermesShadowEnvelope = buildHermesShadowEnvelope(session, receipt);
+            await writeAmyAnamReceipt(session, finalization, receipt, { hermesShadowEnvelope });
             return 'completed';
         } catch (error) {
             if (error instanceof AnamSessionApiError && error.retryable) {

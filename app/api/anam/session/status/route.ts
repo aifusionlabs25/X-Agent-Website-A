@@ -1,5 +1,11 @@
 import { after, NextResponse } from 'next/server';
-import { finalizeAmyAnamSession } from '@/lib/anam/session-finalizer';
+import {
+    ensureAmyAnamHermesShadowQueued,
+    finalizeAmyAnamSession,
+} from '@/lib/anam/session-finalizer';
+import { readAmyAnamHermesShadowConfig } from '@/lib/anam/hermes-shadow';
+import type { AmyAnamHermesShadowReceipt } from '@/lib/anam/hermes-shadow';
+import { readAmyAnamHermesShadowReceipt } from '@/lib/anam/hermes-shadow-store';
 import {
     isValidAnamSessionId,
     readAmyAnamBrowserSession,
@@ -78,6 +84,22 @@ export async function GET(request: Request) {
                 await finalizeAmyAnamSession(sessionId).catch(() => undefined);
             });
         }
+
+        let hermesReceipt: AmyAnamHermesShadowReceipt | null = null;
+        try {
+            const hermesConfig = readAmyAnamHermesShadowConfig();
+            if (receipt && session && hermesConfig.gatesOpen) {
+                hermesReceipt = await readAmyAnamHermesShadowReceipt(sessionId);
+                if (!hermesReceipt) {
+                    after(async () => {
+                        await ensureAmyAnamHermesShadowQueued(session, receipt).catch(() => undefined);
+                    });
+                }
+            }
+        } catch {
+            hermesReceipt = null;
+        }
+
         return noStoreJson({
             found: true,
             status: receipt?.status ?? finalization?.state ?? session?.state,
@@ -86,8 +108,14 @@ export async function GET(request: Request) {
             transcriptUnavailable: receipt?.transcript.source === 'unavailable',
             finalizationDurable: Boolean(finalization),
             finalizationAttempts: finalization?.attempts ?? 0,
-            hermesQueued: false,
-            hermesCompleted: false,
+            hermesStatus: hermesReceipt?.status ?? 'not_queued',
+            hermesQueued: Boolean(hermesReceipt),
+            hermesCompleted: hermesReceipt?.status === 'completed',
+            hermesExecutionHappened: hermesReceipt?.hermesExecutionHappened ?? false,
+            hermesContractValid: hermesReceipt?.outputContractValid ?? false,
+            toolsCalled: 0,
+            emailsSent: 0,
+            memoryWritten: false,
             outboundActionTaken: false,
             contentIncluded: false,
         });

@@ -3,14 +3,24 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const sourceFiles = [
+    '../app/api/anam/amy/readiness/route.ts',
+    '../app/api/anam/hermes/worker/route.ts',
     '../app/api/anam/session/bind/route.ts',
     '../app/api/anam/session/complete/route.ts',
+    '../app/api/anam/session/recover/route.ts',
     '../app/api/anam/session/status/route.ts',
+    '../lib/anam/capability-readiness.ts',
+    '../lib/anam/hermes-shadow-store.ts',
+    '../lib/anam/hermes-shadow.ts',
+    '../lib/anam/hermes-worker-bridge.ts',
     '../lib/anam/session-api.ts',
     '../lib/anam/session-finalizer.ts',
+    '../lib/anam/session-recovery.ts',
     '../lib/anam/session-spine-client.ts',
     '../lib/anam/session-spine-store.ts',
     '../lib/anam/session-spine.ts',
+    '../scripts/hermes/amy-anam-shadow-runtime.py',
+    '../scripts/hermes/amy-anam-shadow-worker.mjs',
 ];
 
 const sources = new Map(await Promise.all(sourceFiles.map(async relativePath => [
@@ -24,8 +34,8 @@ const sessionStore = sources.get('../lib/anam/session-spine-store.ts');
 const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
 const qaHook = await readFile(new URL('../hooks/useAnamQaSession.ts', import.meta.url), 'utf8');
 
-test('Phase 1 session-spine files do not import or invoke outbound automation services', () => {
-    const forbiddenImport = /(?:from|import\()\s*['"][^'"]*(?:openai-service|google-sheets|resend|agentmail|hermes|memory)[^'"]*['"]/i;
+test('session-spine and Hermes shadow files do not import or invoke outbound automation services', () => {
+    const forbiddenImport = /(?:from|import\()\s*['"][^'"]*(?:openai-service|google-sheets|resend|agentmail|memory)[^'"]*['"]/i;
     const forbiddenInvocation = /\b(?:new\s+Resend|emails\.send|appendLead|analyzeTranscript|runAmyPostSessionAnalysis)\b/i;
 
     for (const [relativePath, source] of sources) {

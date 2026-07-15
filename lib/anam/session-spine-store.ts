@@ -1,16 +1,23 @@
 import {
     AMY_ANAM_LAUNCH_TTL_SECONDS,
     AMY_ANAM_RECORD_TTL_SECONDS,
+    readAmyAnamSpineConfig,
+} from './session-spine.ts';
+import type {
     AmyAnamFinalizationRecord,
     AmyAnamLaunchRecord,
     AmyAnamSessionReceipt,
     AmyAnamSessionRecord,
-    readAmyAnamSpineConfig,
 } from './session-spine.ts';
+import type { AmyAnamHermesShadowQueuedEnvelope } from './hermes-shadow-store.ts';
 
 type StoreOptions = {
     env?: NodeJS.ProcessEnv;
     fetchImpl?: typeof fetch;
+};
+
+type ReceiptWriteOptions = StoreOptions & {
+    hermesShadowEnvelope?: AmyAnamHermesShadowQueuedEnvelope;
 };
 
 type RedisPipelineItem = {
@@ -36,6 +43,10 @@ function finalizationKey(sessionId: string): string {
 
 function finalizationDueKey(): string {
     return 'xagent:amy:anam:finalization-due:v1';
+}
+
+function recoveryDrainLockKey(): string {
+    return 'xagent:amy:anam:recovery-drain-lock:v1';
 }
 
 function completionByLaunchKey(launchId: string): string {
@@ -241,6 +252,68 @@ export async function readAmyAnamFinalization(
     return parseRecord<AmyAnamFinalizationRecord>(
         await redisCommand(['GET', finalizationKey(externalSessionId)], options),
     );
+}
+
+export async function listDueAmyAnamFinalizationIds(input: {
+    dueAt?: number;
+    limit: number;
+}, options: StoreOptions = {}): Promise<string[]> {
+    const dueAt = Number.isFinite(input.dueAt) ? Math.trunc(input.dueAt as number) : Date.now();
+    const limit = Math.max(1, Math.min(16, Math.trunc(input.limit) || 1));
+    const result = await redisCommand([
+        'ZRANGEBYSCORE',
+        finalizationDueKey(),
+        '-inf',
+        dueAt,
+        'LIMIT',
+        0,
+        limit,
+    ], options);
+    if (!Array.isArray(result)) {
+        throw new Error('Amy Anam finalization queue returned an invalid response');
+    }
+    return result.map(value => String(value));
+}
+
+export async function removeAmyAnamFinalizationDueEntry(
+    externalSessionId: string,
+    options: StoreOptions = {},
+): Promise<void> {
+    await redisCommand(['ZREM', finalizationDueKey(), externalSessionId], options);
+}
+
+export async function acquireAmyAnamRecoveryDrainLock(
+    lockToken: string,
+    options: StoreOptions = {},
+): Promise<boolean> {
+    const result = await redisCommand([
+        'SET',
+        recoveryDrainLockKey(),
+        lockToken,
+        'NX',
+        'EX',
+        55,
+    ], options);
+    return result === 'OK';
+}
+
+export async function releaseAmyAnamRecoveryDrainLock(
+    lockToken: string,
+    options: StoreOptions = {},
+): Promise<void> {
+    const script = [
+        "if redis.call('GET', KEYS[1]) == ARGV[1] then",
+        "  return redis.call('DEL', KEYS[1])",
+        'end',
+        'return 0',
+    ].join(' ');
+    await redisCommand([
+        'EVAL',
+        script,
+        1,
+        recoveryDrainLockKey(),
+        lockToken,
+    ], options);
 }
 
 export type AmyAnamCompletionRecordStatus =
@@ -514,7 +587,7 @@ export async function writeAmyAnamReceipt(
     session: AmyAnamSessionRecord,
     finalization: AmyAnamFinalizationRecord,
     receipt: AmyAnamSessionReceipt,
-    options: StoreOptions = {},
+    options: ReceiptWriteOptions = {},
 ): Promise<void> {
     const completedSession: AmyAnamSessionRecord = {
         ...session,
@@ -528,7 +601,23 @@ export async function writeAmyAnamReceipt(
         updatedAt: receipt.completedAt,
         nextAttemptAt: null,
     };
-    const script = [
+    const envelope = options.hermesShadowEnvelope;
+    if (envelope && (
+        envelope.job.pointer.externalSessionId !== session.externalSessionId
+        || envelope.job.pointer.receiptId !== receipt.receiptId
+        || envelope.job.pointer.expectedMessageCount !== receipt.transcript.messageCount
+        || envelope.job.pointer.expectedTranscriptSha256 !== receipt.transcript.contentSha256
+        || envelope.job.attempts !== 0
+        || envelope.receipt.status !== 'queued'
+        || envelope.receipt.jobId !== envelope.job.pointer.jobId
+        || envelope.receipt.externalSessionId !== session.externalSessionId
+        || envelope.receipt.contentIncluded !== false
+        || envelope.receipt.outboundActions !== 0
+    )) {
+        throw new Error('Amy Anam Hermes shadow envelope did not match the canonical receipt');
+    }
+
+    const scriptParts = [
         "if redis.call('EXISTS', KEYS[1]) == 1 then redis.call('ZREM', KEYS[4], ARGV[5]); return 'duplicate' end",
         "local currentRaw = redis.call('GET', KEYS[3])",
         "if not currentRaw then return 'stale' end",
@@ -538,23 +627,56 @@ export async function writeAmyAnamReceipt(
         "redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[4])",
         "redis.call('SET', KEYS[3], ARGV[3], 'EX', ARGV[4])",
         "redis.call('ZREM', KEYS[4], ARGV[5])",
-        "return 'OK'",
-    ].join(' ');
-    const result = await redisCommand([
+    ];
+    if (envelope) {
+        scriptParts.push(
+            "if redis.call('SET', KEYS[5], '1', 'NX', 'EX', ARGV[11]) == 'OK' then",
+            "  redis.call('SET', KEYS[6], ARGV[7], 'EX', ARGV[11])",
+            "  redis.call('ZADD', KEYS[7], ARGV[8], ARGV[9])",
+            "  redis.call('EXPIRE', KEYS[7], ARGV[11])",
+            "  redis.call('SET', KEYS[8], ARGV[10], 'EX', ARGV[11])",
+            "  redis.call('SET', KEYS[9], ARGV[10], 'EX', ARGV[11])",
+            'end',
+        );
+    }
+    scriptParts.push("return 'OK'");
+
+    const command: Array<string | number> = [
         'EVAL',
-        script,
-        4,
+        scriptParts.join(' '),
+        envelope ? 9 : 4,
         receiptKey(session.externalSessionId),
         sessionKey(session.externalSessionId),
         finalizationKey(session.externalSessionId),
         finalizationDueKey(),
+    ];
+    if (envelope) {
+        command.push(
+            envelope.keys.dedupe,
+            envelope.keys.job,
+            envelope.keys.due,
+            envelope.keys.jobReceipt,
+            envelope.keys.sessionReceipt,
+        );
+    }
+    command.push(
         JSON.stringify(receipt),
         JSON.stringify(completedSession),
         JSON.stringify(completedFinalization),
         AMY_ANAM_RECORD_TTL_SECONDS,
         session.externalSessionId,
         finalization.updatedAt,
-    ], options);
+    );
+    if (envelope) {
+        command.push(
+            envelope.jobJson,
+            envelope.dueAt,
+            envelope.job.pointer.jobId,
+            envelope.receiptJson,
+            envelope.ttlSeconds,
+        );
+    }
+    const result = await redisCommand(command, options);
     if (result !== 'OK' && result !== 'duplicate' && result !== 'stale') {
         throw new Error('Amy Anam receipt could not be stored');
     }

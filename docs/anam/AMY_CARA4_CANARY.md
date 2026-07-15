@@ -56,6 +56,8 @@ Canary created and verified on 2026-07-14:
 - QA mode disables microphone input. Both QA and normal voice mode use the same server-owned Cara 4 session spine.
 - Cara 4 never sends its browser-assembled transcript to `/api/save-transcript`. The server binds the Anam `SESSION_READY` ID to a signed anonymous browser session, waits for Anam's session and transcript `endTime`, hashes the authoritative transcript, and stores only a content-free receipt.
 - Phase 1 performs no Hermes, memory, AgentMail, Resend, Google Sheets, OpenAI, or other outbound automation work.
+- Phase 2 may queue a pointer-only, post-session Hermes shadow review. The local worker fetches the authoritative transcript directly from Anam, redacts it in memory, and stores generated review content only in the operating-system temp directory. Vercel receives only status, hashes, and risk booleans.
+- Phase 2 still performs no memory writes, tool calls, AgentMail/Resend sends, CRM/calendar updates, or other outbound actions. Those capabilities remain unimplemented and fail closed even if an enable flag is accidentally changed.
 - `cara-4-latest` is intentionally excluded because it is the experimental track.
 - Director Notes are deferred. Stable Cara 4 and the SDK upgrade are evaluated first without adding another variable.
 
@@ -70,6 +72,10 @@ Configure these values on the **Amy canary preview branch only**:
 | `AMY_ANAM_SESSION_SECRET` | separate random value, at least 32 characters | Signs the anonymous browser ownership cookie. Never reuse `ANAM_API_KEY`. |
 | `AMY_ANAM_REDIS_REST_URL` | preview Redis REST URL | Stores launches, ownership, completion intake, due work, and content-free receipts. |
 | `AMY_ANAM_REDIS_REST_TOKEN` | preview Redis REST token | Authenticates server-only Redis calls. |
+| `AMY_ANAM_RECOVERY_SECRET` | separate random value, at least 16 characters (32+ recommended) | Authenticates an external recovery scheduler. `CRON_SECRET` is also accepted for Vercel Cron. |
+| `AMY_ANAM_RECOVERY_ENABLED` | `true` | Requests recovery processing on the canary. |
+| `AMY_ANAM_RECOVERY_KILL_SWITCH` | `false` | Explicitly opens recovery on the canary. Missing or any other value fails closed. |
+| `AMY_ANAM_PRODUCTION_PROMOTION_APPROVED` | `false` | Prevents a production cron invocation from doing provider reads or Redis mutations. Set to `true` only during a separately approved production promotion. |
 
 The existing `ANAM_API_KEY` and branch-scoped `ANAM_AMY_CARA4_PERSONA_ID` are also required. Never use a `NEXT_PUBLIC_` prefix for any value above.
 
@@ -79,7 +85,50 @@ Gate behavior:
 - `ENABLED=true` with a missing secret, Redis value, or explicit `KILL_SWITCH=false`: Amy Cara 4 returns `503`; it does not silently start an untracked canary session.
 - `ENABLED=true`, `KILL_SWITCH=false`, and all server values present: the token response must include `sessionSpineEnabled:true` and a UUID `launchId`.
 
-The completion endpoint persists `verification_pending` before it calls Anam, so closing the page cannot erase completion intake. Next.js `after()` is the preview fast path. A Redis due-set retains delayed work, but an independent scheduled drain is still required before production promotion so a deploy or platform timeout cannot strand a late transcript.
+The completion endpoint persists `verification_pending` before it calls Anam, so closing the page cannot erase completion intake. Next.js `after()` is the preview fast path. The independent `GET`/`POST /api/anam/session/recover` route drains the Redis due-set when called by a scheduler. Each call is limited to eight records, two concurrent finalizers, and a 10-second dispatch window that leaves headroom for in-flight provider polling before the 60-second function limit. A global 55-second lease prevents overlapping drains, while the existing per-session lease also protects against completion/status requests racing the worker.
+
+The recovery route requires its enable gate, open kill switch, and `Authorization: Bearer <secret>`. It accepts either `AMY_ANAM_RECOVERY_SECRET` or Vercel's `CRON_SECRET`. Vercel automatically sends `CRON_SECRET` to configured Cron routes. In production, the route additionally requires `AMY_ANAM_PRODUCTION_PROMOTION_APPROVED=true`; otherwise it returns `503` before doing work. `vercel.json` registers a Hobby-compatible daily call at 10:00 UTC (3:00 AM Phoenix time, with Hobby's hourly delivery window). This is a last-resort recovery backstop, not the timely retry path: `after()` and status checks remain the fast paths. A future QStash schedule or Vercel plan with minute-level cron is still required if the canary needs a shorter unattended recovery target. Cron runs only on production deployments, so preview validation is limited to manual authenticated route calls until an explicit production promotion.
+
+## Phase 2 Hermes shadow environment matrix
+
+Configure these values on the **Amy canary preview branch only**:
+
+| Variable | Required preview value | Purpose |
+| --- | --- | --- |
+| `AMY_ANAM_HERMES_SHADOW_ENABLED` | `true` | Requests post-session shadow analysis. |
+| `AMY_ANAM_HERMES_SHADOW_KILL_SWITCH` | `false` | Explicitly opens the shadow kill switch. Missing or any other value fails closed. |
+| `AMY_ANAM_HERMES_SHADOW_MODE` | `shadow` | The only permitted processing mode. `active` is rejected. |
+| `AMY_ANAM_HERMES_WORKER_SECRET` | separate random value, at least 32 characters | Authenticates the local worker bridge. Never reuse an Anam, Redis, or session secret. |
+| `AMY_ANAM_MEMORY_ENABLED` | `false` | Keeps memory unavailable. |
+| `AMY_ANAM_MEMORY_KILL_SWITCH` | `true` | Second fail-closed memory boundary. |
+| `AMY_ANAM_TOOLS_ENABLED` | `false` | Keeps action tools unavailable. |
+| `AMY_ANAM_TOOLS_KILL_SWITCH` | `true` | Second fail-closed tools boundary. |
+| `AMY_ANAM_AGENTMAIL_ENABLED` | `false` | Keeps AgentMail unavailable. |
+| `AMY_ANAM_AGENTMAIL_KILL_SWITCH` | `true` | Second fail-closed AgentMail boundary. |
+| `AMY_ANAM_OUTBOUND_ACTIONS_ENABLED` | `false` | Keeps all outbound actions unavailable. |
+| `AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH` | `true` | Global outbound kill switch. |
+| `AMY_EMAIL_PROVIDER` | `off` | Prevents the existing email path from being selected. |
+
+The preview keeps the Redis credentials server-side. The local worker does not need them. Configure the local process with:
+
+| Variable | Local value | Purpose |
+| --- | --- | --- |
+| `ANAM_API_KEY` | existing private Anam key | Fetches and verifies the authoritative transcript directly from Anam. |
+| `AMY_ANAM_HERMES_SHADOW_ENABLED` | `true` | Mirrors the preview shadow gate. |
+| `AMY_ANAM_HERMES_SHADOW_KILL_SWITCH` | `false` | Mirrors the preview kill-switch gate. |
+| `AMY_ANAM_HERMES_SHADOW_MODE` | `shadow` | Prevents an active mode. |
+| `AMY_ANAM_HERMES_WORKER_BRIDGE_URL` | `https://<preview>/api/anam/hermes/worker` | Claims pointers and returns content-free receipts over HTTPS. |
+| `AMY_ANAM_HERMES_WORKER_SECRET` | same branch-scoped worker secret | Authenticates the bridge. |
+| `AMY_ANAM_HERMES_HOME` | absolute isolated profile directory | Prevents Amy from inheriting the shared Hermes profile. |
+| `AMY_ANAM_HERMES_PROVIDER` | `openai-codex` | Uses the already verified isolated Hermes provider. |
+| `AMY_ANAM_HERMES_MODEL` | `gpt-5.5` | Uses the verified shadow-analysis model. |
+| `AMY_ANAM_HERMES_PYTHON_COMMAND` | absolute path to the installed Hermes virtual-environment `python.exe` | Runs the pinned Hermes library without the unsafe CLI oneshot path. On this machine: `C:\Users\AI Fusion Labs\AppData\Local\hermes\hermes-agent\venv\Scripts\python.exe`. |
+
+Run one bounded claim with `npm run hermes:amy-anam-shadow -- --once`. The worker does not use `hermes --oneshot`: that CLI mode places the prompt in the process arguments, creates a session database, loads broader agent machinery, and auto-bypasses approvals. Instead, the worker sends bounded JSON over stdin to the pinned Hermes Python runtime and uses Hermes's narrow `openai-codex` auxiliary client. No tool schemas are supplied, no agent/session/memory/hook/plugin runtime is created, and the provider request is sent with `store:false`. The child receives a minimal environment with safe mode enabled and both hook acceptance and YOLO mode explicitly disabled.
+
+A validated summary is written under the operating-system temp directory for at most 24 hours by default. The bridge acknowledgement contains no transcript, prompt, summary, recommendation, contact detail, or other generated content. `npm run test:anam:hermes-runtime` is the opt-in live proof: with `AMY_ANAM_HERMES_RUNTIME_INTEGRATION=1`, the isolated home, and the Python command set locally, it verifies that the prompt is absent from process arguments and every isolated-profile file, while `state.db` keeps the same hash, size, and modification time.
+
+`GET /api/anam/amy/readiness` is a content-free, bearer-authenticated readiness view that reuses the worker secret. It reports the effective session, recovery, and Hermes gates and proves that memory, tools, AgentMail, and global outbound actions remain unavailable. `POST /api/anam/hermes/worker` uses the same bearer authentication, accepts a maximum 32 KiB JSON body, and supports only `claim`, `ack`, and `fail` operations.
 
 ## Validation ladder
 
@@ -92,7 +141,11 @@ The completion endpoint persists `verification_pending` before it calls Anam, so
 7. Confirm Cara 4 makes no `/api/save-transcript` request. Verify a terminal status is `completed` or the explicit `transcript_unavailable`; investigate `failed` or a long-lived pending state.
 8. Smoke-test one control agent, such as Taylor, because the SDK upgrade is shared by all X Agents.
 9. Verify session startup, two-way text turns, interruption, visible framing, and tools/knowledge.
-10. Do not change the production Amy persona mapping until the comparison passes and an independent finalization drain exists.
+10. Invoke the authenticated recovery route with a due test record and confirm the summary is bounded, content-free, and `outbound:false`.
+11. Confirm `/api/anam/amy/readiness` reports Hermes shadow open only on the canary while memory, tools, AgentMail, and outbound actions remain effectively closed.
+12. Confirm an unauthenticated Hermes worker request returns `401`; then run `npm run hermes:amy-anam-shadow -- --once` with the isolated profile and verify a content-free `completed` or explicit retry result.
+13. Confirm `/api/anam/session/status` reports `contentIncluded:false`, zero tools/emails/outbound actions, and no generated summary or transcript fields.
+14. Do not change the production Amy persona mapping until the comparison passes and an independent recovery schedule is configured and observed.
 
 ## Fleet sequence after Amy
 

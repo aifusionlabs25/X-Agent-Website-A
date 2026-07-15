@@ -2,10 +2,9 @@ import {
     AMY_ANAM_MAX_TRANSCRIPT_CHARACTERS,
     AMY_ANAM_MAX_TRANSCRIPT_TURNS,
     AMY_ANAM_MAX_TURN_CHARACTERS,
-    AmyAnamLaunchRecord,
-    AmyTranscriptTurn,
     normalizeAmyTranscript,
 } from './session-spine.ts';
+import type { AmyAnamLaunchRecord, AmyTranscriptTurn } from './session-spine.ts';
 
 const ANAM_API_BASE = 'https://api.anam.ai/v1';
 const DEFAULT_REQUEST_TIMEOUT_MS = 5_000;
