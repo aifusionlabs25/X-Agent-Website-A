@@ -12,12 +12,16 @@ const DEFAULT_POLL_DELAYS_MS = [0, 250, 750, 1_500, 2_500];
 const MAX_METADATA_RESPONSE_BYTES = 64 * 1024;
 const MAX_TRANSCRIPT_RESPONSE_BYTES = 2 * 1024 * 1024;
 
+export const AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS = 30 * 60 * 1000;
+
 type SessionApiOptions = {
     env?: NodeJS.ProcessEnv;
     fetchImpl?: typeof fetch;
     sleep?: (milliseconds: number) => Promise<void>;
     requestTimeoutMs?: number;
     pollDelaysMs?: number[];
+    now?: () => number;
+    emptyTranscriptGraceStartedAt?: number;
 };
 
 export type AnamSessionMetadata = {
@@ -44,7 +48,7 @@ export type CompletedAnamTranscript =
     }
     | {
         status: 'unavailable';
-        reason: 'zero_data_retention' | 'transcripts_disabled';
+        reason: 'empty_transcript' | 'zero_data_retention' | 'transcripts_disabled';
         metadata: AnamSessionMetadata;
     };
 
@@ -322,6 +326,12 @@ export async function fetchCompletedAnamTranscript(
 ): Promise<CompletedAnamTranscript> {
     const delays = options.pollDelaysMs ?? DEFAULT_POLL_DELAYS_MS;
     const sleep = options.sleep ?? defaultSleep;
+    const now = options.now ?? Date.now;
+    let finalEmptyObservation: {
+        metadata: AnamSessionMetadata;
+        graceStartedAt: number | null;
+    } | null = null;
+    let consecutiveEmptyObservations = 0;
 
     for (const delay of delays) {
         await sleep(delay);
@@ -329,7 +339,11 @@ export async function fetchCompletedAnamTranscript(
             const metadata = await fetchAnamSessionMetadata(sessionId, options);
             verifyAnamSessionMetadata(metadata, launch);
 
-            if (!metadata.endTime && !metadata.exitStatus) continue;
+            if (!metadata.endTime && !metadata.exitStatus) {
+                finalEmptyObservation = null;
+                consecutiveEmptyObservations = 0;
+                continue;
+            }
             if (metadata.personaConfig?.zeroDataRetention === true) {
                 return { status: 'unavailable', reason: 'zero_data_retention', metadata };
             }
@@ -338,12 +352,46 @@ export async function fetchCompletedAnamTranscript(
             if (!transcript.transcriptsEnabled) {
                 return { status: 'unavailable', reason: 'transcripts_disabled', metadata };
             }
-            if (!transcript.endTime || !Number.isFinite(Date.parse(transcript.endTime))) continue;
-            if (transcript.turns.length === 0) continue;
+            const transcriptEndedAt = Date.parse(transcript.endTime ?? '');
+            if (!Number.isFinite(transcriptEndedAt)) {
+                finalEmptyObservation = null;
+                consecutiveEmptyObservations = 0;
+                continue;
+            }
+            if (transcript.turns.length === 0) {
+                const metadataEndedAt = Date.parse(metadata.endTime ?? '');
+                const providerEndedAt = Number.isFinite(metadataEndedAt)
+                    ? Math.max(metadataEndedAt, transcriptEndedAt)
+                    : transcriptEndedAt;
+                const locallyReceivedAt = options.emptyTranscriptGraceStartedAt;
+                finalEmptyObservation = {
+                    metadata,
+                    graceStartedAt: Number.isFinite(locallyReceivedAt)
+                        ? Math.max(providerEndedAt, locallyReceivedAt as number)
+                        : null,
+                };
+                consecutiveEmptyObservations += 1;
+                continue;
+            }
             return { status: 'ready', metadata, turns: transcript.turns };
         } catch (error) {
             if (!(error instanceof AnamSessionApiError) || !error.retryable) throw error;
+            finalEmptyObservation = null;
+            consecutiveEmptyObservations = 0;
         }
+    }
+
+    if (
+        finalEmptyObservation
+        && consecutiveEmptyObservations >= 2
+        && finalEmptyObservation.graceStartedAt !== null
+        && now() - finalEmptyObservation.graceStartedAt >= AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS
+    ) {
+        return {
+            status: 'unavailable',
+            reason: 'empty_transcript',
+            metadata: finalEmptyObservation.metadata,
+        };
     }
 
     return { status: 'pending' };

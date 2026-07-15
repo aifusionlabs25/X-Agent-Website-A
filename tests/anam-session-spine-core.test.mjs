@@ -53,7 +53,11 @@ const {
     readAmyAnamBrowserSession,
     readAmyAnamSpineConfig,
 } = sessionSpineModule.exports;
-const { fetchAnamSessionMetadata, fetchCompletedAnamTranscript } = sessionApiModule.exports;
+const {
+    AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
+    fetchAnamSessionMetadata,
+    fetchCompletedAnamTranscript,
+} = sessionApiModule.exports;
 const { completeAmyAnamClientSession } = sessionClientModule.exports;
 
 const SECRET = 'phase-1-test-signing-secret-with-more-than-32-characters';
@@ -313,10 +317,282 @@ test('closed session metadata remains pending while the transcript end time is n
     assert.equal(fetchCount, 2);
 });
 
+test('an enabled zero-message transcript becomes unavailable at the grace boundary', async () => {
+    const launch = createAmyAnamLaunch('browser-session-empty-expired', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: completedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const responses = [
+        jsonResponse(metadata),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+        jsonResponse(metadata),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.equal(result.status, 'unavailable');
+    assert.equal(result.reason, 'empty_transcript');
+    assert.deepEqual(result.metadata, metadata);
+});
+
+test('empty transcript polling still accepts populated content on the final attempt', async () => {
+    const launch = createAmyAnamLaunch('browser-session-empty-then-ready', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: completedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const responses = [
+        jsonResponse(metadata),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+        jsonResponse(metadata),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 1,
+            messages: [{ role: 'persona', message: 'The greeting arrived after the empty response.' }],
+        }),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, {
+        status: 'ready',
+        metadata,
+        turns: [{ role: 'agent', content: 'The greeting arrived after the empty response.' }],
+    });
+});
+
+test('a retryable provider error after an empty transcript keeps finalization recoverable', async () => {
+    const launch = createAmyAnamLaunch('browser-session-empty-then-error', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: completedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const responses = [
+        jsonResponse(metadata),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+        jsonResponse(metadata),
+        jsonResponse({ error: 'not ready' }, 503),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, { status: 'pending' });
+});
+
+test('one empty observation after a retryable provider outage cannot terminalize a session', async () => {
+    const launch = createAmyAnamLaunch('browser-session-error-then-empty', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: completedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const responses = [
+        jsonResponse(metadata),
+        jsonResponse({ error: 'provider unavailable' }, 503),
+        jsonResponse(metadata),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, { status: 'pending' });
+});
+
+test('a fresh local close receipt prevents stale provider timestamps from expiring immediately', async () => {
+    const launch = createAmyAnamLaunch('browser-session-stale-provider-end', PERSONA_ID, 1_900_000_000_000);
+    const providerCompletedAt = '2030-03-17T15:47:10.000Z';
+    const now = Date.parse('2030-03-17T17:47:10.000Z');
+    const locallyReceivedAt = now - AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS + 1;
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: providerCompletedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const emptyTranscript = () => jsonResponse({
+        sessionId: SESSION_ID,
+        endTime: providerCompletedAt,
+        transcriptsEnabled: true,
+        totalMessages: 0,
+        messages: [],
+    });
+    const responses = [
+        jsonResponse(metadata),
+        emptyTranscript(),
+        jsonResponse(metadata),
+        emptyTranscript(),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => now,
+        emptyTranscriptGraceStartedAt: locallyReceivedAt,
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, { status: 'pending' });
+});
+
+test('a future empty-transcript end time never expires because of clock skew', async () => {
+    const launch = createAmyAnamLaunch('browser-session-empty-future', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const responses = [
+        jsonResponse({
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: { zeroDataRetention: false },
+        }),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+        jsonResponse({
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: { zeroDataRetention: false },
+        }),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) - 1,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, { status: 'pending' });
+});
+
 test('an enabled zero-message transcript remains pending even when its end time is present', async () => {
     const launch = createAmyAnamLaunch('browser-session-empty-transcript', PERSONA_ID, 1_900_000_000_000);
     const completedAt = '2030-03-17T17:47:10.000Z';
     const responses = [
+        jsonResponse({
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: { zeroDataRetention: false },
+        }),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 0,
+            messages: [],
+        }),
         jsonResponse({
             id: SESSION_ID,
             personaId: PERSONA_ID,
@@ -338,7 +614,9 @@ test('an enabled zero-message transcript remains pending even when its end time 
 
     const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
         env: { ANAM_API_KEY: 'server-only-test-key' },
-        pollDelaysMs: [0],
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS - 1,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
         sleep: async () => undefined,
         fetchImpl: async url => {
             fetchCount += 1;
@@ -349,7 +627,7 @@ test('an enabled zero-message transcript remains pending even when its end time 
     });
 
     assert.deepEqual(result, { status: 'pending' });
-    assert.equal(fetchCount, 2);
+    assert.equal(fetchCount, 4);
 });
 
 test('zero-data-retention sessions terminate polling without requesting a transcript', async () => {

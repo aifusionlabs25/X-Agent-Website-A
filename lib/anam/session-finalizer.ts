@@ -230,6 +230,7 @@ export async function finalizeAmyAnamSession(
             const transcript = await fetchCompletedAnamTranscript(externalSessionId, launch, {
                 pollDelaysMs: [0, 500, 1_000, 2_000, 3_000],
                 requestTimeoutMs: 2_000,
+                emptyTranscriptGraceStartedAt: Date.parse(finalization.receivedAt),
             });
             if (transcript.status === 'pending') {
                 await markAmyAnamFinalizationPending({
