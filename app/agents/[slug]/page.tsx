@@ -23,32 +23,13 @@ export default async function AgentDetailPage({ params }: Props) {
             {/* Cinematic backdrop */}
             <div className="relative w-full h-[50vh] overflow-hidden">
                 {isAmy ? (
-                    <>
-                        <Image
-                            src={agent.thumbnailSrc}
-                            alt=""
-                            fill
-                            aria-hidden="true"
-                            className="object-cover object-top blur-2xl scale-110 opacity-15"
-                            sizes="100vw"
-                        />
-                        <div
-                            className="absolute inset-y-0 right-0 w-full md:w-[68%]"
-                            style={{
-                                WebkitMaskImage: 'linear-gradient(to right, transparent, black 14%, black 84%, transparent)',
-                                maskImage: 'linear-gradient(to right, transparent, black 14%, black 84%, transparent)',
-                            }}
-                        >
-                            <Image
-                                src={agent.thumbnailSrc}
-                                alt={agent.name}
-                                fill
-                                className="object-contain object-center blur-[1px] opacity-45"
-                                sizes="(min-width: 768px) 68vw, 100vw"
-                            />
-                        </div>
-                        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/75 via-zinc-950/20 to-transparent" />
-                    </>
+                    <Image
+                        src={agent.thumbnailSrc}
+                        alt={agent.name}
+                        fill
+                        className="object-cover object-[center_38%] blur-[1px] opacity-40"
+                        sizes="100vw"
+                    />
                 ) : (
                     <Image
                         src={agent.thumbnailSrc}

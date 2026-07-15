@@ -6,6 +6,16 @@ import {
     selectVoiceMeeterB1DeviceId,
     VOICEMEETER_AUDIO_BRIDGE,
 } from '../lib/anam/audio-bridge.ts';
+import { ALL_AGENTS } from '../lib/agents.ts';
+
+test('Amy launches the Cara 4 persona with the VoiceMeeter bridge from the public site', () => {
+    const amy = ALL_AGENTS.find(agent => agent.slug === 'amy');
+    const launchUrl = new URL(amy.liveUrl, 'https://xagent.aifusionlabs.app');
+
+    assert.equal(launchUrl.pathname, '/demo/amy');
+    assert.equal(launchUrl.searchParams.get('variant'), 'cara4');
+    assert.equal(launchUrl.searchParams.get('audioBridge'), VOICEMEETER_AUDIO_BRIDGE);
+});
 
 test('the bridge is enabled only for Amy Cara 4 voice sessions', () => {
     const enabled = resolveAnamAudioBridge({
