@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { createClient, AnamClient, AnamEvent, MessageStreamEvent } from '@anam-ai/js-sdk';
+import {
+    createClient,
+    AnamClient,
+    AnamEvent,
+    ConnectionClosedCode,
+    MessageStreamEvent,
+} from '@anam-ai/js-sdk';
+import {
+    bindAmyAnamClientSession,
+    completeAmyAnamClientSession,
+} from '@/lib/anam/session-spine-client';
 
 export type TranscriptMessage = {
     role: 'user' | 'agent' | 'system' | 'error';
@@ -12,18 +22,25 @@ interface UseAnamQaSessionProps {
     sessionVariant?: string;
 }
 
+type ActiveSessionLifecycle = {
+    client: AnamClient;
+    completeOnce: (closeReason: string, maxAttempts?: number) => Promise<void>;
+    removeListeners: () => void;
+};
+
 const transcriptRole = (role: string): 'user' | 'agent' => role === 'user' ? 'user' : 'agent';
 
 export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSessionProps) {
     const [client, setClient] = useState<AnamClient | null>(null);
     const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'streaming' | 'error'>('idle');
     const [messages, setMessages] = useState<TranscriptMessage[]>([]);
-    const [sessionId] = useState<string | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null);
     
     // We use refs to handle live streaming chunks without causing excessive re-renders
     const currentMessageRef = useRef<string>('');
     const currentRoleRef = useRef<string>('');
     const isMounted = useRef(true);
+    const activeSessionLifecycleRef = useRef<ActiveSessionLifecycle | null>(null);
 
     const appendMessage = useCallback((role: TranscriptMessage['role'], content: string) => {
         setMessages(prev => [...prev, { role, content, id: crypto.randomUUID() }]);
@@ -33,6 +50,7 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
         if (!personaId) return;
         
         setConnectionState('connecting');
+        setSessionId(null);
         appendMessage('system', 'Initializing QA Session (Audio Input Disabled)...');
 
         try {
@@ -44,7 +62,18 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
             });
 
             if (!tokenRes.ok) throw new Error('Failed to fetch session token');
-            const { sessionToken } = await tokenRes.json();
+            const tokenPayload = await tokenRes.json() as {
+                sessionToken?: string;
+                sessionSpineEnabled?: boolean;
+                launchId?: string;
+            };
+            if (typeof tokenPayload.sessionToken !== 'string') {
+                throw new Error('Session token response was incomplete');
+            }
+            const { sessionToken } = tokenPayload;
+            const sessionSpineActive = tokenPayload.sessionSpineEnabled === true
+                && typeof tokenPayload.launchId === 'string';
+            const launchId = sessionSpineActive ? tokenPayload.launchId ?? null : null;
             
             if (!isMounted.current) return;
 
@@ -53,17 +82,66 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
                 disableInputAudio: true // CRITICAL: Prevents mic permission prompt
             });
 
+            let providerSessionId: string | null = null;
+            let bindPromise: Promise<void> | null = null;
+            let completionPromise: Promise<void> | null = null;
+            let closeHandled = false;
+            let listenersRemoved = false;
+
+            const completeOnce = (closeReason: string, maxAttempts?: number): Promise<void> => {
+                if (!sessionSpineActive || !launchId || !providerSessionId) {
+                    return Promise.resolve();
+                }
+                if (completionPromise) return completionPromise;
+
+                const activeCompletion = (async () => {
+                    const receipt = await completeAmyAnamClientSession({
+                        launchId,
+                        sessionId: providerSessionId as string,
+                        closeReason,
+                        maxAttempts,
+                    });
+                    console.info('[Amy Anam Spine] QA session completion accepted', {
+                        status: receipt.status,
+                        receiptPresent: Boolean(receipt.receiptId),
+                    });
+                })();
+                completionPromise = activeCompletion;
+                activeCompletion.catch(() => {
+                    if (completionPromise === activeCompletion) completionPromise = null;
+                });
+                return activeCompletion;
+            };
+
+            const handlePageHide = () => {
+                void completeOnce('pagehide', 1).catch(() => undefined);
+            };
+
             // Set up event listeners BEFORE connecting
-            anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, () => {
+            const handleConnectionEstablished = () => {
                 if (!isMounted.current) return;
                 setConnectionState('streaming');
                 appendMessage('system', 'Neural Link Established. Streaming ready.');
-                // Note: The Anam JS SDK does not expose sessionId synchronously here easily, 
-                // but we track it conceptually if an event provides it later.
-            });
+            };
+
+            const handleSessionReady = (readySessionId: string) => {
+                if (providerSessionId) return;
+                providerSessionId = readySessionId;
+                if (isMounted.current) setSessionId(readySessionId);
+
+                if (sessionSpineActive && launchId && !bindPromise) {
+                    bindPromise = bindAmyAnamClientSession({
+                        launchId,
+                        sessionId: readySessionId,
+                    });
+                    bindPromise.catch(() => {
+                        console.error('[Amy Anam Spine] QA session binding was not confirmed');
+                    });
+                }
+            };
 
             // Capture live conversation chunks
-            anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, (messageEvent: MessageStreamEvent) => {
+            const handleMessageStream = (messageEvent: MessageStreamEvent) => {
                 // If role changes, flush the previous message to state
                 if (messageEvent.role !== currentRoleRef.current && currentRoleRef.current) {
                     if (currentMessageRef.current) {
@@ -82,20 +160,52 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
                     currentMessageRef.current = '';
                     currentRoleRef.current = '';
                 }
-            });
+            };
 
-            anamClient.addListener(AnamEvent.CONNECTION_CLOSED, () => {
-                if (!isMounted.current) return;
-                setConnectionState('idle');
-                appendMessage('system', 'Session disconnected.');
+            const handleConnectionClosed = (reason: ConnectionClosedCode) => {
+                if (closeHandled) return;
+                closeHandled = true;
+
+                if (sessionSpineActive) {
+                    void completeOnce(String(reason)).catch(() => {
+                        console.error('[Amy Anam Spine] QA session completion was not confirmed');
+                    });
+                }
+
+                if (isMounted.current) {
+                    setConnectionState('idle');
+                    appendMessage('system', 'Session disconnected.');
+                }
                 
                 // Flush remaining chunks
-                if (currentMessageRef.current && currentRoleRef.current) {
+                if (isMounted.current && currentMessageRef.current && currentRoleRef.current) {
                     appendMessage(transcriptRole(currentRoleRef.current), currentMessageRef.current.trim());
                     currentMessageRef.current = '';
                     currentRoleRef.current = '';
                 }
-            });
+                removeClientListeners();
+            };
+
+            const removeClientListeners = () => {
+                if (listenersRemoved) return;
+                listenersRemoved = true;
+                window.removeEventListener('pagehide', handlePageHide);
+                anamClient.removeListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
+                anamClient.removeListener(AnamEvent.SESSION_READY, handleSessionReady);
+                anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
+                anamClient.removeListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
+            };
+
+            if (sessionSpineActive) window.addEventListener('pagehide', handlePageHide);
+            anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
+            anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
+            anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
+            anamClient.addListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
+            activeSessionLifecycleRef.current = {
+                client: anamClient,
+                completeOnce,
+                removeListeners: removeClientListeners,
+            };
 
             // 3. Connect and Stream directly to the video element
             await anamClient.streamToVideoElement(videoElementId);
@@ -155,6 +265,13 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
         isMounted.current = true;
         return () => {
             isMounted.current = false;
+            const activeLifecycle = activeSessionLifecycleRef.current;
+            activeSessionLifecycleRef.current = null;
+            if (activeLifecycle) {
+                activeLifecycle.removeListeners();
+                void activeLifecycle.completeOnce('unmount').catch(() => undefined);
+                void activeLifecycle.client.stopStreaming().catch(console.error);
+            }
         };
     }, []);
 

@@ -53,10 +53,33 @@ Canary created and verified on 2026-07-14:
 
 - The current public Amy persona is never updated by the script.
 - Tavus files and the Tavus deployment are read-only inputs and remain on hold.
-- QA mode disables microphone input and does not call the transcript-save route.
-- If normal voice mode is used on the Cara 4 canary, `/api/save-transcript` accepts only the message count and suppresses filesystem writes, LLM analysis, Google Sheets, and Resend email.
+- QA mode disables microphone input. Both QA and normal voice mode use the same server-owned Cara 4 session spine.
+- Cara 4 never sends its browser-assembled transcript to `/api/save-transcript`. The server binds the Anam `SESSION_READY` ID to a signed anonymous browser session, waits for Anam's session and transcript `endTime`, hashes the authoritative transcript, and stores only a content-free receipt.
+- Phase 1 performs no Hermes, memory, AgentMail, Resend, Google Sheets, OpenAI, or other outbound automation work.
 - `cara-4-latest` is intentionally excluded because it is the experimental track.
 - Director Notes are deferred. Stable Cara 4 and the SDK upgrade are evaluated first without adding another variable.
+
+## Phase 1 session-spine environment matrix
+
+Configure these values on the **Amy canary preview branch only**:
+
+| Variable | Required preview value | Purpose |
+| --- | --- | --- |
+| `AMY_ANAM_SESSION_SPINE_ENABLED` | `true` | Requests the new server-owned path. |
+| `AMY_ANAM_SESSION_SPINE_KILL_SWITCH` | `false` | Explicitly opens the canary gate. Missing or any other value fails closed when the spine is enabled. |
+| `AMY_ANAM_SESSION_SECRET` | separate random value, at least 32 characters | Signs the anonymous browser ownership cookie. Never reuse `ANAM_API_KEY`. |
+| `AMY_ANAM_REDIS_REST_URL` | preview Redis REST URL | Stores launches, ownership, completion intake, due work, and content-free receipts. |
+| `AMY_ANAM_REDIS_REST_TOKEN` | preview Redis REST token | Authenticates server-only Redis calls. |
+
+The existing `ANAM_API_KEY` and branch-scoped `ANAM_AMY_CARA4_PERSONA_ID` are also required. Never use a `NEXT_PUBLIC_` prefix for any value above.
+
+Gate behavior:
+
+- `ENABLED` absent or not `true`: the experimental spine is off and existing agents retain their old behavior.
+- `ENABLED=true` with a missing secret, Redis value, or explicit `KILL_SWITCH=false`: Amy Cara 4 returns `503`; it does not silently start an untracked canary session.
+- `ENABLED=true`, `KILL_SWITCH=false`, and all server values present: the token response must include `sessionSpineEnabled:true` and a UUID `launchId`.
+
+The completion endpoint persists `verification_pending` before it calls Anam, so closing the page cannot erase completion intake. Next.js `after()` is the preview fast path. A Redis due-set retains delayed work, but an independent scheduled drain is still required before production promotion so a deploy or platform timeout cannot strand a late transcript.
 
 ## Validation ladder
 
@@ -64,9 +87,12 @@ Canary created and verified on 2026-07-14:
 2. Run `npm run lint` and `npm run build`.
 3. Confirm public Amy still starts in QA mode with no canary environment variable.
 4. On a Vercel preview, compare public Amy and the Cara 4 canary with the same scenario.
-5. Smoke-test one control agent, such as Taylor, because the SDK upgrade is shared by all X Agents.
-6. Verify session startup, two-way text turns, interruption, visible framing, tools/knowledge, and the absence of `/api/save-transcript` in QA mode.
-7. Do not change the production Amy persona mapping until the comparison passes.
+5. In browser Network tools, confirm the Cara 4 token response has `sessionSpineEnabled:true` and a UUID `launchId`. A visually working Amy session without those fields is a failed spine smoke test.
+6. Confirm `SESSION_READY` calls `/api/anam/session/bind`, closing calls `/api/anam/session/complete` with no transcript field, and `/api/anam/session/status?sessionId=...` reports `finalizationDurable:true` with `contentIncluded:false`.
+7. Confirm Cara 4 makes no `/api/save-transcript` request. Verify a terminal status is `completed` or the explicit `transcript_unavailable`; investigate `failed` or a long-lived pending state.
+8. Smoke-test one control agent, such as Taylor, because the SDK upgrade is shared by all X Agents.
+9. Verify session startup, two-way text turns, interruption, visible framing, and tools/knowledge.
+10. Do not change the production Amy persona mapping until the comparison passes and an independent finalization drain exists.
 
 ## Fleet sequence after Amy
 
