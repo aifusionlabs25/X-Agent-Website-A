@@ -8,6 +8,7 @@ import {
     AMY_ANAM_HERMES_SHADOW_OUTPUT_VERSION,
     hashAmyAnamHermesShadowOutput,
     parseAmyAnamHermesShadowOutput,
+    sanitizeAmyAnamHermesSensitiveText,
 } from '../lib/anam/hermes-shadow.ts';
 import {
     AMY_ANAM_HERMES_LOCAL_REVIEW_VERSION,
@@ -222,6 +223,45 @@ test('the viewer validates, sanitizes, and renders content without identifiers o
     assert.equal(
         sanitizeAmyAnamHermesReviewText('Open /home/AI Fusion Labs/private/secret.json after review.'),
         'Open [path redacted]',
+    );
+});
+
+test('viewer display redaction stays identical to the shared provider sanitizer', () => {
+    const sensitiveCases = [
+        ['pat\u200B\uFF20example\uFF0Etest', '[email redacted]'],
+        ['pat @ example . com', '[email redacted]'],
+        ['pat (at) example (dot) com', '[email redacted]'],
+        ['+44 20 7946 0958', '[phone redacted]'],
+        ['eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signatureABC123', '[token redacted]'],
+        ['Bearer dummyBearerToken123456789', '[token redacted]'],
+        ['OPENAI_API_KEY=dummyApiSecret123456789', '[secret redacted]'],
+        ['DB_PASSWORD=dummyPassword123456', '[secret redacted]'],
+        ['DB_PASS=dummyPass123456', '[secret redacted]'],
+        ['CLIENT_SECRET=dummyClientSecret123456', '[secret redacted]'],
+        ['REDIS_TOKEN=dummyRedisToken123456', '[secret redacted]'],
+        ['AUTH_TOKEN=dummyAuthToken123456', '[secret redacted]'],
+        ['PRIVATE_KEY=dummyPrivateKey123456', '[secret redacted]'],
+        ['ghp_dummyGithubToken123456789', '[token redacted]'],
+        ['xoxb-dummySlackToken123456789', '[token redacted]'],
+        ['-----BEGIN PRIVATE KEY----- dummyPrivateMaterial123456 -----END PRIVATE KEY-----', '[private key redacted]'],
+        ['wss://example.test/socket?auth=dummyAuth123456', '[url redacted]'],
+        ['//server/share/private.docx', '[path redacted]'],
+        ['path=/usr/local/private.conf', '[path redacted]'],
+        ['path=/proc/self/environ', '[path redacted]'],
+        ['path=~/.ssh/id_rsa', '[path redacted]'],
+    ];
+
+    for (const [value, expectedRedaction] of sensitiveCases) {
+        const shared = sanitizeAmyAnamHermesSensitiveText(value);
+        assert.equal(sanitizeAmyAnamHermesReviewText(value), shared, value);
+        assert.equal(shared.includes(expectedRedaction), true, value);
+    }
+
+    const preserved = 'Meeting 2026-07-15; order 12345678; endpoint /api/v1. \uD83D\uDE00';
+    assert.equal(sanitizeAmyAnamHermesReviewText(preserved), preserved);
+    assert.equal(
+        sanitizeAmyAnamHermesReviewText('left\uD800 right\uDC00 valid\uD83D\uDE00'),
+        'left\uFFFD right\uFFFD valid\uD83D\uDE00',
     );
 });
 

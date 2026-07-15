@@ -9,6 +9,7 @@ import {
 import { readAmyAnamHermesShadowConfig } from '@/lib/anam/hermes-shadow';
 import {
     acknowledgeAmyAnamHermesShadowReceipt,
+    beginAmyAnamHermesShadowExecution,
     leaseNextAmyAnamHermesShadowJob,
     readAmyAnamSessionRecordForHermes,
     retryOrDeadLetterAmyAnamHermesShadowJob,
@@ -91,6 +92,16 @@ export async function POST(request: Request) {
                     contentIncluded: false,
                 });
             }
+        }
+
+        if (operation.operation === 'begin') {
+            const status = await beginAmyAnamHermesShadowExecution(operation.lease);
+            return noStoreJson({
+                ok: true,
+                operation: 'begin',
+                status,
+                contentIncluded: false,
+            });
         }
 
         if (operation.operation === 'ack') {

@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:anam": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/anam-session-config.test.mjs tests/anam-audio-bridge.test.mjs tests/anam-session-spine-core.test.mjs tests/anam-session-spine-boundaries.test.mjs tests/anam-session-recovery.test.mjs tests/anam-capability-readiness.test.mjs tests/anam-hermes-shadow.test.mjs tests/anam-hermes-shadow-review.test.mjs tests/anam-hermes-atomic-receipt.test.mjs tests/anam-hermes-worker-bridge.test.mjs tests/anam-hermes-runtime-integration.test.mjs",
+    "test:anam": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/anam-session-config.test.mjs tests/anam-audio-bridge.test.mjs tests/anam-session-spine-core.test.mjs tests/anam-session-spine-boundaries.test.mjs tests/anam-session-recovery.test.mjs tests/anam-capability-readiness.test.mjs tests/anam-hermes-shadow.test.mjs tests/anam-hermes-shadow-review.test.mjs tests/anam-hermes-atomic-receipt.test.mjs tests/anam-hermes-worker-bridge.test.mjs tests/anam-hermes-at-most-once.test.mjs tests/anam-hermes-local-output.test.mjs tests/anam-hermes-runtime-integration.test.mjs",
     "test:anam:hermes-runtime": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/anam-hermes-runtime-integration.test.mjs",
     "hermes:amy-anam-shadow": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/hermes/amy-anam-shadow-worker.mjs",
+    "hermes:amy-anam-cleanup": "node scripts/hermes/amy-anam-shadow-cleanup.mjs",
     "hermes:amy-anam-review": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/hermes/amy-anam-shadow-review.mjs",
     "anam:create-amy-cara4-canary": "node scripts/anam/create-amy-cara4-canary.mjs"
   },

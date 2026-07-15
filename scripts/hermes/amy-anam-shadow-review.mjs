@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
     hashAmyAnamHermesShadowOutput,
     parseAmyAnamHermesShadowOutput,
+    sanitizeAmyAnamHermesSensitiveText,
 } from '../../lib/anam/hermes-shadow.ts';
 
 export const AMY_ANAM_HERMES_LOCAL_REVIEW_VERSION = 'amy_anam_hermes_local_review_v2';
@@ -45,25 +46,7 @@ function isWithin(basePath, candidatePath) {
 }
 
 export function sanitizeAmyAnamHermesReviewText(value) {
-    return String(value ?? '')
-        .replace(/\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g, '')
-        .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
-        .replace(/\u001B[@-_]/g, '')
-        .replace(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .replace(/https?:\/\/[^\s]+/gi, '[url redacted]')
-        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email redacted]')
-        .replace(/\b(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, '[phone redacted]')
-        .replace(/\b[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\b/gi, '[identifier redacted]')
-        .replace(/\b[a-f0-9]{64}\b/gi, '[hash redacted]')
-        .replace(/\b(?:anam[_-]?session|session|sess|job|launch|receipt)(?:[_:-]+|\s+(?:id\s*)?[:=]\s*)[A-Za-z0-9_-]{8,200}\b/gi, '[identifier redacted]')
-        .replace(/\b(?:sk|pk|am)_[A-Za-z0-9_-]{12,}\b/g, '[token redacted]')
-        .replace(/\b(?:password|token|secret|api[_ -]?key)\s*[:=]\s*\S+/gi, '[secret redacted]')
-        .replace(/\bfile:\/\/\/?.*$/gi, '[path redacted]')
-        .replace(/\b[A-Za-z]:\\.*$/g, '[path redacted]')
-        .replace(/\\\\.*$/g, '[path redacted]')
-        .replace(/(^|\s)\/(?:Users|home|tmp|var|etc|opt|mnt|private|root)(?:\/|$).*$/gi, '$1[path redacted]')
-        .trim();
+    return sanitizeAmyAnamHermesSensitiveText(value);
 }
 
 export function deriveAmyAnamHermesReviewPriority(output) {

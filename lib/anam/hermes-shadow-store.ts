@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+    AMY_ANAM_HERMES_SHADOW_EXECUTION_GRACE_SECONDS,
     AMY_ANAM_HERMES_SHADOW_RECEIPT_VERSION,
     buildAmyAnamHermesShadowReceipt,
     normalizeAmyAnamHermesShadowPointer,
@@ -66,6 +67,10 @@ export function amyAnamHermesShadowDeadJobKey(jobId: string): string {
 
 export function amyAnamHermesShadowLeaseKey(jobId: string): string {
     return `xagent:amy:anam:hermes-shadow:lease:v1:${jobId}`;
+}
+
+export function amyAnamHermesShadowExecutionKey(jobId: string): string {
+    return `xagent:amy:anam:hermes-shadow:execution-started:v1:${jobId}`;
 }
 
 export function amyAnamHermesShadowDedupeKey(jobId: string): string {
@@ -191,6 +196,7 @@ function validateReceiptForCloud(receipt: AmyAnamHermesShadowReceipt): void {
             'transcript_integrity_mismatch',
             'hermes_timeout',
             'hermes_execution_failed',
+            'provider_execution_ambiguous',
             'output_contract_invalid',
             'local_output_failed',
         ].includes(receipt.failureCode))
@@ -445,6 +451,85 @@ async function leaseJobById(
     return { job, leaseToken, leaseUntil };
 }
 
+async function deadLetterDurablyStartedJobById(
+    jobId: string,
+    options: StoreOptions = {},
+): Promise<boolean> {
+    const executionKey = amyAnamHermesShadowExecutionKey(jobId);
+    const executionStarted = await redisCommand(['GET', executionKey], options);
+    if (!executionStarted) return false;
+
+    const config = readAmyAnamHermesShadowConfig(options.env ?? process.env);
+    const stored = await redisCommand(['GET', amyAnamHermesShadowJobKey(jobId)], options);
+    if (!stored) {
+        await redisCommand([
+            'EVAL',
+            "if redis.call('GET', KEYS[1]) then redis.call('DEL', KEYS[1]); redis.call('DEL', KEYS[3]); redis.call('ZREM', KEYS[2], ARGV[1]); return 1 end return 0",
+            3,
+            executionKey,
+            AMY_ANAM_HERMES_SHADOW_DUE_KEY,
+            amyAnamHermesShadowLeaseKey(jobId),
+            jobId,
+        ], options);
+        return true;
+    }
+    const job = normalizeAmyAnamHermesShadowJob(stored);
+    if (job.pointer.jobId !== jobId) {
+        throw new Error('Amy Anam Hermes execution marker did not match its job');
+    }
+    const now = options.now ?? Date.now();
+    const receipt = buildAmyAnamHermesShadowReceipt({
+        pointer: job.pointer,
+        status: 'dead_letter',
+        attempts: job.attempts,
+        now,
+        failureCode: 'provider_execution_ambiguous',
+        hermesExecutionHappened: true,
+    });
+    validateReceiptForCloud(receipt);
+
+    const script = [
+        "if not redis.call('GET', KEYS[1]) then return 'not_started' end",
+        "local raw = redis.call('GET', KEYS[2])",
+        "if not raw then redis.call('DEL', KEYS[1]); redis.call('ZREM', KEYS[3], ARGV[1]); return 'stale' end",
+        'local job = cjson.decode(raw)',
+        "if job.pointer.jobId ~= ARGV[1] or job.pointer.externalSessionId ~= ARGV[5] or tonumber(job.attempts) ~= tonumber(ARGV[6]) then return 'stale' end",
+        "redis.call('SET', KEYS[4], raw, 'EX', ARGV[2])",
+        "redis.call('ZADD', KEYS[5], ARGV[3], ARGV[1])",
+        "redis.call('EXPIRE', KEYS[5], ARGV[2])",
+        "redis.call('DEL', KEYS[6])",
+        "redis.call('DEL', KEYS[2])",
+        "redis.call('DEL', KEYS[1])",
+        "redis.call('ZREM', KEYS[3], ARGV[1])",
+        "redis.call('SET', KEYS[7], ARGV[4], 'EX', ARGV[2])",
+        "redis.call('SET', KEYS[8], ARGV[4], 'EX', ARGV[2])",
+        "return 'dead_letter'",
+    ].join(' ');
+    const result = String(await redisCommand([
+        'EVAL',
+        script,
+        8,
+        executionKey,
+        amyAnamHermesShadowJobKey(jobId),
+        AMY_ANAM_HERMES_SHADOW_DUE_KEY,
+        amyAnamHermesShadowDeadJobKey(jobId),
+        AMY_ANAM_HERMES_SHADOW_DEAD_KEY,
+        amyAnamHermesShadowLeaseKey(jobId),
+        amyAnamHermesShadowJobReceiptKey(jobId),
+        amyAnamHermesShadowSessionReceiptKey(job.pointer.externalSessionId),
+        jobId,
+        config.ttlSeconds,
+        now,
+        JSON.stringify(receipt),
+        job.pointer.externalSessionId,
+        job.attempts,
+    ], options));
+    if (!['dead_letter', 'not_started', 'stale'].includes(result)) {
+        throw new Error('Amy Anam Hermes execution marker transition was invalid');
+    }
+    return result !== 'not_started';
+}
+
 export async function leaseNextAmyAnamHermesShadowJob(
     options: StoreOptions = {},
 ): Promise<AmyAnamHermesShadowLease | null> {
@@ -457,10 +542,66 @@ export async function leaseNextAmyAnamHermesShadowJob(
         });
     }
     for (const jobId of dueJobIds) {
+        if (await deadLetterDurablyStartedJobById(jobId, options)) continue;
         const lease = await leaseJobById(jobId, options);
         if (lease) return lease;
     }
     return null;
+}
+
+export async function beginAmyAnamHermesShadowExecution(
+    leaseValue: AmyAnamHermesShadowLease,
+    options: StoreOptions = {},
+): Promise<'started' | 'already_started' | 'stale'> {
+    const config = readAmyAnamHermesShadowConfig(options.env ?? process.env);
+    const lease = normalizeAmyAnamHermesShadowLease(leaseValue);
+    const pointer = lease.job.pointer;
+    const now = options.now ?? Date.now();
+    const script = [
+        "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 'stale' end",
+        "local raw = redis.call('GET', KEYS[2])",
+        "if not raw then return 'stale' end",
+        'local job = cjson.decode(raw)',
+        "if job.pointer.jobId ~= ARGV[2] or job.pointer.externalSessionId ~= ARGV[6] or tonumber(job.attempts) ~= tonumber(ARGV[7]) then return 'stale' end",
+        "if not redis.call('SET', KEYS[3], ARGV[3], 'NX', 'EX', ARGV[4]) then return 'already_started' end",
+        "redis.call('EXPIRE', KEYS[1], ARGV[8])",
+        "redis.call('ZADD', KEYS[6], ARGV[9], ARGV[2])",
+        "redis.call('EXPIRE', KEYS[6], ARGV[4])",
+        "local receiptRaw = redis.call('GET', KEYS[4])",
+        'if receiptRaw then',
+        '  local receipt = cjson.decode(receiptRaw)',
+        '  receipt.hermesExecutionHappened = true',
+        '  receipt.updatedAt = ARGV[5]',
+        '  local encodedReceipt = cjson.encode(receipt)',
+        "  redis.call('SET', KEYS[4], encodedReceipt, 'EX', ARGV[4])",
+        "  redis.call('SET', KEYS[5], encodedReceipt, 'EX', ARGV[4])",
+        'end',
+        "return 'started'",
+    ].join(' ');
+    const result = String(await redisCommand([
+        'EVAL',
+        script,
+        6,
+        amyAnamHermesShadowLeaseKey(pointer.jobId),
+        amyAnamHermesShadowJobKey(pointer.jobId),
+        amyAnamHermesShadowExecutionKey(pointer.jobId),
+        amyAnamHermesShadowJobReceiptKey(pointer.jobId),
+        amyAnamHermesShadowSessionReceiptKey(pointer.externalSessionId),
+        AMY_ANAM_HERMES_SHADOW_DUE_KEY,
+        lease.leaseToken,
+        pointer.jobId,
+        String(lease.job.attempts),
+        config.ttlSeconds,
+        new Date(now).toISOString(),
+        pointer.externalSessionId,
+        lease.job.attempts,
+        AMY_ANAM_HERMES_SHADOW_EXECUTION_GRACE_SECONDS,
+        now + AMY_ANAM_HERMES_SHADOW_EXECUTION_GRACE_SECONDS * 1000,
+    ], options));
+    if (!['started', 'already_started', 'stale'].includes(result)) {
+        throw new Error('Amy Anam Hermes execution-start transition was invalid');
+    }
+    return result as 'started' | 'already_started' | 'stale';
 }
 
 export async function readAmyAnamSessionRecordForHermes(
@@ -519,8 +660,10 @@ export async function acknowledgeAmyAnamHermesShadowReceipt(input: {
         'if not raw then return 0 end',
         'local job = cjson.decode(raw)',
         'if job.pointer.jobId ~= ARGV[5] or job.pointer.externalSessionId ~= ARGV[6] or tonumber(job.attempts) ~= tonumber(ARGV[7]) then return 0 end',
+        "if redis.call('GET', KEYS[6]) ~= ARGV[7] then return 0 end",
         "redis.call('DEL', KEYS[1])",
         "redis.call('DEL', KEYS[2])",
+        "redis.call('DEL', KEYS[6])",
         "redis.call('ZREM', KEYS[3], ARGV[2])",
         "redis.call('EXPIRE', KEYS[3], ARGV[3])",
         "redis.call('SET', KEYS[4], ARGV[4], 'EX', ARGV[3])",
@@ -530,12 +673,13 @@ export async function acknowledgeAmyAnamHermesShadowReceipt(input: {
     const result = await redisCommand([
         'EVAL',
         script,
-        5,
+        6,
         amyAnamHermesShadowLeaseKey(pointer.jobId),
         amyAnamHermesShadowJobKey(pointer.jobId),
         AMY_ANAM_HERMES_SHADOW_DUE_KEY,
         amyAnamHermesShadowJobReceiptKey(pointer.jobId),
         amyAnamHermesShadowSessionReceiptKey(pointer.externalSessionId),
+        amyAnamHermesShadowExecutionKey(pointer.jobId),
         lease.leaseToken,
         pointer.jobId,
         config.ttlSeconds,
@@ -555,6 +699,15 @@ export async function retryOrDeadLetterAmyAnamHermesShadowJob(input: {
     const config = readAmyAnamHermesShadowConfig(options.env ?? process.env);
     const pointer = normalizeAmyAnamHermesShadowPointer(input.lease.job.pointer);
     const now = options.now ?? Date.now();
+    // Once provider execution has started, a timeout or transport failure is
+    // ambiguous: the provider may already have received the transcript.  Do
+    // not send that transcript a second time.  Pre-provider failures may use
+    // the normal bounded retry budget; post-provider failures dead-letter on
+    // this transition by presenting an exhausted attempt budget to the atomic
+    // Redis script below.
+    const maxAttemptsBeforeDeadLetter = input.hermesExecutionHappened
+        ? 0
+        : config.maxAttempts;
     const retryDelayMs = Math.min(30 * 60_000, 60_000 * (2 ** Math.max(0, input.lease.job.attempts - 1)));
     const nextAttemptAtMs = now + retryDelayMs;
     const retryReceipt = buildAmyAnamHermesShadowReceipt({
@@ -589,6 +742,7 @@ export async function retryOrDeadLetterAmyAnamHermesShadowJob(input: {
         "  redis.call('EXPIRE', KEYS[7], ARGV[4])",
         "  redis.call('DEL', KEYS[1])",
         "  redis.call('DEL', KEYS[2])",
+        "  redis.call('DEL', KEYS[8])",
         "  redis.call('ZREM', KEYS[3], ARGV[2])",
         "  redis.call('SET', KEYS[4], ARGV[7], 'EX', ARGV[4])",
         "  redis.call('SET', KEYS[5], ARGV[7], 'EX', ARGV[4])",
@@ -605,7 +759,7 @@ export async function retryOrDeadLetterAmyAnamHermesShadowJob(input: {
     const result = String(await redisCommand([
         'EVAL',
         script,
-        7,
+        8,
         amyAnamHermesShadowLeaseKey(pointer.jobId),
         amyAnamHermesShadowJobKey(pointer.jobId),
         AMY_ANAM_HERMES_SHADOW_DUE_KEY,
@@ -613,9 +767,10 @@ export async function retryOrDeadLetterAmyAnamHermesShadowJob(input: {
         amyAnamHermesShadowSessionReceiptKey(pointer.externalSessionId),
         amyAnamHermesShadowDeadJobKey(pointer.jobId),
         AMY_ANAM_HERMES_SHADOW_DEAD_KEY,
+        amyAnamHermesShadowExecutionKey(pointer.jobId),
         input.lease.leaseToken,
         pointer.jobId,
-        config.maxAttempts,
+        maxAttemptsBeforeDeadLetter,
         config.ttlSeconds,
         now,
         nextAttemptAtMs,

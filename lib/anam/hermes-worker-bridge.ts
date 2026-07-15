@@ -8,6 +8,7 @@ import type { AmyAnamHermesShadowLease } from './hermes-shadow-store.ts';
 import type { AmyAnamSessionRecord } from './session-spine.ts';
 
 export const AMY_ANAM_HERMES_WORKER_BRIDGE_MAX_BODY_BYTES = 32 * 1024;
+export const AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION = 'amy_anam_hermes_worker_v2';
 const WORKER_SECRET_MIN_LENGTH = 32;
 const FAILURE_CODES = new Set<AmyAnamHermesShadowFailureCode>([
     'session_record_invalid',
@@ -16,6 +17,7 @@ const FAILURE_CODES = new Set<AmyAnamHermesShadowFailureCode>([
     'transcript_integrity_mismatch',
     'hermes_timeout',
     'hermes_execution_failed',
+    'provider_execution_ambiguous',
     'output_contract_invalid',
     'local_output_failed',
 ]);
@@ -32,7 +34,11 @@ export type AmyAnamHermesWorkerSessionIdentity = {
 };
 
 export type AmyAnamHermesWorkerBridgeRequest =
-    | { operation: 'claim' }
+    | {
+        operation: 'claim';
+        protocolVersion: typeof AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION;
+    }
+    | { operation: 'begin'; lease: AmyAnamHermesShadowLease }
     | {
         operation: 'ack';
         lease: AmyAnamHermesShadowLease;
@@ -65,6 +71,13 @@ export type AmyAnamHermesWorkerAckResponse = {
     ok: true;
     operation: 'ack';
     status: 'completed' | 'stale';
+    contentIncluded: false;
+};
+
+export type AmyAnamHermesWorkerBeginResponse = {
+    ok: true;
+    operation: 'begin';
+    status: 'started' | 'already_started' | 'stale';
     contentIncluded: false;
 };
 
@@ -140,8 +153,16 @@ export function normalizeAmyAnamHermesWorkerBridgeRequest(
         throw new Error('Amy Anam Hermes worker request is invalid');
     }
     if (input.operation === 'claim') {
-        if (!hasExactKeys(input, ['operation'])) throw new Error('Claim request has extra fields');
-        return { operation: 'claim' };
+        if (
+            !hasExactKeys(input, ['operation', 'protocolVersion'])
+            || input.protocolVersion !== AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION
+        ) {
+            throw new Error('Claim request protocol is invalid');
+        }
+        return {
+            operation: 'claim',
+            protocolVersion: AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
+        };
     }
     if (input.operation === 'ack') {
         if (!hasExactKeys(input, ['operation', 'lease', 'receipt'])) {
@@ -159,6 +180,15 @@ export function normalizeAmyAnamHermesWorkerBridgeRequest(
             throw new Error('Ack receipt did not match its lease');
         }
         return { operation: 'ack', lease, receipt };
+    }
+    if (input.operation === 'begin') {
+        if (!hasExactKeys(input, ['operation', 'lease'])) {
+            throw new Error('Begin request has an invalid shape');
+        }
+        return {
+            operation: 'begin',
+            lease: normalizeAmyAnamHermesShadowLease(input.lease),
+        };
     }
     if (input.operation === 'fail') {
         if (!hasExactKeys(input, [
@@ -279,7 +309,7 @@ export function normalizeAmyAnamHermesWorkerClaimResponse(
 
 export function normalizeAmyAnamHermesWorkerTransitionResponse(
     input: unknown,
-): AmyAnamHermesWorkerAckResponse | AmyAnamHermesWorkerFailResponse {
+): AmyAnamHermesWorkerBeginResponse | AmyAnamHermesWorkerAckResponse | AmyAnamHermesWorkerFailResponse {
     if (!isRecord(input) || input.ok !== true || input.contentIncluded !== false) {
         throw new Error('Worker transition response is invalid');
     }
@@ -289,6 +319,18 @@ export function normalizeAmyAnamHermesWorkerTransitionResponse(
             throw new Error('Worker ack response is invalid');
         }
         return { ok: true, operation: 'ack', status: input.status, contentIncluded: false };
+    }
+    if (input.operation === 'begin') {
+        if (!hasExactKeys(input, ['ok', 'operation', 'status', 'contentIncluded'])
+            || !['started', 'already_started', 'stale'].includes(String(input.status))) {
+            throw new Error('Worker begin response is invalid');
+        }
+        return {
+            ok: true,
+            operation: 'begin',
+            status: input.status as AmyAnamHermesWorkerBeginResponse['status'],
+            contentIncluded: false,
+        };
     }
     if (input.operation === 'fail') {
         if (!hasExactKeys(input, ['ok', 'operation', 'status', 'contentIncluded'])
