@@ -677,6 +677,14 @@ export async function writeAmyAnamReceipt(
         );
     }
     const result = await redisCommand(command, options);
+    if (!options.env && !options.fetchImpl) {
+        console.info('[Amy Anam Receipt] Store transition', {
+            result: String(result),
+            hermesEnvelopeRequested: Boolean(envelope),
+            contentIncluded: false,
+            outboundActions: 0,
+        });
+    }
     if (result !== 'OK' && result !== 'duplicate' && result !== 'stale') {
         throw new Error('Amy Anam receipt could not be stored');
     }

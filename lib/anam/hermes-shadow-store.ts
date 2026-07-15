@@ -448,7 +448,15 @@ async function leaseJobById(
 export async function leaseNextAmyAnamHermesShadowJob(
     options: StoreOptions = {},
 ): Promise<AmyAnamHermesShadowLease | null> {
-    for (const jobId of await listDueJobIds(options)) {
+    const dueJobIds = await listDueJobIds(options);
+    if (!options.env && !options.fetchImpl) {
+        console.info('[Amy Anam Hermes] Queue claim scan', {
+            dueJobCount: dueJobIds.length,
+            contentIncluded: false,
+            outboundActions: 0,
+        });
+    }
+    for (const jobId of dueJobIds) {
         const lease = await leaseJobById(jobId, options);
         if (lease) return lease;
     }
