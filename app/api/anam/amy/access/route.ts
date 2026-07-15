@@ -163,39 +163,24 @@ export async function POST(request: Request) {
     }
 }
 
-export async function DELETE(request: Reqw­7÷«h‘éì¶»§q«^wf('readAmyAnamFinalization(externalSessionId)');
-    const providerVerification = finalizer.indexOf('verifyAnamSessionForLaunch(externalSessionId, launch');
-    assert.ok(readPendingState >= 0, 'finalizer did not read durable finalization state');
-    assert.ok(providerVerification > readPendingState, 'provider verification preceded durable state recovery');
-});
-
-test('AnamPlayer binds SESSION_READY before streaming and keeps legacy transcript upload outside the spine', () => {
-    const readyListener = player.indexOf('AnamEvent.SESSION_READY, handleSessionReady');
-    const streamStart = player.indexOf("streamToVideoElement('persona-video')");
-    assert.ok(readyListener >= 0, 'SESSION_READY listener was not registered');
-    assert.ok(streamStart > readyListener, 'SESSION_READY listener must be registered before streaming');
-    assert.match(player, /removeListener\(AnamEvent\.SESSION_READY, handleSessionReady\)/);
-    assert.match(player, /completeAmyAnamClientSession\(\{\s*launchId:[\s\S]*sessionId:[\s\S]*closeReason/s);
-    assert.match(
-        player,
-        /if \(!sessionSpineActive && transcriptRef\.current\.length > 0\) \{\s*fetch\('\/api\/save-transcript'/s,
-    );
-});
-
-test('both live and QA clients bind SESSION_READY and deduplicate completion', () => {
-    const liveReadyListener = player.indexOf('AnamEvent.SESSION_READY, handleSessionReady');
-    const liveStreamStart = player.indexOf("streamToVideoElement('persona-video')");
-    assert.ok(liveReadyListener >= 0 && liveStreamStart > liveReadyListener);
-    assert.match(player, /bindAmyAnamClientSession\(\{/);
-    assert.match(player, /completeAmyAnamClientSession\(\{/);
-    assert.match(player, /if \(completionPromise\) return completionPromise/);
-
-    const qaReadyListener = qaHook.indexOf('AnamEvent.SESSION_READY, handleSessionReady');
-    const qaStreamStart = qaHook.indexOf('streamToVideoElement(videoElementId)');
-    assert.ok(qaReadyListener >= 0, 'QA SESSION_READY listener was not registered');
-    assert.ok(qaStreamStart > qaReadyListener, 'QA SESSION_READY listener must be registered before streaming');
-    assert.match(qaHook, /bindAmyAnamClientSession\(\{/);
-    assert.match(qaHook, /completeAmyAnamClientSession\(\{/);
-    assert.match(qaHook, /if \(completionPromise\) return completionPromise/);
-    assert.match(qaHook, /removeListener\(AnamEvent\.SESSION_READY, handleSessionReady\)/);
-});
+export async function DELETE(request: Request) {
+    try {
+        const config = readAmyAnamMemoryConfig();
+        const spine = readAmyAnamSpineConfig();
+        if (config.gatesOpen && isTrustedBrowserOrigin(request)) {
+            const browserSession = readAmyAnamBrowserSession(request, spine.signingSecret);
+            if (browserSession) {
+                await deleteAmyAnamBrowserIdentity(browserSession.id).catch(() => undefined);
+            }
+        }
+        const response = noStoreJson({ loggedOut: true });
+        response.cookies.set(
+            AMY_ANAM_BROWSER_COOKIE,
+            '',
+            amyAnamCookieOptions(0),
+        );
+        return response;
+    } catch {
+        return noStoreJson({ error: 'Logout failed' }, { status: 500 });
+    }
+}
