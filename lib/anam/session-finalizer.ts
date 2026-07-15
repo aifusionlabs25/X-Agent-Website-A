@@ -40,12 +40,48 @@ function buildHermesShadowEnvelope(
     session: AmyAnamSessionRecord,
     receipt: AmyAnamSessionReceipt,
 ) {
+    let config;
     try {
-        const config = readAmyAnamHermesShadowConfig();
-        if (!config.gatesOpen || receipt.status !== 'completed') return undefined;
-        const pointer = createAmyAnamHermesShadowPointer({ session, receipt });
-        return buildAmyAnamHermesShadowQueuedEnvelope(pointer);
+        config = readAmyAnamHermesShadowConfig();
     } catch {
+        console.warn('[Amy Anam Hermes] Shadow envelope omitted', {
+            reason: 'configuration_invalid',
+            contentIncluded: false,
+            outboundActions: 0,
+        });
+        return undefined;
+    }
+    if (!config.gatesOpen || receipt.status !== 'completed') return undefined;
+
+    try {
+        const pointer = createAmyAnamHermesShadowPointer({ session, receipt });
+        const envelope = buildAmyAnamHermesShadowQueuedEnvelope(pointer);
+        console.info('[Amy Anam Hermes] Shadow envelope prepared', {
+            messageCount: receipt.transcript.messageCount,
+            contentIncluded: false,
+            outboundActions: 0,
+        });
+        return envelope;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        const reason = message.includes('session identity')
+            ? 'session_identity_invalid'
+            : message.includes('authoritative receipt')
+                ? 'receipt_ineligible'
+                : message.includes('queue gates')
+                    ? 'queue_gates_closed'
+                    : 'envelope_invalid';
+        console.warn('[Amy Anam Hermes] Shadow envelope omitted', {
+            reason,
+            receiptStatus: receipt.status,
+            transcriptSource: receipt.transcript.source,
+            messageCount: receipt.transcript.messageCount,
+            hasContentSha256: Boolean(receipt.transcript.contentSha256),
+            rawTranscriptPersisted: receipt.transcript.rawTranscriptPersisted,
+            actionsEnabled: Object.values(receipt.actions).some(Boolean),
+            contentIncluded: false,
+            outboundActions: 0,
+        });
         return undefined;
     }
 }
