@@ -18,6 +18,12 @@ import {
     deleteAmyAnamLaunch,
     storeAmyAnamLaunch,
 } from '@/lib/anam/session-spine-store';
+import {
+    buildAmyAnamReturningMemoryContext,
+    readAmyAnamApprovedMemoryHistory,
+    readAmyAnamBrowserIdentity,
+    readAmyAnamMemoryConfig,
+} from '@/lib/anam/user-memory';
 
 function noStoreJson(body: unknown, init?: ResponseInit) {
     const response = NextResponse.json(body, init);
@@ -43,11 +49,19 @@ export async function POST(req: Request) {
         }
 
         const spineConfig = readAmyAnamSpineConfig();
+        const memoryConfig = readAmyAnamMemoryConfig();
         const isAmyCara4 = resolution.variant === AMY_CARA4_VARIANT;
         if (isAmyCara4 && spineConfig.enabled && !spineConfig.gatesOpen) {
             console.error('[Amy Anam Spine] Enabled but unavailable');
             return noStoreJson(
                 { error: 'Amy session tracking is temporarily unavailable' },
+                { status: 503 },
+            );
+        }
+        if (isAmyCara4 && memoryConfig.enabled && !memoryConfig.gatesOpen) {
+            console.error('[Amy Anam Memory] Enabled but unavailable');
+            return noStoreJson(
+                { error: 'Amy returning memory is temporarily unavailable' },
                 { status: 503 },
             );
         }
@@ -63,6 +77,8 @@ export async function POST(req: Request) {
 
         let launch: ReturnType<typeof createAmyAnamLaunch> | null = null;
         let browserCookieToken: string | null = null;
+        let returningMemoryContext: string | null = null;
+        let returningMemoryCount = 0;
 
         if (isAmyCara4 && spineConfig.gatesOpen) {
             if (!isTrustedBrowserOrigin(req)) {
@@ -82,10 +98,29 @@ export async function POST(req: Request) {
             }
 
             let browserSession = readAmyAnamBrowserSession(req, spineConfig.signingSecret);
+            if (!browserSession && memoryConfig.gatesOpen) {
+                return noStoreJson(
+                    { error: 'Amy memory check-in is required' },
+                    { status: 401 },
+                );
+            }
             if (!browserSession) {
                 const created = createAmyAnamBrowserSessionWithSecret(spineConfig.signingSecret);
                 browserSession = created.session;
                 browserCookieToken = created.token;
+            }
+
+            if (memoryConfig.gatesOpen) {
+                const identity = await readAmyAnamBrowserIdentity(browserSession.id);
+                if (!identity) {
+                    return noStoreJson(
+                        { error: 'Amy memory check-in is required' },
+                        { status: 401 },
+                    );
+                }
+                const history = await readAmyAnamApprovedMemoryHistory(identity);
+                returningMemoryContext = buildAmyAnamReturningMemoryContext(identity, history);
+                returningMemoryCount = history.length;
             }
 
             const browserRate = await consumeAmyAnamDistributedRateLimit({
@@ -155,6 +190,12 @@ export async function POST(req: Request) {
             variant: resolution.variant,
             sessionSpineEnabled: Boolean(launch),
             ...(launch ? { launchId: launch.launchId } : {}),
+            memoryContextAvailable: Boolean(returningMemoryContext),
+            returningMemoryApplied: returningMemoryCount > 0,
+            returningMemoryCount,
+            ...(returningMemoryContext ? { memoryContext: returningMemoryContext } : {}),
+            rawEmailReturned: false,
+            identityHashReturned: false,
         });
         if (browserCookieToken) {
             result.cookies.set(
