@@ -268,6 +268,7 @@ test('enqueue uses one atomic EVAL, durable due ZSET, finite TTL, and pointer-on
     assert.match(command[1], /ZADD/);
     assert.match(command[1], /EXPIRE/);
     assert.match(command[1], /SET.*NX/);
+    assert.doesNotMatch(command[1], /redis\.call\('SET'[^;]*(?:==|~=)\s*'OK'/);
     const payload = JSON.stringify(command);
     assert.equal(payload.includes('pat@example.com'), false);
     assert.equal(payload.includes('summary'), false);
@@ -293,6 +294,7 @@ test('lease is atomic and updates the real owner-visible session receipt key', a
     assert.match(evalCommand[1], /ZSCORE/);
     assert.match(evalCommand[1], /'NX'/);
     assert.match(evalCommand[1], /ZADD/);
+    assert.doesNotMatch(evalCommand[1], /redis\.call\('SET'[^;]*(?:==|~=)\s*'OK'/);
     assert.ok(evalCommand.includes(amyAnamHermesShadowSessionReceiptKey(SESSION_ID)));
     assert.equal(JSON.stringify(evalCommand).includes('placeholder'), false);
 });

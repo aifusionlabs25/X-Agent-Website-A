@@ -332,7 +332,7 @@ export async function enqueueAmyAnamHermesShadowPointer(
     const envelope = buildAmyAnamHermesShadowQueuedEnvelope(pointer, options);
 
     const script = [
-        "if redis.call('SET', KEYS[1], '1', 'NX', 'EX', ARGV[4]) ~= 'OK' then return 0 end",
+        "if not redis.call('SET', KEYS[1], '1', 'NX', 'EX', ARGV[4]) then return 0 end",
         "redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[4])",
         "redis.call('ZADD', KEYS[3], ARGV[2], ARGV[3])",
         "redis.call('EXPIRE', KEYS[3], ARGV[4])",
@@ -398,7 +398,7 @@ async function leaseJobById(
     const script = [
         "local score = redis.call('ZSCORE', KEYS[2], ARGV[1])",
         'if not score or tonumber(score) > tonumber(ARGV[2]) then return nil end',
-        "if redis.call('SET', KEYS[3], ARGV[3], 'NX', 'EX', ARGV[4]) ~= 'OK' then return nil end",
+        "if not redis.call('SET', KEYS[3], ARGV[3], 'NX', 'EX', ARGV[4]) then return nil end",
         "local raw = redis.call('GET', KEYS[1])",
         "if not raw then redis.call('DEL', KEYS[3]); redis.call('ZREM', KEYS[2], ARGV[1]); return nil end",
         'local job = cjson.decode(raw)',

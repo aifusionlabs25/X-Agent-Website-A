@@ -103,6 +103,7 @@ test('canonical receipt and pointer-only Hermes job commit in one Redis transact
     assert.ok(command.includes(envelope.receiptJson));
     assert.match(command[1], /ZREM.*ZADD/s);
     assert.match(command[1], /SET.*NX.*EX/s);
+    assert.doesNotMatch(command[1], /redis\.call\('SET'[^;]*(?:==|~=)\s*'OK'/);
 
     const serialized = JSON.stringify(command);
     assert.equal(serialized.includes('Hello from Amy.'), false);

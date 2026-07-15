@@ -630,7 +630,7 @@ export async function writeAmyAnamReceipt(
     ];
     if (envelope) {
         scriptParts.push(
-            "if redis.call('SET', KEYS[5], '1', 'NX', 'EX', ARGV[11]) == 'OK' then",
+            "if redis.call('SET', KEYS[5], '1', 'NX', 'EX', ARGV[11]) then",
             "  redis.call('SET', KEYS[6], ARGV[7], 'EX', ARGV[11])",
             "  redis.call('ZADD', KEYS[7], ARGV[8], ARGV[9])",
             "  redis.call('EXPIRE', KEYS[7], ARGV[11])",
