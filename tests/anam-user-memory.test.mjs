@@ -147,13 +147,14 @@ test('two visits with one email share approved memory while another email stays 
     assert.equal(promoted.status, 'stored');
 
     const returning = await storeAmyAnamBrowserIdentity({
-        browserSessionId: 'browser-two', displayName: 'Rob', email: 'ROB@example.com', memoryConsent: true,
+        browserSessionId: 'browser-two', displayName: 'Website Alias', email: 'ROB@example.com', memoryConsent: true,
     }, options);
     const returningHistory = await readAmyAnamApprovedMemoryHistory(returning, options);
     assert.equal(returningHistory.length, 1);
-    const context = buildAmyAnamReturningMemoryContext(returning, returningHistory);
+    const context = buildAmyAnamReturningMemoryContext(returningHistory);
     assert.match(context, /warehouse mobility refresh/i);
-    assert.doesNotMatch(context, /rob@example\.com|ignore previous instructions|system:/i);
+    assert.match(context, /ask the visitor to provide their preferred name and best email address/i);
+    assert.doesNotMatch(context, /Website Alias|rob@example\.com|ignore previous instructions|system:/i);
     assert.doesNotMatch(context, /[a-f0-9]{64}|Redis|storage key|session-one/i);
 
     const other = await storeAmyAnamBrowserIdentity({
@@ -161,6 +162,14 @@ test('two visits with one email share approved memory while another email stays 
     }, options);
     assert.deepEqual(await readAmyAnamApprovedMemoryHistory(other, options), []);
     assert.doesNotMatch([...store.values()].join(' '), /rob@example\.com|other@example\.com/i);
+});
+
+test('website check-in identity never becomes Amy conversational identity', () => {
+    const context = buildAmyAnamReturningMemoryContext([]);
+    assert.match(context, /do not greet the visitor by an assumed name/i);
+    assert.match(context, /ask the visitor to provide their preferred name and best email address/i);
+    assert.match(context, /No approved prior-session notes are available/i);
+    assert.doesNotMatch(context, /\bRob\b|rob@example\.com/i);
 });
 
 test('approved promotion is idempotent and a rejected decision cannot later be approved', async () => {
@@ -268,4 +277,17 @@ test('authenticated memory controls stay collapsed until the visitor opens them'
     assert.match(gate, /profileControlsOpen && \(/);
     assert.match(gate, /aria-label="Open Amy profile controls"/);
     assert.doesNotMatch(gate, /fixed left-4 top-4/);
+});
+
+test('a newly opened Amy demo requires a fresh tester check-in without clearing approved memory', async () => {
+    const gate = await readFile(
+        new URL('../components/amy/AmyMemoryAccessGate.tsx', import.meta.url),
+        'utf8',
+    );
+
+    const freshCheckIn = gate.match(/const requireFreshCheckIn = useCallback[\s\S]*?\}, \[checkAccess\]\);/)?.[0] ?? '';
+    assert.match(freshCheckIn, /method: 'DELETE'/);
+    assert.match(freshCheckIn, /await checkAccess\(\)/);
+    assert.match(gate, /void requireFreshCheckIn\(\)/);
+    assert.doesNotMatch(freshCheckIn, /\/api\/anam\/amy\/memory/);
 });

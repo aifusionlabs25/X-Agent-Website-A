@@ -75,9 +75,28 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         }
     }, []);
 
-    useEffect(() => {
-        void checkAccess();
+    const requireFreshCheckIn = useCallback(async () => {
+        setChecking(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/anam/amy/access', {
+                method: 'DELETE',
+                cache: 'no-store',
+                credentials: 'same-origin',
+            });
+            const payload = await readJson(response);
+            if (!response.ok) throw new Error(String(payload.error ?? 'A fresh check-in could not be started'));
+            await checkAccess();
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'A fresh check-in could not be started');
+            setStatus(emptyStatus);
+            setChecking(false);
+        }
     }, [checkAccess]);
+
+    useEffect(() => {
+        void requireFreshCheckIn();
+    }, [requireFreshCheckIn]);
 
     const submitAccess = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -222,7 +241,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
     }
 
     return (
-        <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#060711] px-5 py-10 text-white">
+        <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#060711] px-5 py-10 text-white">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.25),transparent_38%),radial-gradient(circle_at_80%_80%,rgba(14,165,233,0.18),transparent_42%)]" />
             <div className="relative grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/75 shadow-2xl backdrop-blur-2xl lg:grid-cols-[1.05fr_0.95fr]">
                 <section className="flex flex-col justify-between border-b border-white/10 p-8 lg:border-b-0 lg:border-r lg:p-12">
@@ -235,8 +254,16 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                             Meet Amy.
                         </h1>
                         <p className="mt-5 max-w-xl text-base leading-7 text-zinc-400">
-                            A quick check-in helps Amy greet you by name and, if you choose, pick up where you left off next time.
+                            A quick check-in opens your private preview and, if you choose, helps Amy pick up where you left off next time.
                         </p>
+                        <div className="mt-8 max-w-xl border-l border-indigo-300/30 pl-5">
+                            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-indigo-200/80">
+                                About Amy
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-zinc-300">
+                                Amy is AI Fusion Labs’ Insight Enterprise SDR—an AI-powered X Agent who helps technology leaders explore infrastructure priorities, clarify requirements, and shape practical next steps.
+                            </p>
+                        </div>
                     </div>
                     <div className="mt-10 space-y-3 text-sm text-zinc-400">
                         <p>It takes about a minute to get started.</p>
@@ -258,7 +285,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
 
                     <form onSubmit={submitAccess} className="space-y-5">
                         <label className="block text-sm text-zinc-300">
-                            What should Amy call you?
+                            Your name
                             <input
                                 required
                                 autoComplete="name"
@@ -267,6 +294,9 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                 className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
                                 placeholder="Your first name"
                             />
+                            <span className="mt-2 block text-xs leading-5 text-zinc-500">
+                                Used only for your preview profile. Amy will still ask how you’d like to be addressed.
+                            </span>
                         </label>
                         <label className="block text-sm text-zinc-300">
                             Email
@@ -337,6 +367,9 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                     </form>
                 </section>
             </div>
+            <footer className="relative mt-5 max-w-4xl text-center text-[0.7rem] leading-5 text-zinc-500">
+                Amy is an AI-powered agent, not a human. Conversations may be transcribed and reviewed to support this preview. Please don’t share sensitive or confidential information.
+            </footer>
         </main>
     );
 }

@@ -119,7 +119,7 @@ export async function POST(req: Request) {
                     );
                 }
                 const history = await readAmyAnamApprovedMemoryHistory(identity);
-                returningMemoryContext = buildAmyAnamReturningMemoryContext(identity, history);
+                returningMemoryContext = buildAmyAnamReturningMemoryContext(history);
                 returningMemoryCount = history.length;
             }
 
