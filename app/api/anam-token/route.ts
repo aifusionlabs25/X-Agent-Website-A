@@ -19,8 +19,7 @@ import {
     storeAmyAnamLaunch,
 } from '@/lib/anam/session-spine-store';
 import {
-    buildAmyAnamReturningMemoryContext,
-    readAmyAnamApprovedMemoryHistory,
+    buildAmyAnamMemoryAccessPolicy,
     readAmyAnamBrowserIdentity,
     readAmyAnamMemoryConfig,
 } from '@/lib/anam/user-memory';
@@ -77,8 +76,8 @@ export async function POST(req: Request) {
 
         let launch: ReturnType<typeof createAmyAnamLaunch> | null = null;
         let browserCookieToken: string | null = null;
-        let returningMemoryContext: string | null = null;
-        let returningMemoryCount = 0;
+        let memoryPolicyContext: string | null = null;
+        let memoryUnlockAvailable = false;
 
         if (isAmyCara4 && spineConfig.gatesOpen) {
             if (!isTrustedBrowserOrigin(req)) {
@@ -118,9 +117,9 @@ export async function POST(req: Request) {
                         { status: 401 },
                     );
                 }
-                const history = await readAmyAnamApprovedMemoryHistory(identity);
-                returningMemoryContext = buildAmyAnamReturningMemoryContext(history);
-                returningMemoryCount = history.length;
+                memoryUnlockAvailable = identity.memoryConsent
+                    && Boolean(identity.emailIdentityHash);
+                memoryPolicyContext = buildAmyAnamMemoryAccessPolicy(memoryUnlockAvailable);
             }
 
             const browserRate = await consumeAmyAnamDistributedRateLimit({
@@ -190,10 +189,9 @@ export async function POST(req: Request) {
             variant: resolution.variant,
             sessionSpineEnabled: Boolean(launch),
             ...(launch ? { launchId: launch.launchId } : {}),
-            memoryContextAvailable: Boolean(returningMemoryContext),
-            returningMemoryApplied: returningMemoryCount > 0,
-            returningMemoryCount,
-            ...(returningMemoryContext ? { memoryContext: returningMemoryContext } : {}),
+            memoryPolicyContextAvailable: Boolean(memoryPolicyContext),
+            memoryUnlockAvailable,
+            ...(memoryPolicyContext ? { memoryPolicyContext } : {}),
             rawEmailReturned: false,
             identityHashReturned: false,
         });

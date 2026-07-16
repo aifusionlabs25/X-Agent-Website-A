@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
     AMY_ANAM_MEMORY_MAX_RECORDS,
+    buildAmyAnamMemoryAccessPolicy,
     buildAmyAnamReturningMemoryContext,
     deleteAmyAnamApprovedMemoryHistory,
     deriveAmyAnamEmailIdentityHash,
@@ -153,7 +154,9 @@ test('two visits with one email share approved memory while another email stays 
     assert.equal(returningHistory.length, 1);
     const context = buildAmyAnamReturningMemoryContext(returningHistory);
     assert.match(context, /warehouse mobility refresh/i);
-    assert.match(context, /ask the visitor to provide their preferred name and best email address/i);
+    assert.match(context, /Memory is now unlocked/i);
+    assert.match(context, /confirmed email/i);
+    assert.doesNotMatch(context, /At the start|ask the visitor to provide/i);
     assert.doesNotMatch(context, /Website Alias|rob@example\.com|ignore previous instructions|system:/i);
     assert.doesNotMatch(context, /[a-f0-9]{64}|Redis|storage key|session-one/i);
 
@@ -165,10 +168,11 @@ test('two visits with one email share approved memory while another email stays 
 });
 
 test('website check-in identity never becomes Amy conversational identity', () => {
-    const context = buildAmyAnamReturningMemoryContext([]);
-    assert.match(context, /do not greet the visitor by an assumed name/i);
-    assert.match(context, /ask the visitor to provide their preferred name and best email address/i);
-    assert.match(context, /No approved prior-session notes are available/i);
+    const context = buildAmyAnamMemoryAccessPolicy(true);
+    assert.match(context, /Do not greet the visitor by an assumed name/i);
+    assert.match(context, /Do not ask.*opening turn/i);
+    assert.match(context, /one useful conversational exchange/i);
+    assert.match(context, /confirm_live_identity/i);
     assert.doesNotMatch(context, /\bRob\b|rob@example\.com/i);
 });
 

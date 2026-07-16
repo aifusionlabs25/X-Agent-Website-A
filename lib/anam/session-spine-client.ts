@@ -12,10 +12,23 @@ type CompleteInput = BindInput & {
     sleep?: (milliseconds: number) => Promise<void>;
 };
 
+type ConfirmIdentityInput = BindInput & {
+    preferredName: string;
+    email: string;
+};
+
 export type AmyAnamCompletionResult = {
     accepted: boolean;
     status: string;
     receiptId?: string;
+};
+
+export type AmyAnamLiveIdentityResult = {
+    confirmed: true;
+    memoryUnlocked: true;
+    preferredName: string;
+    memoryContext: string;
+    memoryCount: number;
 };
 
 async function defaultSleep(milliseconds: number): Promise<void> {
@@ -35,6 +48,40 @@ export async function bindAmyAnamClientSession({
         credentials: 'same-origin',
     });
     if (!response.ok) throw new Error(`Amy session binding failed (${response.status})`);
+}
+
+export async function confirmAmyAnamLiveIdentity({
+    launchId,
+    sessionId,
+    preferredName,
+    email,
+    fetchImpl = fetch,
+}: ConfirmIdentityInput): Promise<AmyAnamLiveIdentityResult> {
+    const response = await fetchImpl('/api/anam/session/identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ launchId, sessionId, preferredName, email }),
+        cache: 'no-store',
+        credentials: 'same-origin',
+    });
+    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (
+        !response.ok
+        || payload.confirmed !== true
+        || payload.memoryUnlocked !== true
+        || typeof payload.preferredName !== 'string'
+        || typeof payload.memoryContext !== 'string'
+        || typeof payload.memoryCount !== 'number'
+    ) {
+        throw new Error(`Amy live identity confirmation failed (${response.status})`);
+    }
+    return {
+        confirmed: true,
+        memoryUnlocked: true,
+        preferredName: payload.preferredName,
+        memoryContext: payload.memoryContext,
+        memoryCount: payload.memoryCount,
+    };
 }
 
 export async function completeAmyAnamClientSession({

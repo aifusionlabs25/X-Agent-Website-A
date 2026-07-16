@@ -1,0 +1,29 @@
+{
+  "name": "confirm_live_identity",
+  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked for the preferred name and email separately, repeated the email spelling, and received explicit confirmation.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preferredName": {
+          "type": "string",
+          "description": "The preferred name the visitor stated during this live conversation.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "description": "The exact email spelling the visitor explicitly confirmed during this live conversation.",
+          "minLength": 3,
+          "maxLength": 254
+        }
+      },
+      "required": ["preferredName", "email"]
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 10
+  }
+}

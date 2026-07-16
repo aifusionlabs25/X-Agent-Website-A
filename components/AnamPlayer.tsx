@@ -10,8 +10,10 @@ import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
 } from '@/lib/anam/audio-bridge';
+import { isAmyCara4Variant } from '@/lib/anam/session-config';
 import {
     bindAmyAnamClientSession,
+    confirmAmyAnamLiveIdentity,
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
 
@@ -46,8 +48,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let sessionSpineActive = false;
         let launchId: string | null = null;
         let providerSessionId: string | null = null;
+        let bindingPromise: Promise<void> | null = null;
         let completionPromise: Promise<void> | null = null;
         let removeClientListeners: (() => void) | null = null;
+        let removeIdentityToolHandler: (() => void) | null = null;
+        let completedUserTurns = 0;
+        let confirmedContact: { preferredName: string; email: string } | null = null;
         const videoElement = videoRef.current;
 
         transcriptRef.current = [];
@@ -115,9 +121,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     sessionToken?: string;
                     sessionSpineEnabled?: boolean;
                     launchId?: string;
-                    memoryContextAvailable?: boolean;
-                    memoryContext?: string;
-                    returningMemoryCount?: number;
+                    memoryPolicyContextAvailable?: boolean;
+                    memoryPolicyContext?: string;
+                    memoryUnlockAvailable?: boolean;
                 };
                 if (!tokenPayload.sessionToken) {
                     throw new Error('Session token response was incomplete');
@@ -130,35 +136,38 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 if (!isMounted) return;
 
                 // 2. Initialize Anam Client
-                const anamClient = audioDeviceId
-                    ? createClient(sessionToken, { audioDeviceId })
-                    : createClient(sessionToken);
+                const isAmyCara4 = isAmyCara4Variant(sessionVariant);
+                const clientOptions = {
+                    ...(audioDeviceId ? { audioDeviceId } : {}),
+                    ...(isAmyCara4 ? { voiceDetection: { endOfSpeechSensitivity: 0.3 } } : {}),
+                };
+                const anamClient = createClient(sessionToken, clientOptions);
 
                 activeClient = anamClient;
-                const memoryContext = tokenPayload.memoryContextAvailable === true
-                    && typeof tokenPayload.memoryContext === 'string'
-                    ? tokenPayload.memoryContext
+                const memoryPolicyContext = tokenPayload.memoryPolicyContextAvailable === true
+                    && typeof tokenPayload.memoryPolicyContext === 'string'
+                    ? tokenPayload.memoryPolicyContext
                     : null;
                 let connectionEstablished = false;
-                let memoryContextInjected = false;
+                let memoryPolicyInjected = false;
 
-                const applyMemoryContext = () => {
+                const applyMemoryPolicy = () => {
                     if (
-                        !memoryContext
-                        || memoryContextInjected
+                        !memoryPolicyContext
+                        || memoryPolicyInjected
                         || !connectionEstablished
                         || !providerSessionId
                     ) return;
                     try {
-                        anamClient.addContext(memoryContext);
-                        memoryContextInjected = true;
-                        console.info('[Amy Anam Memory] Approved returning context applied', {
-                            approvedSessionCount: Number(tokenPayload.returningMemoryCount ?? 0),
+                        anamClient.addContext(memoryPolicyContext);
+                        memoryPolicyInjected = true;
+                        console.info('[Amy Anam Memory] Live identity policy applied', {
+                            memoryUnlockAvailable: tokenPayload.memoryUnlockAvailable === true,
                             contentLogged: false,
                         });
                     } catch {
                         if (isMounted) {
-                            setError('Amy could not safely apply returning memory. Please restart the session.');
+                            setError('Amy could not safely initialize returning memory. Please restart the session.');
                             setIsConnecting(false);
                         }
                         void anamClient.stopStreaming().catch(() => undefined);
@@ -169,7 +178,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleConnectionEstablished = () => {
                     console.log('Anam connection established');
                     connectionEstablished = true;
-                    applyMemoryContext();
+                    applyMemoryPolicy();
                     if (isMounted) setIsConnecting(false);
                 };
 
@@ -183,13 +192,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleSessionReady = (sessionId: string) => {
                     if (providerSessionId) return;
                     providerSessionId = sessionId;
-                    applyMemoryContext();
+                    applyMemoryPolicy();
                     if (sessionSpineActive && launchId) {
-                        const binding = bindAmyAnamClientSession({
+                        bindingPromise = bindAmyAnamClientSession({
                             launchId,
                             sessionId,
                         });
-                        binding.catch(() => {
+                        void bindingPromise.catch(() => {
                             console.error('[Amy Anam Spine] Session binding was not confirmed');
                         });
                     }
@@ -197,6 +206,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
+                    if (messageEvent.role === 'user' && messageEvent.endOfSpeech) completedUserTurns += 1;
                     if (sessionSpineActive) return;
                     if (messageEvent.role !== currentRoleRef.current) {
                         if (currentMessageRef.current) {
@@ -254,6 +264,67 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     if (isMounted) onCloseRef.current?.();
                 };
 
+                if (isAmyCara4) {
+                    removeIdentityToolHandler = anamClient.registerToolCallHandler(
+                        'confirm_live_identity',
+                        {
+                            onStart: async payload => {
+                                if (tokenPayload.memoryUnlockAvailable !== true) {
+                                    return JSON.stringify({
+                                        status: 'memory_unavailable',
+                                        instruction: 'Continue without returning memory. Do not request contact details solely for memory.',
+                                    });
+                                }
+                                if (completedUserTurns < 2) {
+                                    throw new Error('Continue the warm conversation before confirming identity.');
+                                }
+
+                                const preferredName = typeof payload.arguments.preferredName === 'string'
+                                    ? payload.arguments.preferredName.trim()
+                                    : '';
+                                const email = typeof payload.arguments.email === 'string'
+                                    ? payload.arguments.email.trim()
+                                    : '';
+                                if (!preferredName || !email) {
+                                    throw new Error('Ask for and explicitly confirm the name and email separately.');
+                                }
+                                if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
+                                    throw new Error('The private session is not ready. Continue the conversation and try once more.');
+                                }
+
+                                const normalizedEmail = email.toLowerCase();
+                                if (confirmedContact) {
+                                    return JSON.stringify({
+                                        status: confirmedContact.email === normalizedEmail
+                                            ? 'memory_already_unlocked'
+                                            : 'identity_already_confirmed',
+                                        instruction: 'Use the stored confirmed contact. Never repeat or reconstruct the email aloud.',
+                                    });
+                                }
+
+                                await bindingPromise;
+                                const result = await confirmAmyAnamLiveIdentity({
+                                    launchId,
+                                    sessionId: providerSessionId,
+                                    preferredName,
+                                    email,
+                                });
+                                confirmedContact = { preferredName: result.preferredName, email: normalizedEmail };
+                                anamClient.addContext(result.memoryContext);
+                                console.info('[Amy Anam Memory] Returning context unlocked', {
+                                    approvedSessionCount: result.memoryCount,
+                                    contactContentLogged: false,
+                                });
+                                return JSON.stringify({
+                                    status: 'memory_unlocked',
+                                    memoryCount: result.memoryCount,
+                                    instruction: 'Use approved context naturally. Refer to the address only as the confirmed email; never repeat or reconstruct it aloud.',
+                                });
+                            },
+                        },
+                    );
+                }
+
                 anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
                 anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                 anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
@@ -289,6 +360,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             isMounted = false;
             window.removeEventListener('pagehide', handlePageHide);
             removeClientListeners?.();
+            removeIdentityToolHandler?.();
             // Cleanup on unmount
             if (activeClient) {
                 void completeOnce('unmount').catch(() => undefined);
