@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 const API_BASE = 'https://api.anam.ai/v1';
 const RELIABILITY_START = '<!-- AMY_CARA4_RELIABILITY_START -->';
 const RELIABILITY_END = '<!-- AMY_CARA4_RELIABILITY_END -->';
+const PUBLIC_SECTOR_START = '<!-- AMY_PUBLIC_SECTOR_START -->';
+const PUBLIC_SECTOR_END = '<!-- AMY_PUBLIC_SECTOR_END -->';
 const personaId = process.env.ANAM_AMY_CARA4_PERSONA_ID?.trim();
 const apiKey = process.env.ANAM_API_KEY?.trim();
 
@@ -13,6 +15,10 @@ if (!apiKey || !personaId) {
 
 const reliabilityUpgrade = (await fs.readFile(
     new URL('../../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url),
+    'utf8',
+)).trim();
+const publicSectorUpgrade = (await fs.readFile(
+    new URL('../../config/anam/amy-public-sector-upgrade.md', import.meta.url),
     'utf8',
 )).trim();
 const liveIdentityTool = JSON.parse(await fs.readFile(
@@ -52,15 +58,15 @@ function listData(payload) {
     return [];
 }
 
-function replaceReliabilityBlock(prompt) {
+function replaceManagedBlock(prompt, startMarker, endMarker, replacement) {
     const current = String(prompt ?? '').trim();
-    const start = current.indexOf(RELIABILITY_START);
-    const end = current.indexOf(RELIABILITY_END);
+    const start = current.indexOf(startMarker);
+    const end = current.indexOf(endMarker);
     if (start >= 0 && end > start) {
-        const after = end + RELIABILITY_END.length;
-        return `${current.slice(0, start).trim()}\n\n${reliabilityUpgrade}\n${current.slice(after).trim() ? `\n${current.slice(after).trim()}` : ''}`;
+        const after = end + endMarker.length;
+        return `${current.slice(0, start).trim()}\n\n${replacement}\n${current.slice(after).trim() ? `\n${current.slice(after).trim()}` : ''}`;
     }
-    return `${current}\n\n${reliabilityUpgrade}\n`;
+    return `${current}\n\n${replacement}\n`;
 }
 
 const [persona, toolListPayload] = await Promise.all([
@@ -98,7 +104,18 @@ const forbiddenHandoffId = toolId(forbiddenHandoff);
 const nextToolIds = [...new Set([...preservedToolIds, ...requiredToolIds])]
     .filter(id => id !== forbiddenHandoffId)
     .sort();
-const expectedPrompt = replaceReliabilityBlock(persona.brain?.systemPrompt);
+const promptWithReliability = replaceManagedBlock(
+    persona.brain?.systemPrompt,
+    RELIABILITY_START,
+    RELIABILITY_END,
+    reliabilityUpgrade,
+);
+const expectedPrompt = replaceManagedBlock(
+    promptWithReliability,
+    PUBLIC_SECTOR_START,
+    PUBLIC_SECTOR_END,
+    publicSectorUpgrade,
+);
 const voiceDetectionOptions = {
     endOfSpeechSensitivity: 0.3,
     silenceBeforeAutoEndTurnSeconds: 1.3,
@@ -123,6 +140,7 @@ const verifiedToolIds = (verified.tools ?? []).map(toolId).filter(Boolean).sort(
 const prompt = verified.brain?.systemPrompt ?? '';
 const failures = [];
 if (sha256(prompt) !== sha256(expectedPrompt)) failures.push('prompt');
+if (!prompt.includes(PUBLIC_SECTOR_START) || !prompt.includes(PUBLIC_SECTOR_END)) failures.push('publicSectorPrompt');
 if (verified.initialMessage !== "Hi, I'm Amy. It's good to meet you. What would be most useful to talk through today?") failures.push('initialMessage');
 if (verified.skipGreeting !== false) failures.push('skipGreeting');
 if (verified.uninterruptibleGreeting !== false) failures.push('uninterruptibleGreeting');
@@ -143,5 +161,7 @@ console.log(JSON.stringify({
     promptSha256: sha256(prompt),
     voiceDetectionOptions: verified.voiceDetectionOptions,
     initialMessageConfigured: Boolean(verified.initialMessage),
+    publicSectorConfigured: prompt.includes(PUBLIC_SECTOR_START)
+        && prompt.includes(PUBLIC_SECTOR_END),
     captureSalesHandoffAttached: forbiddenHandoffId ? verifiedToolIds.includes(forbiddenHandoffId) : false,
 }, null, 2));
