@@ -29,9 +29,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [error, setError] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(true);
     const [isFinalizing, setIsFinalizing] = useState(false);
-    const [audioBridgeStatus, setAudioBridgeStatus] = useState<string | null>(
-        audioBridge ? 'Finding VoiceMeeter Out B1...' : null,
-    );
 
     const onCloseRef = useRef(onClose);
     useEffect(() => {
@@ -59,7 +56,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setError(null);
         setIsConnecting(true);
         setIsFinalizing(false);
-        setAudioBridgeStatus(audioBridge ? 'Finding VoiceMeeter Out B1...' : null);
 
         const completeOnce = (closeReason: string): Promise<void> => {
             if (!sessionSpineActive || !launchId || !providerSessionId) {
@@ -103,10 +99,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     : undefined;
 
                 if (!isMounted) return;
-
-                if (audioDeviceId) {
-                    setAudioBridgeStatus('VoiceMeeter Out B1 selected');
-                }
 
                 // 1. Fetch Session Token
                 const tokenRes = await fetch('/api/anam-token', {
@@ -179,12 +171,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     connectionEstablished = true;
                     applyMemoryContext();
                     if (isMounted) setIsConnecting(false);
-                };
-
-                const handleMicPermissionGranted = () => {
-                    if (audioBridge && isMounted) {
-                        setAudioBridgeStatus('VoiceMeeter Out B1 connected');
-                    }
                 };
 
                 const handleMicPermissionDenied = (permissionError: string) => {
@@ -269,14 +255,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 };
 
                 anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
-                anamClient.addListener(AnamEvent.MIC_PERMISSION_GRANTED, handleMicPermissionGranted);
                 anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                 anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
                 anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                 anamClient.addListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
                 removeClientListeners = () => {
                     anamClient.removeListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
-                    anamClient.removeListener(AnamEvent.MIC_PERMISSION_GRANTED, handleMicPermissionGranted);
                     anamClient.removeListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                     anamClient.removeListener(AnamEvent.SESSION_READY, handleSessionReady);
                     anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
@@ -346,15 +330,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         <div className="w-10 h-10 border-4 border-zinc-700 border-t-emerald-300 rounded-full animate-spin"></div>
                         <p className="text-emerald-200 text-xs tracking-widest uppercase">Securing session record...</p>
                     </div>
-                </div>
-            )}
-
-            {audioBridgeStatus && !error && (
-                <div
-                    className="absolute top-4 left-1/2 -translate-x-1/2 z-20 rounded-full border border-emerald-400/40 bg-black/70 px-4 py-2 text-xs font-mono text-emerald-300 backdrop-blur-sm"
-                    data-audio-bridge-status={audioBridgeStatus}
-                >
-                    Audio bridge: {audioBridgeStatus}
                 </div>
             )}
 

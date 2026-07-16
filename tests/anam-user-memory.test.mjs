@@ -257,3 +257,15 @@ test('the operator CLI requires an explicit approve or reject decision', async (
     assert.match(script, /Authorization: `Bearer \$\{operatorSecret\}`/);
     assert.doesNotMatch(script, /console\.log\(review|process\.stdout\.write\([^)]*summary/s);
 });
+
+test('authenticated memory controls stay collapsed until the visitor opens them', async () => {
+    const gate = await readFile(
+        new URL('../components/amy/AmyMemoryAccessGate.tsx', import.meta.url),
+        'utf8',
+    );
+
+    assert.match(gate, /const \[profileControlsOpen, setProfileControlsOpen\] = useState\(false\)/);
+    assert.match(gate, /profileControlsOpen && \(/);
+    assert.match(gate, /aria-label="Open Amy profile controls"/);
+    assert.doesNotMatch(gate, /fixed left-4 top-4/);
+});

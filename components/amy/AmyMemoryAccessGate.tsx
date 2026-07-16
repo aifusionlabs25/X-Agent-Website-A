@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
-import { Brain, LogOut, RotateCcw, Sparkles, UserRound } from 'lucide-react';
+import { Brain, LogOut, RotateCcw, Sparkles, UserRound, X } from 'lucide-react';
 
 type AccessStatus = {
     required: boolean;
@@ -52,6 +52,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
     const [email, setEmail] = useState('');
     const [accessCode, setAccessCode] = useState('');
     const [memoryConsent, setMemoryConsent] = useState(false);
+    const [profileControlsOpen, setProfileControlsOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
 
@@ -114,6 +115,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         setStatus(emptyStatus);
         setNotice(null);
         setDisplayName('');
+        setProfileControlsOpen(false);
     };
 
     const forgetMemory = async () => {
@@ -151,23 +153,46 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         return (
             <div className="relative">
                 {status.required && (
-                    <aside className="fixed left-4 top-4 z-[600] max-w-sm rounded-2xl border border-white/15 bg-zinc-950/85 p-3 text-xs text-zinc-300 shadow-2xl backdrop-blur-xl">
-                        <div className="flex items-start gap-3">
-                            <div className="rounded-xl bg-indigo-500/15 p-2 text-indigo-300">
-                                <Brain className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-white">
-                                    {status.displayName ? `Welcome, ${status.displayName}` : 'Welcome back'}
-                                </p>
-                                <p className="mt-0.5 text-zinc-400">
-                                    {status.memoryConsent
-                                        ? `${status.approvedMemoryCount} saved conversation highlight(s)`
-                                        : 'Starting fresh for this visit'}
-                                </p>
-                                {notice && <p className="mt-2 text-emerald-300">{notice}</p>}
-                                {error && <p className="mt-2 text-rose-300">{error}</p>}
-                                <div className="mt-3 flex flex-wrap gap-2">
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setProfileControlsOpen(open => !open)}
+                            aria-label="Open Amy profile controls"
+                            aria-expanded={profileControlsOpen}
+                            aria-controls="amy-profile-controls"
+                            title="Profile and memory"
+                            className="fixed bottom-3 left-3 z-[600] grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-black/35 text-white/55 shadow-lg backdrop-blur-md transition hover:border-white/25 hover:bg-black/60 hover:text-white"
+                        >
+                            <UserRound className="h-4 w-4" />
+                        </button>
+                        {profileControlsOpen && (
+                            <aside
+                                id="amy-profile-controls"
+                                className="fixed bottom-14 left-3 z-[600] w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-white/15 bg-zinc-950/90 p-4 text-xs text-zinc-300 shadow-2xl backdrop-blur-xl"
+                            >
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p className="font-semibold text-white">
+                                            {status.displayName ? `Welcome, ${status.displayName}` : 'Welcome back'}
+                                        </p>
+                                        <p className="mt-1 text-zinc-400">
+                                            {status.memoryConsent
+                                                ? `${status.approvedMemoryCount} saved conversation highlight(s)`
+                                                : 'Starting fresh for this visit'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setProfileControlsOpen(false)}
+                                        aria-label="Close profile controls"
+                                        className="rounded-full p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                                {notice && <p className="mt-3 text-emerald-300">{notice}</p>}
+                                {error && <p className="mt-3 text-rose-300">{error}</p>}
+                                <div className="mt-4 flex flex-wrap gap-2">
                                     {status.memoryConsent && status.approvedMemoryCount > 0 && (
                                         <button
                                             type="button"
@@ -187,9 +212,9 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                         Switch user
                                     </button>
                                 </div>
-                            </div>
-                        </div>
-                    </aside>
+                            </aside>
+                        )}
+                    </>
                 )}
                 {children}
             </div>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
     findVoiceMeeterB1Input,
@@ -107,4 +108,15 @@ test('a denied permission probe produces an actionable bridge error', async () =
         selectVoiceMeeterB1DeviceId(mediaDevices),
         /Microphone access is required/,
     );
+});
+
+test('the VoiceMeeter bridge stays functional without a customer-facing status banner', async () => {
+    const player = await readFile(
+        new URL('../components/AnamPlayer.tsx', import.meta.url),
+        'utf8',
+    );
+
+    assert.match(player, /selectVoiceMeeterB1DeviceId/);
+    assert.match(player, /MIC_PERMISSION_DENIED/);
+    assert.doesNotMatch(player, /Audio bridge:|data-audio-bridge-status|VoiceMeeter Out B1 connected/);
 });
