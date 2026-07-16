@@ -9,6 +9,7 @@ export const AMY_ANAM_MEMORY_MAX_RECORDS = 8;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const MIN_ACCESS_CODE_CHARACTERS = 10;
 const MAX_SUMMARY_CHARACTERS = 1_400;
 const MAX_RECALL_SUMMARY_CHARACTERS = 800;
 
@@ -103,7 +104,7 @@ export function readAmyAnamMemoryConfig(
     const identitySalt = value(source, 'AMY_ANAM_MEMORY_IDENTITY_SALT');
     const configured = Boolean(
         spine.configured
-        && accessCode.length >= 12
+        && accessCode.length >= MIN_ACCESS_CODE_CHARACTERS
         && identitySalt.length >= 32
     );
     const gatesOpen = enabled

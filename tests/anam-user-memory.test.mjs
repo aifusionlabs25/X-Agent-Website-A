@@ -84,6 +84,8 @@ function memoryFetch() {
 test('memory gates require the session spine, access code, salt, and explicit switches', () => {
     assert.equal(readAmyAnamMemoryConfig(env).gatesOpen, true);
     assert.equal(readAmyAnamMemoryConfig(env).promotionGatesOpen, true);
+    assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_ACCESS_CODE: '12345678901' }).gatesOpen, true);
+    assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_ACCESS_CODE: '123456789' }).configured, false);
     assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_KILL_SWITCH: 'true' }).gatesOpen, false);
     assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_IDENTITY_SALT: '' }).configured, false);
     assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_OPERATOR_SECRET: '' }).promotionGatesOpen, false);
