@@ -1,6 +1,6 @@
 {
   "name": "confirm_live_identity",
-  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked for the preferred name and email separately, repeated the email spelling, and received explicit confirmation.",
+  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked for the preferred name and email separately, repeated the email spelling, and received explicit confirmation. After success, follow the returned instruction: briefly identify two or three distinctive earlier-session facts, distinguish them from today's statements, and ask whether they are still current.",
   "type": "CLIENT",
   "disableInterruptions": true,
   "config": {

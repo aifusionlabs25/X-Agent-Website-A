@@ -4,6 +4,7 @@ import test from 'node:test';
 import { verifyAmyAnamLiveIdentity } from '../lib/anam/live-identity.ts';
 import {
     buildAmyAnamMemoryAccessPolicy,
+    buildAmyAnamReturningMemoryContext,
     deriveAmyAnamEmailIdentityHash,
 } from '../lib/anam/user-memory.ts';
 
@@ -68,10 +69,24 @@ test('pre-unlock policy warms up first and reveals neither identity nor memory',
     assert.doesNotMatch(policy, /rvicks|Website Alias|ERP migration/i);
 });
 
+test('returning memory is revealed briefly as earlier-session context, never as a current-call echo', () => {
+    const context = buildAmyAnamReturningMemoryContext(approvedHistory);
+    assert.match(context, /approved notes from an earlier conversation/i);
+    assert.match(context, /at most two or three distinctive prior facts/i);
+    assert.match(context, /has not already supplied today/i);
+    assert.match(context, /ask whether they are still current/i);
+    assert.match(context, /never use today's statements as proof of memory/i);
+    assert.match(context, /Do not say "memory unlocked,/i);
+    assert.match(context, /action-capable tool explicitly returned a successful receipt/i);
+    assert.match(context, /ERP migration/i);
+    assert.doesNotMatch(context, /rvicks@gmail\.com|Website Alias/i);
+});
+
 test('server and client enforce delayed, session-owned memory unlock', async () => {
     const tokenRoute = await readFile(new URL('../app/api/anam-token/route.ts', import.meta.url), 'utf8');
     const identityRoute = await readFile(new URL('../app/api/anam/session/identity/route.ts', import.meta.url), 'utf8');
     const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
+    const reliabilityPrompt = await readFile(new URL('../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url), 'utf8');
 
     assert.doesNotMatch(tokenRoute, /readAmyAnamApprovedMemoryHistory|buildAmyAnamReturningMemoryContext/);
     assert.match(tokenRoute, /buildAmyAnamMemoryAccessPolicy/);
@@ -86,5 +101,12 @@ test('server and client enforce delayed, session-owned memory unlock', async () 
             < player.indexOf("streamToVideoElement('persona-video')"),
     );
     assert.match(player, /confirmedContact = \{ preferredName: result\.preferredName, email: normalizedEmail \}/);
+    assert.match(player, /two or three distinctive earlier-session facts/);
+    assert.match(player, /result\.memoryCount > 0/);
     assert.doesNotMatch(player, /console\.(?:log|info|error)[^\n]*(?:normalizedEmail|confirmedContact)/);
+    assert.match(reliabilityPrompt, /never present current-call statements as proof of memory/i);
+    assert.match(reliabilityPrompt, /action-capable tool explicitly reports success/i);
+    assert.match(reliabilityPrompt, /Treat "that's all," "nothing else," "wrap up," "goodbye,"/i);
+    assert.match(reliabilityPrompt, /Do not ask "anything else"/i);
+    assert.match(reliabilityPrompt, /slightly unhurried cadence/i);
 });

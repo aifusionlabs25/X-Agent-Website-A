@@ -377,7 +377,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 return JSON.stringify({
                                     status: 'memory_unlocked',
                                     memoryCount: result.memoryCount,
-                                    instruction: 'Use approved context naturally. Refer to the address only as the confirmed email; never repeat or reconstruct it aloud.',
+                                    instruction: result.memoryCount > 0 ? 'In your next reply, say naturally that you found approved notes from an earlier conversation. Mention at most two or three distinctive earlier-session facts that the visitor has not already supplied today, then ask whether they are still current. Use no more than two short sentences. Do not say memory unlocked or repeat the email.' : 'Say plainly that no approved earlier-session notes were found, then continue naturally. Do not fill the gap with current-call facts or repeat the email.',
                                 });
                             },
                         },
