@@ -49,7 +49,7 @@ function EmptySignal() {
                 <Sparkles size={20} />
             </div>
             <p className="mt-5 text-sm font-semibold text-white">Ready for the first useful signal</p>
-            <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-400">
+            <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-400">
                 Amy will organize confirmed facts, corrections, open questions, and the next decision as the conversation develops.
             </p>
         </div>
@@ -88,9 +88,9 @@ export default function AmyAnamWorkbenchV2({
                             <Sparkles size={20} />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#ff68a9]">Insight intelligence layer</p>
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#ff68a9]">Insight intelligence layer</p>
                             <h2 className="truncate text-xl font-semibold tracking-[-0.02em]">Amy Intelligence</h2>
-                            <p className="mt-0.5 text-xs text-zinc-400">Live planning, visuals, and solution context</p>
+                            <p className="mt-0.5 text-sm text-zinc-400">Live planning, visuals, and solution context</p>
                         </div>
                     </div>
                     <button type="button" onClick={onClose} className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white" aria-label="Close Amy Intelligence">
@@ -109,7 +109,7 @@ export default function AmyAnamWorkbenchV2({
                                 role="tab"
                                 aria-selected={selected}
                                 onClick={() => onViewChange(tab.id)}
-                                className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 bg-[#101014] px-1 text-[9px] font-semibold transition sm:flex-row sm:gap-1.5 sm:text-xs ${selected ? 'bg-white text-black' : 'text-zinc-400 hover:bg-[#18181d] hover:text-white'}`}
+                                className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 bg-[#101014] px-1 text-[11px] font-semibold transition sm:flex-row sm:gap-1.5 sm:text-sm ${selected ? 'bg-white text-black' : 'text-zinc-300 hover:bg-[#18181d] hover:text-white'}`}
                             >
                                 <Icon size={14} />
                                 <span className="truncate">{tab.label}</span>
@@ -122,10 +122,10 @@ export default function AmyAnamWorkbenchV2({
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-7">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Active lane</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Active lane</p>
                         <p className="mt-1 text-sm font-semibold text-zinc-100">{model.lane}</p>
                     </div>
-                    <div className="inline-flex items-center gap-2 border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300">
+                    <div className="inline-flex items-center gap-2 border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-emerald-300">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]" />
                         {model.status === 'live' ? `${model.signalCount} session signals` : 'Listening'}
                     </div>
@@ -135,7 +135,7 @@ export default function AmyAnamWorkbenchV2({
                     <EmptySignal />
                 ) : view === 'notes' ? (
                     <section aria-labelledby="amy-notes-heading">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ff68a9]">Canonical session model</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Canonical session model</p>
                         <h3 id="amy-notes-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Live Notes</h3>
                         <p className="mt-2 max-w-lg text-sm leading-6 text-zinc-400">Confirmed current-session signals. Corrections replace older wording; uncertain speech stays separate.</p>
                         <div className="mt-6 space-y-5">
@@ -144,11 +144,11 @@ export default function AmyAnamWorkbenchV2({
                                 if (!sectionFacts.length) return null;
                                 return (
                                     <article key={section} className="border-t border-white/10 pt-4">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">{section}</p>
+                                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{section}</p>
                                         <div className="mt-3 space-y-3">
                                             {sectionFacts.map((fact) => (
                                                 <div key={`${fact.label}:${fact.value}`} className="grid gap-1 sm:grid-cols-[132px_1fr] sm:gap-4">
-                                                    <div className="flex items-start gap-2 text-xs text-zinc-500"><Check size={13} className="mt-0.5 flex-none text-[#ff68a9]" />{fact.label}</div>
+                                                    <div className="flex items-start gap-2 text-sm text-zinc-400"><Check size={14} className="mt-0.5 flex-none text-[#ff68a9]" />{fact.label}</div>
                                                     <p className="text-sm leading-6 text-zinc-200">{fact.value}</p>
                                                 </div>
                                             ))}
@@ -159,63 +159,63 @@ export default function AmyAnamWorkbenchV2({
                         </div>
                         {model.corrections.length > 0 && (
                             <div className="mt-6 border border-emerald-300/20 bg-emerald-300/[0.05] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300">Applied corrections</p>
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-300">Applied corrections</p>
                                 {model.corrections.map((item) => <p key={`${item.from}:${item.to}`} className="mt-2 text-xs text-zinc-300"><span className="line-through text-zinc-600">{item.from}</span> <span className="mx-2">→</span> {item.to}</p>)}
                             </div>
                         )}
                         {model.uncertainItems.length > 0 && (
                             <div className="mt-4 border border-amber-300/20 bg-amber-300/[0.05] p-4">
-                                <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300"><AlertTriangle size={13} /> Needs clarification</p>
-                                {model.uncertainItems.map((item) => <p key={item} className="mt-2 text-xs leading-5 text-zinc-400">{item}</p>)}
+                                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-300"><AlertTriangle size={14} /> Needs clarification</p>
+                                {model.uncertainItems.map((item) => <p key={item} className="mt-2 text-sm leading-6 text-zinc-400">{item}</p>)}
                             </div>
                         )}
                     </section>
                 ) : view === 'brief' ? (
                     <section aria-labelledby="amy-brief-heading">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ff68a9]">Account-team working summary</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Account-team working summary</p>
                         <h3 id="amy-brief-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Live Brief</h3>
                         <div className="mt-6 border border-white/10 bg-white/[0.035] p-5">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Current objective</p>
+                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">Current objective</p>
                             <p className="mt-3 text-lg leading-7 text-zinc-100">{model.brief.objective}</p>
                         </div>
                         <div className="mt-4 grid gap-4 sm:grid-cols-2">
                             <div className="border border-white/10 p-5">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Environment</p>
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">Environment</p>
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    {(model.brief.environment.length ? model.brief.environment : ['Still to clarify']).map((item) => <span key={item} className="border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-zinc-300">{item}</span>)}
+                                    {(model.brief.environment.length ? model.brief.environment : ['Still to clarify']).map((item) => <span key={item} className="border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-zinc-300">{item}</span>)}
                                 </div>
                             </div>
                             <div className="border border-white/10 p-5">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Priorities and guardrails</p>
-                                <ul className="mt-3 space-y-2 text-xs leading-5 text-zinc-300">
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">Priorities and guardrails</p>
+                                <ul className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
                                     {(model.brief.priorities.length ? model.brief.priorities : ['Still to clarify']).map((item) => <li key={item} className="flex gap-2"><span className="mt-2 h-1 w-1 flex-none rounded-full bg-[#ff68a9]" />{item}</li>)}
                                 </ul>
                             </div>
                         </div>
                         <div className="mt-4 border-l-2 border-[#ff2f8a] bg-[#ff2f8a]/[0.065] px-5 py-4">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#ff68a9]">Suggested next decision</p>
+                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#ff68a9]">Suggested next decision</p>
                             <p className="mt-2 text-sm leading-6 text-zinc-200">{model.brief.nextStep}</p>
                         </div>
                         {model.brief.openQuestions.length > 0 && (
                             <div className="mt-6">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Still to clarify</p>
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">Still to clarify</p>
                                 <ul className="mt-3 space-y-2 text-sm text-zinc-300">{model.brief.openQuestions.map((question) => <li key={question}>- {question}</li>)}</ul>
                             </div>
                         )}
                     </section>
                 ) : view === 'roadmap' ? (
                     <section aria-labelledby="amy-roadmap-heading">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ff68a9]">Illustrative planning sequence</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Illustrative planning sequence</p>
                         <h3 id="amy-roadmap-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">{model.roadmap.title}</h3>
                         <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-400">{model.roadmap.outcome}</p>
                         {model.roadmap.facts.length > 0 && (
-                            <div className="mt-5 flex flex-wrap gap-2">{model.roadmap.facts.slice(0, 7).map((fact) => <span key={`${fact.label}:${fact.value}`} className="border border-white/10 bg-white/[0.035] px-3 py-2 text-[10px] text-zinc-300"><strong className="text-zinc-500">{fact.label}:</strong> {fact.value}</span>)}</div>
+                            <div className="mt-5 flex flex-wrap gap-2">{model.roadmap.facts.slice(0, 7).map((fact) => <span key={`${fact.label}:${fact.value}`} className="border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-zinc-300"><strong className="text-zinc-400">{fact.label}:</strong> {fact.value}</span>)}</div>
                         )}
                         <div className="relative mt-8 space-y-3">
                             {model.roadmap.phases.map((phase) => (
                                 <article key={phase.number} className="grid grid-cols-[40px_1fr] gap-4">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ff2f8a]/45 bg-[#130d11] text-[10px] font-bold text-[#ff68a9]">{phase.number}</div>
-                                    <div className="border border-white/10 bg-white/[0.025] px-5 py-4"><h4 className="text-sm font-semibold text-white">{phase.title}</h4><p className="mt-1 text-xs leading-5 text-zinc-400">{phase.detail}</p></div>
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ff2f8a]/45 bg-[#130d11] text-xs font-bold text-[#ff68a9]">{phase.number}</div>
+                                    <div className="border border-white/10 bg-white/[0.025] px-5 py-4"><h4 className="text-base font-semibold text-white">{phase.title}</h4><p className="mt-1 text-sm leading-6 text-zinc-400">{phase.detail}</p></div>
                                 </article>
                             ))}
                         </div>
@@ -223,44 +223,44 @@ export default function AmyAnamWorkbenchV2({
                 ) : view === 'visual' ? (
                     <section aria-labelledby="amy-visual-heading">
                         <div className="flex items-end justify-between gap-4">
-                            <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ff68a9]">Live microdeck</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">{slideIndex + 1} / {model.visualBrief.slides.length}</p>
+                            <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Live microdeck</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
+                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{slideIndex + 1} / {model.visualBrief.slides.length}</p>
                         </div>
                         <div className="mt-6 overflow-hidden border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.025] to-[#ff2f8a]/[0.055] p-6 sm:min-h-[390px] sm:p-8">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ff68a9]">{activeSlide.eyebrow}</p>
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{activeSlide.eyebrow}</p>
                             <h4 className="mt-5 max-w-lg text-3xl font-semibold tracking-[-0.04em] text-white">{activeSlide.title}</h4>
                             <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-300">{activeSlide.summary}</p>
-                            <div className="mt-8 grid gap-3 sm:grid-cols-2">{activeSlide.bullets.map((bullet) => <div key={bullet} className="border-l border-[#ff2f8a]/70 bg-black/20 px-4 py-3 text-xs leading-5 text-zinc-300">{bullet}</div>)}</div>
-                            <p className="mt-8 border-t border-white/10 pt-4 text-[10px] leading-4 text-zinc-500">{activeSlide.boundary}</p>
+                            <div className="mt-8 grid gap-3 sm:grid-cols-2">{activeSlide.bullets.map((bullet) => <div key={bullet} className="border-l border-[#ff2f8a]/70 bg-black/20 px-4 py-3 text-sm leading-6 text-zinc-300">{bullet}</div>)}</div>
+                            <p className="mt-8 border-t border-white/10 pt-4 text-xs leading-5 text-zinc-400">{activeSlide.boundary}</p>
                         </div>
                         <div className="mt-4 flex items-center justify-between gap-4">
-                            <button type="button" onClick={() => setSlideIndex((current) => Math.max(0, current - 1))} disabled={slideIndex === 0} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/5 disabled:opacity-30"><ChevronLeft size={15} /> Previous</button>
+                            <button type="button" onClick={() => setSlideIndex((current) => Math.max(0, current - 1))} disabled={slideIndex === 0} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30"><ChevronLeft size={15} /> Previous</button>
                             <div className="flex gap-1.5">{model.visualBrief.slides.map((slide, index) => <button key={slide.id} type="button" onClick={() => setSlideIndex(index)} aria-label={`Open slide ${index + 1}`} className={`h-1.5 transition-all ${index === slideIndex ? 'w-7 bg-[#ff2f8a]' : 'w-2 bg-white/20'}`} />)}</div>
-                            <button type="button" onClick={() => setSlideIndex((current) => Math.min(model.visualBrief.slides.length - 1, current + 1))} disabled={slideIndex === model.visualBrief.slides.length - 1} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/5 disabled:opacity-30">Next <ChevronRight size={15} /></button>
+                            <button type="button" onClick={() => setSlideIndex((current) => Math.min(model.visualBrief.slides.length - 1, current + 1))} disabled={slideIndex === model.visualBrief.slides.length - 1} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30">Next <ChevronRight size={15} /></button>
                         </div>
                     </section>
                 ) : (
                     <section aria-labelledby="amy-catalog-heading">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ff68a9]">Directional solution context</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Directional solution context</p>
                         <h3 id="amy-catalog-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">{model.catalog.title}</h3>
                         <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-400">{model.catalog.summary}</p>
                         <div className="mt-7 grid gap-4 sm:grid-cols-2">
                             {model.catalog.categories.map((category, index) => (
                                 <article key={category.title} className="group relative overflow-hidden border border-white/10 bg-white/[0.025] p-5 transition hover:border-[#ff2f8a]/30 hover:bg-white/[0.045]">
-                                    <span className="absolute right-4 top-4 text-[10px] font-bold text-zinc-700">0{index + 1}</span>
+                                    <span className="absolute right-4 top-4 text-xs font-bold text-zinc-600">0{index + 1}</span>
                                     <PackageSearch size={18} className="text-[#ff68a9]" />
                                     <h4 className="mt-4 text-base font-semibold text-white">{category.title}</h4>
-                                    <p className="mt-2 text-xs leading-5 text-zinc-400">{category.description}</p>
-                                    <div className="mt-4 flex flex-wrap gap-2">{category.examples.map((example) => <span key={example} className="border border-white/10 bg-black/20 px-2 py-1 text-[10px] text-zinc-400">{example}</span>)}</div>
+                                    <p className="mt-2 text-sm leading-6 text-zinc-400">{category.description}</p>
+                                    <div className="mt-4 flex flex-wrap gap-2">{category.examples.map((example) => <span key={example} className="border border-white/10 bg-black/20 px-2 py-1 text-xs text-zinc-300">{example}</span>)}</div>
                                 </article>
                             ))}
                         </div>
-                        <div className="mt-6 flex items-start gap-3 border border-amber-300/20 bg-amber-300/[0.045] p-4 text-xs leading-5 text-amber-100/80"><ShieldCheck size={16} className="mt-0.5 flex-none text-amber-300" /><span>{model.catalog.boundary}</span></div>
+                        <div className="mt-6 flex items-start gap-3 border border-amber-300/20 bg-amber-300/[0.045] p-4 text-sm leading-6 text-amber-100/80"><ShieldCheck size={16} className="mt-0.5 flex-none text-amber-300" /><span>{model.catalog.boundary}</span></div>
                     </section>
                 )}
             </div>
 
-            <footer className="flex items-start gap-3 border-t border-white/10 bg-black/30 px-5 py-4 text-[10px] leading-4 text-zinc-500 sm:px-7">
+            <footer className="flex items-start gap-3 border-t border-white/10 bg-black/30 px-5 py-4 text-xs leading-5 text-zinc-400 sm:px-7">
                 <ShieldCheck size={15} className="mt-0.5 flex-none text-emerald-400" />
                 <span>{AMY_WORKBENCH_BOUNDARY}</span>
             </footer>

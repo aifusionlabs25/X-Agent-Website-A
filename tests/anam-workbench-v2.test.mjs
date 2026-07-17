@@ -85,6 +85,18 @@ test('Anam client tools use the current API shape and route five named views', a
     assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist/i);
 });
 
+test('Amy feature tabs and content use readable production typography', async () => {
+    const workbench = await import('node:fs/promises').then((fs) => fs.readFile(
+        new URL('../components/amy/AmyAnamWorkbenchV2.tsx', import.meta.url),
+        'utf8',
+    ));
+
+    assert.match(workbench, /text-\[11px\][^`]+sm:text-sm/);
+    assert.match(workbench, /text-sm leading-6 text-zinc-400/);
+    assert.match(workbench, /text-xs leading-5 text-zinc-400/);
+    assert.doesNotMatch(workbench, /text-\[(?:9|10)px\]/);
+});
+
 test('Amy player registers all five visual handlers and keeps workbench local to Cara 4', async () => {
     const player = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'));
     for (const name of ['show_live_notes', 'show_session_brief', 'show_solution_roadmap', 'show_visual_brief', 'show_solution_catalog']) {
