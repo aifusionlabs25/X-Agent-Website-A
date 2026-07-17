@@ -1,6 +1,6 @@
 {
   "name": "confirm_live_identity",
-  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked for the preferred name and email separately, repeated the email spelling, and received explicit confirmation. Submit letter-by-letter voice spellings in compact email form (for example, r-v-i-c-k-s at gmail dot com becomes rvicks@gmail.com), while preserving a hyphen or other punctuation the visitor explicitly says belongs in the address. After success, follow the returned instruction: briefly identify two or three distinctive earlier-session facts, distinguish them from today's statements, and ask whether they are still current.",
+  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked for the visitor's preferred name, and separately received explicit permission to check for notes from a previous conversation. Never ask for or submit an email address for memory access; the application privately verifies the session-bound website check-in identity. After success, follow the returned instruction: briefly identify two or three distinctive earlier-session facts, distinguish them from today's statements, and ask whether they are still current.",
   "type": "CLIENT",
   "disableInterruptions": true,
   "config": {
@@ -14,14 +14,12 @@
           "minLength": 1,
           "maxLength": 80
         },
-        "email": {
-          "type": "string",
-          "description": "The confirmed email in compact canonical form. Remove separators used only to spell individual letters, but preserve punctuation explicitly stated as part of the real address.",
-          "minLength": 3,
-          "maxLength": 254
+        "memoryAccessConfirmed": {
+          "type": "boolean",
+          "description": "True only after the visitor explicitly agrees that Amy may check for approved notes from a previous conversation."
         }
       },
-      "required": ["preferredName", "email"]
+      "required": ["preferredName", "memoryAccessConfirmed"]
     },
     "awaitResult": true,
     "toolTimeoutSeconds": 10

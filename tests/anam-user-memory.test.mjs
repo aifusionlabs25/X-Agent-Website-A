@@ -155,7 +155,8 @@ test('two visits with one email share approved memory while another email stays 
     const context = buildAmyAnamReturningMemoryContext(returningHistory);
     assert.match(context, /warehouse mobility refresh/i);
     assert.match(context, /Memory is now unlocked/i);
-    assert.match(context, /confirmed email/i);
+    assert.match(context, /private website check-in identity/i);
+    assert.match(context, /not conversational data/i);
     assert.doesNotMatch(context, /At the start|ask the visitor to provide/i);
     assert.doesNotMatch(context, /Website Alias|rob@example\.com|ignore previous instructions|system:/i);
     assert.doesNotMatch(context, /[a-f0-9]{64}|Redis|storage key|session-one/i);
@@ -173,6 +174,8 @@ test('website check-in identity never becomes Amy conversational identity', () =
     assert.match(context, /Do not ask.*opening turn/i);
     assert.match(context, /one useful conversational exchange/i);
     assert.match(context, /confirm_live_identity/i);
+    assert.match(context, /memoryAccessConfirmed/i);
+    assert.match(context, /Never ask for, spell, or repeat an email address solely/i);
     assert.doesNotMatch(context, /\bRob\b|rob@example\.com/i);
 });
 

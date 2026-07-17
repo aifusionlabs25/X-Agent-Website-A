@@ -63,7 +63,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeClientListeners: (() => void) | null = null;
         let removeIdentityToolHandler: (() => void) | null = null;
         let completedUserTurns = 0;
-        let confirmedContact: { preferredName: string; email: string } | null = null;
+        let confirmedMemoryName: string | null = null;
         const videoElement = videoRef.current;
 
         transcriptRef.current = [];
@@ -345,23 +345,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 const preferredName = typeof payload.arguments.preferredName === 'string'
                                     ? payload.arguments.preferredName.trim()
                                     : '';
-                                const email = typeof payload.arguments.email === 'string'
-                                    ? payload.arguments.email.trim()
-                                    : '';
-                                if (!preferredName || !email) {
-                                    throw new Error('Ask for and explicitly confirm the name and email separately.');
+                                const memoryAccessConfirmed = payload.arguments.memoryAccessConfirmed === true;
+                                if (!preferredName || !memoryAccessConfirmed) {
+                                    throw new Error('Ask for the preferred name and explicit permission to check previous notes.');
                                 }
                                 if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
                                     throw new Error('The private session is not ready. Continue the conversation and try once more.');
                                 }
 
-                                const normalizedEmail = email.toLowerCase();
-                                if (confirmedContact) {
+                                if (confirmedMemoryName) {
                                     return JSON.stringify({
-                                        status: confirmedContact.email === normalizedEmail
-                                            ? 'memory_already_unlocked'
-                                            : 'identity_already_confirmed',
-                                        instruction: 'Use the stored confirmed contact. Never repeat or reconstruct the email aloud.',
+                                        status: 'memory_already_unlocked',
+                                        instruction: 'Use the memory context already provided. Do not request contact details solely for memory.',
                                     });
                                 }
 
@@ -370,18 +365,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     launchId,
                                     sessionId: providerSessionId,
                                     preferredName,
-                                    email,
+                                    memoryAccessConfirmed: true,
                                 });
-                                confirmedContact = { preferredName: result.preferredName, email: normalizedEmail };
+                                confirmedMemoryName = result.preferredName;
                                 anamClient.addContext(result.memoryContext);
                                 console.info('[Amy Anam Memory] Returning context unlocked', {
                                     approvedSessionCount: result.memoryCount,
-                                    contactContentLogged: false,
+                                    identityContentLogged: false,
                                 });
                                 return JSON.stringify({
                                     status: 'memory_unlocked',
                                     memoryCount: result.memoryCount,
-                                    instruction: result.memoryCount > 0 ? 'In your next reply, say naturally that you found approved notes from an earlier conversation. Mention at most two or three distinctive earlier-session facts that the visitor has not already supplied today, then ask whether they are still current. Use no more than two short sentences. Do not say memory unlocked or repeat the email.' : 'Say plainly that no approved earlier-session notes were found, then continue naturally. Do not fill the gap with current-call facts or repeat the email.',
+                                    instruction: result.memoryCount > 0 ? 'In your next reply, say naturally that you found approved notes from an earlier conversation. Mention at most two or three distinctive earlier-session facts that the visitor has not already supplied today, then ask whether they are still current. Use no more than two short sentences. Do not say memory unlocked or ask for contact details.' : 'Say plainly that no approved earlier-session notes were found, then continue naturally. Do not fill the gap with current-call facts or ask for contact details.',
                                 });
                             },
                         },

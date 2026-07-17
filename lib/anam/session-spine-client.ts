@@ -14,7 +14,7 @@ type CompleteInput = BindInput & {
 
 type ConfirmIdentityInput = BindInput & {
     preferredName: string;
-    email: string;
+    memoryAccessConfirmed: true;
 };
 
 export type AmyAnamCompletionResult = {
@@ -54,13 +54,13 @@ export async function confirmAmyAnamLiveIdentity({
     launchId,
     sessionId,
     preferredName,
-    email,
+    memoryAccessConfirmed,
     fetchImpl = fetch,
 }: ConfirmIdentityInput): Promise<AmyAnamLiveIdentityResult> {
     const response = await fetchImpl('/api/anam/session/identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ launchId, sessionId, preferredName, email }),
+        body: JSON.stringify({ launchId, sessionId, preferredName, memoryAccessConfirmed }),
         cache: 'no-store',
         credentials: 'same-origin',
     });

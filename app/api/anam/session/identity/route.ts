@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         const launchId = typeof body.launchId === 'string' ? body.launchId.trim() : '';
         const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
         const preferredName = body.preferredName;
-        const email = body.email;
+        const memoryAccessConfirmed = body.memoryAccessConfirmed;
         if (!isUuid(launchId) || !isUuid(sessionId)) {
             return noStoreJson({ error: 'Valid launch and session IDs are required' }, { status: 400 });
         }
@@ -81,10 +81,9 @@ export async function POST(request: Request) {
 
         const identityVerification = verifyAmyAnamLiveIdentity({
             preferredName,
-            email,
+            memoryAccessConfirmed,
             browserIdentity,
             approvedHistory: [],
-            identitySalt: memoryConfig.identitySalt,
         });
         if (!identityVerification) {
             return noStoreJson({ error: 'Live identity could not be confirmed' }, { status: 409 });
@@ -93,10 +92,9 @@ export async function POST(request: Request) {
         const approvedHistory = await readAmyAnamApprovedMemoryHistory(browserIdentity);
         const verification = verifyAmyAnamLiveIdentity({
             preferredName: identityVerification.preferredName,
-            email: identityVerification.normalizedEmail,
+            memoryAccessConfirmed: true,
             browserIdentity,
             approvedHistory,
-            identitySalt: memoryConfig.identitySalt,
         });
         if (!verification) throw new Error('Verified identity state changed unexpectedly');
 
@@ -113,7 +111,7 @@ export async function POST(request: Request) {
         if (error instanceof AmyAnamRequestError) {
             return noStoreJson({ error: error.message }, { status: error.status });
         }
-        if (error instanceof Error && /preferred name|email/i.test(error.message)) {
+        if (error instanceof Error && /preferred name|memory permission/i.test(error.message)) {
             return noStoreJson({ error: 'Live identity could not be confirmed' }, { status: 400 });
         }
         console.error('[Amy Anam Live Identity] Failed');

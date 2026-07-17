@@ -27,81 +27,64 @@ const approvedHistory = [{
     recommendedNextSteps: ['Validate the overnight maintenance window'],
 }];
 
-test('live identity unlocks approved memory only for the matching confirmed email', () => {
+test('session-bound check-in identity unlocks memory after explicit permission', () => {
     const result = verifyAmyAnamLiveIdentity({
         preferredName: ' Rob ',
-        email: ' RVICKS@GMAIL.COM ',
+        memoryAccessConfirmed: true,
         browserIdentity,
         approvedHistory,
-        identitySalt,
     });
     assert.ok(result);
     assert.equal(result.preferredName, 'Rob');
-    assert.equal(result.normalizedEmail, 'rvicks@gmail.com');
     assert.equal(result.memoryCount, 1);
     assert.match(result.memoryContext, /ERP migration/i);
     assert.doesNotMatch(result.memoryContext, /rvicks@gmail\.com|Website Alias/i);
+    assert.doesNotMatch(JSON.stringify(result), /normalizedEmail|emailIdentityHash/i);
 });
 
-test('letter-by-letter voice spelling resolves to the saved compact email', () => {
-    for (const email of ['r-v-i-c-k-s@gmail.com', 'r v i c k s @ gmail.com', 'r-v-i-c-k-s@g-m-a-i-l.com']) {
-        const result = verifyAmyAnamLiveIdentity({
-            preferredName: 'Rob',
-            email,
-            browserIdentity,
-            approvedHistory,
-            identitySalt,
-        });
-        assert.ok(result, `expected ${email} to match the saved identity`);
-        assert.equal(result.normalizedEmail, 'rvicks@gmail.com');
-    }
-});
-
-test('an explicitly saved hyphenated mailbox remains intact', () => {
-    const hyphenatedIdentity = {
-        ...browserIdentity,
-        emailIdentityHash: deriveAmyAnamEmailIdentityHash('rob-vicks@gmail.com', identitySalt),
-    };
-    const result = verifyAmyAnamLiveIdentity({
-        preferredName: 'Rob',
-        email: 'rob-vicks@gmail.com',
-        browserIdentity: hyphenatedIdentity,
-        approvedHistory,
-        identitySalt,
-    });
-    assert.ok(result);
-    assert.equal(result.normalizedEmail, 'rob-vicks@gmail.com');
-});
-
-test('a corrupted or unconsented email cannot unlock any approved history', () => {
+test('memory remains locked without live permission or a consented check-in identity', () => {
     assert.equal(verifyAmyAnamLiveIdentity({
         preferredName: 'Rob',
-        email: 'rvicksks@gmail.com',
+        memoryAccessConfirmed: false,
         browserIdentity,
         approvedHistory,
-        identitySalt,
     }), null);
     assert.equal(verifyAmyAnamLiveIdentity({
         preferredName: 'Rob',
-        email: 'rvicks@gmail.com',
+        memoryAccessConfirmed: true,
         browserIdentity: { ...browserIdentity, memoryConsent: false, emailIdentityHash: null },
         approvedHistory,
-        identitySalt,
     }), null);
+    assert.equal(verifyAmyAnamLiveIdentity({
+        preferredName: 'Rob',
+        memoryAccessConfirmed: true,
+        browserIdentity: { ...browserIdentity, emailIdentityHash: null },
+        approvedHistory,
+    }), null);
+    assert.throws(() => verifyAmyAnamLiveIdentity({
+        preferredName: '',
+        memoryAccessConfirmed: true,
+        browserIdentity,
+        approvedHistory,
+    }), /preferred name/i);
 });
 
-test('pre-unlock policy warms up first and reveals neither identity nor memory', () => {
+test('pre-unlock policy warms up and asks permission without requesting spoken email', () => {
     const policy = buildAmyAnamMemoryAccessPolicy(true);
     assert.match(policy, /warm, neutral greeting/i);
     assert.match(policy, /Do not ask.*opening turn/i);
     assert.match(policy, /at least one useful conversational exchange/i);
-    assert.match(policy, /explicit confirmation/i);
+    assert.match(policy, /check for notes from a previous conversation/i);
+    assert.match(policy, /memoryAccessConfirmed set to true/i);
+    assert.match(policy, /Never ask for, spell, or repeat an email address solely to unlock memory/i);
     assert.doesNotMatch(policy, /rvicks|Website Alias|ERP migration/i);
 });
 
 test('returning memory is revealed briefly as earlier-session context, never as a current-call echo', () => {
     const context = buildAmyAnamReturningMemoryContext(approvedHistory);
     assert.match(context, /approved notes from an earlier conversation/i);
+    assert.match(context, /private website check-in identity/i);
+    assert.match(context, /not conversational data/i);
     assert.match(context, /at most two or three distinctive prior facts/i);
     assert.match(context, /has not already supplied today/i);
     assert.match(context, /ask whether they are still current/i);
@@ -112,36 +95,45 @@ test('returning memory is revealed briefly as earlier-session context, never as 
     assert.doesNotMatch(context, /rvicks@gmail\.com|Website Alias/i);
 });
 
-test('server and client enforce delayed, session-owned memory unlock', async () => {
+test('server and client enforce delayed, session-owned, email-free memory unlock', async () => {
     const tokenRoute = await readFile(new URL('../app/api/anam-token/route.ts', import.meta.url), 'utf8');
     const identityRoute = await readFile(new URL('../app/api/anam/session/identity/route.ts', import.meta.url), 'utf8');
+    const sessionClient = await readFile(new URL('../lib/anam/session-spine-client.ts', import.meta.url), 'utf8');
+    const verifier = await readFile(new URL('../lib/anam/live-identity.ts', import.meta.url), 'utf8');
     const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
     const reliabilityPrompt = await readFile(new URL('../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url), 'utf8');
-    const identityTool = await readFile(new URL('../config/anam/amy-live-identity-client-tool.json', import.meta.url), 'utf8');
+    const identityToolRaw = await readFile(new URL('../config/anam/amy-live-identity-client-tool.json', import.meta.url), 'utf8');
+    const identityTool = JSON.parse(identityToolRaw);
 
     assert.doesNotMatch(tokenRoute, /readAmyAnamApprovedMemoryHistory|buildAmyAnamReturningMemoryContext/);
     assert.match(tokenRoute, /buildAmyAnamMemoryAccessPolicy/);
     assert.match(identityRoute, /launch\.browserSessionId === browserSession\.id/);
     assert.match(identityRoute, /launch\.boundSessionId === sessionId/);
     assert.match(identityRoute, /session\.launchId === launchId/);
-    assert.match(identityRoute, /verifyAmyAnamLiveIdentity/);
+    assert.match(identityRoute, /memoryAccessConfirmed = body\.memoryAccessConfirmed/);
+    assert.doesNotMatch(identityRoute, /body\.email|normalizedEmail/);
+    assert.doesNotMatch(verifier, /deriveAmyAnamEmailIdentityHash|normalizeAmyAnamMemoryEmail|normalizedEmail/);
     assert.match(player, /completedUserTurns < 2/);
     assert.match(player, /registerToolCallHandler\(\s*'confirm_live_identity'/s);
     assert.ok(
         player.indexOf("registerToolCallHandler(\n                        'confirm_live_identity'")
             < player.indexOf("streamToVideoElement('persona-video')"),
     );
-    assert.match(player, /confirmedContact = \{ preferredName: result\.preferredName, email: normalizedEmail \}/);
+    assert.match(player, /payload\.arguments\.memoryAccessConfirmed === true/);
+    assert.match(player, /confirmedMemoryName = result\.preferredName/);
+    assert.doesNotMatch(player, /payload\.arguments\.email|normalizedEmail|confirmedContact/);
+    assert.match(sessionClient, /JSON\.stringify\(\{ launchId, sessionId, preferredName, memoryAccessConfirmed \}\)/);
+    assert.doesNotMatch(sessionClient, /preferredName, email/);
     assert.match(player, /two or three distinctive earlier-session facts/);
     assert.match(player, /result\.memoryCount > 0/);
-    assert.doesNotMatch(player, /console\.(?:log|info|error)[^\n]*(?:normalizedEmail|confirmedContact)/);
+    assert.match(reliabilityPrompt, /Never ask for, spell, repeat, or submit an email address to unlock memory/i);
+    assert.match(reliabilityPrompt, /contact collection as a separate action/i);
     assert.match(reliabilityPrompt, /never present current-call statements as proof of memory/i);
     assert.match(reliabilityPrompt, /action-capable tool explicitly reports success/i);
     assert.match(reliabilityPrompt, /Treat "that's all," "nothing else," "wrap up," "goodbye,"/i);
     assert.match(reliabilityPrompt, /Do not ask "anything else"/i);
     assert.match(reliabilityPrompt, /slightly unhurried cadence/i);
-    assert.match(reliabilityPrompt, /letter by letter/i);
-    assert.match(reliabilityPrompt, /Preserve any hyphen or punctuation/i);
-    assert.match(identityTool, /compact canonical form/i);
-    assert.match(identityTool, /preserve punctuation explicitly stated/i);
+    assert.deepEqual(identityTool.config.parameters.required, ['preferredName', 'memoryAccessConfirmed']);
+    assert.equal(identityTool.config.parameters.properties.memoryAccessConfirmed.type, 'boolean');
+    assert.equal(identityTool.config.parameters.properties.email, undefined);
 });
