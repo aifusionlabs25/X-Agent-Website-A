@@ -65,5 +65,27 @@
       "awaitResult": true,
       "toolTimeoutSeconds": 10
     }
+  },
+  {
+    "name": "show_solution_catalog",
+    "description": "Open Amy's directional solution-category catalog when the visitor explicitly asks to see a catalog, product categories, device categories, or solution categories. This client display does not return live inventory, pricing, availability, lead time, or contract eligibility. Include a concise query based only on the visitor's stated interest. Call silently and never during a farewell.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "A concise product or solution category request using confirmed current-session language. Do not include contact information.",
+            "maxLength": 500
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
   }
 ]

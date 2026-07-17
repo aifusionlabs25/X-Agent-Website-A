@@ -7,7 +7,7 @@ import {
     MessageStreamEvent,
 } from '@anam-ai/js-sdk';
 import { BrainCircuit } from 'lucide-react';
-import AmyAnamWorkbench from '@/components/amy/AmyAnamWorkbench';
+import AmyAnamWorkbenchV2 from '@/components/amy/AmyAnamWorkbenchV2';
 import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
@@ -18,7 +18,7 @@ import {
     confirmAmyAnamLiveIdentity,
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
-import { AmyWorkbenchTurn, AmyWorkbenchView } from '@/lib/anam/workbench';
+import { AmyWorkbenchTurn, AmyWorkbenchView } from '@/lib/anam/workbench-v2';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -38,6 +38,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [workbenchView, setWorkbenchView] = useState<AmyWorkbenchView>('notes');
     const [workbenchTurns, setWorkbenchTurns] = useState<AmyWorkbenchTurn[]>([]);
     const [roadmapTopic, setRoadmapTopic] = useState('');
+    const [catalogQuery, setCatalogQuery] = useState('');
     const workbenchEnabled = isAmyCara4Variant(sessionVariant)
         && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
 
@@ -75,6 +76,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setWorkbenchView('notes');
         setWorkbenchTurns([]);
         setRoadmapTopic('');
+        setCatalogQuery('');
 
         const recordTurn = (role: string, content: string) => {
             const normalized = content.trim();
@@ -182,6 +184,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                             ? payload.arguments.topic.trim().slice(0, 2_000)
                                             : '';
                                         setRoadmapTopic(topic);
+                                    } else if (view === 'catalog') {
+                                        const query = typeof payload.arguments?.query === 'string'
+                                            ? payload.arguments.query.trim().slice(0, 500)
+                                            : '';
+                                        setCatalogQuery(query);
                                     }
                                     setWorkbenchView(view);
                                     setWorkbenchOpen(true);
@@ -195,6 +202,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     registerView('show_session_brief', 'brief', "Opened Amy's Live Brief using current-session conversation signals.");
                     registerView('show_solution_roadmap', 'roadmap', "Opened Amy's illustrative Roadmap for the current conversation.");
                     registerView('show_visual_brief', 'visual', "Opened Amy's Visual Brief for the current conversation.");
+                    registerView('show_solution_catalog', 'catalog', "Opened Amy's directional solution categories. Live pricing and inventory are not shown.");
                 }
                 const memoryPolicyContext = tokenPayload.memoryPolicyContextAvailable === true
                     && typeof tokenPayload.memoryPolicyContext === 'string'
@@ -457,7 +465,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${workbenchEnabled && workbenchOpen ? 'lg:pr-[46vw]' : ''}`}>
+            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${workbenchEnabled && workbenchOpen ? 'lg:pr-[48vw]' : ''}`}>
                 <video
                     ref={videoRef}
                     id="persona-video"
@@ -479,11 +487,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             )}
 
             {workbenchEnabled && (
-                <AmyAnamWorkbench
+                <AmyAnamWorkbenchV2
                     isOpen={workbenchOpen}
                     view={workbenchView}
                     turns={workbenchTurns}
                     roadmapTopic={roadmapTopic}
+                    catalogQuery={catalogQuery}
                     onViewChange={setWorkbenchView}
                     onClose={() => setWorkbenchOpen(false)}
                 />
