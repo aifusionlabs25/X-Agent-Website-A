@@ -1,0 +1,69 @@
+[
+  {
+    "name": "show_live_notes",
+    "description": "Open Amy's Live Notes only when the visitor explicitly asks to see notes, captured details, what Amy heard, or what Amy wrote down. Call silently with exactly an empty object. Do not call during a farewell or use the tool to carry spoken text. This is a current-session working aid, not a CRM record or completed assessment.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
+  },
+  {
+    "name": "show_session_brief",
+    "description": "Open Amy's Live Brief when the visitor explicitly asks for the Live Brief, a brief summary of where things stand, or key points before next steps. A named Live Brief request always uses this tool, never show_live_notes. Call silently with exactly an empty object. Do not call during a farewell or use the tool to carry spoken text.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
+  },
+  {
+    "name": "show_solution_roadmap",
+    "description": "Open Amy's Roadmap when the visitor explicitly asks for a roadmap, phased plan, implementation path, or rollout sequence. The topic must summarize confirmed current-session context and must not contain spoken reply text. Do not call during a farewell. The roadmap is illustrative and is not an approved design, quote, commitment, or completed assessment.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "A compact summary of the confirmed outcome, environment, workload, timing, constraints, and continuity requirements relevant to the requested roadmap. Omit uncertain details.",
+            "maxLength": 2000
+          }
+        },
+        "required": ["topic"],
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
+  },
+  {
+    "name": "show_visual_brief",
+    "description": "Open Amy's Visual Brief when the visitor explicitly asks for a visual summary, workflow, diagram, architecture view, presentation, or executive visual. Call silently with exactly an empty object. Do not call during a farewell. The display uses current-session signals and is not an approved design, quote, live inventory view, or commitment.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
+  }
+]

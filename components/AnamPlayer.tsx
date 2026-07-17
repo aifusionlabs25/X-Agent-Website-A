@@ -6,6 +6,8 @@ import {
     ConnectionClosedCode,
     MessageStreamEvent,
 } from '@anam-ai/js-sdk';
+import { BrainCircuit } from 'lucide-react';
+import AmyAnamWorkbench from '@/components/amy/AmyAnamWorkbench';
 import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
@@ -16,6 +18,7 @@ import {
     confirmAmyAnamLiveIdentity,
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
+import { AmyWorkbenchTurn, AmyWorkbenchView } from '@/lib/anam/workbench';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -31,6 +34,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [error, setError] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(true);
     const [isFinalizing, setIsFinalizing] = useState(false);
+    const [workbenchOpen, setWorkbenchOpen] = useState(false);
+    const [workbenchView, setWorkbenchView] = useState<AmyWorkbenchView>('notes');
+    const [workbenchTurns, setWorkbenchTurns] = useState<AmyWorkbenchTurn[]>([]);
+    const [roadmapTopic, setRoadmapTopic] = useState('');
+    const workbenchEnabled = isAmyCara4Variant(sessionVariant)
+        && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
 
     const onCloseRef = useRef(onClose);
     useEffect(() => {
@@ -62,6 +71,20 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setError(null);
         setIsConnecting(true);
         setIsFinalizing(false);
+        setWorkbenchOpen(false);
+        setWorkbenchView('notes');
+        setWorkbenchTurns([]);
+        setRoadmapTopic('');
+
+        const recordTurn = (role: string, content: string) => {
+            const normalized = content.trim();
+            if (!normalized) return;
+            const turn = { role: transcriptRole(role), content: normalized } as AmyWorkbenchTurn;
+            if (!sessionSpineActive) transcriptRef.current.push(turn);
+            if (workbenchEnabled) {
+                setWorkbenchTurns((current) => [...current.slice(-59), turn]);
+            }
+        };
 
         const completeOnce = (closeReason: string): Promise<void> => {
             if (!sessionSpineActive || !launchId || !providerSessionId) {
@@ -144,6 +167,35 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const anamClient = createClient(sessionToken, clientOptions);
 
                 activeClient = anamClient;
+                const cancelWorkbenchHandlers: Array<() => void> = [];
+                if (workbenchEnabled) {
+                    const registerView = (
+                        toolName: string,
+                        view: AmyWorkbenchView,
+                        confirmation: string,
+                    ) => {
+                        cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler(toolName, {
+                            onStart: async (payload) => {
+                                if (isMounted) {
+                                    if (view === 'roadmap') {
+                                        const topic = typeof payload.arguments?.topic === 'string'
+                                            ? payload.arguments.topic.trim().slice(0, 2_000)
+                                            : '';
+                                        setRoadmapTopic(topic);
+                                    }
+                                    setWorkbenchView(view);
+                                    setWorkbenchOpen(true);
+                                }
+                                return confirmation;
+                            },
+                        }));
+                    };
+
+                    registerView('show_live_notes', 'notes', "Opened Amy's Live Notes using current-session conversation signals.");
+                    registerView('show_session_brief', 'brief', "Opened Amy's Live Brief using current-session conversation signals.");
+                    registerView('show_solution_roadmap', 'roadmap', "Opened Amy's illustrative Roadmap for the current conversation.");
+                    registerView('show_visual_brief', 'visual', "Opened Amy's Visual Brief for the current conversation.");
+                }
                 const memoryPolicyContext = tokenPayload.memoryPolicyContextAvailable === true
                     && typeof tokenPayload.memoryPolicyContext === 'string'
                     ? tokenPayload.memoryPolicyContext
@@ -207,10 +259,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
                     if (messageEvent.role === 'user' && messageEvent.endOfSpeech) completedUserTurns += 1;
-                    if (sessionSpineActive) return;
                     if (messageEvent.role !== currentRoleRef.current) {
                         if (currentMessageRef.current) {
-                            transcriptRef.current.push({ role: transcriptRole(currentRoleRef.current), content: currentMessageRef.current.trim() });
+                            recordTurn(currentRoleRef.current, currentMessageRef.current);
                         }
                         currentRoleRef.current = messageEvent.role;
                         currentMessageRef.current = messageEvent.content;
@@ -220,7 +271,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                     if (messageEvent.endOfSpeech) {
                         if (currentMessageRef.current) {
-                            transcriptRef.current.push({ role: transcriptRole(messageEvent.role), content: currentMessageRef.current.trim() });
+                            recordTurn(messageEvent.role, currentMessageRef.current);
                         }
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
@@ -244,8 +295,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     }
 
                     // Push any trailing un-ended speech chunks
-                    if (!sessionSpineActive && currentMessageRef.current) {
-                        transcriptRef.current.push({ role: transcriptRole(currentRoleRef.current), content: currentMessageRef.current.trim() });
+                    if (currentMessageRef.current) {
+                        recordTurn(currentRoleRef.current, currentMessageRef.current);
                         currentMessageRef.current = '';
                     }
 
@@ -336,6 +387,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     anamClient.removeListener(AnamEvent.SESSION_READY, handleSessionReady);
                     anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                     anamClient.removeListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
+                    cancelWorkbenchHandlers.forEach((cancel) => cancel());
                 };
 
                 // 3. Connect and Stream directly to the video element
@@ -371,7 +423,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 videoElement.srcObject = null;
             }
         };
-    }, [personaId, sessionVariant, audioBridge]);
+    }, [personaId, sessionVariant, audioBridge, workbenchEnabled]);
 
     return (
         <div className="relative w-full h-full bg-zinc-950 flex flex-col items-center justify-center">
@@ -405,13 +457,37 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <video
-                ref={videoRef}
-                id="persona-video"
-                autoPlay
-                playsInline
-                className={`w-full h-full object-contain transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
-            />
+            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${workbenchEnabled && workbenchOpen ? 'lg:pr-[46vw]' : ''}`}>
+                <video
+                    ref={videoRef}
+                    id="persona-video"
+                    autoPlay
+                    playsInline
+                    className={`w-full h-full object-contain transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
+                />
+            </div>
+
+            {workbenchEnabled && !workbenchOpen && !error && !isConnecting && (
+                <button
+                    type="button"
+                    onClick={() => setWorkbenchOpen(true)}
+                    className="absolute right-5 top-5 z-30 inline-flex items-center gap-2 border border-white/15 bg-black/65 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-[#ff2f8a]/60 hover:bg-black/80"
+                >
+                    <BrainCircuit size={16} className="text-[#ff68a9]" />
+                    Amy Intelligence
+                </button>
+            )}
+
+            {workbenchEnabled && (
+                <AmyAnamWorkbench
+                    isOpen={workbenchOpen}
+                    view={workbenchView}
+                    turns={workbenchTurns}
+                    roadmapTopic={roadmapTopic}
+                    onViewChange={setWorkbenchView}
+                    onClose={() => setWorkbenchOpen(false)}
+                />
+            )}
 
             {/* Optional: Add a subtle animated grid overlay for the "HUD" feel */}
             <div className="pointer-events-none absolute inset-0 bg-white opacity-[0.03] mix-blend-overlay"></div>
