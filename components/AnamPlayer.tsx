@@ -139,7 +139,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 });
 
                 if (!tokenRes.ok) {
-                    throw new Error('Failed to fetch session token');
+                    const errorPayload = await tokenRes.json().catch(() => null) as { error?: unknown } | null;
+                    const serverMessage = typeof errorPayload?.error === 'string'
+                        ? errorPayload.error.trim()
+                        : '';
+                    throw new Error(serverMessage || 'Failed to start the agent session');
                 }
 
                 const tokenPayload = await tokenRes.json() as {
@@ -405,9 +409,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 console.error('Anam Initialization Error:', err);
                 if (isMounted) {
                     setError(
-                        audioBridge && err instanceof Error
-                            ? err.message
-                            : 'Failed to connect to the agent. Please try again later.',
+                        err instanceof Error ? err.message : 'Failed to connect to the agent. Please try again later.',
                     );
                     setIsConnecting(false);
                 }
