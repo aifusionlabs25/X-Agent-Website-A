@@ -117,8 +117,8 @@ const expectedPrompt = replaceManagedBlock(
     publicSectorUpgrade,
 );
 const voiceDetectionOptions = {
-    endOfSpeechSensitivity: 0.3,
-    silenceBeforeAutoEndTurnSeconds: 1.3,
+    endOfSpeechSensitivity: 0.15,
+    silenceBeforeAutoEndTurnSeconds: 1.8,
     silenceBeforeSkipTurnSeconds: 0,
     silenceBeforeSessionEndSeconds: 180,
 };

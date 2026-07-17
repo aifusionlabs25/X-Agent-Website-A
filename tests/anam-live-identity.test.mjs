@@ -102,6 +102,7 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     const verifier = await readFile(new URL('../lib/anam/live-identity.ts', import.meta.url), 'utf8');
     const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
     const reliabilityPrompt = await readFile(new URL('../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url), 'utf8');
+    const reliabilityUpdater = await readFile(new URL('../scripts/anam/update-amy-cara4-reliability.mjs', import.meta.url), 'utf8');
     const identityToolRaw = await readFile(new URL('../config/anam/amy-live-identity-client-tool.json', import.meta.url), 'utf8');
     const identityTool = JSON.parse(identityToolRaw);
 
@@ -130,8 +131,15 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     assert.match(reliabilityPrompt, /contact collection as a separate action/i);
     assert.match(reliabilityPrompt, /never present current-call statements as proof of memory/i);
     assert.match(reliabilityPrompt, /action-capable tool explicitly reports success/i);
-    assert.match(reliabilityPrompt, /Treat "that's all," "nothing else," "wrap up," "goodbye,"/i);
-    assert.match(reliabilityPrompt, /Do not ask "anything else"/i);
+    assert.match(reliabilityPrompt, /Never propose ending the call merely because an answer, summary, or Workbench display is complete/i);
+    assert.match(reliabilityPrompt, /"Thanks," "okay," "sounds good," "got it,"/i);
+    assert.match(reliabilityPrompt, /Call end_call only when the visitor clearly and explicitly says they want to end/i);
+    assert.match(reliabilityPrompt, /allow the system tool to handle confirmation/i);
+    assert.match(reliabilityPrompt, /Call end_call at most once/i);
+    assert.match(reliabilityPrompt, /Leave a brief natural beat after the visitor stops speaking/i);
+    assert.match(player, /voiceDetection: \{ endOfSpeechSensitivity: 0\.15 \}/);
+    assert.match(reliabilityUpdater, /endOfSpeechSensitivity: 0\.15/);
+    assert.match(reliabilityUpdater, /silenceBeforeAutoEndTurnSeconds: 1\.8/);
     assert.match(reliabilityPrompt, /slightly unhurried cadence/i);
     assert.deepEqual(identityTool.config.parameters.required, ['preferredName', 'memoryAccessConfirmed']);
     assert.equal(identityTool.config.parameters.properties.memoryAccessConfirmed.type, 'boolean');
