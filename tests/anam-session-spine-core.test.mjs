@@ -57,6 +57,7 @@ const {
     AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
     fetchAnamSessionMetadata,
     fetchCompletedAnamTranscript,
+    verifyAnamSessionMetadata,
 } = sessionApiModule.exports;
 const { completeAmyAnamClientSession } = sessionClientModule.exports;
 
@@ -275,6 +276,39 @@ test('session metadata rejects conflicting top-level and nested persona IDs', as
         }),
         /persona identities conflicted/,
     );
+});
+
+test('session metadata rejects passthrough and non-JavaScript session modes', () => {
+    const launch = createAmyAnamLaunch('browser-session-mode-guard', PERSONA_ID, 1_900_000_000_000);
+    const base = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: null,
+        exitStatus: null,
+        personaConfig: {
+            personaId: PERSONA_ID,
+            type: 'stateful',
+            zeroDataRetention: false,
+            enableAudioPassthrough: false,
+            metadata: { client: 'js-sdk' },
+        },
+    };
+
+    assert.doesNotThrow(() => verifyAnamSessionMetadata(base, launch));
+    assert.throws(() => verifyAnamSessionMetadata({
+        ...base,
+        personaConfig: { ...base.personaConfig, enableAudioPassthrough: true },
+    }, launch), /audio passthrough/);
+    assert.throws(() => verifyAnamSessionMetadata({
+        ...base,
+        personaConfig: { ...base.personaConfig, type: 'livekit' },
+    }, launch), /not stateful/);
+    assert.throws(() => verifyAnamSessionMetadata({
+        ...base,
+        personaConfig: { ...base.personaConfig, metadata: { client: 'livekit' } },
+    }, launch), /not the JavaScript SDK/);
 });
 
 test('closed session metadata remains pending while the transcript end time is null', async () => {

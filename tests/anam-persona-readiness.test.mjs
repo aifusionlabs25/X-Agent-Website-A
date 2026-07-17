@@ -14,6 +14,8 @@ function healthyPersona() {
     return {
         id: PERSONA_ID,
         avatarModel: 'cara-4',
+        zeroDataRetention: false,
+        enableAudioPassthrough: false,
         tools: AMY_CARA4_REQUIRED_TOOL_NAMES.map(name => ({ name })),
         brain: {
             systemPrompt: AMY_CARA4_REQUIRED_PROMPT_MARKERS.join('\n'),
@@ -27,6 +29,8 @@ test('Cara 4 preflight accepts the complete Amy feature configuration', () => {
         ready: true,
         personaIdMatches: true,
         cara4AvatarConfigured: true,
+        sessionDataRetentionConfigured: true,
+        anamTranscriptionPipelineConfigured: true,
         missingToolNames: [],
         missingPromptMarkers: [],
     });
@@ -68,6 +72,22 @@ test('Cara 4 preflight also rejects the wrong persona or avatar model', () => {
     }, PERSONA_ID).ready, false);
 });
 
+test('Cara 4 preflight rejects zero-data retention and audio passthrough', () => {
+    const zeroDataRetention = inspectAmyCara4PersonaReadiness({
+        ...healthyPersona(),
+        zeroDataRetention: true,
+    }, PERSONA_ID);
+    assert.equal(zeroDataRetention.ready, false);
+    assert.equal(zeroDataRetention.sessionDataRetentionConfigured, false);
+
+    const audioPassthrough = inspectAmyCara4PersonaReadiness({
+        ...healthyPersona(),
+        enableAudioPassthrough: true,
+    }, PERSONA_ID);
+    assert.equal(audioPassthrough.ready, false);
+    assert.equal(audioPassthrough.anamTranscriptionPipelineConfigured, false);
+});
+
 test('live readiness fetch is no-store, bounded, and returns only configuration status', async () => {
     const calls = [];
     const result = await readAmyCara4PersonaReadiness(PERSONA_ID, {
@@ -103,6 +123,9 @@ test('the token route fails closed before reserving or authenticating a stripped
     assert.match(route, /Amy configuration is out of sync/);
     assert.match(route, /status: 503/);
     assert.doesNotMatch(route, /missingToolNames[^\n]*error:/);
+    const tokenRequest = route.slice(sessionToken, route.indexOf('const data =', sessionToken));
+    assert.match(tokenRequest, /personaConfig:\s*\{\s*personaId: resolution\.personaId/);
+    assert.doesNotMatch(tokenRequest, /zeroDataRetention|enableAudioPassthrough|livekit/i);
     assert.match(player, /const errorPayload = await tokenRes\.json\(\)\.catch/);
     assert.match(player, /serverMessage \|\| 'Failed to start the agent session'/);
     assert.match(player, /err instanceof Error \? err\.message/);

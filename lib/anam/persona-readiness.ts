@@ -30,6 +30,8 @@ type PersonaPayload = {
     id?: unknown;
     avatarModel?: unknown;
     tools?: unknown;
+    zeroDataRetention?: unknown;
+    enableAudioPassthrough?: unknown;
     brain?: {
         systemPrompt?: unknown;
     } | null;
@@ -39,6 +41,8 @@ export type AmyCara4PersonaReadiness = {
     ready: boolean;
     personaIdMatches: boolean;
     cara4AvatarConfigured: boolean;
+    sessionDataRetentionConfigured: boolean;
+    anamTranscriptionPipelineConfigured: boolean;
     missingToolNames: string[];
     missingPromptMarkers: string[];
 };
@@ -67,6 +71,8 @@ export function inspectAmyCara4PersonaReadiness(
         : '';
     const personaIdMatches = persona.id === expectedPersonaId;
     const cara4AvatarConfigured = persona.avatarModel === 'cara-4';
+    const sessionDataRetentionConfigured = persona.zeroDataRetention === false;
+    const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
     const missingToolNames = AMY_CARA4_REQUIRED_TOOL_NAMES
         .filter(name => !toolNames.has(name));
     const missingPromptMarkers = AMY_CARA4_REQUIRED_PROMPT_MARKERS
@@ -75,10 +81,14 @@ export function inspectAmyCara4PersonaReadiness(
     return {
         ready: personaIdMatches
             && cara4AvatarConfigured
+            && sessionDataRetentionConfigured
+            && anamTranscriptionPipelineConfigured
             && missingToolNames.length === 0
             && missingPromptMarkers.length === 0,
         personaIdMatches,
         cara4AvatarConfigured,
+        sessionDataRetentionConfigured,
+        anamTranscriptionPipelineConfigured,
         missingToolNames,
         missingPromptMarkers,
     };

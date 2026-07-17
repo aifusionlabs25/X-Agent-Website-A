@@ -130,6 +130,8 @@ await anam(`/personas/${personaId}`, {
         initialMessage: "Hi, I'm Amy. It's good to meet you. What would be most useful to talk through today?",
         skipGreeting: false,
         uninterruptibleGreeting: false,
+        zeroDataRetention: false,
+        enableAudioPassthrough: false,
         voiceDetectionOptions,
         toolIds: nextToolIds,
     }),
@@ -144,6 +146,8 @@ if (!prompt.includes(PUBLIC_SECTOR_START) || !prompt.includes(PUBLIC_SECTOR_END)
 if (verified.initialMessage !== "Hi, I'm Amy. It's good to meet you. What would be most useful to talk through today?") failures.push('initialMessage');
 if (verified.skipGreeting !== false) failures.push('skipGreeting');
 if (verified.uninterruptibleGreeting !== false) failures.push('uninterruptibleGreeting');
+if (verified.zeroDataRetention !== false) failures.push('zeroDataRetention');
+if (verified.enableAudioPassthrough !== false) failures.push('enableAudioPassthrough');
 if (JSON.stringify(verifiedToolIds) !== JSON.stringify(nextToolIds)) failures.push('tools');
 for (const [name, value] of Object.entries(voiceDetectionOptions)) {
     if (verified.voiceDetectionOptions?.[name] !== value) failures.push(`voiceDetectionOptions.${name}`);
@@ -161,6 +165,8 @@ console.log(JSON.stringify({
     promptSha256: sha256(prompt),
     voiceDetectionOptions: verified.voiceDetectionOptions,
     initialMessageConfigured: Boolean(verified.initialMessage),
+    zeroDataRetention: verified.zeroDataRetention,
+    enableAudioPassthrough: verified.enableAudioPassthrough,
     publicSectorConfigured: prompt.includes(PUBLIC_SECTOR_START)
         && prompt.includes(PUBLIC_SECTOR_END),
     captureSalesHandoffAttached: forbiddenHandoffId ? verifiedToolIds.includes(forbiddenHandoffId) : false,

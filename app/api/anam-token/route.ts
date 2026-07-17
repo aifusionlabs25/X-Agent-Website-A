@@ -93,6 +93,8 @@ export async function POST(req: Request) {
                 console.error('[Amy Anam Configuration] Out of sync', {
                     personaIdMatches: personaReadiness.personaIdMatches,
                     cara4AvatarConfigured: personaReadiness.cara4AvatarConfigured,
+                    sessionDataRetentionConfigured: personaReadiness.sessionDataRetentionConfigured,
+                    anamTranscriptionPipelineConfigured: personaReadiness.anamTranscriptionPipelineConfigured,
                     missingToolNames: personaReadiness.missingToolNames,
                     missingPromptMarkers: personaReadiness.missingPromptMarkers,
                 });

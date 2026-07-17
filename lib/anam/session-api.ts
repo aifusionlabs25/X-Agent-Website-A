@@ -33,7 +33,12 @@ export type AnamSessionMetadata = {
     exitStatus: string | null;
     personaConfig?: {
         personaId?: string;
+        type?: string;
         zeroDataRetention?: boolean;
+        enableAudioPassthrough?: boolean;
+        metadata?: {
+            client?: string;
+        } | null;
     } | null;
 };
 
@@ -203,6 +208,18 @@ export function verifyAnamSessionMetadata(
     }
     if (metadata.personaId !== launch.resolvedPersonaId) {
         throw new AnamSessionApiError('Anam session persona did not match', 403);
+    }
+    if (metadata.personaConfig?.enableAudioPassthrough === true) {
+        throw new AnamSessionApiError('Anam audio passthrough is not allowed for Amy', 403);
+    }
+    if (metadata.personaConfig?.type && metadata.personaConfig.type !== 'stateful') {
+        throw new AnamSessionApiError('Anam session type was not stateful', 403);
+    }
+    if (
+        metadata.personaConfig?.metadata?.client
+        && metadata.personaConfig.metadata.client !== 'js-sdk'
+    ) {
+        throw new AnamSessionApiError('Anam session client was not the JavaScript SDK', 403);
     }
 
     if (metadata.startTime) {
