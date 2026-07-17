@@ -298,3 +298,20 @@ test('a newly opened Amy demo requires a fresh tester check-in without clearing 
     assert.match(gate, /void requireFreshCheckIn\(\)/);
     assert.doesNotMatch(freshCheckIn, /\/api\/anam\/amy\/memory/);
 });
+
+test('check-in pauses before launch and clearly reports whether prior memory was found', async () => {
+    const gate = await readFile(
+        new URL('../components/amy/AmyMemoryAccessGate.tsx', import.meta.url),
+        'utf8',
+    );
+
+    assert.match(gate, /setCheckInResult\(nextStatus\)/);
+    assert.match(gate, /status\.authenticated && checkInResult/);
+    assert.match(gate, /Previous conversation found\./);
+    assert.match(gate, /No previous conversation found\./);
+    assert.match(gate, /check the email spelling/i);
+    assert.match(gate, /Check email/);
+    assert.match(gate, /Continue fresh/);
+    assert.match(gate, /Your email stays private and is never shown to Amy\./);
+    assert.match(gate, /<details className="hidden">/);
+});

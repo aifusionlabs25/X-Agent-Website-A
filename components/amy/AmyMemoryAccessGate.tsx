@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
-import { Brain, LogOut, RotateCcw, Sparkles, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, Brain, CheckCircle2, LogOut, RotateCcw, Sparkles, UserRound, X } from 'lucide-react';
 
 type AccessStatus = {
     required: boolean;
@@ -55,6 +55,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
     const [profileControlsOpen, setProfileControlsOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    const [checkInResult, setCheckInResult] = useState<AccessStatus | null>(null);
 
     const checkAccess = useCallback(async () => {
         setChecking(true);
@@ -114,8 +115,8 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
             if (!response.ok) throw new Error(String(payload.error ?? 'Access was not granted'));
             const nextStatus = normalizeStatus(payload);
             setStatus(nextStatus);
+            setCheckInResult(nextStatus);
             setAccessCode('');
-            setEmail('');
             setNotice(nextStatus.approvedMemoryCount > 0
                 ? `Amy found ${nextStatus.approvedMemoryCount} saved conversation highlight(s) for you.`
                 : 'You’re all set. Amy is ready to meet you.');
@@ -124,6 +125,30 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const editCheckIn = async () => {
+        setError(null);
+        await fetch('/api/anam/amy/access', {
+            method: 'DELETE',
+            credentials: 'same-origin',
+        }).catch(() => undefined);
+        setStatus(emptyStatus);
+        setCheckInResult(null);
+        setAccessCode('');
+    };
+
+    const continueToAmy = () => {
+        if (!checkInResult) return;
+        setNotice(
+            checkInResult.memoryConsent && checkInResult.approvedMemoryCount > 0
+                ? `${checkInResult.approvedMemoryCount} previous conversation ${checkInResult.approvedMemoryCount === 1 ? 'note is' : 'notes are'} ready.`
+                : checkInResult.memoryConsent
+                    ? 'Starting with a fresh conversation.'
+                    : 'Memory is off for this visit.',
+        );
+        setEmail('');
+        setCheckInResult(null);
     };
 
     const logout = async () => {
@@ -168,8 +193,63 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         );
     }
 
+    if (status.authenticated && checkInResult) {
+        const memoryFound = checkInResult.memoryConsent && checkInResult.approvedMemoryCount > 0;
+        const memoryMissing = checkInResult.memoryConsent && checkInResult.approvedMemoryCount === 0;
+        return (
+            <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#07080d] px-5 py-10 text-white">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.17),transparent_42%)]" />
+                <section className="relative w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-[#0d0f17]/95 p-8 shadow-2xl sm:p-10">
+                    <div className={`grid h-12 w-12 place-items-center rounded-full border ${memoryMissing ? 'border-amber-300/25 bg-amber-300/10 text-amber-200' : 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200'}`}>
+                        {memoryMissing ? <AlertCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
+                    </div>
+                    <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                        Check-in complete
+                    </p>
+                    <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                        {memoryFound
+                            ? 'Previous conversation found.'
+                            : memoryMissing
+                                ? 'No previous conversation found.'
+                                : 'You are ready to meet Amy.'}
+                    </h1>
+                    <p className="mt-4 text-base leading-7 text-zinc-400">
+                        {memoryFound
+                            ? `Amy found ${checkInResult.approvedMemoryCount} reviewed ${checkInResult.approvedMemoryCount === 1 ? 'note' : 'notes'} from an earlier conversation.`
+                            : memoryMissing
+                                ? 'If you have met Amy before, check the email spelling. Otherwise, continue and start fresh.'
+                                : 'Amy will start fresh for this visit.'}
+                    </p>
+                    <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                        {memoryMissing && (
+                            <button
+                                type="button"
+                                onClick={() => void editCheckIn()}
+                                className="rounded-xl border border-white/15 px-5 py-3 font-medium text-zinc-200 transition hover:border-white/30 hover:bg-white/5"
+                            >
+                                Check email
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={continueToAmy}
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200"
+                        >
+                            {memoryMissing ? 'Continue fresh' : 'Continue to Amy'}
+                            <ArrowRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                    <p className="mt-6 text-xs leading-5 text-zinc-600">
+                        Your email stays private and is never shown to Amy.
+                    </p>
+                </section>
+            </main>
+        );
+    }
+
     if (status.authenticated) {
         return (
+
             <div className="relative">
                 {status.required && (
                     <>
@@ -241,10 +321,10 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
     }
 
     return (
-        <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#060711] px-5 py-10 text-white">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,0.25),transparent_38%),radial-gradient(circle_at_80%_80%,rgba(14,165,233,0.18),transparent_42%)]" />
-            <div className="relative grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/75 shadow-2xl backdrop-blur-2xl lg:grid-cols-[1.05fr_0.95fr]">
-                <section className="flex flex-col justify-between border-b border-white/10 p-8 lg:border-b-0 lg:border-r lg:p-12">
+        <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#07080d] px-5 py-10 text-white">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.17),transparent_42%)]" />
+            <div className="relative w-full max-w-lg overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#0d0f17]/95 shadow-2xl">
+                <section className="hidden">
                     <div>
                         <div className="inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-indigo-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200">
                             <Sparkles className="h-4 w-4" />
@@ -272,8 +352,17 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                     </div>
                 </section>
 
-                <section className="p-8 lg:p-12">
-                    <div className="mb-7 flex items-center gap-3">
+                <section className="p-7 sm:p-9">
+                    <div className="mb-7">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">
+                            Amy / Insight Enterprise SDR
+                        </p>
+                        <h1 className="mt-3 text-4xl font-semibold tracking-tight">Meet Amy.</h1>
+                        <p className="mt-3 text-sm leading-6 text-zinc-400">
+                            Sign in to begin. Use the same email next time if you want Amy to recognize reviewed conversation notes.
+                        </p>
+                    </div>
+                    <div className="hidden">
                         <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-indigo-200">
                             <UserRound className="h-5 w-5" />
                         </div>
@@ -283,7 +372,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                         </div>
                     </div>
 
-                    <form onSubmit={submitAccess} className="space-y-5">
+                    <form onSubmit={submitAccess} className="space-y-4">
                         <label className="block text-sm text-zinc-300">
                             Your name
                             <input
@@ -294,7 +383,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                 className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
                                 placeholder="Your first name"
                             />
-                            <span className="mt-2 block text-xs leading-5 text-zinc-500">
+                            <span className="hidden">
                                 Used only for your preview profile. Amy will still ask how you’d like to be addressed.
                             </span>
                         </label>
@@ -311,7 +400,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                             />
                         </label>
                         <label className="block text-sm text-zinc-300">
-                            Preview access code
+                            Access code
                             <input
                                 required
                                 type="password"
@@ -330,9 +419,9 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                 className="mt-1 h-4 w-4 accent-indigo-500"
                             />
                             <span>
-                                <strong className="font-medium text-white">Remember me for next time</strong>
+                                <strong className="font-medium text-white">Remember this email</strong>
                                 <span className="mt-1 block text-xs leading-5 text-zinc-500">
-                                    Amy can use reviewed conversation highlights to make your next visit feel more familiar. Leave this off to start fresh each time.
+                                    Amy can find reviewed notes on your next visit. Turn this off to start fresh.
                                 </span>
                             </span>
                         </label>
@@ -352,11 +441,11 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                         <button
                             type="button"
                             onClick={() => void checkAccess()}
-                            className="w-full text-sm text-zinc-500 transition hover:text-zinc-300"
+                            className="hidden"
                         >
                             Having trouble? Try again
                         </button>
-                        <details className="group rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-zinc-500">
+                        <details className="hidden">
                             <summary className="cursor-pointer list-none text-zinc-400 transition hover:text-zinc-200">
                                 How remembering works
                             </summary>
@@ -367,9 +456,12 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                     </form>
                 </section>
             </div>
-            <footer className="relative mt-5 max-w-4xl text-center text-[0.7rem] leading-5 text-zinc-500">
+            <footer className="hidden">
                 Amy is an AI-powered agent, not a human. Conversations may be transcribed and reviewed to support this preview. Please don’t share sensitive or confidential information.
             </footer>
         </main>
     );
+            <footer className="relative mt-5 max-w-lg text-center text-[0.7rem] leading-5 text-zinc-600">
+                Amy is an AI agent. Conversations may be transcribed and reviewed. Do not share sensitive information.
+            </footer>
 }
