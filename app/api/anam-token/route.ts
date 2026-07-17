@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ALL_AGENTS } from '@/lib/agents';
 import { AMY_CARA4_VARIANT, resolveAnamSessionPersona } from '@/lib/anam/session-config';
 import { readAmyCara4PersonaReadiness } from '@/lib/anam/persona-readiness';
+import { readJamesPersonaReadiness } from '@/lib/anam/james-persona-readiness';
 import {
     AMY_ANAM_BROWSER_COOKIE,
     AmyAnamRequestError,
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
         const spineConfig = readAmyAnamSpineConfig();
         const memoryConfig = readAmyAnamMemoryConfig();
         const isAmyCara4 = resolution.variant === AMY_CARA4_VARIANT;
+        const jamesPersonaId = ALL_AGENTS.find(agent => agent.slug === 'james')?.personaId;
+        const isJames = resolution.personaId === jamesPersonaId;
         if (isAmyCara4 && spineConfig.enabled && !spineConfig.gatesOpen) {
             console.error('[Amy Anam Spine] Enabled but unavailable');
             return noStoreJson(
@@ -98,6 +101,33 @@ export async function POST(req: Request) {
                 });
                 return noStoreJson(
                     { error: 'Amy configuration is out of sync. Please try again after it has been restored.' },
+                    { status: 503 },
+                );
+            }
+        }
+
+        if (isJames) {
+            let personaReadiness;
+            try {
+                personaReadiness = await readJamesPersonaReadiness(resolution.personaId, { apiKey: anamApiKey });
+            } catch {
+                console.error('[James Anam Configuration] Preflight unavailable');
+                return noStoreJson(
+                    { error: 'James configuration validation is temporarily unavailable' },
+                    { status: 503 },
+                );
+            }
+            if (!personaReadiness.ready) {
+                console.error('[James Anam Configuration] Out of sync', {
+                    personaIdMatches: personaReadiness.personaIdMatches,
+                    cara4AvatarConfigured: personaReadiness.cara4AvatarConfigured,
+                    zeroDataRetentionEnabled: personaReadiness.zeroDataRetentionEnabled,
+                    aiDisclosureConfigured: personaReadiness.aiDisclosureConfigured,
+                    missingToolNames: personaReadiness.missingToolNames,
+                    missingPromptMarkers: personaReadiness.missingPromptMarkers,
+                });
+                return noStoreJson(
+                    { error: 'James configuration is out of sync. Please try again after it has been restored.' },
                     { status: 503 },
                 );
             }

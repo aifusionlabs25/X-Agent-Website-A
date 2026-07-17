@@ -29,6 +29,18 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Persona is not available on this site.' }, { status: 403 });
         }
 
+        // James is a legal-intake demo. Do not persist, analyze, email, or export
+        // any transcript unless a future, separately approved legal workflow exists.
+        if (agent.slug === 'james') {
+            console.info(`[James Privacy] Accepted ${transcript.length} messages with all outbound processing suppressed.`);
+            return NextResponse.json({
+                success: true,
+                privacySuppressed: true,
+                outbound: false,
+                messageCount: transcript.length,
+            }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+        }
+
         if (variant && !isAmyCara4Variant(variant)) {
             return NextResponse.json({ error: 'Unsupported Anam session variant.' }, { status: 400 });
         }

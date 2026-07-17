@@ -171,6 +171,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     ...(isAmyCara4 ? { voiceDetection: { endOfSpeechSensitivity: 0.3 } } : {}),
                 };
                 const anamClient = createClient(sessionToken, clientOptions);
+                const addPersonaContext = (context: string) => {
+                    const contextClient = anamClient as AnamClient & { addContext?: (value: string) => void };
+                    if (typeof contextClient.addContext !== 'function') {
+                        throw new Error('The Anam client does not support live context injection.');
+                    }
+                    contextClient.addContext(context);
+                };
 
                 activeClient = anamClient;
                 const cancelWorkbenchHandlers: Array<() => void> = [];
@@ -223,7 +230,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         || !providerSessionId
                     ) return;
                     try {
-                        anamClient.addContext(memoryPolicyContext);
+                        addPersonaContext(memoryPolicyContext);
                         memoryPolicyInjected = true;
                         console.info('[Amy Anam Memory] Live identity policy applied', {
                             memoryUnlockAvailable: tokenPayload.memoryUnlockAvailable === true,
@@ -368,7 +375,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     memoryAccessConfirmed: true,
                                 });
                                 confirmedMemoryName = result.preferredName;
-                                anamClient.addContext(result.memoryContext);
+                                addPersonaContext(result.memoryContext);
                                 console.info('[Amy Anam Memory] Returning context unlocked', {
                                     approvedSessionCount: result.memoryCount,
                                     identityContentLogged: false,

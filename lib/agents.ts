@@ -12,6 +12,9 @@ export interface AgentData {
   tenant?: string; // Fictional tenant name for demo agents
   companyUrl?: string; // Target URL for follow-up
   logoSrc?: string; // Dynamic path for logo
+  overview?: string;
+  disclaimer?: string;
+  capabilities?: Array<[string, string]>;
 }
 
 export const ALL_AGENTS: AgentData[] = [
@@ -56,11 +59,23 @@ export const ALL_AGENTS: AgentData[] = [
   {
     slug: "james",
     name: "JAMES",
-    role: "Legal Intake",
-    personaId: "8a991c93-0c95-42c5-8c22-a67428946eb8",
+    role: "Arizona Legal Intake Assistant",
+    personaId: "ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d",
     thumbnailSrc: "/agents/thumbnails/James Knowles Law Firm 1.jpg",
     accentColor: "#3b82f6",
     liveUrl: "/demo/james",
+    tenant: "Knowles Law Firm, PLC",
+    companyUrl: "https://www.knowleslaw.org/",
+    overview: "James is an AI intake assistant for general, non-privileged intake conversations about Arizona criminal defense, DUI defense, and personal injury matters. He can organize basic facts and provide verified firm contact information, but he does not give legal advice or submit a case.",
+    disclaimer: "James is an AI assistant, not a lawyer. This demo does not create an attorney-client relationship, provide legal advice, clear conflicts, calculate deadlines, submit an intake, or schedule a consultation. For urgent legal timing, call the firm or a licensed attorney. For emergencies, call 911.",
+    capabilities: [
+      ["Supported scope", "Criminal defense, DUI, personal injury"],
+      ["Knowledge", "Reviewed Knowles Law Firm information"],
+      ["Conversation", "One-question-at-a-time intake"],
+      ["Privacy boundary", "No transcript storage or outbound processing"],
+      ["Automations", "No submission, email, CRM, or scheduling"],
+      ["Human contact", "602-702-5431"],
+    ],
   },
   {
     slug: "morgan",

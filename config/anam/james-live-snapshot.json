@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-07-16",
+  "sourcePersonaId": "8a991c93-0c95-42c5-8c22-a67428946eb8",
+  "managedPersonaId": "ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d",
+  "managedPersonaName": "James Knowles Law Firm - Cara 4",
+  "avatarModel": "cara-4",
+  "avatarId": "81b70170-2e80-4e4b-a6fb-e04ac110dc4b",
+  "voiceId": "e9104cf7-d163-4f89-b01a-311f2e8943d0",
+  "llmId": "85906141-db1c-4927-b74d-3c82ebe2436e",
+  "zeroDataRetention": false,
+  "zeroDataRetentionNote": "Unavailable on the current Anam plan; James transcript persistence and outbound processing are suppressed by the application.",
+  "promptSha256": "4ac1b2e2dc34ed3a517db0dfbfe2c0dc4b8faebc5e5113af3a3523e4bc3c0f0e",
+  "knowledgeBundleSha256": "e06c51311c977e995be64103170db61aa210a9e29f4e78d5fad077a1b32bb148",
+  "knowledgeGroupId": "0487402b-b539-4069-abc9-f080e72b1e12",
+  "knowledgeToolId": "a204f0b1-6284-47cb-b740-7ed2d636f77f",
+  "knowledgeDocumentCount": 7,
+  "knowledgeDocumentsReady": 7,
+  "attachedToolNames": [
+    "Knowledge_James_Knowles_Law_Firm_2026_07",
+    "end_call",
+    "skip_turn"
+  ]
+}

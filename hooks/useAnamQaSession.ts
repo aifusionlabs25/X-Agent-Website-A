@@ -84,6 +84,13 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
             const anamClient = createClient(sessionToken, { 
                 disableInputAudio: true // CRITICAL: Prevents mic permission prompt
             });
+            const addPersonaContext = (context: string) => {
+                const contextClient = anamClient as AnamClient & { addContext?: (value: string) => void };
+                if (typeof contextClient.addContext !== 'function') {
+                    throw new Error('The Anam client does not support live context injection.');
+                }
+                contextClient.addContext(context);
+            };
 
             let providerSessionId: string | null = null;
             let bindPromise: Promise<void> | null = null;
@@ -105,7 +112,7 @@ export function useAnamQaSession({ personaId, sessionVariant }: UseAnamQaSession
                     || !providerSessionId
                 ) return;
                 try {
-                    anamClient.addContext(memoryContext);
+                    addPersonaContext(memoryContext);
                     memoryContextInjected = true;
                     appendMessage(
                         'system',

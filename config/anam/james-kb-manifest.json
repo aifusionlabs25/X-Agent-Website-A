@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "james_anam_kb_manifest_v1",
+  "bundleVersion": "JAMES_KB_2026_07_16",
+  "reviewedAt": "2026-07-16",
+  "knowledgeToolName": "Knowledge_James_Knowles_Law_Firm_2026_07",
+  "documents": [
+    "README_JAMES_KB.md",
+    "01_FIRM_FACTS_AND_CONTACT.md",
+    "02_PRACTICE_AREAS.md",
+    "03_SAFE_INTAKE_FLOW.md",
+    "04_BOUNDARIES_PRIVACY_AND_URGENCY.md",
+    "05_SAFE_RESPONSE_PATTERNS.md",
+    "06_PROVENANCE_AND_EXCLUSIONS.md"
+  ],
+  "authoritativeSources": [
+    "https://www.knowleslaw.org/",
+    "https://www.knowleslaw.org/contact-us/",
+    "https://www.knowleslaw.org/meet-our-team/",
+    "https://www.knowleslaw.org/phoenix-criminal-defense-attorney/",
+    "https://www.knowleslaw.org/phoenix-dui-lawyer/",
+    "https://www.knowleslaw.org/mesa/"
+  ],
+  "legacyProviderSourcesAreContentOnly": true,
+  "legalAdviceContentAllowed": false,
+  "memoryEnabled": false,
+  "outboundAutomationEnabled": false
+}
