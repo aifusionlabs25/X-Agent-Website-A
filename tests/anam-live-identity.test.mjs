@@ -43,6 +43,36 @@ test('live identity unlocks approved memory only for the matching confirmed emai
     assert.doesNotMatch(result.memoryContext, /rvicks@gmail\.com|Website Alias/i);
 });
 
+test('letter-by-letter voice spelling resolves to the saved compact email', () => {
+    for (const email of ['r-v-i-c-k-s@gmail.com', 'r v i c k s @ gmail.com', 'r-v-i-c-k-s@g-m-a-i-l.com']) {
+        const result = verifyAmyAnamLiveIdentity({
+            preferredName: 'Rob',
+            email,
+            browserIdentity,
+            approvedHistory,
+            identitySalt,
+        });
+        assert.ok(result, `expected ${email} to match the saved identity`);
+        assert.equal(result.normalizedEmail, 'rvicks@gmail.com');
+    }
+});
+
+test('an explicitly saved hyphenated mailbox remains intact', () => {
+    const hyphenatedIdentity = {
+        ...browserIdentity,
+        emailIdentityHash: deriveAmyAnamEmailIdentityHash('rob-vicks@gmail.com', identitySalt),
+    };
+    const result = verifyAmyAnamLiveIdentity({
+        preferredName: 'Rob',
+        email: 'rob-vicks@gmail.com',
+        browserIdentity: hyphenatedIdentity,
+        approvedHistory,
+        identitySalt,
+    });
+    assert.ok(result);
+    assert.equal(result.normalizedEmail, 'rob-vicks@gmail.com');
+});
+
 test('a corrupted or unconsented email cannot unlock any approved history', () => {
     assert.equal(verifyAmyAnamLiveIdentity({
         preferredName: 'Rob',
@@ -87,6 +117,7 @@ test('server and client enforce delayed, session-owned memory unlock', async () 
     const identityRoute = await readFile(new URL('../app/api/anam/session/identity/route.ts', import.meta.url), 'utf8');
     const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
     const reliabilityPrompt = await readFile(new URL('../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url), 'utf8');
+    const identityTool = await readFile(new URL('../config/anam/amy-live-identity-client-tool.json', import.meta.url), 'utf8');
 
     assert.doesNotMatch(tokenRoute, /readAmyAnamApprovedMemoryHistory|buildAmyAnamReturningMemoryContext/);
     assert.match(tokenRoute, /buildAmyAnamMemoryAccessPolicy/);
@@ -109,4 +140,8 @@ test('server and client enforce delayed, session-owned memory unlock', async () 
     assert.match(reliabilityPrompt, /Treat "that's all," "nothing else," "wrap up," "goodbye,"/i);
     assert.match(reliabilityPrompt, /Do not ask "anything else"/i);
     assert.match(reliabilityPrompt, /slightly unhurried cadence/i);
+    assert.match(reliabilityPrompt, /letter by letter/i);
+    assert.match(reliabilityPrompt, /Preserve any hyphen or punctuation/i);
+    assert.match(identityTool, /compact canonical form/i);
+    assert.match(identityTool, /preserve punctuation explicitly stated/i);
 });
