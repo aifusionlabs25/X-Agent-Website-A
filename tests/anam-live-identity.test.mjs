@@ -141,11 +141,12 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     assert.match(reliabilityPrompt, /preserve it as an open item/i);
     assert.match(reliabilityPrompt, /Do not use "Is there anything else\?" as routine filler/i);
     assert.match(reliabilityPrompt, /Never use "before we wrap up/i);
-    assert.match(player, /voiceDetection: \{ endOfSpeechSensitivity: 0\.15 \}/);
-    assert.match(reliabilityUpdater, /endOfSpeechSensitivity: 0\.15/);
-    assert.match(reliabilityUpdater, /silenceBeforeAutoEndTurnSeconds: 2\.2/);
+    assert.match(player, /voiceDetection: \{ endOfSpeechSensitivity: 0\.05 \}/);
+    assert.match(reliabilityUpdater, /endOfSpeechSensitivity: 0\.05/);
+    assert.match(reliabilityUpdater, /silenceBeforeAutoEndTurnSeconds: 3/);
     assert.match(reliabilityPrompt, /slightly unhurried cadence/i);
     assert.deepEqual(identityTool.config.parameters.required, ['preferredName', 'memoryAccessConfirmed']);
     assert.equal(identityTool.config.parameters.properties.memoryAccessConfirmed.type, 'boolean');
     assert.equal(identityTool.config.parameters.properties.email, undefined);
 });
+

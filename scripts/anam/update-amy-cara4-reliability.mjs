@@ -117,8 +117,8 @@ const expectedPrompt = replaceManagedBlock(
     publicSectorUpgrade,
 );
 const voiceDetectionOptions = {
-    endOfSpeechSensitivity: 0.15,
-    silenceBeforeAutoEndTurnSeconds: 2.2,
+    endOfSpeechSensitivity: 0.05,
+    silenceBeforeAutoEndTurnSeconds: 3,
     silenceBeforeSkipTurnSeconds: 0,
     silenceBeforeSessionEndSeconds: 180,
 };
@@ -171,3 +171,4 @@ console.log(JSON.stringify({
         && prompt.includes(PUBLIC_SECTOR_END),
     captureSalesHandoffAttached: forbiddenHandoffId ? verifiedToolIds.includes(forbiddenHandoffId) : false,
 }, null, 2));
+
