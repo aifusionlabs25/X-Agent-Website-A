@@ -4,7 +4,9 @@ import {
     sendAmyEmailWithAgentMail,
 } from '../email/amy-email-provider.ts';
 import { buildAmyEmailBundle } from './agentmail-templates.ts';
+import { createAmyAnamContactToken, readAmyAnamContactToken } from './contact-token.ts';
 import type { AmyTranscriptTurn } from './session-spine.ts';
+import type { AmyAnamSessionReceipt, AmyAnamSessionRecord } from './session-spine.ts';
 import {
     normalizeAmyTranscript,
     readAmyAnamSpineConfig,
@@ -60,6 +62,32 @@ type AmyAnamEmailAttemptRecord = {
     rawEmailStored: false;
     messageContentStored: false;
 };
+
+type AmyAnamEmailIntentRecord = {
+    schemaVersion: 'amy_anam_agentmail_intent_v1';
+    externalSessionId: string;
+    browserSessionId: string;
+    status: 'queued';
+    receiptId: string;
+    displayName: string;
+    contactToken: string;
+    requestedAt: string;
+    rawEmailStored: false;
+    transcriptStored: false;
+    messageContentStored: false;
+};
+
+export type AmyAnamFollowUpQueueResult = {
+    status: 'email_queued' | 'email_already_queued';
+    queued: true;
+    sent: false;
+    duplicate: boolean;
+    receiptId: string;
+    provider: 'agentmail';
+};
+
+export type AmyAnamPostSessionDispatchResult = AmyAnamFollowUpResult
+    | { status: 'email_not_requested' | 'email_unavailable'; sent: false };
 
 export type AmyAnamFollowUpResult = {
     status: 'email_sent' | 'email_already_attempted';
@@ -131,6 +159,10 @@ export function readAmyAnamAgentMailConfig(
 
 function attemptKey(externalSessionId: string): string {
     return `xagent:amy:anam:agentmail:attempt:v1:${externalSessionId}`;
+}
+
+function intentKey(externalSessionId: string): string {
+    return `xagent:amy:anam:agentmail:intent:v1:${externalSessionId}`;
 }
 
 async function redisPipeline(
@@ -206,6 +238,31 @@ function parseAttempt(valueToParse: unknown): AmyAnamEmailAttemptRecord | null {
     return record as AmyAnamEmailAttemptRecord;
 }
 
+function parseIntent(valueToParse: unknown): AmyAnamEmailIntentRecord | null {
+    if (valueToParse === null || valueToParse === undefined) return null;
+    const valueToNormalize = typeof valueToParse === 'string'
+        ? JSON.parse(valueToParse) as unknown
+        : valueToParse;
+    if (!valueToNormalize || typeof valueToNormalize !== 'object' || Array.isArray(valueToNormalize)) {
+        throw new Error('Amy AgentMail intent was invalid');
+    }
+    const record = valueToNormalize as Partial<AmyAnamEmailIntentRecord>;
+    if (
+        record.schemaVersion !== 'amy_anam_agentmail_intent_v1'
+        || typeof record.externalSessionId !== 'string'
+        || typeof record.browserSessionId !== 'string'
+        || record.status !== 'queued'
+        || typeof record.receiptId !== 'string'
+        || typeof record.displayName !== 'string'
+        || typeof record.contactToken !== 'string'
+        || typeof record.requestedAt !== 'string'
+        || record.rawEmailStored !== false
+        || record.transcriptStored !== false
+        || record.messageContentStored !== false
+    ) throw new Error('Amy AgentMail intent was invalid');
+    return record as AmyAnamEmailIntentRecord;
+}
+
 function redactContactData(turns: AmyTranscriptTurn[]): AmyTranscriptTurn[] {
     return turns.map(turn => ({
         ...turn,
@@ -226,10 +283,75 @@ export function buildAmyConversationFollowUp(input: {
         verifiedEmail: 'private contact',
         externalSessionId: 'template-preview',
         sessionStartedAt: generatedAt,
+        sessionEndedAt: generatedAt,
         generatedAt,
         turns,
         model: buildAmyWorkbenchModel(turns),
     }).visitor;
+}
+
+export async function queueAmyAnamConversationFollowUp(input: {
+    externalSessionId: string;
+    browserSessionId: string;
+    displayName: string;
+    email: string;
+    contactSecret: string;
+}, options: AgentMailStoreOptions = {}): Promise<AmyAnamFollowUpQueueResult> {
+    const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
+    if (!config.effectiveGateOpen) throw new Error('Amy AgentMail is unavailable');
+    const requestedAt = new Date().toISOString();
+    const receiptId = createHash('sha256')
+        .update(`amy:anam:agentmail:intent:v1:${input.externalSessionId}`, 'utf8')
+        .digest('hex')
+        .slice(0, 32);
+    const intent: AmyAnamEmailIntentRecord = {
+        schemaVersion: 'amy_anam_agentmail_intent_v1',
+        externalSessionId: input.externalSessionId,
+        browserSessionId: input.browserSessionId,
+        status: 'queued',
+        receiptId,
+        displayName: input.displayName,
+        contactToken: createAmyAnamContactToken({
+            browserSessionId: input.browserSessionId,
+            email: input.email,
+            secret: input.contactSecret,
+        }),
+        requestedAt,
+        rawEmailStored: false,
+        transcriptStored: false,
+        messageContentStored: false,
+    };
+    const reserved = await redisCommand([
+        'SET',
+        intentKey(input.externalSessionId),
+        JSON.stringify(intent),
+        'NX',
+        'EX',
+        EMAIL_RECEIPT_TTL_SECONDS,
+    ], options);
+    if (reserved !== 'OK') {
+        const existing = parseIntent(await redisCommand([
+            'GET',
+            intentKey(input.externalSessionId),
+        ], options));
+        if (!existing) throw new Error('Amy AgentMail intent reservation conflicted');
+        return {
+            status: 'email_already_queued',
+            queued: true,
+            sent: false,
+            duplicate: true,
+            receiptId: existing.receiptId,
+            provider: 'agentmail',
+        };
+    }
+    return {
+        status: 'email_queued',
+        queued: true,
+        sent: false,
+        duplicate: false,
+        receiptId,
+        provider: 'agentmail',
+    };
 }
 
 export async function sendAmyAnamConversationFollowUp(input: {
@@ -237,6 +359,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
     displayName: string;
     email: string;
     sessionStartedAt: string;
+    sessionEndedAt: string;
     turns: AmyTranscriptTurn[] | unknown;
 }, options: AgentMailStoreOptions = {}): Promise<AmyAnamFollowUpResult> {
     const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
@@ -303,6 +426,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
             verifiedEmail: input.email,
             externalSessionId: input.externalSessionId,
             sessionStartedAt: input.sessionStartedAt,
+            sessionEndedAt: input.sessionEndedAt,
             turns: safeTurns,
             model: buildAmyWorkbenchModel(safeTurns),
         });
@@ -365,4 +489,43 @@ export async function sendAmyAnamConversationFollowUp(input: {
         ], options).catch(() => undefined);
         throw new Error('Amy could not confirm email delivery');
     }
+}
+
+export async function dispatchAmyAnamPostSessionFollowUp(input: {
+    session: AmyAnamSessionRecord;
+    receipt: AmyAnamSessionReceipt;
+    turns: AmyTranscriptTurn[] | unknown;
+}, options: AgentMailStoreOptions = {}): Promise<AmyAnamPostSessionDispatchResult> {
+    const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
+    if (!config.effectiveGateOpen) return { status: 'email_unavailable', sent: false };
+    const intent = parseIntent(await redisCommand([
+        'GET',
+        intentKey(input.session.externalSessionId),
+    ], options));
+    if (!intent) return { status: 'email_not_requested', sent: false };
+    if (
+        intent.externalSessionId !== input.session.externalSessionId
+        || intent.browserSessionId !== input.session.browserSessionId
+        || input.receipt.externalSessionId !== input.session.externalSessionId
+    ) throw new Error('Amy AgentMail post-session ownership did not match');
+    const spine = readAmyAnamSpineConfig(options.env ?? process.env);
+    const contact = readAmyAnamContactToken({
+        token: intent.contactToken,
+        browserSessionId: input.session.browserSessionId,
+        secret: spine.signingSecret,
+    });
+    if (!contact) throw new Error('Amy AgentMail post-session contact token expired or was invalid');
+    const result = await sendAmyAnamConversationFollowUp({
+        externalSessionId: input.session.externalSessionId,
+        displayName: intent.displayName,
+        email: contact.email,
+        sessionStartedAt: input.session.boundAt,
+        sessionEndedAt: input.session.closeReceivedAt || input.receipt.completedAt,
+        turns: input.turns,
+    }, options);
+    if (result.sent) {
+        await redisCommand(['DEL', intentKey(input.session.externalSessionId)], options)
+            .catch(() => undefined);
+    }
+    return result;
 }

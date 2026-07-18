@@ -34,12 +34,14 @@ const sessionStore = sources.get('../lib/anam/session-spine-store.ts');
 const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
 const qaHook = await readFile(new URL('../hooks/useAnamQaSession.ts', import.meta.url), 'utf8');
 
-test('session-spine and Hermes shadow files do not import or invoke outbound automation services', () => {
+test('session-spine and Hermes shadow files keep outbound automation isolated to finalization', () => {
     const forbiddenImport = /(?:from|import\()\s*['"][^'"]*(?:openai-service|google-sheets|resend|agentmail)[^'"]*['"]/i;
     const forbiddenInvocation = /\b(?:new\s+Resend|emails\.send|appendLead|analyzeTranscript|runAmyPostSessionAnalysis)\b/i;
 
     for (const [relativePath, source] of sources) {
-        assert.doesNotMatch(source, forbiddenImport, `${relativePath} imported an outbound service`);
+        if (relativePath !== '../lib/anam/session-finalizer.ts') {
+            assert.doesNotMatch(source, forbiddenImport, `${relativePath} imported an outbound service`);
+        }
         assert.doesNotMatch(source, forbiddenInvocation, `${relativePath} invoked an outbound service`);
     }
 });
@@ -111,4 +113,15 @@ test('both live and QA clients bind SESSION_READY and deduplicate completion', (
     assert.match(qaHook, /completeAmyAnamClientSession\(\{/);
     assert.match(qaHook, /if \(completionPromise\) return completionPromise/);
     assert.match(qaHook, /removeListener\(AnamEvent\.SESSION_READY, handleSessionReady\)/);
+});
+
+test('email delivery occurs only after final transcript retrieval and durable session receipt', () => {
+    const transcriptFetch = finalizer.indexOf('const transcript = await fetchCompletedAnamTranscript');
+    const receiptWrite = finalizer.indexOf('await writeAmyAnamReceipt(session, finalization, receipt');
+    const emailDispatch = finalizer.indexOf('await dispatchAmyAnamPostSessionFollowUp({');
+    assert.ok(transcriptFetch >= 0, 'final transcript was not fetched');
+    assert.ok(receiptWrite > transcriptFetch, 'session receipt was written before final transcript retrieval');
+    assert.ok(emailDispatch > receiptWrite, 'email was dispatched before post-session finalization');
+    assert.match(finalizer, /turns:\s*transcript\.status === 'ready' \? transcript\.turns : \[\]/);
+    assert.doesNotMatch(player, /sendAmyAnamFollowUpEmail\([\s\S]*transcript:/);
 });

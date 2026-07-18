@@ -409,22 +409,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     launchId,
                                     sessionId: providerSessionId,
                                     userConfirmed: true,
-                                    transcript: transcriptRef.current,
                                 });
-                                console.info('[Amy Anam AgentMail] Follow-up action completed', {
+                                console.info('[Amy Anam AgentMail] Post-session intent recorded', {
                                     status: result.status,
-                                    sent: result.sent,
+                                    queued: result.queued,
                                     duplicate: result.duplicate,
                                     contactContentLogged: false,
                                 });
                                 return JSON.stringify({
                                     status: result.status,
-                                    sent: result.sent,
+                                    queued: result.queued,
+                                    sent: false,
                                     duplicate: result.duplicate,
                                     receiptId: result.receiptId,
-                                    instruction: result.sent
-                                        ? 'Confirm briefly that the email was sent. Then pause and ask whether there is anything else to cover. Do not end the call unless the visitor clearly says they are finished.'
-                                        : 'Say that a previous email attempt is already recorded. Do not claim a new email was sent, and do not end the call automatically.',
+                                    instruction: result.duplicate
+                                        ? 'Confirm briefly that the post-session email is already scheduled. Do not say it was sent yet, and do not end the call automatically.'
+                                        : 'Confirm briefly that the follow-up will be emailed after this session ends. Do not say it was sent yet. Then continue naturally and end only when the visitor clearly says they are finished.',
                                 });
                             },
                         },

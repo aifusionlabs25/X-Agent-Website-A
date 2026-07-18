@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sendAmyAnamConversationFollowUp } from '@/lib/anam/agentmail';
+import { queueAmyAnamConversationFollowUp } from '@/lib/anam/agentmail';
 import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
 import {
     AmyAnamRequestError,
@@ -44,8 +44,8 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'A private checked-in email is required' }, { status: 409 });
         }
 
-        const body = await readBoundedJsonObject(request, 256 * 1024);
-        const allowedFields = new Set(['launchId', 'sessionId', 'userConfirmed', 'transcript']);
+        const body = await readBoundedJsonObject(request, 8 * 1024);
+        const allowedFields = new Set(['launchId', 'sessionId', 'userConfirmed']);
         if (Object.keys(body).some(key => !allowedFields.has(key))) {
             return noStoreJson({ error: 'Email request contained unsupported fields' }, { status: 400 });
         }
@@ -85,12 +85,12 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'Email session ownership could not be confirmed' }, { status: 409 });
         }
 
-        const result = await sendAmyAnamConversationFollowUp({
+        const result = await queueAmyAnamConversationFollowUp({
             externalSessionId: sessionId,
+            browserSessionId: browserSession.id,
             displayName: identity.displayName,
             email: contact.email,
-            sessionStartedAt: session.boundAt,
-            turns: body.transcript,
+            contactSecret: spine.signingSecret,
         });
         return noStoreJson({
             ...result,
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
         if (/unavailable|not configured/i.test(message)) {
             return noStoreJson({ error: 'Amy email is temporarily unavailable' }, { status: 503 });
         }
-        console.error('[Amy Anam AgentMail] Delivery was not confirmed');
-        return noStoreJson({ error: 'Amy could not confirm email delivery' }, { status: 502 });
+        console.error('[Amy Anam AgentMail] Post-session email intent was not recorded');
+        return noStoreJson({ error: 'Amy could not schedule the post-session email' }, { status: 502 });
     }
 }
