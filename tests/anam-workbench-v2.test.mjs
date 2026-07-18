@@ -49,6 +49,47 @@ test('Corrections replace rejected terms and uncertain speech remains separate',
     assert.doesNotMatch(JSON.stringify(model.facts), /FleetPilot/i);
 });
 
+test('Supplied ERP and municipal session produces accurate working views', () => {
+    const turns = [
+        { role: 'user', content: "Hi, Amy. I'm a returning user. We spoke before about an Azure migration. Can you pull up what you remember from that?" },
+        { role: 'user', content: "Partially. Yes, the ERP cutover with a tight overnight outage window is still key, but there's also a municipal subcontract where compliance is unclear, and we can't assume any framework yet." },
+        { role: 'user', content: "Not sure. The prime hasn't flowed anything down yet, so we're treating it as prescoping only and not making assumptions." },
+        { role: 'user', content: 'Probably in a few weeks, but it depends on when the prime clarifies compliance. For now, just pre-scoping.' },
+        { role: 'user', content: 'Maybe later. For now, just capture that status and please show me the live notes.' },
+        { role: 'user', content: 'Now, please show me the live brief.' },
+        { role: 'user', content: 'Yes, please build and show me a simple roadmap that separates the ERP cutover work stream from the municipal compliance pre-scoping stream.' },
+        { role: 'user', content: 'Do you have a visual?' },
+    ];
+    const topic = 'ERP cutover with overnight outage window and separate municipal subcontract compliance pre-scoping; both to begin pre-scoping in a few weeks.';
+    const model = buildAmyWorkbenchModel(turns, topic);
+
+    assert.equal(model.lane, 'Azure ERP and municipal compliance planning');
+    assert.match(model.brief.objective, /two separate workstreams/i);
+    assert.match(model.brief.objective, /tight overnight outage window/i);
+    assert.doesNotMatch(model.brief.objective, /please (?:build|show)/i);
+
+    const guardrail = model.facts.find((fact) => fact.label === 'Primary guardrail')?.value ?? '';
+    const timing = model.facts.find((fact) => fact.label === 'Timing')?.value ?? '';
+    const outputs = model.facts.find((fact) => fact.label === 'Requested output')?.value ?? '';
+    assert.match(guardrail, /tight overnight ERP cutover window/i);
+    assert.match(guardrail, /do not assume a compliance framework/i);
+    assert.match(timing, /few weeks/i);
+    assert.match(timing, /prime contractor/i);
+    assert.equal(outputs, 'Live notes / Live brief / Two-track roadmap / Visual brief');
+    assert.ok(model.uncertainItems.some((item) => /framework.*not yet known/i.test(item)));
+    assert.doesNotMatch(JSON.stringify(model.brief), /Maybe later|please show me|please build and show/i);
+
+    assert.equal(model.roadmap.title, 'ERP cutover + municipal pre-scoping');
+    assert.deepEqual(model.roadmap.phases.map((phase) => phase.title), [
+        'Shared facts and dependencies',
+        'ERP cutover workstream',
+        'Municipal compliance pre-scoping',
+        'Separate decision gates',
+    ]);
+    assert.doesNotMatch(model.roadmap.outcome, /Yes, please build/i);
+    assert.equal(model.visualBrief.slides[0].summary, model.brief.objective);
+});
+
 test('Roadmap topic is session-specific without becoming an approval claim', () => {
     const topic = 'Modernize 1,200 Windows 11 endpoints with Intune in controlled waves before peak season.';
     const model = buildAmyWorkbenchModel([{ role: 'user', content: 'Please show me a phased endpoint roadmap.' }], topic);
@@ -90,6 +131,11 @@ test('Amy feature tabs and content use readable production typography', async ()
         new URL('../components/amy/AmyAnamWorkbenchV2.tsx', import.meta.url),
         'utf8',
     ));
+    assert.match(workbench, /Open full screen/);
+    assert.match(workbench, /Exit full screen/);
+    assert.match(workbench, /data-expanded=\{isExpanded\}/);
+    assert.match(workbench, /lg:w-\[min\(56vw,820px\)\]/);
+    assert.match(workbench, /event\.key === 'Escape'/);
 
     assert.match(workbench, /text-\[11px\][^`]+sm:text-sm/);
     assert.match(workbench, /text-sm leading-6 text-zinc-400/);

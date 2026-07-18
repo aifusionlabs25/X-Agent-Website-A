@@ -462,7 +462,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${workbenchEnabled && workbenchOpen ? 'lg:pr-[48vw]' : ''}`}>
+            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${workbenchEnabled && workbenchOpen ? 'lg:pr-[min(56vw,820px)]' : ''}`}>
                 <video
                     ref={videoRef}
                     id="persona-video"

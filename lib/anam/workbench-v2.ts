@@ -118,6 +118,33 @@ function isUncertain(value: string): boolean {
     return /\b(?:not sure|might be|could be|possibly|perhaps|I think|I may have|did you say|I heard)\b/i.test(value);
 }
 
+function statementsFrom(values: string[]): string[] {
+    return values.flatMap((value) => value
+        .split(/(?<=[.!?])\s+/)
+        .map((statement) => compact(statement))
+        .filter(Boolean));
+}
+
+function isWorkbenchRequest(value: string): boolean {
+    return /\b(?:please\s+)?(?:show|open|display|leave|keep|pull up|build and show|capture)\b.*\b(?:notes?|brief|roadmap|visual|catalog|status)\b/i.test(value)
+        || /\bdo you have a visual\b/i.test(value);
+}
+
+function isConversationControl(value: string): boolean {
+    return /^(?:thanks?|thank you|yes,? please|no|not right(?: now)?|maybe later|sure|partially|for now)\.?$/i.test(value.trim());
+}
+
+function requestedOutputsFrom(values: string[], dualTrack: boolean): string[] {
+    const text = values.join(' ');
+    return unique([
+        /\blive notes?\b/i.test(text) ? 'Live notes' : '',
+        /\blive brief\b/i.test(text) ? 'Live brief' : '',
+        /\broadmap\b/i.test(text) ? (dualTrack ? 'Two-track roadmap' : 'Roadmap') : '',
+        /\bvisual(?: brief)?\b/i.test(text) ? 'Visual brief' : '',
+        /\bcatalog\b/i.test(text) ? 'Solution catalog' : '',
+    ], 5);
+}
+
 function readCorrections(values: string[]): Array<{ from: string; to: string }> {
     const corrections: Array<{ from: string; to: string }> = [];
     const seen = new Set<string>();
@@ -210,12 +237,19 @@ function extractScale(text: string): string {
     return compact(text.match(/\b((?:\d+(?:,\d{3})*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:(?:Windows\s+11|rugged|managed|mobile)\s+)?(?:manufacturing\s+)?(?:plants?|endpoints?|devices?|users?|sites?|locations?|warehouses?|distribution centers?|scanners?|tablets?|clinics?))\b/i)?.[1] ?? '');
 }
 
-function buildPhases(lane: LaneId, context: { scale: string; terms: string[]; constraint: string; timing: string; workloads: string[] }): WorkbenchPhase[] {
+function buildPhases(lane: LaneId, context: { scale: string; terms: string[]; constraint: string; timing: string; workloads: string[]; dualTrack: boolean }): WorkbenchPhase[] {
     const scope = context.scale || 'the environment in scope';
     const stack = context.terms.slice(0, 5).join(', ') || 'the current technology environment';
     const guardrail = context.constraint || 'the stated operating constraints';
     const timing = context.timing ? ` within ${context.timing}` : '';
     const workloads = context.workloads.join(', ') || 'the priority workloads';
+
+    if (context.dualTrack) return [
+        { number: '01', title: 'Shared facts and dependencies', detail: 'Confirm the Azure and ERP estate, decision owners, cutover dependencies, and the prime-contractor flow-down status without assuming a compliance framework.' },
+        { number: '02', title: 'ERP cutover workstream', detail: 'Map ERP dependencies, rehearse recovery and rollback, and validate that the cutover can fit the tight overnight outage window.' },
+        { number: '03', title: 'Municipal compliance pre-scoping', detail: 'Document the subcontract context, data and workload boundaries, open compliance questions, and evidence needed once the prime provides flow-down requirements.' },
+        { number: '04', title: 'Separate decision gates', detail: 'Gate ERP cutover readiness independently from municipal compliance scope, then confirm owners, timing, and specialist review for each stream.' },
+    ];
 
     if (lane === 'mobility') return [
         { number: '01', title: 'Survey and baseline', detail: `Validate wireless coverage, ${stack}, device condition, WMS dependencies, and picking risks across ${scope}.` },
@@ -303,26 +337,40 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         .filter((turn) => turn.role === 'user')
         .map((turn) => canonical(turn.content))
         .filter((value) => value && value !== CONTACT_OMITTED);
+    const statements = statementsFrom(userTurns);
     const corrections = readCorrections(userTurns);
     const rejected = new Set(corrections.map((item) => canonical(item.from).toLowerCase()));
-    const certainTurns = userTurns.filter((value) => !isUncertain(value));
-    const uncertainItems = unique(userTurns.filter(isUncertain).map((value) => compact(value, 150)), 4);
-    const allText = canonical(`${certainTurns.join(' ')} ${roadmapTopic}`);
-    const terms = termsFrom(certainTurns, rejected);
+    const certainStatements = statements.filter((value) => !isUncertain(value));
+    const substantiveStatements = certainStatements.filter((value) => !isWorkbenchRequest(value) && !isConversationControl(value));
+    const sourceText = canonical(`${certainStatements.join(' ')} ${roadmapTopic}`);
+    const dualTrack = /\bAzure\b/i.test(sourceText) && /\bERP\b/i.test(sourceText) && /\bmunicipal\b|public[ -]sector|government subcontract/i.test(sourceText);
+    const uncertainItems = unique(statements.filter(isUncertain).map((value) => {
+        if (/not sure/i.test(value) && /compliance|framework|prime|flow/i.test(sourceText)) return 'Applicable compliance framework is not yet known; prime-contractor flow-down is pending.';
+        if (/^not sure\.?$/i.test(value)) return '';
+        return compact(value, 150);
+    }), 4);
+    const allText = sourceText;
+    const terms = termsFrom(certainStatements, rejected);
     for (const correction of corrections) {
         for (const [, label] of TERM_RULES) {
             if (canonical(correction.to).toLowerCase().includes(label.toLowerCase()) && !terms.includes(label)) terms.push(label);
         }
     }
     const laneId = detectLane(allText);
-    const lane = LANE_LABELS[laneId];
+    const lane = dualTrack ? 'Azure ERP and municipal compliance planning' : LANE_LABELS[laneId];
     const scale = extractScale(allText);
-    const objective = lastSentence(certainTurns, /need|want|trying|looking|goal|objective|moderni[sz]|replace|migrate|improve|protect|reduce|support|roadmap|assessment/i)
-        || (certainTurns.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
-    const timing = lastSentence(certainTurns, /timeline|timing|\d+[ -]?(?:day|week|month)|next (?:year|quarter|month)|this (?:year|quarter|month)|within|before|early|late|maintenance window|peak season/i);
-    const constraint = lastSentence(certainTurns, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
-    const stakeholder = lastSentence(certainTurns, /decision|stakeholder|CIO|CFO|CTO|director|vice president|VP|executive|procurement|leadership|owner/i);
-    const organization = lastSentence(certainTurns, /county|city|agency|company|firm|hospital|health system|manufactur|distribution|university|school district/i);
+    const objective = dualTrack
+        ? 'Plan two separate workstreams: protect the ERP cutover within a tight overnight outage window, and pre-scope municipal compliance while awaiting prime-contractor flow-down.'
+        : lastSentence(substantiveStatements, /need|want|trying|looking|goal|objective|moderni[sz]|replace|migrate|improve|protect|reduce|support|roadmap|assessment/i)
+        || (certainStatements.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
+    const timing = dualTrack && /few weeks/i.test(allText)
+        ? 'Detailed planning may begin in a few weeks, dependent on compliance clarification from the prime contractor.'
+        : lastSentence(substantiveStatements, /timeline|timing|\d+[ -]?(?:day|week|month)|next (?:year|quarter|month)|this (?:year|quarter|month)|within|before|early|late|maintenance window|peak season/i);
+    const constraint = dualTrack
+        ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
+        : lastSentence(substantiveStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
+    const stakeholder = lastSentence(substantiveStatements, /decision|stakeholder|CIO|CFO|CTO|director|vice president|VP|executive|procurement|leadership|owner/i);
+    const organization = lastSentence(substantiveStatements, /county|city|agency|company|firm|hospital|health system|manufactur|distribution|university|school district/i);
     const workloads = unique([
         /customer portal/i.test(allText) ? 'Customer portal' : '',
         /\bERP\b/i.test(allText) ? 'ERP' : '',
@@ -338,13 +386,14 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /FedRAMP/i.test(allText) ? 'FedRAMP' : '',
         /StateRAMP/i.test(allText) ? 'StateRAMP' : '',
     ], 5);
-    const requestedOutput = lastSentence(certainTurns, /roadmap|assessment|brief|notes|visual|presentation|catalog|follow-up|workshop/i);
-    const decision = lastSentence(certainTurns, /we decided|we selected|we will proceed|the decision is/i);
+    const requestedOutputs = requestedOutputsFrom(userTurns, dualTrack);
+    const requestedOutput = requestedOutputs.join(' / ');
+    const decision = lastSentence(substantiveStatements, /we decided|we selected|we will proceed|the decision is/i);
 
     const facts = [
         makeFact('Organization', 'Context', organization),
         makeFact('Scale', 'Environment scale', scale),
-        makeFact('Environment', 'Current platforms', terms.join(' / ')),
+        makeFact('Environment', 'Technology context', terms.join(' / ')),
         makeFact('Environment', 'Critical workloads', workloads.join(' / ')),
         makeFact('Priorities', 'Current objective', objective.includes('still being clarified') || objective.startsWith('Waiting') ? '' : objective),
         makeFact('Constraints', 'Primary guardrail', constraint),
@@ -363,15 +412,25 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         !stakeholder ? 'Who should be involved in the next decision?' : '',
         ...uncertainItems.map((item) => `Please clarify: ${item}`),
     ], 4);
-    const priorities = unique([constraint, timing, compliance.length ? `Account for ${compliance.join(', ')}.` : '', terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : ''], 5);
-    const nextStep = openQuestions.length
+    const priorities = unique([
+        dualTrack ? 'Keep the ERP cutover and municipal compliance pre-scoping as separate workstreams.' : '',
+        constraint,
+        timing,
+        compliance.length ? `Account for ${compliance.join(', ')}.` : '',
+        terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : '',
+    ], 5);
+    const nextStep = dualTrack
+        ? 'Confirm separate owners and decision gates for the ERP cutover and municipal compliance pre-scoping workstreams.'
+        : openQuestions.length
         ? `Clarify ${openQuestions[0].replace(/^What |^Which |^Who |^Please clarify:\s*/i, '').replace(/\?$/, '').toLowerCase()}.`
         : 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';
     const roadmapFacts = facts
         .filter((fact) => ['Scale', 'Environment', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
-    const phases = buildPhases(laneId, { scale, terms, constraint, timing, workloads });
-    const roadmapOutcome = compact(roadmapTopic) || ({
+    const phases = buildPhases(laneId, { scale, terms, constraint, timing, workloads, dualTrack });
+    const roadmapOutcome = dualTrack
+        ? 'Develop two coordinated but independently gated paths: ERP cutover readiness and municipal compliance pre-scoping.'
+        : compact(roadmapTopic) || ({
         endpoint: 'Create a measured endpoint modernization path with representative pilots and controlled deployment waves.',
         cloud: 'Shape a phased modernization path that protects critical workloads and validates continuity requirements.',
         security: 'Turn the stated risks and control gaps into a validated and sequenced remediation plan.',
@@ -399,7 +458,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         corrections,
         uncertainItems,
         brief: { objective, environment: terms, priorities, discussionPoints, nextStep, openQuestions },
-        roadmap: { title: `${lane} path`, outcome: roadmapOutcome, facts: roadmapFacts, phases },
+        roadmap: { title: dualTrack ? 'ERP cutover + municipal pre-scoping' : `${lane} path`, outcome: roadmapOutcome, facts: roadmapFacts, phases },
         visualBrief: { title: `${lane} working brief`, slides: visualSlides },
         catalog: {
             title: `${lane} solution categories`,

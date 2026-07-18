@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     AlertTriangle,
     BookOpenText,
@@ -9,6 +9,8 @@ import {
     ChevronRight,
     FileText,
     GitBranch,
+    Maximize2,
+    Minimize2,
     Network,
     PackageSearch,
     ShieldCheck,
@@ -70,13 +72,34 @@ export default function AmyAnamWorkbenchV2({
         [catalogQuery, roadmapTopic, turns],
     );
     const [slideIndex, setSlideIndex] = useState(0);
+    const [isExpanded, setIsExpanded] = useState(false);
     const activeSlide = model.visualBrief.slides[slideIndex] ?? model.visualBrief.slides[0];
+
+    useEffect(() => {
+        if (!isExpanded) return;
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setIsExpanded(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isExpanded]);
+
+    const closeWorkbench = () => {
+        setIsExpanded(false);
+        onClose();
+    };
 
     return (
         <aside
             aria-hidden={!isOpen}
             inert={!isOpen}
-            className={`absolute inset-y-0 right-0 z-40 flex w-full max-w-[680px] flex-col overflow-hidden border-l border-white/10 bg-[#0b0b0d]/[0.985] text-white shadow-[-32px_0_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition duration-500 ease-out lg:w-[48vw] ${
+            aria-label="Amy Intelligence feature panel"
+            data-expanded={isExpanded}
+            className={`absolute z-40 flex w-full flex-col overflow-hidden bg-[#0b0b0d]/[0.985] text-white shadow-[-32px_0_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition-[transform,opacity,width] duration-500 ease-out ${
+                isExpanded
+                    ? 'inset-0 max-w-none border-l-0'
+                    : 'inset-y-0 right-0 border-l border-white/10 lg:w-[min(56vw,820px)]'
+            } ${
                 isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-full opacity-0'
             }`}
         >
@@ -93,9 +116,22 @@ export default function AmyAnamWorkbenchV2({
                             <p className="mt-0.5 text-sm text-zinc-400">Live planning, visuals, and solution context</p>
                         </div>
                     </div>
-                    <button type="button" onClick={onClose} className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white" aria-label="Close Amy Intelligence">
-                        <X size={17} />
-                    </button>
+                    <div className="flex flex-none items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsExpanded((expanded) => !expanded)}
+                            className="flex h-10 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-xs font-semibold text-zinc-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+                            aria-label={isExpanded ? 'Exit full screen' : 'Open full screen'}
+                            aria-pressed={isExpanded}
+                            title={isExpanded ? 'Exit full screen (Esc)' : 'Open full screen'}
+                        >
+                            {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                            <span className="hidden sm:inline">{isExpanded ? 'Restore' : 'Full screen'}</span>
+                        </button>
+                        <button type="button" onClick={closeWorkbench} className="flex h-10 w-10 flex-none items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white" aria-label="Close Amy Intelligence">
+                            <X size={17} />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="relative mt-5 grid grid-cols-5 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10" role="tablist" aria-label="Amy Intelligence views">
