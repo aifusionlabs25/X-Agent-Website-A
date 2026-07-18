@@ -762,7 +762,7 @@ test('Hermes runtime uses stdin, no tools/memory/session store, and a minimal en
         AMY_ANAM_HERMES_HOME: hermesHome,
         AMY_ANAM_HERMES_PROVIDER: 'openai-codex',
         AMY_ANAM_HERMES_MODEL: 'gpt-5.5',
-        AMY_ANAM_HERMES_PYTHON_COMMAND: 'C:\\safe-bin\\python.exe',
+        AMY_ANAM_HERMES_PYTHON_COMMAND: resolve(tmpdir(), 'safe-bin', 'python.exe'),
         PATH: 'C:\\safe-bin',
         HERMES_KANBAN_TASK: 'must-not-leak',
         AGENTMAIL_API_KEY: 'must-not-leak',
@@ -815,7 +815,7 @@ test('Hermes runtime uses stdin, no tools/memory/session store, and a minimal en
     );
     assert.equal(result.output.safety.outbound_actions, 0);
     assert.equal(result.runtime.tools_called, 0);
-    assert.equal(invocation.command, resolve('C:\\safe-bin\\python.exe'));
+    assert.equal(invocation.command, resolve(tmpdir(), 'safe-bin', 'python.exe'));
     assert.equal(invocation.args.length, 1);
     assert.match(invocation.args[0], /amy-anam-shadow-runtime\.py$/);
     assert.equal(invocation.args.some(value => value.includes('fully redacted request')), false);

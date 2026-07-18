@@ -324,7 +324,7 @@ test('worker refuses to claim or spawn while local output cleanup is busy', asyn
         AMY_ANAM_HERMES_HOME: hermesHome,
         AMY_ANAM_HERMES_PROVIDER: 'openai-codex',
         AMY_ANAM_HERMES_MODEL: 'gpt-5.5',
-        AMY_ANAM_HERMES_PYTHON_COMMAND: 'C:\\safe-bin\\python.exe',
+        AMY_ANAM_HERMES_PYTHON_COMMAND: resolve(tmpdir(), 'safe-bin', 'python.exe'),
         ANAM_API_KEY: 'local-anam-key',
     };
 

@@ -53,7 +53,7 @@ test('checked-in email is encrypted, session-bound, expiring, and tamper-evident
         now: now + 1_000,
     }), null);
     assert.equal(readAmyAnamContactToken({
-        token: `${token.slice(0, -1)}x`,
+        token: `${token.slice(0, -1)}${token.endsWith('x') ? 'y' : 'x'}`,
         browserSessionId: BROWSER_ID,
         secret: SECRET,
         now: now + 1_000,

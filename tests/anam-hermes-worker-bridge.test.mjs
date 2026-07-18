@@ -298,7 +298,7 @@ test('worker bridge is primary without local Redis credentials and never sends a
         AMY_ANAM_HERMES_WORKER_OUTPUT_DIR: outputDir,
         AMY_ANAM_HERMES_PROVIDER: 'openai-codex',
         AMY_ANAM_HERMES_MODEL: 'gpt-5.5',
-        AMY_ANAM_HERMES_PYTHON_COMMAND: 'C:\\safe-bin\\python.exe',
+        AMY_ANAM_HERMES_PYTHON_COMMAND: resolve(tmpdir(), 'safe-bin', 'python.exe'),
         ANAM_API_KEY: 'local-anam-key',
         PATH: 'C:\\safe-bin',
     };
@@ -369,7 +369,7 @@ test('worker bridge is primary without local Redis credentials and never sends a
     ];
     let overlappingCleanup;
     const spawnImpl = (command, args, spawnOptions) => {
-        assert.equal(command, resolve('C:\\safe-bin\\python.exe'));
+        assert.equal(command, resolve(tmpdir(), 'safe-bin', 'python.exe'));
         assert.equal(args.length, 1);
         assert.match(args[0], /amy-anam-shadow-runtime\.py$/);
         assert.equal(args.some(value => value.includes('SAP discovery notes')), false);
@@ -471,7 +471,7 @@ test('begin refusal or lost response never reaches the provider process', async 
             AMY_ANAM_HERMES_WORKER_OUTPUT_DIR: outputDir,
             AMY_ANAM_HERMES_PROVIDER: 'openai-codex',
             AMY_ANAM_HERMES_MODEL: 'gpt-5.5',
-            AMY_ANAM_HERMES_PYTHON_COMMAND: 'C:\\safe-bin\\python.exe',
+            AMY_ANAM_HERMES_PYTHON_COMMAND: resolve(tmpdir(), 'safe-bin', 'python.exe'),
             ANAM_API_KEY: 'local-anam-key',
         };
         const identity = buildAmyAnamHermesWorkerSessionIdentity(sessionRecord());
@@ -562,7 +562,7 @@ test('bridge client validates responses and route is POST-only with bounded auth
         AMY_ANAM_HERMES_HOME: resolve(tmpdir(), 'bridge-config-test-home'),
         AMY_ANAM_HERMES_PROVIDER: 'openai-codex',
         AMY_ANAM_HERMES_MODEL: 'gpt-5.5',
-        AMY_ANAM_HERMES_PYTHON_COMMAND: 'C:\\safe-bin\\python.exe',
+        AMY_ANAM_HERMES_PYTHON_COMMAND: resolve(tmpdir(), 'safe-bin', 'python.exe'),
         ANAM_API_KEY: 'local-anam-key',
     };
     const config = readAmyAnamHermesWorkerConfig(env);
