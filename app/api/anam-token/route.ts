@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ALL_AGENTS } from '@/lib/agents';
+import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
+import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
 import { AMY_CARA4_VARIANT, resolveAnamSessionPersona } from '@/lib/anam/session-config';
 import { readAmyCara4PersonaReadiness } from '@/lib/anam/persona-readiness';
 import {
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
 
         const spineConfig = readAmyAnamSpineConfig();
         const memoryConfig = readAmyAnamMemoryConfig();
+        const agentMailConfig = readAmyAnamAgentMailConfig();
         const isAmyCara4 = resolution.variant === AMY_CARA4_VARIANT;
         if (isAmyCara4 && spineConfig.enabled && !spineConfig.gatesOpen) {
             console.error('[Amy Anam Spine] Enabled but unavailable');
@@ -109,6 +112,7 @@ export async function POST(req: Request) {
         let browserCookieToken: string | null = null;
         let memoryPolicyContext: string | null = null;
         let memoryUnlockAvailable = false;
+        let agentMailAvailable = false;
 
         if (isAmyCara4 && spineConfig.gatesOpen) {
             if (!isTrustedBrowserOrigin(req)) {
@@ -151,6 +155,13 @@ export async function POST(req: Request) {
                 memoryUnlockAvailable = identity.memoryConsent
                     && Boolean(identity.emailIdentityHash);
                 memoryPolicyContext = buildAmyAnamMemoryAccessPolicy(memoryUnlockAvailable);
+                agentMailAvailable = agentMailConfig.effectiveGateOpen && Boolean(
+                    readAmyAnamContactFromRequest({
+                        request: req,
+                        browserSessionId: browserSession.id,
+                        secret: spineConfig.signingSecret,
+                    }),
+                );
             }
 
             const browserRate = await consumeAmyAnamDistributedRateLimit({
@@ -223,6 +234,7 @@ export async function POST(req: Request) {
             memoryPolicyContextAvailable: Boolean(memoryPolicyContext),
             memoryUnlockAvailable,
             ...(memoryPolicyContext ? { memoryPolicyContext } : {}),
+            agentMailAvailable,
             rawEmailReturned: false,
             identityHashReturned: false,
         });

@@ -83,6 +83,12 @@ const emailProvider = value('AMY_EMAIL_PROVIDER');
 if (emailProvider === 'agentmail') {
     requireExact('AMY_AGENTMAIL_ADDRESS', 'amy-insight@agentmail.to');
     requireValue('AGENTMAIL_API_KEY', 16);
+    requireExact('AMY_ANAM_AGENTMAIL_ENABLED', 'true');
+    requireExact('AMY_ANAM_AGENTMAIL_KILL_SWITCH', 'false');
+    requireExact('AMY_ANAM_TOOLS_ENABLED', 'true');
+    requireExact('AMY_ANAM_TOOLS_KILL_SWITCH', 'false');
+    requireExact('AMY_ANAM_OUTBOUND_ACTIONS_ENABLED', 'true');
+    requireExact('AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH', 'false');
 }
 
 if (failures.length > 0) {

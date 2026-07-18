@@ -67,7 +67,7 @@ test('recovery readiness reflects its fail-closed gate and production approval',
     assert.equal(approved.productionPromotionApproved, true);
 });
 
-test('memory opens only when configured while tools, AgentMail, and outbound stay disabled', () => {
+test('memory opens while AgentMail stays fail-closed without provider configuration', () => {
     const readiness = buildAmyAnamCapabilityReadiness({
         ...BASE_ENV,
         AMY_ANAM_MEMORY_ENABLED: 'true',
@@ -99,13 +99,50 @@ test('memory opens only when configured while tools, AgentMail, and outbound sta
         readiness.globalOutbound,
     ]) {
         assert.equal(capability.requestedGateOpen, true);
-        assert.equal(capability.implemented, false);
+        assert.equal(capability.implemented, true);
         assert.equal(capability.effectiveGateOpen, false);
     }
     assert.equal(readiness.tools.invocationsPerformed, 0);
     assert.equal(readiness.agentMail.emailsSent, 0);
     assert.equal(readiness.globalOutbound.actionsPerformed, 0);
     assert.equal(readiness.productionPromotionApproved, false);
+});
+
+test('AgentMail, its tool, and global outbound open together only when fully configured', () => {
+    const readiness = buildAmyAnamCapabilityReadiness({
+        ...BASE_ENV,
+        AMY_EMAIL_PROVIDER: 'agentmail',
+        AMY_AGENTMAIL_ADDRESS: 'amy-insight@agentmail.to',
+        AGENTMAIL_API_KEY: 'am_fixture_agentmail_secret',
+        AMY_ANAM_TOOLS_ENABLED: 'true',
+        AMY_ANAM_TOOLS_KILL_SWITCH: 'false',
+        AMY_ANAM_AGENTMAIL_ENABLED: 'true',
+        AMY_ANAM_AGENTMAIL_KILL_SWITCH: 'false',
+        AMY_ANAM_OUTBOUND_ACTIONS_ENABLED: 'true',
+        AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH: 'false',
+    });
+
+    assert.equal(readiness.tools.implemented, true);
+    assert.equal(readiness.tools.effectiveGateOpen, true);
+    assert.deepEqual(readiness.tools.availableToolNames, ['send_follow_up_email']);
+    assert.equal(readiness.agentMail.implemented, true);
+    assert.equal(readiness.agentMail.provider, 'agentmail');
+    assert.equal(readiness.agentMail.configured, true);
+    assert.equal(readiness.agentMail.effectiveGateOpen, true);
+    assert.equal(readiness.agentMail.inboxAddressConfigured, true);
+    assert.equal(readiness.agentMail.apiKeyConfigured, true);
+    assert.equal(readiness.globalOutbound.implemented, true);
+    assert.equal(readiness.globalOutbound.effectiveGateOpen, true);
+
+    const killed = buildAmyAnamCapabilityReadiness({
+        ...BASE_ENV,
+        AMY_EMAIL_PROVIDER: 'agentmail',
+        AMY_AGENTMAIL_ADDRESS: 'amy-insight@agentmail.to',
+        AGENTMAIL_API_KEY: 'am_fixture_agentmail_secret',
+        AMY_ANAM_AGENTMAIL_ENABLED: 'true',
+        AMY_ANAM_AGENTMAIL_KILL_SWITCH: 'true',
+    });
+    assert.equal(killed.agentMail.effectiveGateOpen, false);
 });
 
 test('all future capability requests fail closed when variables are absent', () => {
@@ -118,7 +155,7 @@ test('all future capability requests fail closed when variables are absent', () 
     assert.equal(readiness.tools.killSwitchActive, true);
     assert.equal(readiness.agentMail.killSwitchActive, true);
     assert.equal(readiness.globalOutbound.killSwitchActive, true);
-    assert.equal(readiness.agentMail.providerForcedOff, false);
+    assert.equal(readiness.agentMail.providerForcedOff, true);
 });
 
 test('the readiness route reuses constant-time worker bearer authentication', async () => {

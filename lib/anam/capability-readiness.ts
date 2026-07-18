@@ -1,14 +1,13 @@
+import { readAmyAnamAgentMailConfig } from './outbound-email-config.ts';
 import { readAmyAnamHermesShadowConfig } from './hermes-shadow.ts';
 import { readAmyAnamRecoveryConfig } from './session-recovery.ts';
 import { readAmyAnamSpineConfig } from './session-spine.ts';
 import { readAmyAnamMemoryConfig } from './user-memory.ts';
 
-type DisabledCapabilityReadiness = {
-    implemented: false;
+type CapabilityRequest = {
     enabled: boolean;
     killSwitchActive: boolean;
     requestedGateOpen: boolean;
-    effectiveGateOpen: false;
 };
 
 function value(source: NodeJS.ProcessEnv, name: string): string {
@@ -19,18 +18,16 @@ function value(source: NodeJS.ProcessEnv, name: string): string {
         .trim();
 }
 
-function disabledCapability(
+function capabilityRequest(
     source: NodeJS.ProcessEnv,
-    prefix: 'AMY_ANAM_AGENTMAIL' | 'AMY_ANAM_TOOLS',
-): DisabledCapabilityReadiness {
+    prefix: 'AMY_ANAM_TOOLS',
+): CapabilityRequest {
     const enabled = value(source, `${prefix}_ENABLED`) === 'true';
     const killSwitchActive = value(source, `${prefix}_KILL_SWITCH`) !== 'false';
     return {
-        implemented: false,
         enabled,
         killSwitchActive,
         requestedGateOpen: enabled && !killSwitchActive,
-        effectiveGateOpen: false,
     };
 }
 
@@ -41,6 +38,8 @@ export function buildAmyAnamCapabilityReadiness(
     const recovery = readAmyAnamRecoveryConfig(source);
     const hermes = readAmyAnamHermesShadowConfig(source);
     const memory = readAmyAnamMemoryConfig(source);
+    const agentMail = readAmyAnamAgentMailConfig(source);
+    const tools = capabilityRequest(source, 'AMY_ANAM_TOOLS');
     const outboundEnabled = value(source, 'AMY_ANAM_OUTBOUND_ACTIONS_ENABLED') === 'true';
     const outboundKillSwitchActive = value(source, 'AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH') !== 'false';
 
@@ -100,20 +99,31 @@ export function buildAmyAnamCapabilityReadiness(
             maxApprovedRecords: 8,
         },
         tools: {
-            ...disabledCapability(source, 'AMY_ANAM_TOOLS'),
+            implemented: true,
+            ...tools,
+            effectiveGateOpen: agentMail.effectiveGateOpen,
+            availableToolNames: ['send_follow_up_email'],
             invocationsPerformed: 0,
         },
         agentMail: {
-            ...disabledCapability(source, 'AMY_ANAM_AGENTMAIL'),
-            providerForcedOff: value(source, 'AMY_EMAIL_PROVIDER') === 'off',
+            implemented: true,
+            provider: agentMail.provider,
+            enabled: agentMail.enabled,
+            configured: agentMail.configured,
+            killSwitchActive: agentMail.killSwitchActive,
+            requestedGateOpen: agentMail.requestedGateOpen,
+            effectiveGateOpen: agentMail.effectiveGateOpen,
+            providerForcedOff: agentMail.provider === 'off',
+            inboxAddressConfigured: agentMail.inboxAddressConfigured,
+            apiKeyConfigured: agentMail.apiKeyConfigured,
             emailsSent: 0,
         },
         globalOutbound: {
-            implemented: false,
+            implemented: true,
             enabled: outboundEnabled,
             killSwitchActive: outboundKillSwitchActive,
             requestedGateOpen: outboundEnabled && !outboundKillSwitchActive,
-            effectiveGateOpen: false,
+            effectiveGateOpen: agentMail.effectiveGateOpen,
             actionsPerformed: 0,
         },
         productionPromotionApproved: recovery.productionPromotionApproved,

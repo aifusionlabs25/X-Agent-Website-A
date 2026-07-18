@@ -1,0 +1,21 @@
+{
+  "name": "send_follow_up_email",
+  "description": "Send one conversation follow-up to the visitor's private website check-in address only after a useful conversation and only after the visitor explicitly says yes to receiving it. Never ask for, spell, repeat, infer, or submit an email address through this tool. Call silently with userConfirmed true, wait for the receipt, and claim success only when the tool returns email_sent. Do not use for memory access, cold outreach, third-party recipients, or automatic call closing.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "userConfirmed": {
+          "type": "boolean",
+          "description": "Must be true only after the visitor explicitly agrees during this conversation to receive Amy's follow-up email."
+        }
+      },
+      "required": ["userConfirmed"],
+      "additionalProperties": false
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 15
+  }
+}

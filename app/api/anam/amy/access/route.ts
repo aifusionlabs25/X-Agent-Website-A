@@ -13,10 +13,16 @@ import {
 } from '@/lib/anam/session-spine';
 import { consumeAmyAnamDistributedRateLimit } from '@/lib/anam/session-spine-store';
 import {
+    AMY_ANAM_CONTACT_COOKIE,
+    amyAnamContactCookieOptions,
+    createAmyAnamContactToken,
+} from '@/lib/anam/contact-token';
+import {
     deleteAmyAnamBrowserIdentity,
     readAmyAnamApprovedMemoryHistory,
     readAmyAnamBrowserIdentity,
     readAmyAnamMemoryConfig,
+    normalizeAmyAnamMemoryEmail,
     storeAmyAnamBrowserIdentity,
 } from '@/lib/anam/user-memory';
 
@@ -133,6 +139,11 @@ export async function POST(request: Request) {
             email,
             memoryConsent,
         });
+        const contactToken = createAmyAnamContactToken({
+            browserSessionId: created.session.id,
+            email: normalizeAmyAnamMemoryEmail(email),
+            secret: spine.signingSecret,
+        });
         const history = await readAmyAnamApprovedMemoryHistory(identity);
         const response = noStoreJson(safeIdentityStatus({
             required: true,
@@ -145,6 +156,11 @@ export async function POST(request: Request) {
             AMY_ANAM_BROWSER_COOKIE,
             created.token,
             amyAnamCookieOptions(),
+        );
+        response.cookies.set(
+            AMY_ANAM_CONTACT_COOKIE,
+            contactToken,
+            amyAnamContactCookieOptions(),
         );
         return response;
     } catch (error) {
@@ -178,6 +194,11 @@ export async function DELETE(request: Request) {
             AMY_ANAM_BROWSER_COOKIE,
             '',
             amyAnamCookieOptions(0),
+        );
+        response.cookies.set(
+            AMY_ANAM_CONTACT_COOKIE,
+            '',
+            amyAnamContactCookieOptions(0),
         );
         return response;
     } catch {

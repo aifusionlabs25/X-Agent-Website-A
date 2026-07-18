@@ -12,6 +12,7 @@ import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
 } from '@/lib/anam/audio-bridge';
+import { sendAmyAnamFollowUpEmail } from '@/lib/anam/agentmail-client';
 import { isAmyCara4Variant } from '@/lib/anam/session-config';
 import {
     bindAmyAnamClientSession,
@@ -62,6 +63,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let completionPromise: Promise<void> | null = null;
         let removeClientListeners: (() => void) | null = null;
         let removeIdentityToolHandler: (() => void) | null = null;
+        let removeEmailToolHandler: (() => void) | null = null;
         let completedUserTurns = 0;
         let confirmedMemoryName: string | null = null;
         const videoElement = videoRef.current;
@@ -82,7 +84,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             const normalized = content.trim();
             if (!normalized) return;
             const turn = { role: transcriptRole(role), content: normalized } as AmyWorkbenchTurn;
-            if (!sessionSpineActive) transcriptRef.current.push(turn);
+            transcriptRef.current = [...transcriptRef.current.slice(-399), turn];
             if (workbenchEnabled) {
                 setWorkbenchTurns((current) => [...current.slice(-59), turn]);
             }
@@ -153,6 +155,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     memoryPolicyContextAvailable?: boolean;
                     memoryPolicyContext?: string;
                     memoryUnlockAvailable?: boolean;
+                    agentMailAvailable?: boolean;
                 };
                 if (!tokenPayload.sessionToken) {
                     throw new Error('Session token response was incomplete');
@@ -381,6 +384,51 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             },
                         },
                     );
+                    removeEmailToolHandler = anamClient.registerToolCallHandler(
+                        'send_follow_up_email',
+                        {
+                            onStart: async payload => {
+                                if (tokenPayload.agentMailAvailable !== true) {
+                                    return JSON.stringify({
+                                        status: 'email_unavailable',
+                                        instruction: 'Say that email is temporarily unavailable. Do not claim anything was sent and do not end the call automatically.',
+                                    });
+                                }
+                                if (completedUserTurns < 1) {
+                                    throw new Error('Continue the conversation before offering an email follow-up.');
+                                }
+                                if (payload.arguments.userConfirmed !== true) {
+                                    throw new Error('Ask the visitor for explicit permission before sending email.');
+                                }
+                                if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
+                                    throw new Error('The private session is not ready. Continue the conversation and try once more.');
+                                }
+
+                                await bindingPromise;
+                                const result = await sendAmyAnamFollowUpEmail({
+                                    launchId,
+                                    sessionId: providerSessionId,
+                                    userConfirmed: true,
+                                    transcript: transcriptRef.current,
+                                });
+                                console.info('[Amy Anam AgentMail] Follow-up action completed', {
+                                    status: result.status,
+                                    sent: result.sent,
+                                    duplicate: result.duplicate,
+                                    contactContentLogged: false,
+                                });
+                                return JSON.stringify({
+                                    status: result.status,
+                                    sent: result.sent,
+                                    duplicate: result.duplicate,
+                                    receiptId: result.receiptId,
+                                    instruction: result.sent
+                                        ? 'Confirm briefly that the email was sent. Then pause and ask whether there is anything else to cover. Do not end the call unless the visitor clearly says they are finished.'
+                                        : 'Say that a previous email attempt is already recorded. Do not claim a new email was sent, and do not end the call automatically.',
+                                });
+                            },
+                        },
+                    );
                 }
 
                 anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
@@ -418,6 +466,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             window.removeEventListener('pagehide', handlePageHide);
             removeClientListeners?.();
             removeIdentityToolHandler?.();
+            removeEmailToolHandler?.();
             // Cleanup on unmount
             if (activeClient) {
                 void completeOnce('unmount').catch(() => undefined);
