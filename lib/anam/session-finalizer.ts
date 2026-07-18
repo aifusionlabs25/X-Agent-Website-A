@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { dispatchAmyAnamPostSessionFollowUp } from './agentmail.ts';
 import {
     AnamSessionApiError,
     fetchCompletedAnamTranscript,
@@ -249,6 +250,18 @@ export async function finalizeAmyAnamSession(
             });
             const hermesShadowEnvelope = buildHermesShadowEnvelope(session, receipt);
             await writeAmyAnamReceipt(session, finalization, receipt, { hermesShadowEnvelope });
+            const emailResult = await dispatchAmyAnamPostSessionFollowUp({
+                session,
+                receipt,
+                turns: transcript.status === 'ready' ? transcript.turns : [],
+            }).catch(() => ({ status: 'email_unavailable' as const, sent: false as const }));
+            console.info('[Amy Anam AgentMail] Post-session dispatch finished', {
+                status: emailResult.status,
+                sent: emailResult.sent,
+                afterSessionClose: true,
+                finalTranscriptAvailable: transcript.status === 'ready',
+                contentIncludedInLog: false,
+            });
             return 'completed';
         } catch (error) {
             if (error instanceof AnamSessionApiError && error.retryable) {

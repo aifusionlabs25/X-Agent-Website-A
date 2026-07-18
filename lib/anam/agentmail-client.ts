@@ -4,13 +4,13 @@ type SendEmailInput = {
     launchId: string;
     sessionId: string;
     userConfirmed: true;
-    transcript: Array<{ role: string; content: string }>;
     fetchImpl?: ClientFetch;
 };
 
 export type AmyAnamEmailResult = {
-    status: 'email_sent' | 'email_already_attempted';
-    sent: boolean;
+    status: 'email_queued' | 'email_already_queued';
+    queued: true;
+    sent: false;
     duplicate: boolean;
     receiptId: string;
     provider: 'agentmail';
@@ -20,21 +20,21 @@ export async function sendAmyAnamFollowUpEmail({
     launchId,
     sessionId,
     userConfirmed,
-    transcript,
     fetchImpl = fetch,
 }: SendEmailInput): Promise<AmyAnamEmailResult> {
     const response = await fetchImpl('/api/anam/session/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ launchId, sessionId, userConfirmed, transcript }),
+        body: JSON.stringify({ launchId, sessionId, userConfirmed }),
         cache: 'no-store',
         credentials: 'same-origin',
     });
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (
         !response.ok
-        || !['email_sent', 'email_already_attempted'].includes(String(payload.status))
-        || typeof payload.sent !== 'boolean'
+        || !['email_queued', 'email_already_queued'].includes(String(payload.status))
+        || payload.queued !== true
+        || payload.sent !== false
         || typeof payload.duplicate !== 'boolean'
         || typeof payload.receiptId !== 'string'
         || payload.provider !== 'agentmail'
@@ -47,6 +47,7 @@ export async function sendAmyAnamFollowUpEmail({
     return {
         status: payload.status as AmyAnamEmailResult['status'],
         sent: payload.sent,
+        queued: true,
         duplicate: payload.duplicate,
         receiptId: payload.receiptId,
         provider: 'agentmail',

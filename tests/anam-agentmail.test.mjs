@@ -3,7 +3,8 @@ import test from 'node:test';
 import {
     buildAmyConversationFollowUp,
     readAmyAnamAgentMailConfig,
-    sendAmyAnamConversationFollowUp,
+    dispatchAmyAnamPostSessionFollowUp,
+    queueAmyAnamConversationFollowUp,
 } from '../lib/anam/agentmail.ts';
 import {
     createAmyAnamContactToken,
@@ -131,7 +132,7 @@ test('follow-up content is deterministic, redacts contact data, and escapes HTML
     assert.doesNotMatch(message.text, /Timing:\s*Before we close|Pulse Session/i);
 });
 
-test('one approved action sends a visitor, admin, and intake bundle without storing content', async () => {
+test('email permission queues without sending, then finalization sends the complete three-email bundle', async () => {
     const store = new Map();
     const agentMailRequests = [];
     const fetchImpl = async (url, init) => {
@@ -140,6 +141,7 @@ test('one approved action sends a visitor, admin, and intake bundle without stor
             const results = commands.map(command => {
                 const [operation, key, storedValue, condition] = command;
                 if (operation === 'GET') return { result: store.get(key) ?? null };
+                if (operation === 'DEL') return { result: store.delete(key) ? 1 : 0 };
                 if (operation === 'SET' && condition === 'NX') {
                     if (store.has(key)) return { result: null };
                     store.set(key, storedValue);
@@ -163,33 +165,57 @@ test('one approved action sends a visitor, admin, and intake bundle without stor
             headers: { 'Content-Type': 'application/json' },
         });
     };
-    const input = {
+    const queueInput = {
         externalSessionId: SESSION_ID,
+        browserSessionId: BROWSER_ID,
         displayName: 'Rob',
         email: 'rvicks@gmail.com',
-        sessionStartedAt: '2026-07-18T16:00:00.000Z',
-        turns: [{ role: 'user', content: 'We need an Azure ERP migration roadmap.' }],
+        contactSecret: SECRET,
     };
-    const first = await sendAmyAnamConversationFollowUp(input, { env: ENV, fetchImpl });
-    const second = await sendAmyAnamConversationFollowUp(input, { env: ENV, fetchImpl });
-    assert.equal(first.status, 'email_sent');
-    assert.equal(first.sent, true);
-    assert.equal(first.deliveryCount, 3);
-    assert.equal(first.visitorSent, true);
-    assert.equal(first.internalNotificationsSent, true);
-    assert.equal(second.status, 'email_already_attempted');
-    assert.equal(second.sent, true);
-    assert.equal(second.duplicate, true);
-    assert.equal(second.deliveryCount, 3);
+    const queued = await queueAmyAnamConversationFollowUp(queueInput, { env: ENV, fetchImpl });
+    const duplicateQueue = await queueAmyAnamConversationFollowUp(queueInput, { env: ENV, fetchImpl });
+    assert.equal(queued.status, 'email_queued');
+    assert.equal(queued.queued, true);
+    assert.equal(queued.sent, false);
+    assert.equal(duplicateQueue.status, 'email_already_queued');
+    assert.equal(agentMailRequests.length, 0);
+
+    const session = {
+        schemaVersion: 'amy_anam_session_v1', browserSessionId: BROWSER_ID,
+        launchId: '99999999-8888-4777-8666-555555555555', externalSessionId: SESSION_ID,
+        clientLabel: 'xagent-amy:test', resolvedPersonaId: '77777777-6666-4555-8444-333333333333',
+        provider: 'anam', agentSlug: 'amy', variant: 'amy-cara4', state: 'completed',
+        createdAt: '2026-07-18T15:59:55.000Z', boundAt: '2026-07-18T16:00:00.000Z',
+        closeReceivedAt: '2026-07-18T16:05:00.000Z', closeReason: 'user_ended',
+        completedAt: '2026-07-18T16:05:10.000Z',
+    };
+    const receipt = {
+        schemaVersion: 'amy_anam_session_receipt_v1', receiptId: 'receipt-final', provider: 'anam',
+        externalSessionId: SESSION_ID, variant: 'amy-cara4', status: 'completed',
+        completedAt: '2026-07-18T16:05:10.000Z', closeReason: 'user_ended',
+        transcript: { source: 'anam_api', messageCount: 2, contentSha256: 'a'.repeat(64), rawTranscriptPersisted: false },
+        actions: { hermes: false, memory: false, email: false, sheets: false },
+    };
+    const dispatched = await dispatchAmyAnamPostSessionFollowUp({
+        session, receipt,
+        turns: [
+            { role: 'user', content: 'We need an Azure ERP migration roadmap.' },
+            { role: 'agent', content: 'I will organize the two workstreams.' },
+        ],
+    }, { env: ENV, fetchImpl });
+    assert.equal(dispatched.status, 'email_sent');
+    assert.equal(dispatched.sent, true);
+    assert.equal(dispatched.deliveryCount, 3);
+    assert.equal(dispatched.internalNotificationsSent, true);
     assert.equal(agentMailRequests.length, 3);
     assert.deepEqual(agentMailRequests.map(request => request.to), [
-        ['rvicks@gmail.com'],
-        ['aifusionlabs@gmail.com'],
-        ['aifusionlabs@gmail.com'],
+        ['rvicks@gmail.com'], ['aifusionlabs@gmail.com'], ['aifusionlabs@gmail.com'],
     ]);
     assert.match(agentMailRequests[0].html, /Your conversation, clearly captured/i);
     assert.match(agentMailRequests[1].subject, /AMY SESSION/i);
-    assert.match(agentMailRequests[1].html, /Elapsed at email request/i);
+    assert.match(agentMailRequests[1].html, /Final call duration/i);
+    assert.match(agentMailRequests[1].html, />5m 0s</i);
+    assert.doesNotMatch(agentMailRequests[1].html, /Elapsed at email request|Live when follow-up was requested/i);
     assert.match(agentMailRequests[2].subject, /INSIGHT INTAKE/i);
     assert.match(agentMailRequests[2].html, /Sales &amp; Operations/i);
     const storedReceipts = [...store.values()].join('\n');

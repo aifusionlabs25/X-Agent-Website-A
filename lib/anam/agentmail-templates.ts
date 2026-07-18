@@ -18,6 +18,7 @@ type TemplateInput = {
     verifiedEmail: string;
     externalSessionId: string;
     sessionStartedAt: string;
+    sessionEndedAt: string;
     generatedAt?: string;
     turns: AmyTranscriptTurn[];
     model: AmyWorkbenchModel;
@@ -188,8 +189,10 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         timing ? `Project timing: ${timing}` : '',
         requestedOutput ? `Requested output: ${requestedOutput}` : '',
     ], 6);
-    const elapsed = formatElapsed(input.sessionStartedAt, generatedAt);
+    const duration = formatElapsed(input.sessionStartedAt, input.sessionEndedAt);
+    const elapsed = duration;
     const started = formatPhoenixDate(input.sessionStartedAt);
+    const ended = formatPhoenixDate(input.sessionEndedAt);
     const generated = formatPhoenixDate(generatedAt);
     const transcript = transcriptSnapshot(input.turns);
 
@@ -219,9 +222,10 @@ ${highlights.length ? `<div style="margin-top:28px;font-size:18px;line-height:24
     const adminDetails = [
         detailRow('Session ID', input.externalSessionId),
         detailRow('Started', started),
-        detailRow('Elapsed at email request', elapsed),
+        detailRow('Ended', ended),
+        detailRow('Final call duration', duration),
         detailRow('Email generated', generated),
-        detailRow('Session state', 'Live when follow-up was requested'),
+        detailRow('Session state', 'Finalized before email delivery'),
         detailRow('Visitor', name),
         detailRow('Verified contact', input.verifiedEmail),
         detailRow('Transcript turns captured', String(input.turns.length)),
@@ -238,7 +242,8 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
         'AMY SESSION OPERATIONS RECORD', '',
         `Session ID: ${input.externalSessionId}`,
         `Started: ${started}`,
-        `Elapsed at email request: ${elapsed}`,
+        `Ended: ${ended}`,
+        `Final call duration: ${duration}`,
         `Email generated: ${generated}`,
         `Visitor: ${name}`,
         `Verified contact: ${input.verifiedEmail}`,
