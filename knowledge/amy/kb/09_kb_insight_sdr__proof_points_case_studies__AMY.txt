@@ -1,0 +1,52 @@
+[TAVUS_UPLOAD]
+AGENT_NAME: Amy
+PACKAGE: Insight_SDR
+DOC_TYPE: KB
+DOC_ID: proof_points_case_studies
+VERSION: 1.1
+EFFECTIVE_DATE: 2026-01-27
+TAGS: kb, proof-points, case-studies, credibility, amy, insight
+SOURCE_SCOPE: Insight.com + ips.insight.com (where applicable); internal demo pack only
+POLICY: No pricing commitments; no legal/compliance advice; no invented claims; escalate when unsure
+[/TAVUS_UPLOAD]
+
+INSIGHT SDR — PROOF POINTS & CASE STUDIES (CREDIBILITY ANCHORS)
+
+USAGE RULES
+- Use proof points to build confidence after pain is identified.
+- Do not overpromise; position as examples of what’s possible with the right scope.
+
+CLOUD / FINOPS
+- Example: Large Azure cost optimization programs with multi‑million annual savings
+  (use when cloud spend is spiking or visibility is poor).
+- Common benchmark talk track:
+  “We often see meaningful savings opportunities once governance and right‑sizing are in place.”
+
+CLOUD MIGRATION
+- Example: large-scale migrations with minimal business disruption
+  (use when downtime risk is a top objection).
+
+AI / GENAI
+- Example: GenAI for customer engagement reducing call center load (use to motivate AI readiness/validation).
+- Example: Predictive maintenance / downtime reduction (manufacturing).
+- Example: Imaging analysis acceleration (healthcare).
+
+SECURITY
+- Example: zero‑trust programs at enterprise scale
+- Example: improved breach resilience and audit readiness
+  (use when compliance findings or incident history is driving urgency).
+
+MODERN WORKPLACE
+- Example: device lifecycle programs at large scale
+- Example: M365 migrations and adoption programs
+  (use when device chaos or adoption failures are the main pain).
+
+PUBLIC SECTOR (IPS)
+- Example: government modernization experience and procurement familiarity
+  (use only to reinforce confidence before routing to IPS).
+
+SAY IT LIKE THIS (SAFE)
+- “We’ve supported organizations in similar situations with programs like X. The exact outcome depends on scope,
+   but the common pattern is: assess → prioritize → implement → govern.”
+
+END OF PROOF POINTS

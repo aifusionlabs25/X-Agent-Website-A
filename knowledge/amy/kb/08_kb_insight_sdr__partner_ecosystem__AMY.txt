@@ -1,0 +1,102 @@
+[TAVUS_UPLOAD]
+AGENT_NAME: Amy
+PACKAGE: Insight_SDR
+DOC_TYPE: KB
+DOC_ID: partner_ecosystem
+VERSION: 1.1
+EFFECTIVE_DATE: 2026-01-27
+TAGS: kb, partners, aws, azure, gcp, cisco, microsoft, positioning, amy
+SOURCE_SCOPE: Insight.com + ips.insight.com (where applicable); internal demo pack only
+POLICY: No pricing commitments; no legal/compliance advice; no invented claims; escalate when unsure
+[/TAVUS_UPLOAD]
+
+INSIGHT SDR — PARTNER ECOSYSTEM (POSITIONING GUIDE)
+
+GOLDEN RULE
+Partnerships enable options; they do NOT force lock‑in.
+Position Insight as vendor‑agnostic: best‑fit per workload, multi‑cloud when appropriate.
+
+CORE CLOUD PARTNERS
+- Microsoft Azure: strong enterprise + security/compliance alignment; M365 ecosystem
+- AWS: broad infrastructure, mature services, strong data/analytics options
+- Google Cloud: strong data/analytics (e.g., BigQuery) + ML platform options
+
+HOW TO POSITION MULTI‑CLOUD (DEFAULT SCRIPT)
+“We work across AWS, Azure, and Google Cloud. We’re not here to push a platform—
+ we recommend the best fit per workload. Many customers end up hybrid or multi‑cloud.”
+
+WHEN TO LEAN AZURE
+- Microsoft licensing already in place (M365/Teams)
+- Compliance‑heavy environments (healthcare, government constraints)
+- GenAI interest with enterprise controls
+
+WHEN TO LEAN AWS
+- Existing AWS footprint with cost/security needs
+- Data‑intensive workloads, startup/tech culture
+
+WHEN TO LEAN GOOGLE CLOUD
+- Analytics-first orgs, BigQuery-like patterns, ML at scale
+- Customer already invested in Google ecosystem
+
+SECURITY / NETWORK PARTNERS (MENTION WHEN RELEVANT)
+- Cisco: networking, collaboration, security
+- CrowdStrike (EDR): endpoint detection and response
+- Okta/Ping: identity and access management
+- CyberArk: privileged access management
+- Veeam/Commvault: backup, recovery, ransomware resilience
+
+CISCO-DESIGNED SOLUTION / WHY INSIGHT
+
+Use this when a visitor asks why Insight should be involved if Cisco already has the architecture, engineers, or BOM.
+
+Amy should answer directly before asking another discovery question.
+
+Do not position Insight as replacing Cisco.
+
+Safe talk track:
+"If Cisco already has the architecture and BOM, Insight should not replace that work. The value is helping pressure-test the BOM against your standards, public-sector buying path, deployment logistics, lifecycle support, and available partner or contract options, then coordinating the right specialists so the design becomes a lower-risk plan to purchase and deploy."
+
+If the visitor says Cisco has the architecture, design, or engineers but does not mention BOM, do not introduce BOM. Say architecture or solution design instead.
+
+Execution-risk talk track:
+"Insight can help reduce execution risk by validating the design against your standards, checking the purchasing path, planning staging and deployment waves, tightening cutover risk, and aligning the support model."
+
+For switching, wireless, firewalls, data center, or public safety operations:
+"The risk is often in staging, migration sequencing, configuration validation, maintenance windows, and support ownership."
+
+Strategic partner positioning:
+- Insight's partner relationships can help the account team review available purchasing paths.
+- Insight can help review eligible contract options.
+- Insight can help validate quote structure and lifecycle support considerations.
+- Insight can help coordinate deployment resources around the approved design.
+
+Do not say:
+- Insight has better pricing.
+- Insight has guaranteed discounts.
+- Insight has confirmed contract eligibility.
+- Insight has approved procurement terms.
+- Insight has current availability.
+
+Use safer language:
+"The account team can review current partner, contract, and purchasing options."
+
+"That requires account-team or IPS review before we claim pricing or eligibility."
+
+AI / DATA ECOSYSTEM
+- OpenAI via enterprise-safe implementations (position as “capabilities,” not hype)
+- Databricks and managed ML platforms (when data engineering + MLOps complexity is high)
+- Hugging Face / open-source models (when customization and control matter)
+
+PUBLIC SECTOR PROCUREMENT VEHICLES (IPS OWNED)
+- GSA / SEWP / CIO‑NS: mention only to flag that Insight supports them,
+  then route to IPS for specifics.
+
+TALK TRACKS (QUICK)
+- Vendor lock‑in concern:
+  “That’s exactly why customers use a solutions integrator—so the architecture stays portable.”
+- “We’re an Azure shop”:
+  “Perfect—then the question is how to optimize and govern it, not whether to replace it.”
+- “We want best-of-breed”:
+  “That’s our default: match each layer to your requirements and make it integrate cleanly.”
+
+END OF PARTNER ECOSYSTEM

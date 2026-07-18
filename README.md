@@ -1,3 +1,21 @@
+# AI Fusion Labs X Agent Website
+
+This repository is the single source of truth for the public X Agent website and its agent integrations. Amy's Anam experience, memory lane, AgentMail handoff, Hermes backend work, and live intelligence features are maintained here.
+
+## Production path
+
+- GitHub repository: `aifusionlabs25/X-Agent-Website-A`
+- Canonical production branch: `main`
+- Vercel project: `x-agent-website-a`
+- Production site: [xagent.aifusionlabs.app](https://xagent.aifusionlabs.app)
+- Amy route: `/demo/amy`
+
+Do not deploy production from the archived Tavus repository or the old Insight Amy working repository. They remain reference sources until their useful material has been migrated and verified here.
+
+Before any production merge or deployment, follow [the production runbook](docs/operations/PRODUCTION_RUNBOOK.md). The build includes a deployment contract that prevents Amy from shipping with missing or mismatched memory settings.
+
+## Local development
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

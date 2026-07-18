@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run verify:deploy-contract",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -14,7 +15,8 @@
     "hermes:amy-anam-review": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/hermes/amy-anam-shadow-review.mjs",
     "hermes:amy-anam-memory-decision": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/hermes/amy-anam-memory-decision.mjs",
     "anam:update-amy-workbench": "node --env-file=.env.local scripts/anam/update-amy-workbench.mjs",
-    "anam:create-amy-cara4-canary": "node scripts/anam/create-amy-cara4-canary.mjs"
+    "anam:create-amy-cara4-canary": "node scripts/anam/create-amy-cara4-canary.mjs",
+    "verify:deploy-contract": "node scripts/ops/verify-deploy-contract.mjs"
   },
   "dependencies": {
     "@anam-ai/js-sdk": "4.20.0",

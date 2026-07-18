@@ -1,0 +1,192 @@
+[TAVUS_UPLOAD]
+AGENT_NAME: Amy
+PACKAGE: Insight_SDR
+DOC_TYPE: KB
+DOC_ID: solutions_catalog
+VERSION: 1.1
+EFFECTIVE_DATE: 2026-01-27
+TAGS: kb, solutions, catalog, offerings, amy, insight, purchasing, ranges
+SOURCE_SCOPE: Insight.com + ips.insight.com (where applicable); internal demo pack only
+POLICY: No pricing commitments; no legal/compliance advice; no invented claims; escalate when unsure
+[/TAVUS_UPLOAD]
+
+INSIGHT SDR — SOLUTIONS CATALOG (DEMO‑READY)
+
+HOW TO USE
+- Do NOT “pitch the menu.” Use this after you’ve identified pain.
+- Select 1–2 best‑fit offers, propose a low‑risk next step, route to the right specialist.
+
+PRICING RULE
+- Use ranges only. Never quote exact pricing. Always say “depends on scope.”
+
+======================================================================
+1) CLOUD TRANSFORMATION
+
+1.1 Cloud Strategy & Assessment
+- Best for: unclear cloud roadmap, mixed on‑prem + cloud, modernization planning
+- Typical timeline: 2–4 weeks
+- Typical range: $15K–$50K
+- Output: current state, roadmap, ROI and risk view
+- Qualifying questions:
+  * “On‑prem/cloud/hybrid today?”
+  * “What’s driving the push—cost, agility, end‑of‑life hardware?”
+- Route: Cloud specialist / AE
+
+1.2 Cloud Migration (AWS/Azure/GCP)
+- Best for: moving workloads off on‑prem, data center exit, app modernization
+- Typical timeline: 3–12 months
+- Typical range: $100K–$1M+
+- Output: migration waves, cutover plan, post‑migration optimization
+- Route: Cloud architect / AE
+
+1.3 Cloud Cost Optimization (FinOps)
+- Best for: cloud spend spikes, poor cost visibility, overprovisioning
+- Typical timeline: 2–3 months initial
+- Typical range: $25K–$100K+ (plus ongoing as needed)
+- Output: savings plan + governance
+- Route: FinOps specialist
+
+1.4 Managed Cloud Services
+- Best for: lacking 24/7 ops, reliability issues, security & patch burden
+- Commercial model: monthly retainer
+- Typical range: $10K–$50K+/month
+- Route: Managed services lead
+
+======================================================================
+2) AI & DATA TRANSFORMATION
+
+2.1 AI Readiness Assessment
+- Best for: GenAI interest but unclear use cases, governance, or data readiness
+- Timeline: 1–2 weeks
+- Range: $10K–$25K
+- Output: prioritized use cases + roadmap
+- Route: AI specialist
+
+2.2 “Prism‑style” GenAI Validation (5–10 days)
+- Best for: stuck pilots, leadership asking “where’s the ROI?”
+- Timeline: 5–10 days
+- Range: $25K–$75K
+- Output: validated use case + ROI hypothesis + scale plan
+- Guardrail: never guarantee ROI; validate feasibility and value signals
+- Route: AI specialist
+
+2.3 GenAI / AI Implementation
+- Best for: approved use case, need production deployment + operating model
+- Timeline: 2–6 months (typical)
+- Range: $100K–$500K+
+- Output: deployed solution + monitoring + enablement
+- Route: AI delivery lead / AE
+
+2.4 Data Platform + MLOps
+- Best for: data fragmentation, no warehouse/lake, models not operationalized
+- Timeline: 3–9 months
+- Range: $150K–$500K+
+- Route: Data platform architect
+
+======================================================================
+3) CYBERSECURITY & COMPLIANCE
+
+3.1 Zero‑Trust Architecture
+- Best for: zero‑trust mandate, identity sprawl, remote work risk
+- Timeline: 3–9 months
+- Range: $100K–$500K+
+- Route: Security architect / CISO team
+
+3.2 Managed Security (SOC/MDR)
+- Best for: no 24/7 monitoring, alert fatigue, incident response gaps
+- Commercial model: monthly retainer
+- Range: $10K–$50K+/month
+- Route: Managed security lead
+
+3.3 Compliance Automation
+- Best for: audit findings, reporting pain, frameworks like HIPAA/SOC2/FedRAMP
+- Timeline: 2–6 months
+- Range: $50K–$200K
+- Route: Compliance/security specialist
+
+3.4 Identity & Access Management (IAM)
+- Best for: SSO/MFA gaps, access reviews, privileged access risk
+- Timeline: 2–4 months
+- Range: $50K–$150K
+- Route: IAM specialist
+
+3.5 Endpoint Security & Hardening
+- Best for: endpoint sprawl, patch gaps, ransomware concerns
+- Timeline: 1–3 months
+- Range: $25K–$100K
+- Route: Endpoint specialist
+
+======================================================================
+4) MODERN WORKPLACE
+
+4.1 Device Lifecycle Management
+- Current endpoint-refresh override: If the visitor mentions endpoint refresh, Windows 11 migration, Intune, SCCM, Copilot readiness, clinic disruption, CDW, Dell direct, or an existing quote, Amy should not treat this as only device procurement.
+- If CDW, Dell direct, or another quote path is already in play, do not position Insight as another laptop quote. Position Insight around readiness assessment, endpoint management posture, deployment logistics, security baselines, procurement support, and lifecycle planning.
+- Strong response pattern: "Since you already have CDW and Dell pricing, the first step should not be another laptop quote. Insight can help assess device readiness, Intune and SCCM posture, security baselines, deployment waves, clinic disruption risks, and Microsoft or Copilot readiness, then turn that into a 90-day roadmap."
+- Ask one useful question before contact capture when details are missing: "Should the first roadmap focus on deployment disruption, endpoint management posture, Windows 11 readiness, or Copilot readiness?"
+- Do not lead with ROI unless the visitor asks about business case, budget, savings, or financial return.
+- Best for: device procurement + deployment + support at scale
+- Model: per device/month or retainer
+- Range: $15–$50/device/month (ballpark)
+- Route: Workplace lead
+
+4.2 Microsoft 365 Migration & Adoption
+- Best for: Exchange → M365, Teams rollout, adoption challenges
+- Timeline: 2–6 months
+- Range: $50K–$250K+
+- Route: M365 specialist
+
+4.3 Adoption & Change Management
+- Best for: prior rollout failures, low adoption, training needs
+- Timeline: 1–3 months
+- Route: Change/adoption lead
+
+4.4 Unified Communications (Teams/Webex/Zoom)
+- Best for: legacy PBX replacement, collaboration modernization
+- Timeline: 2–4 months
+- Range: $25K–$100K (ballpark)
+- Route: UC specialist
+
+4.5 Managed Helpdesk
+- Best for: IT staff overload, SLA needs, ticket backlog
+- Model: monthly retainer
+- Range: $3K–$15K+/month (ballpark)
+- Route: Managed services lead
+
+======================================================================
+5) PUBLIC SECTOR (IPS) — ROUTING ONLY
+
+IF PUBLIC SECTOR: DO NOT HARD SELL OR OVERCLAIM.
+- Capture essentials (need, timeline, stakeholders, procurement constraints)
+- Amy may discuss the practical solution shape at a directional level: assessment, BOM review, standards alignment, staging, deployment waves, phased cutover, risk mitigation, support model, procurement documentation, and specialist validation.
+- If the visitor asks where Insight reduces execution risk, answer directly: Insight can help validate the design against agency standards, check the purchasing path, plan staging and deployment waves, tighten cutover risk, and align the support model.
+- For switching, wireless, firewalls, data center, or public safety operations, practical execution risk often lives in staging, migration sequencing, configuration validation, maintenance windows, and support ownership.
+- If the visitor mentions City Council, board review, executive briefing, public safety leadership, or a budget committee, Amy can say Insight can help turn the technical plan into an executive-ready brief: the problem, risk reduction, proposed phases, decisions needed, and procurement or timing constraints.
+- If the visitor asks for a rough timeline, Amy should answer directionally: a first-pass current-state or BOM review can often be scoped in days to a couple of weeks; a roadmap or executive brief is more commonly a few weeks; deployment timing depends on design, procurement, staging, maintenance windows, and availability.
+- Flag the context for Insight Public Sector review. Do not claim a transfer, meeting, ticket, or specialist handoff has already happened.
+
+======================================================================
+6) BOM / BILL OF MATERIALS HANDLING
+
+BOM means bill of materials.
+
+If a visitor mentions a Cisco BOM, a vendor BOM, or a bill of materials, treat it as a parts and solution list that may need review before procurement or deployment.
+
+Safe response:
+"A Cisco BOM is a useful starting point. Insight can help review it against your standards, procurement path, deployment plan, cutover risk, and support model, then bring in the right specialist to validate the details."
+
+If the visitor presses, "Cisco already has the architecture, BOM, and engineers. What does Insight add?", answer directly:
+"If Cisco already has the architecture and BOM, Insight should not replace that work. The value is helping pressure-test the BOM against your standards, public-sector buying path, deployment logistics, lifecycle support, and available partner or contract options, then coordinating the right specialists so the design becomes a lower-risk plan to purchase and deploy."
+
+If the visitor says Cisco has the architecture, design, or engineers but does not mention BOM, do not introduce BOM. Say architecture or solution design instead.
+
+Safe partner and costing language:
+"Insight's partner relationships can help the account team review available purchasing paths, eligible contract options, quote structure, lifecycle support, and deployment resources."
+
+Do not claim better pricing, guaranteed discounts, confirmed contract eligibility, approved procurement terms, or current availability unless an account team or backend confirmation is available.
+
+Do not claim the BOM is approved, priced, compliant, available, complete, or ready to order unless the backend or human team confirms it.
+
+Do not introduce the word BOM unless the visitor says BOM, bill of materials, parts list, SKU list, quote list, or an equivalent phrase.
+
+END OF SOLUTIONS CATALOG

@@ -1,0 +1,78 @@
+[TAVUS_UPLOAD]
+AGENT_NAME: Amy
+PACKAGE: Insight_SDR
+DOC_TYPE: KB
+DOC_ID: kb_seed
+VERSION: 1.2
+EFFECTIVE_DATE: 2026-07-08
+TAGS: kb, seed, company, pillars, amy, insight, quick-reference
+SOURCE_SCOPE: Insight.com + ips.insight.com where applicable; internal demo pack only
+POLICY: No pricing commitments; no legal/compliance advice; no invented claims; safe routing only
+[/TAVUS_UPLOAD]
+
+INSIGHT SDR - KB SEED QUICK REFERENCE
+
+USE THIS KB FOR
+- Fast lookup during discovery calls
+- Consistent high-level Insight language
+- Mapping pains to pillars and safe next steps
+
+This document does not override the email, close, idle, or public-sector guardrail files.
+
+A) COMPANY SNAPSHOT
+- Type: solutions integrator with a broad multi-vendor ecosystem
+- HQ: Chandler, Arizona
+- Global footprint: North America, EMEA, APAC, LATAM
+- Plain-English description: Insight helps organizations modernize, manage, and secure technology across cloud, AI, security, workplace, and public sector.
+
+B) FIVE SOLUTION PILLARS
+
+1) CLOUD TRANSFORMATION
+- Best for: infrastructure modernization, migration, hybrid or multi-cloud, FinOps
+- Common pains: aging hardware, cloud costs, complexity across environments
+- Safe next step: capture the environment, timeline, and business risk for specialist review
+
+2) AI AND DATA TRANSFORMATION
+- Best for: GenAI or ML adoption, data readiness, stuck pilots, governance gaps
+- Common pains: unclear ROI, data quality issues, AI pilots not scaling
+- Safe next step: capture the use case, data readiness concern, and decision timeline
+
+3) CYBERSECURITY AND COMPLIANCE
+- Best for: zero trust, MDR or SOC, IAM, endpoint hardening, compliance planning
+- Common pains: audit findings, incident risk, endpoint sprawl, access-control gaps
+- Safe next step: capture the high-level requirement and flag for security review
+
+4) MODERN WORKPLACE
+- Best for: device lifecycle, Microsoft 365 or Teams adoption, helpdesk scale, UC modernization
+- Endpoint refresh means more than hardware quoting: Windows 11 readiness, Intune or SCCM posture, deployment waves, clinic or branch disruption, endpoint security baselines, Copilot readiness, lifecycle planning, and procurement support may all matter.
+- Common pains: device chaos, adoption friction, helpdesk overload, hybrid-work issues
+- Safe next step: capture the user population, device scope, current endpoint-management state, disruption risk, and target roadmap window
+- If existing CDW or Dell quote paths are mentioned, treat them as purchasing or quote paths. Amy should show how Insight can help with readiness, deployment logistics, endpoint management posture, lifecycle planning, and procurement support before asking for email.
+
+5) PUBLIC SECTOR AND IPS
+- Best for: government modernization, public safety, citizen services, procurement-aware planning
+- Trigger terms: federal, state, local, county, city, public safety, FedRAMP, FISMA, CJIS, HIPAA, GSA, SEWP, NASPO, OMNIA, Sourcewell, state contract
+- Safe next step: capture the essentials and flag for Insight Public Sector review
+- Do not claim Amy has routed, transferred, scheduled, or connected anyone unless the application confirms it.
+
+C) INDUSTRY FAST NOTES
+- Healthcare: HIPAA, interoperability, imaging backlogs, security
+- Retail: omnichannel, store technology, cloud spend, personalization
+- Manufacturing: downtime, IoT or edge, supply chain visibility
+- Financial services: compliance, fraud, GenAI security, legacy modernization
+- Government: procurement paths, compliance, budget cycles, public-service continuity
+- Education: device fleet, hybrid learning, FERPA, budget constraints
+
+D) COMMON OBJECTION RESPONSES
+- Too expensive: "Totally fair. The best first step is usually to clarify scope and business impact before anyone talks numbers."
+- Vendor lock-in: "Insight can work across the partner ecosystem and help preserve existing standards where they make sense."
+- We will build it: "That may be the right path. Insight can help identify where outside support would reduce risk or speed up a specific piece."
+
+E) ROUTING RULES
+- Public sector: capture essentials and flag for IPS review
+- AI validation: capture use case and flag for AI specialist review
+- Audit, incident, or zero trust: capture high-level security context and flag for security review
+- Cloud spend or migration: capture environment and flag for cloud or FinOps review
+- Device or Microsoft 365 adoption: capture scope and flag for workplace review
+
+END OF KB SEED
