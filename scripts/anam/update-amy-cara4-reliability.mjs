@@ -118,7 +118,7 @@ const expectedPrompt = replaceManagedBlock(
 );
 const voiceDetectionOptions = {
     endOfSpeechSensitivity: 0.15,
-    silenceBeforeAutoEndTurnSeconds: 1.8,
+    silenceBeforeAutoEndTurnSeconds: 2.2,
     silenceBeforeSkipTurnSeconds: 0,
     silenceBeforeSessionEndSeconds: 180,
 };

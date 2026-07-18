@@ -126,6 +126,17 @@ test('Anam client tools use the current API shape and route five named views', a
     assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist/i);
 });
 
+test('Workbench prompt protects visitor review time from filler and premature closing', async () => {
+    const prompt = await import('node:fs/promises').then((fs) => fs.readFile(
+        new URL('../config/anam/amy-workbench-prompt-upgrade.md', import.meta.url),
+        'utf8',
+    ));
+    assert.match(prompt, /hang on.*one moment.*let me review.*let me look/is);
+    assert.match(prompt, /call skip_turn and remain silent/i);
+    assert.match(prompt, /Never follow a display with "Is there anything else\?"/i);
+    assert.match(prompt, /before we wrap up/i);
+});
+
 test('Amy feature tabs and content use readable production typography', async () => {
     const workbench = await import('node:fs/promises').then((fs) => fs.readFile(
         new URL('../components/amy/AmyAnamWorkbenchV2.tsx', import.meta.url),

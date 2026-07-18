@@ -37,6 +37,17 @@ Hermes remains backend-only. The live workbench does not give Hermes a browser l
 
 Hermes may later receive a reviewed post-session packet for shadow analysis or operator-approved refinement. PDF/PPT export stays deferred until that reviewed packet is the source of truth; exports must not be generated from a partial live transcript.
 
+## Future roadmap: live canvas and presentations
+
+Status: discovery for later discussion.
+
+1. **Embedded live canvas:** evaluate the tldraw SDK inside the Visual tab, driven by the same canonical session model as Notes, Brief, and Roadmap. Start read-only and browser-local.
+2. **Guided user corrections:** add an explicit edit mode with undo and a separate correction overlay. User edits do not become Amy context until the visitor chooses **Share changes with Amy**.
+3. **Hermes Visual Composer:** allow the backend-only Hermes worker to propose validated, allowlisted canvas-shape patches. This role receives no email, CRM, browsing, memory, or general tool authority.
+4. **Presentation workflow:** organize approved canvas frames into presentation pages, support SVG/PNG export, and later evaluate reviewed PPTX generation or read-only slide presentation during a live session.
+
+Security gates include authenticated sessions, short-lived document access, version history, script and external-embed blocking, allowlisted shapes and actions, and treating all canvas text as untrusted input. Production use also requires confirming tldraw licensing and persistence architecture.
+
 ## Release verification
 
 Run:
