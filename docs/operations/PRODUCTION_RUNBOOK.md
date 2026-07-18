@@ -2,9 +2,17 @@
 
 ## Current safety state
 
-Production is intentionally pinned to the known-good rollback that can retrieve the reviewed memory for rvicks@gmail.com. Do not create or promote another Production deployment until the original Production Redis URL, Redis token, and Amy identity salt have been recovered together and installed in the Vercel Production environment.
+Production remains pinned to the known-good rollback until this branch is reviewed and merged to main. The future-deployment memory configuration has been repaired and verified:
 
-The identity salt is part of the user lookup key. Replacing it creates a different identity lane even when the email is typed correctly. It cannot be reconstructed from the stored hash.
+- The original Upstash URL and token were recovered from the private Insight Amy worker environment.
+- Redis contained exactly one approved history key and one approval decision.
+- The known-good deployment confirmed that history belongs to the designated rvicks@gmail.com test identity.
+- A new random identity salt was created, stored in the Windows user environment, and installed as a Vercel sensitive value.
+- The sole approved history record was copied to the new pseudonymous identity key; the old key was retained.
+- Matching URL, token, salt, and fingerprint values were installed in Vercel Production and the Amy feature-branch Preview scope.
+- An isolated Preview check-in returned authenticated true and approvedMemoryCount 1 without returning raw email, identity hash, or memory content.
+
+The identity salt remains part of the user lookup key. Replacing it creates a different identity lane even when the email is typed correctly. It cannot be reconstructed from the stored hash, so the Windows user-level backup and configuration fingerprint must be preserved.
 
 ## Before a production deployment
 
@@ -16,9 +24,9 @@ The identity salt is part of the user lookup key. Replacing it creates a differe
    - AMY_ANAM_REDIS_REST_URL
    - AMY_ANAM_REDIS_REST_TOKEN
    - AMY_ANAM_MEMORY_IDENTITY_SALT
-6. Calculate the configuration fingerprint locally without printing the secrets:
+6. Confirm the configuration fingerprint without printing the secrets:
    - SHA-256 of Redis URL without a trailing slash, a NUL byte, Redis token, a NUL byte, and identity salt.
-   - Store the 64-character result as AMY_ANAM_MEMORY_CONFIG_FINGERPRINT in Production.
+   - It must match AMY_ANAM_MEMORY_CONFIG_FINGERPRINT in Production.
 7. Confirm AgentMail, when selected, uses amy-insight@agentmail.to and a valid AGENTMAIL_API_KEY.
 8. Run npm run test:anam and npm run build.
 9. Verify a Preview session before merging.
