@@ -89,6 +89,7 @@ export async function POST(request: Request) {
             externalSessionId: sessionId,
             displayName: identity.displayName,
             email: contact.email,
+            sessionStartedAt: session.boundAt,
             turns: body.transcript,
         });
         return noStoreJson({

@@ -9,7 +9,7 @@ import AnamPlayer from '@/components/AnamPlayer';
 import AgentQaChat from '@/components/qa/AgentQaChat';
 import AmyMemoryAccessGate from '@/components/amy/AmyMemoryAccessGate';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 interface Props {
     params: Promise<{ slug: string }>;
@@ -91,8 +91,8 @@ export default function DemoPage({ params, searchParams }: Props) {
                     href={returnHref}
                     className="pointer-events-auto flex items-center gap-2 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full transition-all text-sm font-bold uppercase tracking-widest hover:scale-105"
                 >
-                    <ArrowLeft size={18} />
-                    {isPrivateReturn ? `Back to ${agent.name} Screening` : `Back to ${agent.name}`}
+                    <LogOut size={18} />
+                    Exit
                 </Link>
             </div>
 

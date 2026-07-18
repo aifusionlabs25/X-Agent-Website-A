@@ -120,17 +120,20 @@ test('follow-up content is deterministic, redacts contact data, and escapes HTML
             { role: 'user', content: 'We need to migrate our ERP to Azure. Email me at attacker@example.com <script>alert(1)</script>.' },
             { role: 'agent', content: 'What continuity requirement matters most?' },
             { role: 'user', content: 'The overnight maintenance window is critical.' },
+            { role: 'user', content: 'Before we close, can you send a Pulse Session email?' },
         ],
     });
     assert.match(message.text, /ERP|Azure/i);
     assert.doesNotMatch(message.text, /attacker@example\.com/i);
     assert.doesNotMatch(message.html, /<script>/i);
     assert.match(message.html, /AI-powered conversational agent/i);
+    assert.match(message.html, /Insight · Conversation follow-up/i);
+    assert.doesNotMatch(message.text, /Timing:\s*Before we close|Pulse Session/i);
 });
 
-test('one AgentMail attempt is allowed per Anam session and receipts store no address or content', async () => {
+test('one approved action sends a visitor, admin, and intake bundle without storing content', async () => {
     const store = new Map();
-    let agentMailCalls = 0;
+    const agentMailRequests = [];
     const fetchImpl = async (url, init) => {
         if (String(url).startsWith('https://redis.agentmail.test/')) {
             const commands = JSON.parse(init.body);
@@ -154,7 +157,7 @@ test('one AgentMail attempt is allowed per Anam session and receipts store no ad
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-        agentMailCalls += 1;
+        agentMailRequests.push(JSON.parse(init.body));
         return new Response(JSON.stringify({ message_id: 'msg_once', thread_id: 'thr_once' }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -164,16 +167,31 @@ test('one AgentMail attempt is allowed per Anam session and receipts store no ad
         externalSessionId: SESSION_ID,
         displayName: 'Rob',
         email: 'rvicks@gmail.com',
+        sessionStartedAt: '2026-07-18T16:00:00.000Z',
         turns: [{ role: 'user', content: 'We need an Azure ERP migration roadmap.' }],
     };
     const first = await sendAmyAnamConversationFollowUp(input, { env: ENV, fetchImpl });
     const second = await sendAmyAnamConversationFollowUp(input, { env: ENV, fetchImpl });
     assert.equal(first.status, 'email_sent');
     assert.equal(first.sent, true);
+    assert.equal(first.deliveryCount, 3);
+    assert.equal(first.visitorSent, true);
+    assert.equal(first.internalNotificationsSent, true);
     assert.equal(second.status, 'email_already_attempted');
     assert.equal(second.sent, true);
     assert.equal(second.duplicate, true);
-    assert.equal(agentMailCalls, 1);
+    assert.equal(second.deliveryCount, 3);
+    assert.equal(agentMailRequests.length, 3);
+    assert.deepEqual(agentMailRequests.map(request => request.to), [
+        ['rvicks@gmail.com'],
+        ['aifusionlabs@gmail.com'],
+        ['aifusionlabs@gmail.com'],
+    ]);
+    assert.match(agentMailRequests[0].html, /Your conversation, clearly captured/i);
+    assert.match(agentMailRequests[1].subject, /AMY SESSION/i);
+    assert.match(agentMailRequests[1].html, /Elapsed at email request/i);
+    assert.match(agentMailRequests[2].subject, /INSIGHT INTAKE/i);
+    assert.match(agentMailRequests[2].html, /Sales &amp; Operations/i);
     const storedReceipts = [...store.values()].join('\n');
     assert.doesNotMatch(storedReceipts, /rvicks@gmail\.com|Azure|ERP migration/i);
     assert.match(storedReceipts, /"rawEmailStored":false/);

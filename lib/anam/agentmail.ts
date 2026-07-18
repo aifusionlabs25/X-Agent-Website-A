@@ -3,6 +3,7 @@ import {
     readAmyAgentMailProviderConfig,
     sendAmyEmailWithAgentMail,
 } from '../email/amy-email-provider.ts';
+import { buildAmyEmailBundle } from './agentmail-templates.ts';
 import type { AmyTranscriptTurn } from './session-spine.ts';
 import {
     normalizeAmyTranscript,
@@ -51,6 +52,11 @@ type AmyAnamEmailAttemptRecord = {
     messageId: string | null;
     threadId: string | null;
     failureCode: 'delivery_rejected_or_unknown' | null;
+    deliveryStatus?: {
+        visitor: boolean;
+        admin: boolean;
+        intake: boolean;
+    };
     rawEmailStored: false;
     messageContentStored: false;
 };
@@ -61,7 +67,13 @@ export type AmyAnamFollowUpResult = {
     duplicate: boolean;
     receiptId: string;
     provider: 'agentmail';
+    deliveryCount: number;
+    visitorSent: boolean;
+    internalNotificationsSent: boolean;
 };
+
+const AMY_ADMIN_EMAIL = 'aifusionlabs@gmail.com';
+const AMY_INSIGHT_INTAKE_EMAIL = 'aifusionlabs@gmail.com';
 
 function value(source: NodeJS.ProcessEnv, name: string): string {
     return String(source[name] ?? '')
@@ -174,79 +186,57 @@ function parseAttempt(valueToParse: unknown): AmyAnamEmailAttemptRecord | null {
         throw new Error('Amy AgentMail attempt receipt was invalid');
     }
     const record = valueToNormalize as Partial<AmyAnamEmailAttemptRecord>;
+    const deliveryStatusIsValid = record.deliveryStatus === undefined || (
+        typeof record.deliveryStatus === 'object'
+        && record.deliveryStatus !== null
+        && typeof record.deliveryStatus.visitor === 'boolean'
+        && typeof record.deliveryStatus.admin === 'boolean'
+        && typeof record.deliveryStatus.intake === 'boolean'
+    );
     if (
         record.schemaVersion !== 'amy_anam_agentmail_attempt_v1'
         || typeof record.externalSessionId !== 'string'
         || !['pending', 'sent', 'failed'].includes(String(record.status))
         || typeof record.receiptId !== 'string'
         || record.provider !== 'agentmail'
+        || !deliveryStatusIsValid
         || record.rawEmailStored !== false
         || record.messageContentStored !== false
     ) throw new Error('Amy AgentMail attempt receipt was invalid');
     return record as AmyAnamEmailAttemptRecord;
 }
 
-function escapeHtml(input: string): string {
-    return input
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+function redactContactData(turns: AmyTranscriptTurn[]): AmyTranscriptTurn[] {
+    return turns.map(turn => ({
+        ...turn,
+        content: String(turn.content ?? '')
+            .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[private contact]')
+            .replace(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/g, '[private contact]'),
+    }));
 }
 
 export function buildAmyConversationFollowUp(input: {
     displayName: string;
     turns: AmyTranscriptTurn[];
 }) {
-    const model = buildAmyWorkbenchModel(input.turns);
-    const facts = model.facts
-        .filter(fact => fact.section !== 'Identity')
-        .slice(0, 6)
-        .map(fact => `${fact.label}: ${fact.value}`);
-    const name = String(input.displayName || 'there')
-        .replace(/[^\p{L}\p{M}' -]/gu, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 80) || 'there';
-    const nextStep = model.brief.nextStep || 'Continue the conversation with the appropriate Insight specialist.';
-    const lines = [
-        `Hi ${name},`,
-        '',
-        'Thank you for speaking with Amy. Here is the working follow-up from your conversation.',
-        '',
-        ...(facts.length ? ['Conversation highlights', ...facts.map(fact => `- ${fact}`), ''] : []),
-        `Suggested next step: ${nextStep}`,
-        '',
-        'This is a conversation working summary, not a final design, quote, commitment, or compliance determination. Reply to this email if you would like to add context or request human follow-up.',
-        '',
-        'Amy is an AI-powered conversational agent. Important decisions should be confirmed with an appropriate Insight specialist.',
-    ];
-    const text = lines.join('\n');
-    const highlightsHtml = facts.length
-        ? `<h2 style="font-size:16px;margin:24px 0 8px">Conversation highlights</h2><ul>${facts.map(fact => `<li>${escapeHtml(fact)}</li>`).join('')}</ul>`
-        : '';
-    const html = [
-        '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#18181b;max-width:680px">',
-        `<p>Hi ${escapeHtml(name)},</p>`,
-        '<p>Thank you for speaking with Amy. Here is the working follow-up from your conversation.</p>',
-        highlightsHtml,
-        `<p><strong>Suggested next step:</strong> ${escapeHtml(nextStep)}</p>`,
-        '<p style="margin-top:28px;color:#52525b">This is a conversation working summary, not a final design, quote, commitment, or compliance determination. Reply to this email if you would like to add context or request human follow-up.</p>',
-        '<p style="font-size:12px;color:#71717a;border-top:1px solid #e4e4e7;padding-top:16px">Amy is an AI-powered conversational agent. Important decisions should be confirmed with an appropriate Insight specialist.</p>',
-        '</div>',
-    ].join('');
-    return {
-        subject: 'Your conversation with Amy',
-        text,
-        html,
-    };
+    const turns = redactContactData(input.turns);
+    const generatedAt = new Date().toISOString();
+    return buildAmyEmailBundle({
+        displayName: input.displayName,
+        verifiedEmail: 'private contact',
+        externalSessionId: 'template-preview',
+        sessionStartedAt: generatedAt,
+        generatedAt,
+        turns,
+        model: buildAmyWorkbenchModel(turns),
+    }).visitor;
 }
 
 export async function sendAmyAnamConversationFollowUp(input: {
     externalSessionId: string;
     displayName: string;
     email: string;
+    sessionStartedAt: string;
     turns: AmyTranscriptTurn[] | unknown;
 }, options: AgentMailStoreOptions = {}): Promise<AmyAnamFollowUpResult> {
     const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
@@ -268,6 +258,11 @@ export async function sendAmyAnamConversationFollowUp(input: {
         messageId: null,
         threadId: null,
         failureCode: null,
+        deliveryStatus: {
+            visitor: false,
+            admin: false,
+            intake: false,
+        },
         rawEmailStored: false,
         messageContentStored: false,
     };
@@ -291,24 +286,49 @@ export async function sendAmyAnamConversationFollowUp(input: {
             duplicate: true,
             receiptId: existing.receiptId,
             provider: 'agentmail',
+            deliveryCount: existing.deliveryStatus
+                ? Object.values(existing.deliveryStatus).filter(Boolean).length
+                : existing.status === 'sent' ? 1 : 0,
+            visitorSent: existing.deliveryStatus?.visitor ?? existing.status === 'sent',
+            internalNotificationsSent: existing.deliveryStatus
+                ? existing.deliveryStatus.admin && existing.deliveryStatus.intake
+                : false,
         };
     }
 
     try {
-        const message = buildAmyConversationFollowUp({
+        const safeTurns = redactContactData(turns);
+        const bundle = buildAmyEmailBundle({
             displayName: input.displayName,
-            turns,
+            verifiedEmail: input.email,
+            externalSessionId: input.externalSessionId,
+            sessionStartedAt: input.sessionStartedAt,
+            turns: safeTurns,
+            model: buildAmyWorkbenchModel(safeTurns),
         });
-        const delivery = await sendAmyEmailWithAgentMail({
-            to: input.email,
-            ...message,
-        }, options);
+        const [visitorResult, adminResult, intakeResult] = await Promise.allSettled([
+            sendAmyEmailWithAgentMail({ to: input.email, ...bundle.visitor }, options),
+            sendAmyEmailWithAgentMail({ to: AMY_ADMIN_EMAIL, ...bundle.admin }, options),
+            sendAmyEmailWithAgentMail({ to: AMY_INSIGHT_INTAKE_EMAIL, ...bundle.intake }, options),
+        ]);
+        if (visitorResult.status === 'rejected') {
+            throw new Error('Amy visitor follow-up delivery was not confirmed');
+        }
+        const deliveryStatus = {
+            visitor: true,
+            admin: adminResult.status === 'fulfilled',
+            intake: intakeResult.status === 'fulfilled',
+        };
+        if (!deliveryStatus.admin || !deliveryStatus.intake) {
+            console.error('[Amy Anam AgentMail] One or more internal notifications were not confirmed');
+        }
         const sent: AmyAnamEmailAttemptRecord = {
             ...pending,
             status: 'sent',
             completedAt: new Date().toISOString(),
-            messageId: delivery.messageId,
-            threadId: delivery.threadId,
+            messageId: visitorResult.value.messageId,
+            threadId: visitorResult.value.threadId,
+            deliveryStatus,
         };
         await redisCommand([
             'SET',
@@ -324,6 +344,9 @@ export async function sendAmyAnamConversationFollowUp(input: {
             duplicate: false,
             receiptId,
             provider: 'agentmail',
+            deliveryCount: Object.values(deliveryStatus).filter(Boolean).length,
+            visitorSent: true,
+            internalNotificationsSent: deliveryStatus.admin && deliveryStatus.intake,
         };
     } catch {
         const failed: AmyAnamEmailAttemptRecord = {

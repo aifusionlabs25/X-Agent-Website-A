@@ -1,6 +1,6 @@
 {
   "name": "send_follow_up_email",
-  "description": "Send one conversation follow-up to the visitor's private website check-in address only after a useful conversation and only after the visitor explicitly says yes to receiving it. Never ask for, spell, repeat, infer, or submit an email address through this tool. Call silently with userConfirmed true, wait for the receipt, and claim success only when the tool returns email_sent. Do not use for memory access, cold outreach, third-party recipients, or automatic call closing.",
+  "description": "Send the approved follow-up bundle to the visitor's private website check-in address and fixed internal recipients after a useful conversation. A direct request to email or send a follow-up is explicit permission; otherwise obtain one short yes. Never ask for, spell, repeat, confirm aloud, infer, or submit an email address through this tool. Call silently with userConfirmed true, wait for the receipt, and claim success only when the tool returns email_sent. Do not use for memory access, cold outreach, third-party recipients, or automatic call closing.",
   "type": "CLIENT",
   "disableInterruptions": true,
   "config": {
