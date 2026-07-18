@@ -17,7 +17,32 @@ import {
     readAmyAnamReceipt,
 } from '@/lib/anam/session-spine-store';
 
-export const maxDuration = 60;
+export const maxDuration = 240;
+
+const POST_CLOSE_RETRY_DELAYS_MS = [0, 5_000, 15_000, 30_000, 60_000] as const;
+
+async function wait(milliseconds: number): Promise<void> {
+    if (milliseconds <= 0) return;
+    await new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function finalizeAfterClose(sessionId: string) {
+    let status: Awaited<ReturnType<typeof finalizeAmyAnamSession>> = 'pending';
+    const sessionRef = sessionId.slice(-8);
+
+    for (let attempt = 0; attempt < POST_CLOSE_RETRY_DELAYS_MS.length; attempt += 1) {
+        await wait(POST_CLOSE_RETRY_DELAYS_MS[attempt]);
+        status = await finalizeAmyAnamSession(sessionId).catch(() => 'failed' as const);
+        console.info('[Amy Anam Complete] Post-close finalization attempt', {
+            sessionRef,
+            attempt: attempt + 1,
+            status,
+        });
+        if (status === 'completed' || status === 'failed' || status === 'missing') break;
+    }
+
+    return status;
+}
 
 const ALLOWED_CLOSE_REASONS = new Set([
     'CONNECTION_CLOSED_CODE_NORMAL',
@@ -109,11 +134,11 @@ export async function POST(request: Request) {
         }
 
         after(async () => {
-            let status = await finalizeAmyAnamSession(sessionId).catch(() => 'failed' as const);
-            if (status === 'bound') {
-                status = await finalizeAmyAnamSession(sessionId).catch(() => 'failed' as const);
-            }
-            console.info('[Amy Anam Complete] Background finalization finished', { status });
+            const status = await finalizeAfterClose(sessionId);
+            console.info('[Amy Anam Complete] Background finalization finished', {
+                sessionRef: sessionId.slice(-8),
+                status,
+            });
         });
 
         return noStoreJson({
@@ -132,3 +157,4 @@ export async function POST(request: Request) {
         return noStoreJson({ error: 'Session finalization failed' }, { status: 500 });
     }
 }
+

@@ -171,7 +171,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const isAmyCara4 = isAmyCara4Variant(sessionVariant);
                 const clientOptions = {
                     ...(audioDeviceId ? { audioDeviceId } : {}),
-                    ...(isAmyCara4 ? { voiceDetection: { endOfSpeechSensitivity: 0.15 } } : {}),
+                    ...(isAmyCara4 ? { voiceDetection: { endOfSpeechSensitivity: 0.05 } } : {}),
                 };
                 const anamClient = createClient(sessionToken, clientOptions);
 
@@ -549,3 +549,4 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         </div>
     );
 }
+

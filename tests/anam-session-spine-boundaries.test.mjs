@@ -56,6 +56,10 @@ test('the completion route rejects client transcript fields and returns explicit
     assert.match(completionRoute, /canary:\s*true/);
     assert.match(completionRoute, /outbound:\s*false/);
     assert.doesNotMatch(completionRoute, /body\.transcript|transcript:\s*body\./);
+    assert.match(completionRoute, /export const maxDuration = 240/);
+    assert.match(completionRoute, /POST_CLOSE_RETRY_DELAYS_MS = \[0, 5_000, 15_000, 30_000, 60_000\]/);
+    assert.match(completionRoute, /await finalizeAfterClose\(sessionId\)/);
+    assert.match(completionRoute, /sessionRef:\s*sessionId\.slice\(-8\)/);
 });
 
 test('the client completion transport is keepalive-safe and never includes a transcript', () => {
@@ -67,7 +71,7 @@ test('the client completion transport is keepalive-safe and never includes a tra
 
 test('completion is durably verification-pending before provider verification begins', () => {
     const recordCall = completionRoute.indexOf('recordAmyAnamCompletion({');
-    const finalizerCall = completionRoute.indexOf('finalizeAmyAnamSession(sessionId)');
+    const finalizerCall = completionRoute.indexOf('await finalizeAfterClose(sessionId)');
     assert.ok(recordCall >= 0, 'completion was not durably recorded');
     assert.ok(finalizerCall > recordCall, 'provider finalization started before durable completion recording');
     assert.doesNotMatch(completionRoute, /verifyAnamSessionForLaunch|fetchCompletedAnamTranscript/);
@@ -125,3 +129,4 @@ test('email delivery occurs only after final transcript retrieval and durable se
     assert.match(finalizer, /turns:\s*transcript\.status === 'ready' \? transcript\.turns : \[\]/);
     assert.doesNotMatch(player, /sendAmyAnamFollowUpEmail\([\s\S]*transcript:/);
 });
+
