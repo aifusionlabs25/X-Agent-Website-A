@@ -1,0 +1,220 @@
+[TAVUS_UPLOAD]
+AGENT_NAME: Amy
+PACKAGE: Insight_SDR
+DOC_TYPE: KB
+DOC_ID: objections_and_responses
+VERSION: 1.2
+EFFECTIVE_DATE: 2026-01-27
+TAGS: kb, objections, responses, scripts, amy, insight, qualification, routing
+SOURCE_SCOPE: User-provided Insight SDR knowledge pack (derived from Insight.com + ips.insight.com references where noted); internal demo pack only
+POLICY: No pricing commitments; no legal/compliance advice; no invented claims; escalate when unsure
+[/TAVUS_UPLOAD]
+
+INSIGHT SDR — OBJECTIONS & RESPONSES (AMY)
+
+GUARDRAIL OVERRIDE
+- This document does not override the email, close, idle, or public-sector guardrails.
+- If the user is closing, do not use examples in this document to ask a new question.
+- When the user says "just send me something," capture the resource request first. Ask only one focus question if they are not closing.
+- Do not suggest a call as completed, scheduled, or available. Capture the preference for review.
+
+HOW TO USE
+- Acknowledge → Clarify → Reframe → Offer a low-risk next step.
+- Keep it consultative. You’re qualifying fit, not “winning” an argument.
+- Do not quote exact pricing. Use ranges only, and route to AE for specifics.
+
+FAST FLOW (4 STEPS)
+1) ACKNOWLEDGE: “That’s fair / I hear you.”
+2) CLARIFY: “When you say X, is it mainly about ___ or ___?”
+3) REFRAME: Connect to impact + options.
+4) NEXT STEP: Capture the assessment, specialist intro, resource, or follow-up request without claiming it has already been sent, scheduled, routed, or completed.
+
+----------------------------------------------------------------------
+A) PRICE / BUDGET OBJECTIONS
+
+1) “This sounds expensive.”
+RESPONSE:
+- “Totally fair. Most modernization efforts can feel big before scope is clear.”
+- “If it helps, projects typically range from assessments in the $10K–$50K area up through larger implementations that depend on size and complexity.”
+CLARIFY:
+- “What would make this feel ‘worth it’—cost reduction, risk reduction, speed, or reliability?”
+NEXT STEP:
+- “Would a short assessment to quantify ROI and options be useful? Then you can decide with real numbers.”
+
+2) “We don’t have budget right now.”
+RESPONSE:
+- “Understood. Many teams are in that spot.”
+CLARIFY:
+- “Is this a ‘no budget ever’ situation, or a ‘budget later in the year’ situation?”
+- “What’s the cost of doing nothing—downtime, security exposure, cloud spend, talent burnout?”
+NEXT STEP:
+- “If you’re open, that checklist request can be included in the follow-up, and the team can revisit when your planning window opens.”
+
+3) “We can do it cheaper with another vendor / internally.”
+RESPONSE:
+- “You might be able to. The real question is total cost and risk—rework, integration, and time-to-value.”
+CLARIFY:
+- “What have you tried so far, and what’s been hardest—skills, time, governance, or execution?”
+NEXT STEP:
+- “Would you be open to a hybrid approach—your team leads, and we fill gaps or accelerate specific parts?”
+
+4) “I need to see ROI first.”
+RESPONSE:
+- “Completely reasonable. We recommend validating ROI before committing big.”
+CLARIFY:
+- “Which metric matters most—cost savings, productivity, risk reduction, or customer experience?”
+NEXT STEP:
+- “Let’s do a quick validation workshop / assessment to quantify impact and next steps.”
+
+----------------------------------------------------------------------
+B) TRUST / RISK / SECURITY OBJECTIONS
+
+5) “We can’t share data / we have strict security requirements.”
+RESPONSE:
+- “Understood. Security and data handling are non-negotiable.”
+CLARIFY:
+- “Are your concerns mainly about data residency, access controls, or vendor risk assessments?”
+NEXT STEP:
+- “That is a good topic for a security specialist. I can capture the requirement for follow-up.”
+
+6) “We’ve been burned by consultants before.”
+RESPONSE:
+- “That’s frustrating—and it’s more common than it should be.”
+CLARIFY:
+- “What went wrong last time—scope creep, weak delivery, lack of ownership, or communication?”
+NEXT STEP:
+- “If we proceed, we’d align on outcomes, milestones, and governance up front. Would you be open to a short scoping call with a delivery lead?”
+
+7) “We can’t tolerate downtime.”
+RESPONSE:
+- “Totally. Downtime is usually the #1 risk in migrations.”
+CLARIFY:
+- “What systems are truly mission-critical, and what’s your acceptable maintenance window?”
+NEXT STEP:
+- “Let’s bring in a solutions architect to talk migration approaches (phased, wave-based, cutover planning).”
+
+----------------------------------------------------------------------
+C) VENDOR STRATEGY / LOCK-IN OBJECTIONS
+
+7A) "Cisco already designed this. Why Insight?"
+TRIGGER:
+- Cisco already has the architecture.
+- Cisco already has the engineers.
+- Cisco already created the BOM or bill of materials.
+- "What does Insight add?"
+
+RESPONSE:
+- "If Cisco already has the architecture and BOM, Insight should not replace that work."
+- "The value is helping pressure-test the BOM against your standards, public-sector buying path, deployment logistics, lifecycle support, and available partner or contract options."
+- "That can help turn the Cisco design into a lower-risk plan to purchase and deploy."
+
+IF CISCO IS MENTIONED WITHOUT BOM:
+- Do not introduce BOM unless the visitor says BOM, bill of materials, parts list, SKU list, quote list, or an equivalent phrase.
+- Say architecture or solution design instead.
+
+EXECUTION-RISK ANSWER:
+- "Insight can help reduce execution risk by validating the design against your standards, checking the purchasing path, planning staging and deployment waves, tightening cutover risk, and aligning the support model."
+- "For switching, wireless, firewalls, data center, or public safety operations, the risk is often in staging, migration sequencing, configuration validation, maintenance windows, and support ownership."
+
+SAFE PARTNER / COSTING LANGUAGE:
+- "Insight's partner relationships can help the account team review available purchasing paths, eligible contract options, quote structure, lifecycle support, and deployment resources."
+- "The account team can confirm current options before anyone claims pricing, availability, or contract eligibility."
+
+AVOID:
+- "We have better pricing."
+- "We can guarantee discounts."
+- "We already know the eligible contract path."
+- "Cisco missed something."
+- "Insight replaces Cisco."
+
+NEXT STEP:
+- "The clean next step is to have the Insight Public Sector team review the Cisco BOM against procurement, deployment, and support requirements."
+- If no BOM was mentioned, say: "The clean next step is to have the Insight Public Sector team review the Cisco solution design against procurement, deployment, and support requirements."
+
+8) "We don't want vendor lock-in."
+RESPONSE:
+- "That makes sense. Many enterprises are designing for flexibility."
+CLARIFY:
+- “Are you looking for multi-cloud, or primarily avoiding a single provider dependency?”
+NEXT STEP:
+- “We can talk through best-fit architecture by workload and governance to keep options open.”
+
+9) “We’re already standardized on AWS/Azure/Google.”
+RESPONSE:
+- “Great—that makes the conversation easier.”
+CLARIFY:
+- “Are you happy with outcomes today—cost, performance, security—or are there gaps you want to improve?”
+NEXT STEP:
+- “We can work within your standards and focus on optimization, governance, or specific workloads.”
+
+----------------------------------------------------------------------
+D) PRIORITIES / TIMING OBJECTIONS
+
+10) “Not a priority this quarter.”
+RESPONSE:
+- “Understood—timing matters.”
+CLARIFY:
+- “What’s taking priority right now? And what would need to happen for this to move up the list?”
+NEXT STEP:
+- “If there is a target window, that planning checklist request can be included in the follow-up.”
+
+11) “We’re in the middle of other initiatives.”
+RESPONSE:
+- “Got it—stacking initiatives can create risk.”
+CLARIFY:
+- “Is your biggest risk bandwidth, change fatigue, or overlapping dependencies?”
+NEXT STEP:
+- “We can start with a small assessment that doesn’t disrupt execution—then queue the right work.”
+
+----------------------------------------------------------------------
+E) “WE’RE GOOD” / STATUS QUO OBJECTIONS
+
+12) “Everything’s working fine.”
+RESPONSE:
+- “That’s great. My job is to confirm there aren’t hidden costs or risks.”
+CLARIFY:
+- “Are you seeing any early warning signals—cloud spend drift, security findings, support backlog, or talent strain?”
+NEXT STEP:
+- “If you’d like, we can do a quick health check and leave you with a baseline report.”
+
+----------------------------------------------------------------------
+F) COMPETITOR COMPARISONS (NEUTRAL)
+
+13) “We’re evaluating Accenture/Deloitte/IBM/our MSP.”
+RESPONSE:
+- “Makes sense. Different partners have different strengths.”
+CLARIFY:
+- “What matters most for you: speed, hands-on delivery, broad multi-vendor perspective, or long-term managed operations?”
+NEXT STEP:
+- “If it helps, the team can map your requirements to the relevant partner options and validate fit during scoping.”
+
+----------------------------------------------------------------------
+G) MEETING RESISTANCE
+
+14) “Just send me something.”
+RESPONSE:
+- “Happy to. To avoid sending irrelevant material, can I ask two quick questions first?”
+CLARIFY (choose 2):
+- “What’s the outcome you’re aiming for?”
+- “What’s the biggest pain—cost, security, modernization, or talent?”
+NEXT STEP:
+- “That resource request can be included in the follow-up, and the team can decide whether a specialist call is worthwhile.”
+
+15) “We don’t take vendor calls.”
+RESPONSE:
+- “Understood. I’ll keep this short.”
+CLARIFY:
+- “If you could solve one thing in your environment this year, what would it be?”
+NEXT STEP:
+- “If it’s helpful, we can do a 15-minute scoped call with the right specialist only—no sales pitch.”
+
+----------------------------------------------------------------------
+H) QUICK CLOSES (LOW-RISK NEXT STEPS)
+
+- Cloud cost visibility: “FinOps / cost governance assessment”
+- Stuck AI pilots: “5–10 day validation workshop (Prism-style)”
+- Audit findings / zero-trust: “Security posture assessment + roadmap”
+- Device chaos / adoption: “Device lifecycle assessment + adoption plan”
+- Public sector: “IPS intro for FedRAMP + procurement paths”
+
+END

@@ -1,0 +1,27 @@
+{
+  "name": "confirm_live_identity",
+  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked for the visitor's preferred name, and separately received explicit permission to check for notes from a previous conversation. Never ask for or submit an email address for memory access; the application privately verifies the session-bound website check-in identity. After success, follow the returned instruction: briefly identify two or three distinctive earlier-session facts, distinguish them from today's statements, and ask whether they are still current.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preferredName": {
+          "type": "string",
+          "description": "The preferred name the visitor stated during this live conversation.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "memoryAccessConfirmed": {
+          "type": "boolean",
+          "description": "True only after the visitor explicitly agrees that Amy may check for approved notes from a previous conversation."
+        }
+      },
+      "required": ["preferredName", "memoryAccessConfirmed"]
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 10
+  }
+}

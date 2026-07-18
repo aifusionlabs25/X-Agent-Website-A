@@ -16,18 +16,29 @@ export default async function AgentDetailPage({ params }: Props) {
     const { slug } = await params;
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) notFound();
+    const isAmy = agent.slug === 'amy';
 
     return (
         <main className="min-h-screen bg-zinc-950 pt-20">
             {/* Cinematic backdrop */}
             <div className="relative w-full h-[50vh] overflow-hidden">
-                <Image
-                    src={agent.thumbnailSrc}
-                    alt={agent.name}
-                    fill
-                    className="object-cover object-top blur-sm scale-105 opacity-40"
-                    sizes="100vw"
-                />
+                {isAmy ? (
+                    <Image
+                        src={agent.thumbnailSrc}
+                        alt={agent.name}
+                        fill
+                        className="object-cover object-[center_38%] blur-[1px] opacity-40"
+                        sizes="100vw"
+                    />
+                ) : (
+                    <Image
+                        src={agent.thumbnailSrc}
+                        alt={agent.name}
+                        fill
+                        className="object-cover object-top blur-sm scale-105 opacity-40"
+                        sizes="100vw"
+                    />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
 
                 {/* Poster + info overlay */}

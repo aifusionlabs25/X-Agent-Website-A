@@ -3,8 +3,11 @@
 import { notFound, useRouter } from 'next/navigation';
 import { use } from 'react';
 import { ALL_AGENTS } from '@/lib/agents';
+import { AMY_CARA4_VARIANT } from '@/lib/anam/session-config';
+import { resolveAnamAudioBridge } from '@/lib/anam/audio-bridge';
 import AnamPlayer from '@/components/AnamPlayer';
 import AgentQaChat from '@/components/qa/AgentQaChat';
+import AmyMemoryAccessGate from '@/components/amy/AmyMemoryAccessGate';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -21,6 +24,22 @@ export default function DemoPage({ params, searchParams }: Props) {
 
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) return notFound();
+
+    const rawVariant = Array.isArray(resolvedSearchParams.variant)
+        ? resolvedSearchParams.variant[0]
+        : resolvedSearchParams.variant;
+    const isAmyCara4Canary = agent.slug === 'amy' && rawVariant === 'cara4';
+    const sessionVariant = isAmyCara4Canary ? AMY_CARA4_VARIANT : undefined;
+
+    const rawAudioBridge = Array.isArray(resolvedSearchParams.audioBridge)
+        ? resolvedSearchParams.audioBridge[0]
+        : resolvedSearchParams.audioBridge;
+    const audioBridge = resolveAnamAudioBridge({
+        agentSlug: agent.slug,
+        isAmyCara4Canary,
+        isQaMode,
+        requestedAudioBridge: rawAudioBridge,
+    });
 
     const rawReturnUrl = Array.isArray(resolvedSearchParams.returnUrl)
         ? resolvedSearchParams.returnUrl[0]
@@ -60,8 +79,12 @@ export default function DemoPage({ params, searchParams }: Props) {
         router.push(returnHref);
     };
 
-    return (
-        <main className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden">
+    const experience = (
+        <main
+            className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden"
+            data-anam-variant={sessionVariant ?? 'public'}
+            data-anam-audio-bridge={audioBridge ?? 'default'}
+        >
             {/* Minimal bottom nav to return - Centered and High Visibility */}
             <div className="absolute bottom-10 left-0 w-full z-20 flex justify-center items-center pointer-events-none">
                 <Link
@@ -77,9 +100,18 @@ export default function DemoPage({ params, searchParams }: Props) {
             <div className={`w-full h-full relative ${isQaMode ? 'z-30' : ''}`}>
                 {agent.personaId ? (
                     isQaMode ? (
-                        <AgentQaChat personaId={agent.personaId} agentName={agent.name} />
+                        <AgentQaChat
+                            personaId={agent.personaId}
+                            agentName={isAmyCara4Canary ? `${agent.name} · Cara 4 canary` : agent.name}
+                            sessionVariant={sessionVariant}
+                        />
                     ) : (
-                        <AnamPlayer personaId={agent.personaId} onClose={handleClose} />
+                        <AnamPlayer
+                            personaId={agent.personaId}
+                            sessionVariant={sessionVariant}
+                            audioBridge={audioBridge}
+                            onClose={handleClose}
+                        />
                     )
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -92,4 +124,8 @@ export default function DemoPage({ params, searchParams }: Props) {
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] z-10" />
         </main>
     );
+
+    return isAmyCara4Canary
+        ? <AmyMemoryAccessGate>{experience}</AmyMemoryAccessGate>
+        : experience;
 }

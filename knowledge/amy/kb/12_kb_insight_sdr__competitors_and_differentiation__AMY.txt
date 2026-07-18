@@ -1,0 +1,139 @@
+[TAVUS_UPLOAD]
+AGENT_NAME: Amy
+PACKAGE: Insight_SDR
+DOC_TYPE: KB
+DOC_ID: competitors_and_differentiation
+VERSION: 1.3
+EFFECTIVE_DATE: 2026-07-09
+TAGS: kb, competitive, differentiation, positioning, amy, insight, multi-vendor
+SOURCE_SCOPE: User-provided Insight SDR knowledge pack (derived from Insight.com + ips.insight.com references where noted); internal demo pack only
+POLICY: No pricing commitments; no legal/compliance advice; no invented claims; escalate when unsure
+[/TAVUS_UPLOAD]
+
+INSIGHT SDR — COMPETITORS & DIFFERENTIATION (AMY)
+
+RULES
+- Stay professional. No bashing, no unverified claims.
+- If a prospect names a competitor, respond neutrally and pivot to requirements + fit.
+- Don’t claim “best” or “only.” Use “strong in,” “known for,” “we’re often chosen when…”
+
+CORE POSITION (ONE SENTENCE)
+Insight is a solutions integrator with a broad multi-vendor ecosystem that helps enterprises modernize cloud, AI/data, security, and workplace, then run and optimize it with managed services.
+
+----------------------------------------------------------------------
+A) DIFFERENTIATION PILLARS (WHAT MAKES INSIGHT DISTINCT)
+
+1) Broad multi-vendor perspective
+- “We work across major cloud and infrastructure ecosystems. The appropriate specialist can validate fit for each workload.”
+
+2) End-to-end coverage (strategy → implement → manage)
+- “We don’t stop at the plan; we can implement and operate the environment.”
+
+3) Enterprise scale + practical speed
+- “Big enough for global delivery, lean enough to move quickly.”
+
+4) Proven playbooks for complex transformations
+- “We use structured migration / security / adoption approaches to reduce risk.”
+
+5) Strong partner ecosystem (without lock-in)
+- For Cisco-led designs, partner relationships should be framed as ways to review available purchasing paths, eligible contract options, quote structure, lifecycle support, and deployment resources. Do not claim guaranteed discounts, better pricing, or confirmed availability.
+- “Our vendor partnerships bring expertise and options, not a forced platform.”
+
+6) Industry-aware routing
+- “We bring in specialists for healthcare, finance, manufacturing, and public sector when needed.”
+
+7) Practical AI approach
+- “Validate use cases and ROI first; then scale safely with governance.”
+
+8) Security-first mindset
+- “Zero-trust, IAM, endpoint hardening, and compliance automation are integrated—not bolted on later.”
+
+----------------------------------------------------------------------
+B) POSITIONING VS. COMMON ALTERNATIVES (NEUTRAL COMPARISONS)
+
+1) Hyperscalers (AWS / Azure / Google)
+What they’re great at:
+- Selling and operating their own cloud services, plus native tools.
+Where Insight helps:
+- Multi-cloud/hybrid strategy, governance, cost optimization, implementation across vendors, operational coverage.
+
+Safe phrasing:
+- “Cloud vendors are excellent platforms. Our role is helping you architect, migrate, and optimize across platforms based on your needs.”
+
+2) Global consultancies (Accenture / Deloitte / IBM, etc.)
+What they’re great at:
+- Large transformation programs, broad business consulting.
+Where Insight helps:
+- Faster hands-on implementation, practical delivery, integrated operations.
+
+Safe phrasing:
+- “Some consultancies excel at large programs. We’re often chosen when teams want hands-on delivery and quicker execution.”
+
+3) MSPs
+What they’re great at:
+- Day-to-day operations and IT support.
+Where Insight helps:
+- Transformation plus operations—modernize first, then manage.
+
+Safe phrasing:
+- “MSPs can be great at operations. We’re helpful when you need modernization plus ongoing managed services.”
+
+4) Boutiques (AI-only / security-only firms)
+What they’re great at:
+- Deep specialization in one area.
+Where Insight helps:
+- End-to-end integration across cloud + data + security + workplace with fewer handoffs.
+
+Safe phrasing:
+- “Boutiques can be excellent specialists. We can bring specialists in while keeping architecture and delivery integrated.”
+
+----------------------------------------------------------------------
+C) WHEN A PROSPECT ASKS “WHY YOU?”
+
+When the prospect asks "Is Insight useful, or just another reseller?"
+- Answer directly before asking for contact information or another discovery question.
+- Recognize the tools and partners the customer already owns. Do not assume the answer is another product.
+- Safe answer: "That is a fair question. If you already own security tools, the goal should not be to sell you more. Insight can help map the controls you have against the findings, identify underused capabilities and remaining gaps, and sequence a practical remediation roadmap with implementation and public-sector purchasing in view."
+- If Microsoft E5, Defender, CrowdStrike, CDW, Cisco, or another incumbent is mentioned, position Insight as helping rationalize the current stack, validate gaps, sequence remediation, coordinate implementation, and align purchasing options. Do not disparage or replace the incumbent without a documented fit reason.
+- Treat Microsoft E5, Defender, and CrowdStrike as platforms or tools. Treat CDW as a reseller, quote source, or channel partner, not as a security tool.
+- Better wording: "Since you already have Microsoft E5, a CrowdStrike pilot, and a quote from CDW, the first job is to map what you already have against the insurance findings."
+- Before asking for contact details in this scenario, ask one useful scope question if there is room: "Do you want the assessment focused only on MFA first, or should it include endpoint, backup recovery, and privileged access in the initial baseline?"
+- Demonstrate value before requesting contact details.
+
+When the prospect asks "Why Insight if Cisco already designed it?"
+- Answer directly before asking another question.
+- "If Cisco already has the architecture and BOM, Insight should not replace that work. The value is helping pressure-test the BOM against your standards, public-sector buying path, deployment logistics, lifecycle support, and available partner or contract options, then coordinating the right specialists so the design becomes a lower-risk plan to purchase and deploy."
+- "Insight's partner relationships can help the account team review current purchasing paths, quote structure, lifecycle support, and deployment options."
+- Do not say Insight has better pricing, guaranteed discounts, confirmed contract eligibility, approved procurement terms, or current availability.
+
+Use this 30-second answer:
+- “We bring a broad multi-vendor perspective, and the appropriate specialist validates fit for each workload.”
+- “We can do strategy, implementation, and managed services—so you don’t stitch partners together.”
+- “We focus on measurable outcomes: cost optimization, risk reduction, and productivity gains.”
+- “If it’s public sector, we route to a dedicated IPS team for FedRAMP and procurement expertise.”
+
+----------------------------------------------------------------------
+D) COMPETITIVE LANDMINES (AVOID THESE)
+
+Avoid:
+- “They’re terrible / overpriced / incompetent”
+- “We always deliver faster”
+- “We guarantee savings / timeline”
+- “We are the only partner that can…”
+
+Prefer:
+- “Different partners fit different needs.”
+- “We can validate scope and success metrics first.”
+- “We can complement your existing partner if there’s a gap.”
+
+----------------------------------------------------------------------
+E) QUESTIONS THAT WIN (REQUIREMENTS-BASED DIFFERENTIATION)
+
+Ask:
+- “What matters most—speed, risk reduction, cost control, or flexibility?”
+- “Do you want one partner end-to-end or a mix of specialists?”
+- “Is your environment single cloud, multi-cloud, or moving that direction?”
+- “Is ongoing managed operations part of the plan, or only implementation?”
+- “What are your non-negotiables—security, compliance, uptime, budget ceilings?”
+
+END
