@@ -11,9 +11,12 @@ const env = Object.fromEntries(localEnv.split(/\r?\n/).map(line => line.trim()).
 const apiKey = process.env.ANAM_API_KEY?.trim() || env.ANAM_API_KEY?.trim();
 if (!apiKey) throw new Error('ANAM_API_KEY is required and is never printed.');
 
-const prompt = `${(await fs.readFile(new URL('../../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8')).trim()}\n`;
+const normalizeLineEndings = value => String(value).replace(/\r\n?/g, '\n');
+const managedPromptOf = value => `${normalizeLineEndings(value).split('\n# TOOLS\n', 1)[0].trim()}\n`;
+const prompt = `${normalizeLineEndings(await fs.readFile(new URL('../../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8')).trim()}\n`;
 const manifest = JSON.parse(await fs.readFile(new URL('../../config/anam/evan/knowledge-manifest.json', import.meta.url), 'utf8'));
-const sha256 = value => crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
+const personaManifest = JSON.parse(await fs.readFile(new URL('../../config/anam/evan/persona-manifest.json', import.meta.url), 'utf8'));
+const sha256 = value => crypto.createHash('sha256').update(normalizeLineEndings(value), 'utf8').digest('hex');
 const idOf = value => value?._toolId ?? value?.id ?? null;
 
 async function anam(pathname) {
@@ -39,7 +42,10 @@ const failures = [];
 if (!/evan/i.test(evan.name) || !/mullins/i.test(evan.name)) failures.push('Evan identity');
 if (!/james/i.test(james.name) || !/knowles/i.test(james.name)) failures.push('protected James identity');
 if (evan.avatarModel !== 'cara-4') failures.push('Cara 4');
-if (sha256(evan.brain?.systemPrompt ?? '') !== sha256(prompt)) failures.push('prompt hash');
+if (sha256(managedPromptOf(evan.brain?.systemPrompt ?? '')) !== sha256(prompt)) failures.push('prompt hash');
+for (const [name, value] of Object.entries(personaManifest.voiceDetectionOptions)) {
+    if (evan.voiceDetectionOptions?.[name] !== value) failures.push(`voiceDetectionOptions.${name}`);
+}
 for (const name of REQUIRED_TOOLS) if (!names.has(name)) failures.push(`tool ${name}`);
 if (!idOf(knowledgeTool)) failures.push('managed knowledge tool');
 if (JSON.stringify(knowledgeTool?.config?.documentFolderIds ?? []) !== JSON.stringify([group.id])) failures.push('knowledge folder isolation');
@@ -53,7 +59,8 @@ console.log(JSON.stringify({
     evanPersonaId: evan.id,
     protectedJamesPersonaId: james.id,
     avatarModel: evan.avatarModel,
-    promptSha256: sha256(evan.brain.systemPrompt),
+    promptSha256: sha256(managedPromptOf(evan.brain.systemPrompt)),
+    voiceDetectionOptions: evan.voiceDetectionOptions,
     knowledgeGroupId: group.id,
     knowledgeToolId: idOf(knowledgeTool),
     knowledgeDocuments: relevant.map(document => ({ filename: document.filename, status: document.status })).sort((a, b) => a.filename.localeCompare(b.filename)),

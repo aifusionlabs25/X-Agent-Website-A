@@ -6,6 +6,13 @@
   "expectedName": "Evan Mullins Moving Concierge",
   "expectedAvatarModel": "cara-4",
   "initialMessage": "Hi, I'm Evan with Mullins Moving. I can help answer questions and get the right move details to the team. What kind of move are you planning?",
+  "voiceDetectionOptions": {
+    "endOfSpeechSensitivity": 0.05,
+    "silenceBeforeAutoEndTurnSeconds": 3,
+    "silenceBeforeSkipTurnSeconds": 0,
+    "silenceBeforeSessionEndSeconds": 0,
+    "speechEnhancementLevel": 0.7
+  },
   "promptFile": "EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md",
   "knowledgeToolName": "Knowledge_Evan_Mullins_Moving",
   "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_call"]

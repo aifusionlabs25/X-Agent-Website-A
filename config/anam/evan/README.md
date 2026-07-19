@@ -16,6 +16,8 @@ The live identity of both IDs is checked before any sync.
 - `knowledge-manifest.json`: folder name, source policy, document allowlist, and exclusions.
 - `persona-manifest.json`: expected persona identity, model, greeting, and tools.
 
+Evan's managed voice detection waits through natural pauses: sensitivity `0.05`, a `3` second mid-sentence pause tolerance, disabled silence prompts and silence-based session ending, and speech enhancement `0.7`.
+
 Internal strategy, Tavus/PAL runtime instructions, test-specific answers, draft workflows, transcripts, questionnaires, and backups are intentionally excluded from the live KB.
 
 ## Commands
@@ -38,3 +40,10 @@ The update command defaults to a read-only dry run. `--apply` creates or reuses 
 - Rollback persona: `8fe1fcdd-172d-4974-afcf-b3608c8181a3`
 - Required live tools: `Knowledge_Evan_Mullins_Moving`, `skip_turn`, `end_call`
 - Eight of eight documents reported `READY`; delayed read-back passed.
+
+## 2026-07-19 responsiveness update
+
+- Reduced end-of-speech sensitivity from `0.3` to `0.05`.
+- Increased mid-sentence pause tolerance from `1.3` to `3` seconds.
+- Disabled silence prompts and silence-based session ending.
+- Set speech enhancement to `0.7` to reduce false turn endings from background noise.

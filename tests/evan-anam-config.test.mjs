@@ -51,6 +51,25 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /claim success only after its successful receipt/i);
 });
 
+test('managed persona uses patient turn detection and disables silence prompts and shutdown', async () => {
+    const manifest = JSON.parse(await readFile(new URL('../config/anam/evan/persona-manifest.json', import.meta.url), 'utf8'));
+    assert.deepEqual(manifest.voiceDetectionOptions, {
+        endOfSpeechSensitivity: 0.05,
+        silenceBeforeAutoEndTurnSeconds: 3,
+        silenceBeforeSkipTurnSeconds: 0,
+        silenceBeforeSessionEndSeconds: 0,
+        speechEnhancementLevel: 0.7,
+    });
+
+    const updater = await readFile(new URL('../scripts/anam/update-evan-persona.mjs', import.meta.url), 'utf8');
+    const audit = await readFile(new URL('../scripts/anam/audit-evan-persona.mjs', import.meta.url), 'utf8');
+    assert.match(updater, /personaManifest\.voiceDetectionOptions/);
+    assert.match(updater, /voiceDetectionOptions: VOICE_DETECTION_OPTIONS/);
+    assert.match(updater, /managedPromptOf/);
+    assert.match(audit, /voiceDetectionOptions\.\$\{name\}/);
+    assert.match(audit, /managedPromptOf/);
+});
+
 test('knowledge manifest is complete and excludes internal/Tavus material', async () => {
     const manifest = JSON.parse(await readFile(new URL('../config/anam/evan/knowledge-manifest.json', import.meta.url), 'utf8'));
     const files = (await readdir(new URL('../config/anam/evan/knowledge/', import.meta.url))).sort();
