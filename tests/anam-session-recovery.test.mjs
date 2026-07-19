@@ -270,3 +270,17 @@ test('the recovery route is scheduler-compatible, bearer-authenticated, and has 
         /current\.state ~= 'failed' or current\.failureCode ~= 'provider_response'/,
     );
 });
+test('owner email recovery requires the signed session browser and a same-origin POST', async () => {
+    const route = await readFile(
+        new URL('../app/support/amy-email-recovery/route.ts', import.meta.url),
+        'utf8',
+    );
+
+    assert.match(route, /readAmyAnamBrowserSession\(request, config\.signingSecret\)/);
+    assert.match(route, /session\.browserSessionId !== browserSession\.id/);
+    assert.match(route, /finalization\.browserSessionId !== browserSession\.id/);
+    assert.match(route, /request\.headers\.get\('origin'\) !== new URL\(request\.url\)\.origin/);
+    assert.match(route, /failureCode !== 'provider_response'/);
+    assert.match(route, /requeueAmyAnamProviderResponseFailure\(owned\.sessionId\)/);
+    assert.match(route, /X-Robots-Tag', 'noindex, nofollow'/);
+});
