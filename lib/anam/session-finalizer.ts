@@ -264,6 +264,14 @@ export async function finalizeAmyAnamSession(
             });
             return 'completed';
         } catch (error) {
+            console.warn('[Amy Anam Finalization] Finalization step failed', {
+                externalSessionId,
+                errorType: error instanceof Error ? error.name : typeof error,
+                errorCategory: error instanceof AnamSessionApiError ? error.message : 'unexpected_error',
+                providerStatus: error instanceof AnamSessionApiError ? error.status : null,
+                retryable: error instanceof AnamSessionApiError ? error.retryable : false,
+                contentIncludedInLog: false,
+            });
             if (error instanceof AnamSessionApiError && error.retryable) {
                 await markAmyAnamFinalizationPending({
                     session,
