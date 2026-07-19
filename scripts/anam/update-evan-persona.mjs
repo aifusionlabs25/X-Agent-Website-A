@@ -7,12 +7,6 @@ const JAMES_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
 const CURRENT_KNOWLEDGE_TOOL_ID = 'ad2e09f5-1360-4f4e-b692-8aaaa55cc976';
 const KNOWLEDGE_TOOL_NAME = 'Knowledge_Evan_Mullins_Moving';
 const INITIAL_MESSAGE = "Hi, I'm Evan with Mullins Moving. I can help answer questions and get the right move details to the team. What kind of move are you planning?";
-const VOICE_DETECTION_OPTIONS = {
-    endOfSpeechSensitivity: 0.3,
-    silenceBeforeAutoEndTurnSeconds: 1.3,
-    silenceBeforeSkipTurnSeconds: 0,
-    silenceBeforeSessionEndSeconds: 180,
-};
 const apply = process.argv.includes('--apply');
 
 const localEnv = await fs.readFile(new URL('../../.env.local', import.meta.url), 'utf8').catch(() => '');
@@ -25,13 +19,17 @@ const envMap = Object.fromEntries(localEnv.split(/\r?\n/)
 const apiKey = process.env.ANAM_API_KEY?.trim() || envMap.ANAM_API_KEY?.trim();
 if (!apiKey) throw new Error('ANAM_API_KEY is required and is never printed.');
 
-const prompt = `${(await fs.readFile(new URL('../../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8')).trim()}\n`;
+const personaManifest = JSON.parse(await fs.readFile(new URL('../../config/anam/evan/persona-manifest.json', import.meta.url), 'utf8'));
+const VOICE_DETECTION_OPTIONS = personaManifest.voiceDetectionOptions;
+const normalizeLineEndings = value => String(value).replace(/\r\n?/g, '\n');
+const managedPromptOf = value => `${normalizeLineEndings(value).split('\n# TOOLS\n', 1)[0].trim()}\n`;
+const prompt = `${normalizeLineEndings(await fs.readFile(new URL('../../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8')).trim()}\n`;
 const manifest = JSON.parse(await fs.readFile(new URL('../../config/anam/evan/knowledge-manifest.json', import.meta.url), 'utf8'));
 const documents = await Promise.all(manifest.documents.map(async filename => ({
     filename,
     content: await fs.readFile(new URL(`../../config/anam/evan/knowledge/${filename}`, import.meta.url), 'utf8'),
 })));
-const sha256 = value => crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
+const sha256 = value => crypto.createHash('sha256').update(normalizeLineEndings(value), 'utf8').digest('hex');
 const bundleSha256 = sha256(JSON.stringify({
     manifest,
     documents: documents.map(document => ({ filename: document.filename, sha256: sha256(document.content) })),
@@ -109,6 +107,7 @@ const plan = {
     promptSha256: sha256(prompt),
     knowledgeBundleSha256: bundleSha256,
     toolNames: [KNOWLEDGE_TOOL_NAME, 'skip_turn', 'end_call'],
+    voiceDetectionOptions: VOICE_DETECTION_OPTIONS,
 };
 if (!apply) {
     console.log(JSON.stringify(plan, null, 2));
@@ -182,7 +181,7 @@ async function verifyLive() {
     const failures = [];
     if (persona.name !== 'Evan Mullins Moving Concierge') failures.push('name');
     if (persona.avatarModel !== 'cara-4') failures.push('avatarModel');
-    if (sha256(persona.brain?.systemPrompt ?? '') !== sha256(prompt)) failures.push('prompt');
+    if (sha256(managedPromptOf(persona.brain?.systemPrompt ?? '')) !== sha256(prompt)) failures.push('prompt');
     if (persona.initialMessage !== INITIAL_MESSAGE) failures.push('initialMessage');
     if (JSON.stringify(sortedToolIds(persona)) !== JSON.stringify(nextToolIds)) failures.push('tools');
     if (tool.name !== KNOWLEDGE_TOOL_NAME) failures.push('knowledgeToolName');
@@ -201,6 +200,7 @@ console.log(JSON.stringify({
     livePromptSha256: sha256(delayed.persona.brain.systemPrompt),
     liveKnowledgeFolderIds: delayed.tool.config.documentFolderIds,
     liveToolNames: delayed.persona.tools.map(tool => tool.name).sort(),
+    liveVoiceDetectionOptions: delayed.persona.voiceDetectionOptions,
     knowledgeDocuments: readyDocuments.map(document => ({ filename: document.filename, status: document.status })),
     delayedReadbackPassed: true,
 }, null, 2));
