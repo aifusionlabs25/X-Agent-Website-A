@@ -547,6 +547,82 @@ export async function markAmyAnamFinalizationFailed(input: {
     }
 }
 
+export type AmyAnamFailedFinalizationRetryStatus =
+    | 'completed'
+    | 'missing'
+    | 'not_retryable'
+    | 'requeued'
+    | 'stale';
+
+export async function requeueAmyAnamProviderResponseFailure(
+    externalSessionId: string,
+    options: StoreOptions = {},
+): Promise<AmyAnamFailedFinalizationRetryStatus> {
+    const existingReceipt = await readAmyAnamReceipt(externalSessionId, options);
+    if (existingReceipt) return 'completed';
+
+    const [currentSession, currentFinalization] = await Promise.all([
+        readAmyAnamSession(externalSessionId, options),
+        readAmyAnamFinalization(externalSessionId, options),
+    ]);
+    if (!currentSession || !currentFinalization) return 'missing';
+    if (
+        currentFinalization.state !== 'failed'
+        || currentFinalization.failureCode !== 'provider_response'
+    ) {
+        return 'not_retryable';
+    }
+
+    const now = Date.now();
+    const retryAt = new Date(now).toISOString();
+    const session: AmyAnamSessionRecord = {
+        ...currentSession,
+        state: 'awaiting_transcript',
+    };
+    const finalization: AmyAnamFinalizationRecord = {
+        ...currentFinalization,
+        state: 'awaiting_transcript',
+        attempts: currentFinalization.attempts + 1,
+        updatedAt: retryAt,
+        nextAttemptAt: retryAt,
+        failureCode: undefined,
+    };
+    const script = [
+        "if redis.call('EXISTS', KEYS[4]) == 1 then redis.call('ZREM', KEYS[3], ARGV[5]); return 'terminal' end",
+        "local currentRaw = redis.call('GET', KEYS[2])",
+        "if not currentRaw then return 'missing' end",
+        'local current = cjson.decode(currentRaw)',
+        "if current.updatedAt ~= ARGV[6] then return 'stale' end",
+        "if current.state ~= 'failed' or current.failureCode ~= 'provider_response' then return 'not_retryable' end",
+        "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[4])",
+        "redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[4])",
+        "redis.call('ZADD', KEYS[3], ARGV[3], ARGV[5])",
+        "redis.call('EXPIRE', KEYS[3], ARGV[4])",
+        "return 'OK'",
+    ].join(' ');
+    const result = await redisCommand([
+        'EVAL',
+        script,
+        4,
+        sessionKey(externalSessionId),
+        finalizationKey(externalSessionId),
+        finalizationDueKey(),
+        receiptKey(externalSessionId),
+        JSON.stringify(session),
+        JSON.stringify(finalization),
+        now,
+        AMY_ANAM_RECORD_TTL_SECONDS,
+        externalSessionId,
+        currentFinalization.updatedAt,
+    ], options);
+
+    if (result === 'OK') return 'requeued';
+    if (result === 'terminal') return 'completed';
+    if (result === 'missing') return 'missing';
+    if (result === 'not_retryable') return 'not_retryable';
+    if (result === 'stale') return 'stale';
+    throw new Error('Amy Anam failed finalization could not be requeued');
+}
 export async function acquireAmyAnamCompletionLock(
     externalSessionId: string,
     lockToken: string,
