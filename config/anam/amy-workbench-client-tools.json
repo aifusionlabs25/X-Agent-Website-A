@@ -16,7 +16,7 @@
   },
   {
     "name": "show_session_brief",
-    "description": "Open Amy's Live Brief when the visitor explicitly asks for the Live Brief, a brief summary of where things stand, or key points before next steps. A named Live Brief request always uses this tool, never show_live_notes. Call silently with exactly an empty object. Do not call during a farewell or use the tool to carry spoken text.",
+    "description": "Rebuild and open Amy's Live Brief from the latest current-session turns whenever the visitor explicitly asks for the Live Brief, requests an update, refresh, or regeneration, or says the displayed brief is stale. A named Live Brief request always uses this tool, never show_live_notes. Wait for the tool result and confirm only that the working view is open; do not claim specific tracks are visible unless they were stated in the current conversation. Call silently with exactly an empty object.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {
@@ -31,7 +31,7 @@
   },
   {
     "name": "show_solution_roadmap",
-    "description": "Open Amy's Roadmap when the visitor explicitly asks for a roadmap, phased plan, implementation path, or rollout sequence. The topic must summarize confirmed current-session context and must not contain spoken reply text. Do not call during a farewell. The roadmap is illustrative and is not an approved design, quote, commitment, or completed assessment.",
+    "description": "Rebuild and open Amy's Roadmap from the latest current-session turns whenever the visitor asks for a roadmap, update, refresh, regeneration, or says the displayed roadmap is stale. The topic must summarize all confirmed current-session tracks and must not contain spoken reply text. Wait for the tool result and confirm only that the working view is open; do not claim specific tracks are visible unless they were stated in the current conversation. Do not call during a farewell. The roadmap is illustrative and is not an approved design, quote, commitment, or completed assessment.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {
