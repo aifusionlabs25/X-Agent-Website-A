@@ -141,7 +141,7 @@ function requestedOutputsFrom(values: string[], trackCount: number): string[] {
     return unique([
         /\blive notes?\b/i.test(text) ? 'Live notes' : '',
         /\blive brief\b/i.test(text) ? 'Live brief' : '',
-        /\broadmap\b/i.test(text) ? (trackCount > 1 ? `${trackCount}-track roadmap` : 'Roadmap') : '',
+        /\broadmap\b/i.test(text) ? (trackCount === 2 ? 'Two-track roadmap' : trackCount > 2 ? `${trackCount}-track roadmap` : 'Roadmap') : '',
         /\bvisual(?: brief)?\b/i.test(text) ? 'Visual brief' : '',
         /\bcatalog\b/i.test(text) ? 'Solution catalog' : '',
     ], 5);
@@ -495,7 +495,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Clarify ${openQuestions[0].replace(/^What |^Which |^Who |^Please clarify:\s*/i, '').replace(/\?$/, '').toLowerCase()}.`
         : 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';
     const roadmapFacts = facts
-        .filter((fact) => ['Scale', 'Environment', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
+        .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
     const phases = currentTracks.length > 2
         ? buildMultiTrackPhases(currentTracks)
@@ -520,7 +520,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         { id: 'what_we_heard', eyebrow: '02 / What we heard', title: 'Current-session signals', summary: 'A concise view of stated facts, excluding contact details and uncertain language.', bullets: discussionPoints.length ? discussionPoints.slice(0, 6) : ['No substantive session signals yet.'], boundary: slideBoundary },
         { id: 'environment_and_constraints', eyebrow: '03 / Environment', title: 'Platforms and guardrails', summary: 'The current environment and constraints shaping a viable path.', bullets: unique([terms.join(' / '), workloads.join(' / '), compliance.join(' / '), constraint], 6).length ? unique([terms.join(' / '), workloads.join(' / '), compliance.join(' / '), constraint], 6) : ['Environment details are still being clarified.'], boundary: slideBoundary },
         { id: 'recommended_path', eyebrow: '04 / Direction', title: 'Recommended planning approach', summary: roadmapOutcome, bullets: phases.slice(0, 3).map((phase) => `${phase.title}: ${phase.detail}`), boundary: slideBoundary },
-        { id: 'phased_roadmap', eyebrow: '05 / Roadmap', title: 'Four-stage working path', summary: 'A phased sequence to validate decisions before broader rollout.', bullets: phases.map((phase) => `${phase.number} ${phase.title}`), boundary: slideBoundary },
+        { id: 'phased_roadmap', eyebrow: '05 / Roadmap', title: 'Phased working path', summary: 'A phased sequence to validate decisions before broader rollout.', bullets: phases.map((phase) => `${phase.number} ${phase.title}`), boundary: slideBoundary },
         { id: 'decisions_and_next_steps', eyebrow: '06 / Decisions', title: 'Next decision', summary: nextStep, bullets: unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5).length ? unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5) : ['Confirm owners and the next decision gate.'], boundary: slideBoundary },
     ];
 
