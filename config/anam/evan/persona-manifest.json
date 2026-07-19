@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "personaId": "4b7e933a-ea04-4b84-b418-72c0762545e6",
+  "doNotUsePersonaId": "8a991c93-0c95-42c5-8c22-a67428946eb8",
+  "doNotUseReason": "This ID is the live James Knowles Law Firm persona as verified on 2026-07-16.",
+  "expectedName": "Evan Mullins Moving Concierge",
+  "expectedAvatarModel": "cara-4",
+  "initialMessage": "Hi, I'm Evan with Mullins Moving. I can help answer questions and get the right move details to the team. What kind of move are you planning?",
+  "promptFile": "EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md",
+  "knowledgeToolName": "Knowledge_Evan_Mullins_Moving",
+  "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_call"]
+}

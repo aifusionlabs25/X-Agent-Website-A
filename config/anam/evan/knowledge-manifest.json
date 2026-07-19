@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "agent": "Evan",
+  "company": "Mullins Moving",
+  "verifiedAt": "2026-07-16",
+  "folderName": "Evan Mullins Moving Anam KB 2026-07-16",
+  "toolName": "Knowledge_Evan_Mullins_Moving",
+  "documents": ["01_company_brand_contact.md", "02_services_and_service_areas.md", "03_estimates_pricing_and_timing.md", "04_move_planning_and_access.md", "05_specialty_and_white_glove.md", "06_senior_commercial_and_labor.md", "07_restricted_items_valuation_and_claims.md", "08_public_discounts.md"],
+  "excludedClasses": ["Tavus/PAL runtime instructions", "internal strategy and SOP files", "draft workflows", "founder questionnaires and transcripts", "backups and test fixtures"],
+  "sourcePolicy": "Only current customer-facing facts reverified against official Mullins Moving pages are included. Exact pricing, availability, item acceptance, building requirements, valuation, and claims require human confirmation."
+}
