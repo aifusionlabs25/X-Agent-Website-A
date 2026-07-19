@@ -74,8 +74,10 @@ test('pre-unlock policy warms up and asks permission without requesting spoken e
     assert.match(policy, /warm, neutral greeting/i);
     assert.match(policy, /Do not ask.*opening turn/i);
     assert.match(policy, /at least one useful conversational exchange/i);
-    assert.match(policy, /check for notes from a previous conversation/i);
+    assert.match(policy, /check for notes from an earlier conversation/i);
     assert.match(policy, /memoryAccessConfirmed set to true/i);
+    assert.match(policy, /What name would you like me to use\?/i);
+    assert.doesNotMatch(policy, /ask naturally for the visitor's preferred name/i);
     assert.match(policy, /Never ask for, spell, or repeat an email address solely to unlock memory/i);
     assert.doesNotMatch(policy, /rvicks|Website Alias|ERP migration/i);
 });

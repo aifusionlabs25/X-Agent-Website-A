@@ -1,6 +1,6 @@
 {
   "name": "confirm_live_identity",
-  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked for the visitor's preferred name, and separately received explicit permission to check for notes from a previous conversation. Never ask for or submit an email address for memory access; the application privately verifies the session-bound website check-in identity. After success, follow the returned instruction: briefly identify two or three distinctive earlier-session facts, distinguish them from today's statements, and ask whether they are still current.",
+  "description": "Unlock approved returning-user memory only after Amy has completed a useful warm exchange, asked exactly 'What name would you like me to use?', received a real spoken name rather than User, Visitor, Guest, or Customer, and separately received explicit permission to check for notes from an earlier conversation. Never ask for or submit an email address for memory access; the application privately verifies the session-bound website check-in identity. After success, follow the returned instruction and prefer the newest approved notes over older superseded context.",
   "type": "CLIENT",
   "disableInterruptions": true,
   "config": {
@@ -10,7 +10,7 @@
       "properties": {
         "preferredName": {
           "type": "string",
-          "description": "The preferred name the visitor stated during this live conversation.",
+          "description": "The real name the visitor stated after Amy asked 'What name would you like me to use?'. Never submit User, Visitor, Guest, or Customer.",
           "minLength": 1,
           "maxLength": 80
         },

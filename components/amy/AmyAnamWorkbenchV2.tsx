@@ -42,7 +42,7 @@ const TABS: Array<{ id: AmyWorkbenchView; label: string; icon: typeof FileText }
     { id: 'catalog', label: 'Catalog', icon: PackageSearch },
 ];
 
-const NOTE_SECTIONS = ['Organization', 'Scale', 'Environment', 'Priorities', 'Constraints', 'Timing', 'Identity', 'Requested outputs', 'Decisions'] as const;
+const NOTE_SECTIONS = ['Organization', 'Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Identity', 'Requested outputs', 'Decisions'] as const;
 
 function EmptySignal() {
     return (

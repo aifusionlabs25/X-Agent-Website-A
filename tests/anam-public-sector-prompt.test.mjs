@@ -21,6 +21,10 @@ test('Anam Amy has explicit Public Sector recognition and procurement literacy',
     assert.match(guidance, /OMNIA Partners/);
     assert.match(guidance, /Sourcewell/);
     assert.match(guidance, /purchasing paths or contract vehicles/i);
+    assert.match(guidance, /SVAR in Arizona means Software Value-Added Reseller/i);
+    assert.match(guidance, /CTR069959/);
+    assert.match(guidance, /Statewide Vendor Authorization and Review/i);
+    assert.match(guidance, /Never invent an expansion, phase model/i);
 });
 
 test('Public Sector guidance covers mission discovery without inventing compliance or eligibility', () => {
@@ -31,6 +35,9 @@ test('Public Sector guidance covers mission discovery without inventing complian
     assert.match(guidance, /Never claim.*compliant, authorized, eligible, approved/s);
     assert.match(guidance, /Never promise contract eligibility, pricing, discounts, inventory/s);
     assert.match(guidance, /Insight Public Sector specialist/i);
+    assert.match(guidance, /agency or contract-controlled information/i);
+    assert.match(guidance, /human review/i);
+    assert.match(guidance, /success will be measured/i);
 });
 
 test('the live updater manages and verifies the Public Sector block idempotently', () => {

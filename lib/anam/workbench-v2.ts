@@ -6,7 +6,7 @@ export interface AmyWorkbenchTurn {
 }
 
 export interface AmyWorkbenchFact {
-    section: 'Identity' | 'Organization' | 'Environment' | 'Scale' | 'Priorities' | 'Constraints' | 'Timing' | 'Decisions' | 'Requested outputs';
+    section: 'Identity' | 'Organization' | 'Environment' | 'Scale' | 'Priorities' | 'Procurement' | 'Constraints' | 'Timing' | 'Decisions' | 'Requested outputs';
     label: string;
     value: string;
     status: 'mentioned' | 'confirmed';
@@ -82,6 +82,8 @@ function clean(value: unknown): string {
 
 function canonical(value: string): string {
     return clean(value)
+        .replace(/\bS\s*[- ]\s*V\s*[- ]\s*A\s*[- ]\s*R\b/gi, 'SVAR')
+        .replace(/\bArizona\s+SFAR\b/gi, 'Arizona SVAR')
         .replace(/\b(?:sccf|s c c m|system center configuration manager)\b/gi, 'SCCM')
         .replace(/\b(?:in tune|intune)\b/gi, 'Intune')
         .replace(/\b(?:m d m|mobile device management)\b/gi, 'MDM')
@@ -134,12 +136,12 @@ function isConversationControl(value: string): boolean {
     return /^(?:thanks?|thank you|yes,? please|no|not right(?: now)?|maybe later|sure|partially|for now)\.?$/i.test(value.trim());
 }
 
-function requestedOutputsFrom(values: string[], dualTrack: boolean): string[] {
+function requestedOutputsFrom(values: string[], trackCount: number): string[] {
     const text = values.join(' ');
     return unique([
         /\blive notes?\b/i.test(text) ? 'Live notes' : '',
         /\blive brief\b/i.test(text) ? 'Live brief' : '',
-        /\broadmap\b/i.test(text) ? (dualTrack ? 'Two-track roadmap' : 'Roadmap') : '',
+        /\broadmap\b/i.test(text) ? (trackCount === 2 ? 'Two-track roadmap' : trackCount > 2 ? `${trackCount}-track roadmap` : 'Roadmap') : '',
         /\bvisual(?: brief)?\b/i.test(text) ? 'Visual brief' : '',
         /\bcatalog\b/i.test(text) ? 'Solution catalog' : '',
     ], 5);
@@ -289,6 +291,56 @@ function buildPhases(lane: LaneId, context: { scale: string; terms: string[]; co
     ];
 }
 
+
+function buildCurrentTracks(input: {
+    hasErpCutover: boolean;
+    hasMunicipalPrescoping: boolean;
+    hasArizonaSvar: boolean;
+    hasAiDiscovery: boolean;
+}): string[] {
+    return [
+        input.hasErpCutover ? 'ERP cutover' : '',
+        input.hasArizonaSvar
+            ? 'Arizona SVAR procurement pre-scoping'
+            : input.hasMunicipalPrescoping ? 'Municipal compliance pre-scoping' : '',
+        input.hasAiDiscovery ? 'AI discovery' : '',
+    ].filter(Boolean);
+}
+
+function buildMultiTrackPhases(tracks: string[]): WorkbenchPhase[] {
+    const phases: WorkbenchPhase[] = [{
+        number: '01',
+        title: 'Shared facts and boundaries',
+        detail: 'Confirm owners, data and workload boundaries, dependencies, timing, and open decisions without turning procurement into compliance or assuming unconfirmed requirements.',
+    }];
+    if (tracks.includes('ERP cutover')) phases.push({
+        number: String(phases.length + 1).padStart(2, '0'),
+        title: 'ERP cutover workstream',
+        detail: 'Map ERP dependencies, rehearse recovery and rollback, and validate that the cutover can fit the tight overnight outage window.',
+    });
+    if (tracks.includes('Arizona SVAR procurement pre-scoping')) phases.push({
+        number: String(phases.length + 1).padStart(2, '0'),
+        title: 'Arizona SVAR purchasing path',
+        detail: 'Confirm the software category, purchaser, agency or prime ordering path, and specialist contract review. SVAR is a Software Value-Added Reseller contract vehicle, not a compliance certification.',
+    });
+    if (tracks.includes('Municipal compliance pre-scoping')) phases.push({
+        number: String(phases.length + 1).padStart(2, '0'),
+        title: 'Municipal compliance pre-scoping',
+        detail: 'Document the subcontract context, data boundaries, and evidence needed once the prime provides flow-down requirements.',
+    });
+    if (tracks.includes('AI discovery')) phases.push({
+        number: String(phases.length + 1).padStart(2, '0'),
+        title: 'AI discovery workstream',
+        detail: 'Prioritize runbooks, technical-document search, telemetry analysis, and an internal IT assistant; validate data access, agency AI policy, identity controls, human review, hosting, and measurable outcomes.',
+    });
+    phases.push({
+        number: String(phases.length + 1).padStart(2, '0'),
+        title: 'Independent decision gates',
+        detail: 'Confirm separate owners, evidence, specialist review, and next decisions for each track without implying approval, eligibility, or a completed design.',
+    });
+    return phases;
+}
+
 const CATALOG: Record<LaneId, CatalogCategory[]> = {
     endpoint: [
         { title: 'Endpoint lifecycle', description: 'Device strategy, refresh, deployment, asset management, and support.', examples: ['Windows 11 readiness', 'Device lifecycle', 'Deployment services'] },
@@ -343,7 +395,13 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const certainStatements = statements.filter((value) => !isUncertain(value));
     const substantiveStatements = certainStatements.filter((value) => !isWorkbenchRequest(value) && !isConversationControl(value));
     const sourceText = canonical(`${certainStatements.join(' ')} ${roadmapTopic}`);
-    const dualTrack = /\bAzure\b/i.test(sourceText) && /\bERP\b/i.test(sourceText) && /\bmunicipal\b|public[ -]sector|government subcontract/i.test(sourceText);
+    const hasErpCutover = /\bERP\b/i.test(sourceText) && /cutover|overnight outage|maintenance window/i.test(sourceText);
+    const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sourceText);
+    const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
+    const hasAiDiscovery = /\bAI\b|artificial intelligence|runbook automation|migration runbooks?|technical document(?:ation)? search|analy[sz](?:e|ing) telemetry|internal (?:IT )?assistant/i.test(sourceText);
+    const currentTracks = buildCurrentTracks({ hasErpCutover, hasMunicipalPrescoping, hasArizonaSvar, hasAiDiscovery });
+    const multiTrack = currentTracks.length > 1;
+    const dualTrack = hasErpCutover && hasMunicipalPrescoping;
     const uncertainItems = unique(statements.filter(isUncertain).map((value) => {
         if (/not sure/i.test(value) && /compliance|framework|prime|flow/i.test(sourceText)) return 'Applicable compliance framework is not yet known; prime-contractor flow-down is pending.';
         if (/^not sure\.?$/i.test(value)) return '';
@@ -357,9 +415,13 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         }
     }
     const laneId = detectLane(allText);
-    const lane = dualTrack ? 'Azure ERP and municipal compliance planning' : LANE_LABELS[laneId];
+    const lane = hasErpCutover && hasArizonaSvar && hasAiDiscovery
+        ? 'Azure ERP, Arizona SVAR, and AI discovery'
+        : dualTrack ? 'Azure ERP and municipal compliance planning' : LANE_LABELS[laneId];
     const scale = extractScale(allText);
-    const objective = dualTrack
+    const objective = hasErpCutover && hasArizonaSvar && hasAiDiscovery
+        ? 'Plan three distinct tracks: protect the ERP cutover within a tight overnight outage window; clarify the Arizona SVAR software purchasing path without treating it as compliance; and scope AI opportunities for runbooks, technical-document search, telemetry analysis, and an internal IT assistant.'
+        : dualTrack
         ? 'Plan two separate workstreams: protect the ERP cutover within a tight overnight outage window, and pre-scope municipal compliance while awaiting prime-contractor flow-down.'
         : lastSentence(substantiveStatements, /need|want|trying|looking|goal|objective|moderni[sz]|replace|migrate|improve|protect|reduce|support|roadmap|assessment/i)
         || (certainStatements.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
@@ -370,7 +432,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
         : lastSentence(substantiveStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
     const stakeholder = lastSentence(substantiveStatements, /decision|stakeholder|CIO|CFO|CTO|director|vice president|VP|executive|procurement|leadership|owner/i);
-    const organization = lastSentence(substantiveStatements, /county|city|agency|company|firm|hospital|health system|manufactur|distribution|university|school district/i);
+    const organization = hasArizonaSvar
+        ? 'State of Arizona agency; Arizona SVAR purchasing path raised for specialist validation.'
+        : lastSentence(substantiveStatements, /county|city|agency|company|firm|hospital|health system|manufactur|distribution|university|school district/i);
     const workloads = unique([
         /customer portal/i.test(allText) ? 'Customer portal' : '',
         /\bERP\b/i.test(allText) ? 'ERP' : '',
@@ -386,7 +450,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /FedRAMP/i.test(allText) ? 'FedRAMP' : '',
         /StateRAMP/i.test(allText) ? 'StateRAMP' : '',
     ], 5);
-    const requestedOutputs = requestedOutputsFrom(userTurns, dualTrack);
+    const requestedOutputs = requestedOutputsFrom(userTurns, currentTracks.length);
     const requestedOutput = requestedOutputs.join(' / ');
     const decision = lastSentence(substantiveStatements, /we decided|we selected|we will proceed|the decision is/i);
 
@@ -396,6 +460,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Environment', 'Technology context', terms.join(' / ')),
         makeFact('Environment', 'Critical workloads', workloads.join(' / ')),
         makeFact('Priorities', 'Current objective', objective.includes('still being clarified') || objective.startsWith('Waiting') ? '' : objective),
+        makeFact('Priorities', 'AI discovery', hasAiDiscovery ? 'Runbooks, technical-document search, telemetry analysis, and an internal IT assistant remain a separate discovery track.' : ''),
+        makeFact('Procurement', 'Arizona SVAR', hasArizonaSvar ? 'Software Value-Added Reseller purchasing contract; confirm software category, purchaser, and ordering path with an Insight Public Sector specialist.' : ''),
         makeFact('Constraints', 'Primary guardrail', constraint),
         makeFact('Constraints', 'Governance drivers', compliance.join(' / ')),
         makeFact('Timing', 'Timing', timing),
@@ -405,6 +471,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ].filter((fact): fact is AmyWorkbenchFact => Boolean(fact));
 
     const openQuestions = unique([
+        hasAiDiscovery ? 'What data would each AI use case access, and could agency or contract-controlled information enter prompts?' : '',
+        hasAiDiscovery ? 'What agency AI policy, human-review, hosting, identity, and measurable-outcome requirements apply?' : '',
+        hasArizonaSvar ? 'Who will purchase through SVAR-the agency, the prime contractor, or another eligible entity?' : '',
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'What outcome would make this initiative successful?' : '',
         !terms.length ? 'Which environment, workload, or platform is in scope?' : '',
         !constraint ? 'What constraint or risk should shape the approach?' : '',
@@ -413,22 +482,27 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ...uncertainItems.map((item) => `Please clarify: ${item}`),
     ], 4);
     const priorities = unique([
-        dualTrack ? 'Keep the ERP cutover and municipal compliance pre-scoping as separate workstreams.' : '',
+        multiTrack ? `Keep ${currentTracks.join(', ')} as separate workstreams.` : '',
+        hasArizonaSvar ? 'Treat Arizona SVAR as a software purchasing path, not a compliance approval process.' : '',
         constraint,
         timing,
         compliance.length ? `Account for ${compliance.join(', ')}.` : '',
         terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : '',
     ], 5);
-    const nextStep = dualTrack
-        ? 'Confirm separate owners and decision gates for the ERP cutover and municipal compliance pre-scoping workstreams.'
+    const nextStep = multiTrack
+        ? `Confirm separate owners and decision gates for ${currentTracks.join(', ')}, including Insight Public Sector review of the SVAR ordering path.`
         : openQuestions.length
         ? `Clarify ${openQuestions[0].replace(/^What |^Which |^Who |^Please clarify:\s*/i, '').replace(/\?$/, '').toLowerCase()}.`
         : 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';
     const roadmapFacts = facts
-        .filter((fact) => ['Scale', 'Environment', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
+        .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
-    const phases = buildPhases(laneId, { scale, terms, constraint, timing, workloads, dualTrack });
-    const roadmapOutcome = dualTrack
+    const phases = currentTracks.length > 2
+        ? buildMultiTrackPhases(currentTracks)
+        : buildPhases(laneId, { scale, terms, constraint, timing, workloads, dualTrack });
+    const roadmapOutcome = currentTracks.length > 2
+        ? `Develop ${currentTracks.length} coordinated but independently gated tracks: ${currentTracks.join(', ')}.`
+        : dualTrack
         ? 'Develop two coordinated but independently gated paths: ERP cutover readiness and municipal compliance pre-scoping.'
         : compact(roadmapTopic) || ({
         endpoint: 'Create a measured endpoint modernization path with representative pilots and controlled deployment waves.',
@@ -446,7 +520,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         { id: 'what_we_heard', eyebrow: '02 / What we heard', title: 'Current-session signals', summary: 'A concise view of stated facts, excluding contact details and uncertain language.', bullets: discussionPoints.length ? discussionPoints.slice(0, 6) : ['No substantive session signals yet.'], boundary: slideBoundary },
         { id: 'environment_and_constraints', eyebrow: '03 / Environment', title: 'Platforms and guardrails', summary: 'The current environment and constraints shaping a viable path.', bullets: unique([terms.join(' / '), workloads.join(' / '), compliance.join(' / '), constraint], 6).length ? unique([terms.join(' / '), workloads.join(' / '), compliance.join(' / '), constraint], 6) : ['Environment details are still being clarified.'], boundary: slideBoundary },
         { id: 'recommended_path', eyebrow: '04 / Direction', title: 'Recommended planning approach', summary: roadmapOutcome, bullets: phases.slice(0, 3).map((phase) => `${phase.title}: ${phase.detail}`), boundary: slideBoundary },
-        { id: 'phased_roadmap', eyebrow: '05 / Roadmap', title: 'Four-stage working path', summary: 'A phased sequence to validate decisions before broader rollout.', bullets: phases.map((phase) => `${phase.number} ${phase.title}`), boundary: slideBoundary },
+        { id: 'phased_roadmap', eyebrow: '05 / Roadmap', title: 'Phased working path', summary: 'A phased sequence to validate decisions before broader rollout.', bullets: phases.map((phase) => `${phase.number} ${phase.title}`), boundary: slideBoundary },
         { id: 'decisions_and_next_steps', eyebrow: '06 / Decisions', title: 'Next decision', summary: nextStep, bullets: unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5).length ? unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5) : ['Confirm owners and the next decision gate.'], boundary: slideBoundary },
     ];
 
@@ -458,7 +532,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         corrections,
         uncertainItems,
         brief: { objective, environment: terms, priorities, discussionPoints, nextStep, openQuestions },
-        roadmap: { title: dualTrack ? 'ERP cutover + municipal pre-scoping' : `${lane} path`, outcome: roadmapOutcome, facts: roadmapFacts, phases },
+        roadmap: { title: currentTracks.length > 2 ? currentTracks.join(' + ') : dualTrack ? 'ERP cutover + municipal pre-scoping' : `${lane} path`, outcome: roadmapOutcome, facts: roadmapFacts, phases },
         visualBrief: { title: `${lane} working brief`, slides: visualSlides },
         catalog: {
             title: `${lane} solution categories`,
