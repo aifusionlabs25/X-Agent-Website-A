@@ -48,6 +48,17 @@ Status: discovery for later discussion.
 
 Security gates include authenticated sessions, short-lived document access, version history, script and external-embed blocking, allowlisted shapes and actions, and treating all canvas text as untrusted input. Production use also requires confirming tldraw licensing and persistence architecture.
 
+## Future roadmap: post-session pursuit package
+
+Status: viable after the current three-email workflow is stable.
+
+1. **Hermes-generated attachments:** create a reviewed post-session package containing live notes, the session brief, the roadmap, and allowlisted visual artifacts such as workflows and Mermaid diagrams. Generate from the finalized transcript and canonical workbench model, never a partial live transcript.
+2. **Attachment formats:** begin with accessible HTML and PDF; add SVG/PNG diagrams and reviewed PPTX only after the visual-composer and export gates are proven.
+3. **Matched case studies:** retrieve only approved Insight case studies from a curated internal library using verified opportunity attributes. Include source, industry, solution lane, and applicability notes so the team receives a defensible go-to-market starting point instead of an invented comparison.
+4. **Human review and release:** Hermes may draft and rank the package, but attachments and case-study recommendations remain internal until an authorized reviewer approves them for the Sales and Operations email.
+
+Required safeguards include document provenance, attachment size and type allowlists, contact-data redaction, prompt-injection isolation, malware scanning, deterministic filenames, versioned approvals, and a complete outbound audit receipt.
+
 ## Release verification
 
 Run:

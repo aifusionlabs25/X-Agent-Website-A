@@ -118,7 +118,7 @@ test('AgentMail adapter sends through Amy inbox and returns a bounded receipt', 
 
 test('follow-up content is deterministic, redacts contact data, and escapes HTML', () => {
     const message = buildAmyConversationFollowUp({
-        displayName: 'Rob <script>',
+        displayName: 'Rob Vicks <script>',
         turns: [
             { role: 'user', content: 'We need to migrate our ERP to Azure. Email me at attacker@example.com <script>alert(1)</script>.' },
             { role: 'agent', content: 'What continuity requirement matters most?' },
@@ -130,7 +130,14 @@ test('follow-up content is deterministic, redacts contact data, and escapes HTML
     assert.doesNotMatch(message.text, /attacker@example\.com/i);
     assert.doesNotMatch(message.html, /<script>/i);
     assert.match(message.html, /AI-powered conversational agent/i);
-    assert.match(message.html, /Insight · Conversation follow-up/i);
+    assert.match(message.html, /Insight · Follow-up from Amy/i);
+    assert.match(message.html, />Hi Rob,</i);
+    assert.doesNotMatch(message.html, />Hi Rob Vicks,</i);
+    assert.match(message.text, /speaking with me/i);
+    assert.match(message.text, /appropriate specialists will review it and follow up/i);
+    assert.match(message.html, /Reconnect with Amy/i);
+    assert.match(message.html, /https:\/\/xagent\.aifusionlabs\.app\/demo\/amy\?variant=cara4/i);
+    assert.doesNotMatch(message.text, /Thank you for speaking with Amy|Reply to this email if/i);
     assert.doesNotMatch(message.text, /Timing:\s*Before we close|Pulse Session/i);
 });
 
@@ -213,13 +220,16 @@ test('email permission queues without sending, then finalization sends the compl
     assert.deepEqual(agentMailRequests.map(request => request.to), [
         ['rvicks@gmail.com'], ['aifusionlabs@gmail.com'], ['aifusionlabs@gmail.com'],
     ]);
-    assert.match(agentMailRequests[0].html, /Your conversation, clearly captured/i);
+    assert.match(agentMailRequests[0].html, /Here&#039;s the recap I promised/i);
     assert.match(agentMailRequests[1].subject, /AMY SESSION/i);
     assert.match(agentMailRequests[1].html, /Final call duration/i);
     assert.match(agentMailRequests[1].html, />5m 0s</i);
     assert.doesNotMatch(agentMailRequests[1].html, /Elapsed at email request|Live when follow-up was requested/i);
     assert.match(agentMailRequests[2].subject, /INSIGHT INTAKE/i);
     assert.match(agentMailRequests[2].html, /Sales &amp; Operations/i);
+    assert.match(agentMailRequests[2].html, /Customer value and urgency/i);
+    assert.match(agentMailRequests[2].html, /Recommended pursuit plan/i);
+    assert.match(agentMailRequests[2].html, /Recommended next-meeting objective/i);
     const storedReceipts = [...store.values()].join('\n');
     assert.doesNotMatch(storedReceipts, /rvicks@gmail\.com|Azure|ERP migration/i);
     assert.match(storedReceipts, /"rawEmailStored":false/);
