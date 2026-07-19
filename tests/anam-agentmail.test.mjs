@@ -130,7 +130,7 @@ test('follow-up content is deterministic, redacts contact data, and escapes HTML
     assert.doesNotMatch(message.text, /attacker@example\.com/i);
     assert.doesNotMatch(message.html, /<script>/i);
     assert.match(message.html, /AI-powered conversational agent/i);
-    assert.match(message.html, /Insight Â· Conversation follow-up/i);
+    assert.match(message.html, /Insight · Conversation follow-up/i);
     assert.doesNotMatch(message.text, /Timing:\s*Before we close|Pulse Session/i);
 });
 
