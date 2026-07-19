@@ -142,6 +142,8 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     assert.match(reliabilityPrompt, /Treat "hang on," "give me a moment," "let me review,"/i);
     assert.match(reliabilityPrompt, /preserve it as an open item/i);
     assert.match(reliabilityPrompt, /Do not use "Is there anything else\?" as routine filler/i);
+    assert.match(reliabilityPrompt, /Never speak the word "goodbye" unless end_call has just returned a successful receipt/i);
+    assert.match(reliabilityPrompt, /call skip_turn and remain silent/i);
     assert.match(reliabilityPrompt, /Never use "before we wrap up/i);
     assert.match(player, /voiceDetection: \{ endOfSpeechSensitivity: 0\.05 \}/);
     assert.match(reliabilityUpdater, /endOfSpeechSensitivity: 0\.05/);

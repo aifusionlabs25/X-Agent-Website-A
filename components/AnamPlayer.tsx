@@ -19,7 +19,7 @@ import {
     confirmAmyAnamLiveIdentity,
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
-import { AmyWorkbenchTurn, AmyWorkbenchView } from '@/lib/anam/workbench-v2';
+import { AmyWorkbenchTurn, AmyWorkbenchView, buildAmyWorkbenchModel } from '@/lib/anam/workbench-v2';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -186,30 +186,47 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     ) => {
                         cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler(toolName, {
                             onStart: async (payload) => {
+                                const synchronizedTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
+                                const pendingContent = currentMessageRef.current.trim();
+                                const pendingTurn = pendingContent
+                                    ? { role: transcriptRole(currentRoleRef.current), content: pendingContent } as AmyWorkbenchTurn
+                                    : null;
+                                if (
+                                    pendingTurn
+                                    && pendingTurn.role === 'user'
+                                    && synchronizedTurns.at(-1)?.content !== pendingTurn.content
+                                ) {
+                                    synchronizedTurns.push(pendingTurn);
+                                }
+                                const topic = view === 'roadmap' && typeof payload.arguments?.topic === 'string'
+                                    ? payload.arguments.topic.trim().slice(0, 2_000)
+                                    : '';
+                                const query = view === 'catalog' && typeof payload.arguments?.query === 'string'
+                                    ? payload.arguments.query.trim().slice(0, 500)
+                                    : '';
+                                const receiptModel = buildAmyWorkbenchModel(synchronizedTurns, topic, query);
                                 if (isMounted) {
                                     workbenchRevision += 1;
-                                    const synchronizedTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
                                     setWorkbenchTurns([...synchronizedTurns]);
                                     if (view === 'roadmap') {
-                                        const topic = typeof payload.arguments?.topic === 'string'
-                                            ? payload.arguments.topic.trim().slice(0, 2_000)
-                                            : '';
                                         setRoadmapTopic(topic);
                                     } else if (view === 'catalog') {
-                                        const query = typeof payload.arguments?.query === 'string'
-                                            ? payload.arguments.query.trim().slice(0, 500)
-                                            : '';
                                         setCatalogQuery(query);
                                     }
                                     setWorkbenchView(view);
                                     setWorkbenchOpen(true);
+                                    await new Promise<void>((resolve) => {
+                                        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                                    });
                                 }
                                 return JSON.stringify({
                                 status: 'view_rebuilt',
                                 view,
                                 revision: workbenchRevision,
-                                currentSessionUserTurns: transcriptRef.current.filter((turn) => turn.role === 'user').length,
-                                instruction: `${confirmation} Confirm only that the working view is open and rebuilt from the latest current-session turns. Do not claim a named fact or track is visible unless it is present in the current conversation.`,
+                                currentSessionUserTurns: synchronizedTurns.filter((turn) => turn.role === 'user').length,
+                                lane: receiptModel.lane,
+                                visibleFacts: receiptModel.facts.map((fact) => `${fact.label}: ${fact.value}`),
+                                instruction: `${confirmation} The client has committed this revision to the screen. Confirm only that the working view is open. Claim a named fact or track is visible only when it appears in visibleFacts.`,
                             });
                             },
                         }));
