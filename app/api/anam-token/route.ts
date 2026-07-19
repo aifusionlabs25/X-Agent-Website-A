@@ -3,7 +3,7 @@ import { ALL_AGENTS } from '@/lib/agents';
 import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
 import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
 import { AMY_CARA4_VARIANT, resolveAnamSessionPersona } from '@/lib/anam/session-config';
-import { readAmyCara4PersonaReadiness } from '@/lib/anam/persona-readiness';
+import { EVAN_PERSONA_ID, readAmyCara4PersonaReadiness, readEvanPersonaReadiness } from '@/lib/anam/persona-readiness';
 import {
     AMY_ANAM_BROWSER_COOKIE,
     AmyAnamRequestError,
@@ -27,6 +27,10 @@ import {
     readAmyAnamMemoryConfig,
 } from '@/lib/anam/user-memory';
 
+const ALLOWED_PERSONA_IDS = new Set(
+    ALL_AGENTS.map(agent => agent.personaId).filter((personaId): personaId is string => Boolean(personaId)),
+);
+
 function noStoreJson(body: unknown, init?: ResponseInit) {
     const response = NextResponse.json(body, init);
     response.headers.set('Cache-Control', 'no-store');
@@ -39,7 +43,7 @@ export async function POST(req: Request) {
         const resolution = resolveAnamSessionPersona({
             requestedPersonaId: personaId,
             requestedVariant: variant,
-            allowedPersonaIds: ALL_AGENTS.map(agent => agent.personaId),
+            allowedPersonaIds: ALLOWED_PERSONA_IDS,
             amyCara4PersonaId: process.env.ANAM_AMY_CARA4_PERSONA_ID,
         });
 
@@ -76,6 +80,32 @@ export async function POST(req: Request) {
                 { error: 'Server configuration error' },
                 { status: 500 },
             );
+        }
+
+        if (resolution.personaId === EVAN_PERSONA_ID) {
+            let personaReadiness;
+            try {
+                personaReadiness = await readEvanPersonaReadiness(anamApiKey);
+            } catch {
+                console.error('[Evan Anam Configuration] Preflight unavailable');
+                return noStoreJson(
+                    { error: 'Evan is temporarily unavailable while his configuration is checked.' },
+                    { status: 503 },
+                );
+            }
+            if (!personaReadiness.ready) {
+                console.error('[Evan Anam Configuration] Out of sync', {
+                    personaIdMatches: personaReadiness.personaIdMatches,
+                    identityMatches: personaReadiness.identityMatches,
+                    cara4AvatarConfigured: personaReadiness.cara4AvatarConfigured,
+                    missingToolNames: personaReadiness.missingToolNames,
+                    missingPromptMarkers: personaReadiness.missingPromptMarkers,
+                });
+                return noStoreJson(
+                    { error: 'Evan is temporarily unavailable while his configuration is checked.' },
+                    { status: 503 },
+                );
+            }
         }
 
         if (isAmyCara4) {

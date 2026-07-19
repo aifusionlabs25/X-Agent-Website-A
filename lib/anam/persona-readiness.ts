@@ -22,12 +22,26 @@ export const AMY_CARA4_REQUIRED_PROMPT_MARKERS = [
     '<!-- AMY_WORKBENCH_END -->',
 ] as const;
 
+export const EVAN_PERSONA_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
+
+export const EVAN_REQUIRED_TOOL_NAMES = [
+    'Knowledge_Evan_Mullins_Moving',
+    'skip_turn',
+    'end_call',
+] as const;
+
+export const EVAN_REQUIRED_PROMPT_MARKERS = [
+    '<!-- EVAN_ANAM_CORE_START -->',
+    '<!-- EVAN_ANAM_CORE_END -->',
+] as const;
+
 type PersonaTool = {
     name?: unknown;
 };
 
 type PersonaPayload = {
     id?: unknown;
+    name?: unknown;
     avatarModel?: unknown;
     tools?: unknown;
     zeroDataRetention?: unknown;
@@ -43,6 +57,15 @@ export type AmyCara4PersonaReadiness = {
     cara4AvatarConfigured: boolean;
     sessionDataRetentionConfigured: boolean;
     anamTranscriptionPipelineConfigured: boolean;
+    missingToolNames: string[];
+    missingPromptMarkers: string[];
+};
+
+export type EvanPersonaReadiness = {
+    ready: boolean;
+    personaIdMatches: boolean;
+    identityMatches: boolean;
+    cara4AvatarConfigured: boolean;
     missingToolNames: string[];
     missingPromptMarkers: string[];
 };
@@ -117,4 +140,57 @@ export async function readAmyCara4PersonaReadiness(
         throw new Error('Anam persona readiness response was invalid');
     }
     return inspectAmyCara4PersonaReadiness(persona, personaId);
+}
+
+export function inspectEvanPersonaReadiness(
+    persona: PersonaPayload,
+): EvanPersonaReadiness {
+    const toolNames = toolNamesFromPersona(persona);
+    const prompt = typeof persona.brain?.systemPrompt === 'string'
+        ? persona.brain.systemPrompt
+        : '';
+    const personaIdMatches = persona.id === EVAN_PERSONA_ID;
+    const identityMatches = typeof persona.name === 'string'
+        && /evan/i.test(persona.name)
+        && /mullins/i.test(persona.name);
+    const cara4AvatarConfigured = persona.avatarModel === 'cara-4';
+    const missingToolNames = EVAN_REQUIRED_TOOL_NAMES
+        .filter(name => !toolNames.has(name));
+    const missingPromptMarkers = EVAN_REQUIRED_PROMPT_MARKERS
+        .filter(marker => !prompt.includes(marker));
+
+    return {
+        ready: personaIdMatches
+            && identityMatches
+            && cara4AvatarConfigured
+            && missingToolNames.length === 0
+            && missingPromptMarkers.length === 0,
+        personaIdMatches,
+        identityMatches,
+        cara4AvatarConfigured,
+        missingToolNames,
+        missingPromptMarkers,
+    };
+}
+
+export async function readEvanPersonaReadiness(
+    apiKey: string,
+    fetchImpl: typeof fetch = fetch,
+): Promise<EvanPersonaReadiness> {
+    const response = await fetchImpl(
+        `${ANAM_API_BASE}/personas/${EVAN_PERSONA_ID}`,
+        {
+            headers: { Authorization: `Bearer ${apiKey.trim()}` },
+            signal: AbortSignal.timeout(5_000),
+            cache: 'no-store',
+        },
+    );
+    if (!response.ok) {
+        throw new Error(`Anam Evan readiness request failed (${response.status})`);
+    }
+    const persona = await response.json().catch(() => null) as PersonaPayload | null;
+    if (!persona || typeof persona !== 'object') {
+        throw new Error('Anam Evan readiness response was invalid');
+    }
+    return inspectEvanPersonaReadiness(persona);
 }
