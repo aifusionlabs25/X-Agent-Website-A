@@ -27,12 +27,15 @@ export const EVAN_PERSONA_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
 export const EVAN_REQUIRED_TOOL_NAMES = [
     'Knowledge_Evan_Mullins_Moving',
     'skip_turn',
+    'send_mullins_follow_up_email',
     'end_call',
 ] as const;
 
 export const EVAN_REQUIRED_PROMPT_MARKERS = [
     '<!-- EVAN_ANAM_CORE_START -->',
     '<!-- EVAN_ANAM_CORE_END -->',
+    '<!-- EVAN_AGENTMAIL_START -->',
+    '<!-- EVAN_AGENTMAIL_END -->',
 ] as const;
 
 type PersonaTool = {
@@ -66,6 +69,8 @@ export type EvanPersonaReadiness = {
     personaIdMatches: boolean;
     identityMatches: boolean;
     cara4AvatarConfigured: boolean;
+    sessionDataRetentionConfigured: boolean;
+    anamTranscriptionPipelineConfigured: boolean;
     missingToolNames: string[];
     missingPromptMarkers: string[];
 };
@@ -153,6 +158,8 @@ export function inspectEvanPersonaReadiness(
     const identityMatches = typeof persona.name === 'string'
         && /evan/i.test(persona.name)
         && /mullins/i.test(persona.name);
+    const sessionDataRetentionConfigured = persona.zeroDataRetention === false;
+    const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
     const cara4AvatarConfigured = persona.avatarModel === 'cara-4';
     const missingToolNames = EVAN_REQUIRED_TOOL_NAMES
         .filter(name => !toolNames.has(name));
@@ -164,12 +171,16 @@ export function inspectEvanPersonaReadiness(
             && identityMatches
             && cara4AvatarConfigured
             && missingToolNames.length === 0
+            && sessionDataRetentionConfigured
+            && anamTranscriptionPipelineConfigured
             && missingPromptMarkers.length === 0,
         personaIdMatches,
         identityMatches,
         cara4AvatarConfigured,
         missingToolNames,
         missingPromptMarkers,
+        sessionDataRetentionConfigured,
+        anamTranscriptionPipelineConfigured,
     };
 }
 

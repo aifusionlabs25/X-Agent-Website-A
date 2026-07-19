@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queueAmyAnamConversationFollowUp } from '@/lib/anam/agentmail';
+import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
+import { EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
 import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
 import {
     AmyAnamRequestError,
@@ -81,14 +83,20 @@ export async function POST(request: Request) {
             && session?.browserSessionId === browserSession.id
             && session.launchId === launchId
             && session.externalSessionId === sessionId;
-        if (!ownershipMatches || !identity) {
+        const isEvan = session?.resolvedPersonaId === EVAN_PERSONA_ID
+            && launch?.resolvedPersonaId === EVAN_PERSONA_ID;
+        const displayName = isEvan ? contact.displayName : identity?.displayName;
+        if (!ownershipMatches || !displayName) {
             return noStoreJson({ error: 'Email session ownership could not be confirmed' }, { status: 409 });
         }
 
-        const result = await queueAmyAnamConversationFollowUp({
+        const queueFollowUp = isEvan
+            ? queueEvanAnamConversationFollowUp
+            : queueAmyAnamConversationFollowUp;
+        const result = await queueFollowUp({
             externalSessionId: sessionId,
             browserSessionId: browserSession.id,
-            displayName: identity.displayName,
+            displayName,
             email: contact.email,
             contactSecret: spine.signingSecret,
         });
@@ -103,9 +111,9 @@ export async function POST(request: Request) {
         }
         const message = error instanceof Error ? error.message : '';
         if (/unavailable|not configured/i.test(message)) {
-            return noStoreJson({ error: 'Amy email is temporarily unavailable' }, { status: 503 });
+            return noStoreJson({ error: 'Email is temporarily unavailable' }, { status: 503 });
         }
-        console.error('[Amy Anam AgentMail] Post-session email intent was not recorded');
-        return noStoreJson({ error: 'Amy could not schedule the post-session email' }, { status: 502 });
+        console.error('[Anam AgentMail] Post-session email intent was not recorded');
+        return noStoreJson({ error: 'The follow-up email could not be scheduled' }, { status: 502 });
     }
 }

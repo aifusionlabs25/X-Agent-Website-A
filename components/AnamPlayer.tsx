@@ -13,6 +13,7 @@ import {
     selectVoiceMeeterB1DeviceId,
 } from '@/lib/anam/audio-bridge';
 import { sendAmyAnamFollowUpEmail } from '@/lib/anam/agentmail-client';
+import { EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
 import { isAmyCara4Variant } from '@/lib/anam/session-config';
 import {
     bindAmyAnamClientSession,
@@ -170,6 +171,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // 2. Initialize Anam Client
                 const isAmyCara4 = isAmyCara4Variant(sessionVariant);
+                const isEvan = personaId === EVAN_PERSONA_ID;
                 const clientOptions = {
                     ...(audioDeviceId ? { audioDeviceId } : {}),
                     ...(isAmyCara4 ? { voiceDetection: { endOfSpeechSensitivity: 0.05 } } : {}),
@@ -461,6 +463,45 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 }
 
                 anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
+                if (isEvan) {
+                    removeEmailToolHandler = anamClient.registerToolCallHandler(
+                        'send_mullins_follow_up_email',
+                        {
+                            onStart: async payload => {
+                                if (tokenPayload.agentMailAvailable !== true) {
+                                    return JSON.stringify({
+                                        status: 'email_unavailable',
+                                        instruction: 'Say that email is temporarily unavailable. Do not claim anything was sent.',
+                                    });
+                                }
+                                if (completedUserTurns < 1) {
+                                    throw new Error('Continue the moving conversation before offering an email follow-up.');
+                                }
+                                if (payload.arguments.userConfirmed !== true) {
+                                    throw new Error('Ask the visitor for explicit permission before scheduling the Mullins follow-up.');
+                                }
+                                if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
+                                    throw new Error('The secure session is not ready. Continue the conversation and try once more.');
+                                }
+                                await bindingPromise;
+                                const result = await sendAmyAnamFollowUpEmail({
+                                    launchId, sessionId: providerSessionId, userConfirmed: true,
+                                });
+                                console.info('[Evan Anam AgentMail] Three-message post-session intent recorded', {
+                                    status: result.status, duplicate: result.duplicate, contactContentLogged: false,
+                                });
+                                return JSON.stringify({
+                                    status: result.status, queued: true, sent: false, duplicate: result.duplicate,
+                                    receiptId: result.receiptId,
+                                    instruction: result.duplicate
+                                        ? 'Confirm briefly that the Mullins follow-up is already scheduled for after the session. Do not say it was sent yet.'
+                                        : 'Confirm briefly that the visitor summary and Mullins team follow-up will be emailed after this session ends. Do not say anything was sent yet. Continue naturally.',
+                                });
+                            },
+                        },
+                    );
+                }
+
                 anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                 anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
                 anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);

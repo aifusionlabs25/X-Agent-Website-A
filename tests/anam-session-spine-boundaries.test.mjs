@@ -122,7 +122,7 @@ test('both live and QA clients bind SESSION_READY and deduplicate completion', (
 test('email delivery occurs only after final transcript retrieval and durable session receipt', () => {
     const transcriptFetch = finalizer.indexOf('const transcript = await fetchCompletedAnamTranscript');
     const receiptWrite = finalizer.indexOf('await writeAmyAnamReceipt(session, finalization, receipt');
-    const emailDispatch = finalizer.indexOf('await dispatchAmyAnamPostSessionFollowUp({');
+    const emailDispatch = finalizer.indexOf('await dispatchFollowUp({');
     assert.ok(transcriptFetch >= 0, 'final transcript was not fetched');
     assert.ok(receiptWrite > transcriptFetch, 'session receipt was written before final transcript retrieval');
     assert.ok(emailDispatch > receiptWrite, 'email was dispatched before post-session finalization');

@@ -14,6 +14,8 @@
     "speechEnhancementLevel": 0.7
   },
   "promptFile": "EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md",
+  "zeroDataRetention": false,
+  "enableAudioPassthrough": false,
   "knowledgeToolName": "Knowledge_Evan_Mullins_Moving",
-  "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_call"]
+  "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_call", "send_mullins_follow_up_email"]
 }

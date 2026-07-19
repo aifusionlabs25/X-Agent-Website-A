@@ -7,6 +7,8 @@ const healthyPersona = () => ({
     id: EVAN_PERSONA_ID,
     name: 'Evan Mullins Moving Concierge',
     avatarModel: 'cara-4',
+    zeroDataRetention: false,
+    enableAudioPassthrough: false,
     tools: EVAN_REQUIRED_TOOL_NAMES.map(name => ({ name })),
     brain: { systemPrompt: EVAN_REQUIRED_PROMPT_MARKERS.join('\n') },
 });
@@ -47,8 +49,10 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /at most one meaningful next question/i);
     assert.match(prompt, /Do not restart the intake/i);
     assert.match(prompt, /Never silently guess or change a person's name/i);
-    assert.match(prompt, /There is no verified booking, email, SMS, CRM/i);
-    assert.match(prompt, /claim success only after its successful receipt/i);
+    assert.match(prompt, /send_mullins_follow_up_email/);
+    assert.match(prompt, /three messages are scheduled/i);
+    assert.match(prompt, /never visible to you/i);
+    assert.match(prompt, /No tool books a move/i);
 });
 
 test('managed persona uses patient turn detection and disables silence prompts and shutdown', async () => {
