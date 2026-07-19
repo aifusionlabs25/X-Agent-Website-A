@@ -220,7 +220,7 @@ test('email permission queues without sending, then finalization sends the compl
     assert.deepEqual(agentMailRequests.map(request => request.to), [
         ['rvicks@gmail.com'], ['aifusionlabs@gmail.com'], ['aifusionlabs@gmail.com'],
     ]);
-    assert.match(agentMailRequests[0].html, /Here's the recap I promised/i);
+    assert.match(agentMailRequests[0].html, /Here&#039;s the recap I promised/i);
     assert.match(agentMailRequests[1].subject, /AMY SESSION/i);
     assert.match(agentMailRequests[1].html, /Final call duration/i);
     assert.match(agentMailRequests[1].html, />5m 0s</i);
