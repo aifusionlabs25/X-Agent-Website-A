@@ -53,8 +53,10 @@ test('checked-in email is encrypted, session-bound, expiring, and tamper-evident
         secret: SECRET,
         now: now + 1_000,
     }), null);
+    const tamperedParts = token.split('.');
+    tamperedParts[3] = `${tamperedParts[3].startsWith('A') ? 'B' : 'A'}${tamperedParts[3].slice(1)}`;
     assert.equal(readAmyAnamContactToken({
-        token: `${token.slice(0, -1)}${token.endsWith('x') ? 'y' : 'x'}`,
+        token: tamperedParts.join('.'),
         browserSessionId: BROWSER_ID,
         secret: SECRET,
         now: now + 1_000,
@@ -128,7 +130,7 @@ test('follow-up content is deterministic, redacts contact data, and escapes HTML
     assert.doesNotMatch(message.text, /attacker@example\.com/i);
     assert.doesNotMatch(message.html, /<script>/i);
     assert.match(message.html, /AI-powered conversational agent/i);
-    assert.match(message.html, /Insight · Conversation follow-up/i);
+    assert.match(message.html, /Insight Â· Conversation follow-up/i);
     assert.doesNotMatch(message.text, /Timing:\s*Before we close|Pulse Session/i);
 });
 
@@ -223,3 +225,4 @@ test('email permission queues without sending, then finalization sends the compl
     assert.match(storedReceipts, /"rawEmailStored":false/);
     assert.match(storedReceipts, /"messageContentStored":false/);
 });
+
