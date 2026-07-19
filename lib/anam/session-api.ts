@@ -291,6 +291,7 @@ function parseTranscriptPayload(value: unknown, expectedSessionId: string): {
     }
     const totalMessages = record.totalMessages;
     let totalCharacters = 0;
+    let conversationalMessages = 0;
     for (const item of record.messages) {
         if (!item || typeof item !== 'object') {
             throw new AnamSessionApiError('Anam transcript message was invalid', 502);
@@ -299,19 +300,19 @@ function parseTranscriptPayload(value: unknown, expectedSessionId: string): {
         if (
             (message.role !== 'persona' && message.role !== 'user')
             || typeof message.message !== 'string'
-            || !message.message.trim()
             || message.message.length > AMY_ANAM_MAX_TURN_CHARACTERS
         ) {
             throw new AnamSessionApiError('Anam transcript message was invalid', 502);
         }
         totalCharacters += message.message.length;
+        if (message.message.trim()) conversationalMessages += 1;
     }
     if (totalCharacters > AMY_ANAM_MAX_TRANSCRIPT_CHARACTERS) {
         throw new AnamSessionApiError('Anam transcript exceeded safety limits', 502);
     }
     const endTime = typeof record.endTime === 'string' ? record.endTime : null;
     const turns = normalizeAmyTranscript(record.messages);
-    if (record.transcriptsEnabled && turns.length !== totalMessages) {
+    if (record.transcriptsEnabled && turns.length !== conversationalMessages) {
         throw new AnamSessionApiError('Anam transcript messages were invalid', 502);
     }
     return { transcriptsEnabled: record.transcriptsEnabled, endTime, turns, totalMessages };
@@ -413,3 +414,4 @@ export async function fetchCompletedAnamTranscript(
 
     return { status: 'pending' };
 }
+

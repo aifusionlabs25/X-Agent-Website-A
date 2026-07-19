@@ -239,6 +239,61 @@ test('authoritative transcript polling waits for session completion and normaliz
     assert.ok(calls.every(call => call.init.body === undefined));
 });
 
+test('Anam skip-turn silence is discarded without rejecting the completed transcript', async () => {
+    const launch = createAmyAnamLaunch('browser-session-skip-turn', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const responses = [
+        jsonResponse({
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: { zeroDataRetention: false },
+        }),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 3,
+            messages: [
+                { role: 'persona', message: 'The notes are open.' },
+                { role: 'persona', message: '' },
+                { role: 'user', message: 'I finished reviewing them.' },
+            ],
+        }),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0],
+        sleep: async () => undefined,
+        fetchImpl: async url => {
+            const response = responses.shift();
+            assert.ok(response, "Unexpected fetch: " + url);
+            return response;
+        },
+    });
+
+    assert.deepEqual(result, {
+        status: 'ready',
+        metadata: {
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: { zeroDataRetention: false },
+        },
+        turns: [
+            { role: 'agent', content: 'The notes are open.' },
+            { role: 'user', content: 'I finished reviewing them.' },
+        ],
+    });
+});
+
 test('Cara 4 session metadata accepts the nested persona ID when the top-level field is empty', async () => {
     const metadata = await fetchAnamSessionMetadata(SESSION_ID, {
         env: { ANAM_API_KEY: 'server-only-test-key' },
@@ -878,3 +933,4 @@ test('client completion retries an awaiting transcript without expanding its req
     assert.ok(bodies.every(body => Object.hasOwn(body, 'transcript') === false));
     assert.ok(bodies.every(body => Object.keys(body).sort().join(',') === 'closeReason,launchId,sessionId'));
 });
+
