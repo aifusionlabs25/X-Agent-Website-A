@@ -21,6 +21,10 @@ if (!apiKey) throw new Error('ANAM_API_KEY is required and is never printed.');
 
 const personaManifest = JSON.parse(await fs.readFile(new URL('../../config/anam/evan/persona-manifest.json', import.meta.url), 'utf8'));
 const VOICE_DETECTION_OPTIONS = personaManifest.voiceDetectionOptions;
+const emailToolDefinition = JSON.parse(await fs.readFile(
+    new URL('../../config/anam/evan-agentmail-client-tool.json', import.meta.url),
+    'utf8',
+));
 const normalizeLineEndings = value => String(value).replace(/\r\n?/g, '\n');
 const managedPromptOf = value => `${normalizeLineEndings(value).split('\n# TOOLS\n', 1)[0].trim()}\n`;
 const prompt = `${normalizeLineEndings(await fs.readFile(new URL('../../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8')).trim()}\n`;
@@ -95,7 +99,22 @@ const skipTurn = tools.find(item => item.name === 'skip_turn');
 const endCall = tools.find(item => item.name === 'end_call');
 const currentKnowledge = tools.find(item => idOf(item) === CURRENT_KNOWLEDGE_TOOL_ID);
 if (!idOf(skipTurn) || !idOf(endCall) || !currentKnowledge) throw new Error('Required Evan knowledge/skip_turn/end_call tools are unavailable.');
-const nextToolIds = [CURRENT_KNOWLEDGE_TOOL_ID, idOf(skipTurn), idOf(endCall)].sort();
+const existingEmailTool = tools.find(item => item.name === emailToolDefinition.name);
+let emailTool = existingEmailTool;
+if (apply) {
+    emailTool = idOf(existingEmailTool)
+        ? await anam('/tools/' + idOf(existingEmailTool), {
+            method: 'PUT',
+            body: JSON.stringify(emailToolDefinition),
+        })
+        : await anam('/tools', {
+            method: 'POST',
+            body: JSON.stringify(emailToolDefinition),
+        });
+}
+const emailToolId = idOf(emailTool);
+if (apply && !emailToolId) throw new Error('Evan AgentMail client tool could not be created.');
+const nextToolIds = [CURRENT_KNOWLEDGE_TOOL_ID, idOf(skipTurn), idOf(endCall), ...(emailToolId ? [emailToolId] : [])].sort();
 
 const plan = {
     mode: apply ? 'apply' : 'dry-run',
@@ -106,7 +125,8 @@ const plan = {
     missingKnowledgeDocuments: missingDocuments.map(document => document.filename),
     promptSha256: sha256(prompt),
     knowledgeBundleSha256: bundleSha256,
-    toolNames: [KNOWLEDGE_TOOL_NAME, 'skip_turn', 'end_call'],
+    toolNames: [KNOWLEDGE_TOOL_NAME, 'skip_turn', 'end_call', emailToolDefinition.name],
+    emailToolWillBeCreated: !emailToolId,
     voiceDetectionOptions: VOICE_DETECTION_OPTIONS,
 };
 if (!apply) {
@@ -173,6 +193,8 @@ await anam(`/personas/${EVAN_ID}`, {
         uninterruptibleGreeting: false,
         toolIds: nextToolIds,
         voiceDetectionOptions: VOICE_DETECTION_OPTIONS,
+        zeroDataRetention: false,
+        enableAudioPassthrough: false,
     }),
 });
 
@@ -185,6 +207,8 @@ async function verifyLive() {
     if (persona.initialMessage !== INITIAL_MESSAGE) failures.push('initialMessage');
     if (JSON.stringify(sortedToolIds(persona)) !== JSON.stringify(nextToolIds)) failures.push('tools');
     if (tool.name !== KNOWLEDGE_TOOL_NAME) failures.push('knowledgeToolName');
+    if (persona.zeroDataRetention !== false) failures.push('zeroDataRetention');
+    if (persona.enableAudioPassthrough !== false) failures.push('enableAudioPassthrough');
     if (JSON.stringify(tool.config?.documentFolderIds ?? []) !== JSON.stringify([group.id])) failures.push('knowledgeFolder');
     for (const [name, value] of Object.entries(VOICE_DETECTION_OPTIONS)) if (persona.voiceDetectionOptions?.[name] !== value) failures.push(`voiceDetectionOptions.${name}`);
     if (failures.length) throw new Error(`Evan live verification failed: ${failures.join(', ')}`);

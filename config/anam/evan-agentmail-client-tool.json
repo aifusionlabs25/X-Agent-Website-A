@@ -1,0 +1,21 @@
+{
+  "name": "send_mullins_follow_up_email",
+  "description": "Schedule the visitor thank-you/summary, Mullins Admin session summary, and Mullins Sales quote-or-walkthrough intake email bundle for backend delivery only after the Anam session closes and the final transcript is available. A direct request to email the recap is explicit permission; otherwise obtain one short yes. Never ask for, spell, repeat, confirm aloud, infer, or submit an email address through this tool. Call silently with userConfirmed true. Only when the tool returns email_queued may Evan say the follow-up will be emailed after the session ends. Never claim it was already sent, never use it for cold outreach or third-party recipients, and never auto-close the call.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "userConfirmed": {
+          "type": "boolean",
+          "description": "Must be true only after the visitor explicitly agrees during this conversation to receive the Mullins follow-up."
+        }
+      },
+      "required": ["userConfirmed"],
+      "additionalProperties": false
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 15
+  }
+}

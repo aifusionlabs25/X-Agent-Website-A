@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyAnamSessionForLaunch, AnamSessionApiError } from '@/lib/anam/session-api';
+import { EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
 import {
     AmyAnamRequestError,
     isTrustedBrowserOrigin,
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
         if (status === 'bound' || status === 'duplicate') {
             const memoryConfig = readAmyAnamMemoryConfig();
             let memoryIdentityLinked = false;
-            if (memoryConfig.gatesOpen) {
+            if (memoryConfig.gatesOpen && launch.resolvedPersonaId !== EVAN_PERSONA_ID) {
                 const memoryLinkStatus = await linkAmyAnamSessionMemoryIdentity({
                     browserSessionId: browserSession.id,
                     externalSessionId: sessionId,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ALL_AGENTS } from '@/lib/agents';
 import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
+import { readEvanAnamAgentMailConfig } from '@/lib/anam/evan-agentmail';
 import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
 import { AMY_CARA4_VARIANT, resolveAnamSessionPersona } from '@/lib/anam/session-config';
 import { EVAN_PERSONA_ID, readAmyCara4PersonaReadiness, readEvanPersonaReadiness } from '@/lib/anam/persona-readiness';
@@ -57,8 +58,10 @@ export async function POST(req: Request) {
         const spineConfig = readAmyAnamSpineConfig();
         const memoryConfig = readAmyAnamMemoryConfig();
         const agentMailConfig = readAmyAnamAgentMailConfig();
+        const evanAgentMailConfig = readEvanAnamAgentMailConfig();
         const isAmyCara4 = resolution.variant === AMY_CARA4_VARIANT;
-        if (isAmyCara4 && spineConfig.enabled && !spineConfig.gatesOpen) {
+        const isEvan = resolution.personaId === EVAN_PERSONA_ID;
+        if ((isAmyCara4 || isEvan) && spineConfig.enabled && !spineConfig.gatesOpen) {
             console.error('[Amy Anam Spine] Enabled but unavailable');
             return noStoreJson(
                 { error: 'Amy session tracking is temporarily unavailable' },
@@ -144,7 +147,7 @@ export async function POST(req: Request) {
         let memoryUnlockAvailable = false;
         let agentMailAvailable = false;
 
-        if (isAmyCara4 && spineConfig.gatesOpen) {
+        if ((isAmyCara4 || isEvan) && spineConfig.gatesOpen) {
             if (!isTrustedBrowserOrigin(req)) {
                 return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
             }
@@ -162,7 +165,13 @@ export async function POST(req: Request) {
             }
 
             let browserSession = readAmyAnamBrowserSession(req, spineConfig.signingSecret);
-            if (!browserSession && memoryConfig.gatesOpen) {
+            if (!browserSession && isAmyCara4 && memoryConfig.gatesOpen) {
+            if (!browserSession && isEvan) {
+                return noStoreJson(
+                    { error: 'Complete the secure Evan email check-in first' },
+                    { status: 401 },
+                );
+            }
                 return noStoreJson(
                     { error: 'Amy memory check-in is required' },
                     { status: 401 },
@@ -174,7 +183,7 @@ export async function POST(req: Request) {
                 browserCookieToken = created.token;
             }
 
-            if (memoryConfig.gatesOpen) {
+            if (isAmyCara4 && memoryConfig.gatesOpen) {
                 const identity = await readAmyAnamBrowserIdentity(browserSession.id);
                 if (!identity) {
                     return noStoreJson(
@@ -192,6 +201,20 @@ export async function POST(req: Request) {
                         secret: spineConfig.signingSecret,
                     }),
                 );
+            }
+            if (isEvan) {
+                const contact = readAmyAnamContactFromRequest({
+                    request: req,
+                    browserSessionId: browserSession.id,
+                    secret: spineConfig.signingSecret,
+                });
+                if (!contact) {
+                    return noStoreJson(
+                        { error: 'Complete the secure Evan email check-in first' },
+                        { status: 401 },
+                    );
+                }
+                agentMailAvailable = evanAgentMailConfig.effectiveGateOpen;
             }
 
             const browserRate = await consumeAmyAnamDistributedRateLimit({
