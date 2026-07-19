@@ -114,6 +114,25 @@ test('Arizona SVAR and AI additions rebuild the brief and roadmap as three disti
     assert.ok(model.brief.openQuestions.some((question) => /agency AI policy/i.test(question)));
 });
 
+test('Workbench control language never becomes organization, timing, or stakeholder data', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: 'The ERP cutover targets Azure with a tight overnight window. The municipal subcontract is strictly pre-scoping because prime-contractor flow-down is unknown.' },
+        { role: 'user', content: 'This is for a State of Arizona agency. SVAR is a likely procurement track, not a compliance framework.' },
+        { role: 'user', content: 'Leadership is also asking whether AI can help with migration runbooks, technical documentation search, telemetry analysis, and an internal IT assistant.' },
+        { role: 'user', content: 'Before you put that together, please show the live notes.' },
+        { role: 'user', content: 'One fix. That organization context line before you put that together is not part of the project. Please remove that entirely, then rebuild the live brief.' },
+        { role: 'user', content: "It looks like my instruction got pasted into the timing and stakeholder sections. Please remove the sentence that starts with please remove that entirely from every section. For timing, just say open pending prime contractor compliance flow-down and SVAR clarification. For stakeholder context, leave it blank or note that it's not confirmed yet. Then show me the refreshed live notes." },
+    ]);
+    const serialized = JSON.stringify(model);
+    const timing = model.facts.find((fact) => fact.label === 'Timing')?.value ?? '';
+
+    assert.equal(model.lane, 'Azure ERP, Arizona SVAR, and AI discovery');
+    assert.equal(timing, 'open pending prime contractor compliance flow-down and SVAR clarification');
+    assert.equal(model.facts.some((fact) => fact.label === 'Stakeholder context'), false);
+    assert.match(model.facts.find((fact) => fact.label === 'Context')?.value ?? '', /State of Arizona agency/i);
+    assert.doesNotMatch(serialized, /before you put that together|please remove that entirely|pasted into|show me the refreshed/i);
+    assert.match(model.brief.objective, /three distinct tracks/i);
+});
 test('Roadmap topic is session-specific without becoming an approval claim', () => {
     const topic = 'Modernize 1,200 Windows 11 endpoints with Intune in controlled waves before peak season.';
     const model = buildAmyWorkbenchModel([{ role: 'user', content: 'Please show me a phased endpoint roadmap.' }], topic);
@@ -159,6 +178,8 @@ test('Workbench prompt protects visitor review time from filler and premature cl
     assert.match(prompt, /call skip_turn and remain silent/i);
     assert.match(prompt, /Never follow a display with "Is there anything else\?"/i);
     assert.match(prompt, /before we wrap up/i);
+    assert.match(prompt, /navigation, review, and editing language as control instructions/i);
+    assert.match(prompt, /visibleFacts/i);
 });
 
 test('Amy feature tabs and content use readable production typography', async () => {
@@ -188,6 +209,8 @@ test('Amy player registers all five visual handlers and keeps workbench local to
     assert.match(player, /transcriptRef\.current\.slice\(-120\)/);
     assert.match(player, /status: 'view_rebuilt'/);
     assert.match(player, /currentSessionUserTurns/);
+    assert.match(player, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
+    assert.match(player, /visibleFacts: receiptModel\.facts/);
 });
 
 test('Catalog is directional and never claims live commerce data', () => {

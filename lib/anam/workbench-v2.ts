@@ -136,6 +136,33 @@ function isConversationControl(value: string): boolean {
     return /^(?:thanks?|thank you|yes,? please|no|not right(?: now)?|maybe later|sure|partially|for now)\.?$/i.test(value.trim());
 }
 
+function isWorkbenchEditInstruction(value: string): boolean {
+    const normalized = value.trim();
+    return /^(?:actually,?\s+)?(?:quick\s+)?(?:correction|cleanup|one\s+(?:fix|cleanup)|hold on|hang on|checking|one moment)\b/i.test(normalized)
+        || /^(?:before you|next thing I tell Amy|then (?:show|open|refresh|rebuild)|please (?:show|open|refresh|rebuild|remove|delete)|make sure|let me)\b/i.test(normalized)
+        || /\b(?:line|sentence|instruction|conversational (?:bit|instruction)|pasted into|section)\b.*\b(?:remove|delete|blank|not part of|shouldn't|should not|doesn't belong|does not belong)\b/i.test(normalized)
+        || /\b(?:remove|delete)\b.*\b(?:line|sentence|instruction|conversational (?:bit|instruction)|section)\b/i.test(normalized)
+        || /\b(?:live notes?|live brief|roadmap|visual|catalog)\b.*\b(?:open|show|refresh|rebuild|regenerate|update|stale|clean(?:er|up)?)\b/i.test(normalized)
+        || /\b(?:open|show|refresh|rebuild|regenerate|update)\b.*\b(?:live notes?|live brief|roadmap|visual|catalog)\b/i.test(normalized);
+}
+
+function explicitTimingFrom(values: string[]): string {
+    for (const value of [...values].reverse()) {
+        const canonicalValue = canonical(value);
+        const match = canonicalValue.match(/\bfor timing[,\s:]+(?:just\s+)?(?:say|note|use|set(?: it)? to|write)\s+["“]?(.+?)(?=["”]?(?:[.!?](?:\s|$)|\bfor stakeholder\b|\bthen\b|$))/i)
+            ?? canonicalValue.match(/\btiming(?: entry)?\s+(?:is|reads?|should (?:be|say))\s+["“]?(.+?)(?=["”]?(?:[.!?](?:\s|$)|\bfor stakeholder\b|\bthen\b|$))/i);
+        const candidate = compact(match?.[1] ?? '', 180);
+        if (candidate && !/\b(?:remove|delete|instruction|line|sentence|section|show|refresh|rebuild)\b/i.test(candidate)) {
+            return candidate;
+        }
+    }
+    return '';
+}
+
+function stakeholderWasCleared(values: string[]): boolean {
+    return [...values].reverse().some((value) => /\bstakeholder(?: context| section)?\b.*\b(?:leave (?:it )?blank|not confirmed|remove|delete|clear)\b/i.test(value));
+}
+
 function requestedOutputsFrom(values: string[], trackCount: number): string[] {
     const text = values.join(' ');
     return unique([
@@ -393,8 +420,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const corrections = readCorrections(userTurns);
     const rejected = new Set(corrections.map((item) => canonical(item.from).toLowerCase()));
     const certainStatements = statements.filter((value) => !isUncertain(value));
-    const substantiveStatements = certainStatements.filter((value) => !isWorkbenchRequest(value) && !isConversationControl(value));
-    const sourceText = canonical(`${certainStatements.join(' ')} ${roadmapTopic}`);
+    const substantiveStatements = certainStatements.filter((value) => !isWorkbenchRequest(value)
+        && !isConversationControl(value)
+        && !isWorkbenchEditInstruction(value));
+    const sourceText = canonical(`${substantiveStatements.join(' ')} ${roadmapTopic}`);
     const hasErpCutover = /\bERP\b/i.test(sourceText) && /cutover|overnight outage|maintenance window/i.test(sourceText);
     const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sourceText);
     const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
@@ -408,7 +437,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         return compact(value, 150);
     }), 4);
     const allText = sourceText;
-    const terms = termsFrom(certainStatements, rejected);
+    const terms = termsFrom(substantiveStatements, rejected);
     for (const correction of corrections) {
         for (const [, label] of TERM_RULES) {
             if (canonical(correction.to).toLowerCase().includes(label.toLowerCase()) && !terms.includes(label)) terms.push(label);
@@ -425,13 +454,17 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Plan two separate workstreams: protect the ERP cutover within a tight overnight outage window, and pre-scope municipal compliance while awaiting prime-contractor flow-down.'
         : lastSentence(substantiveStatements, /need|want|trying|looking|goal|objective|moderni[sz]|replace|migrate|improve|protect|reduce|support|roadmap|assessment/i)
         || (certainStatements.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
-    const timing = dualTrack && /few weeks/i.test(allText)
+    const explicitTiming = explicitTimingFrom(userTurns);
+    const timing = explicitTiming
+        || (dualTrack && /few weeks/i.test(allText)
         ? 'Detailed planning may begin in a few weeks, dependent on compliance clarification from the prime contractor.'
-        : lastSentence(substantiveStatements, /timeline|timing|\d+[ -]?(?:day|week|month)|next (?:year|quarter|month)|this (?:year|quarter|month)|within|before|early|late|maintenance window|peak season/i);
+        : lastSentence(substantiveStatements, /timeline|timing|\d+[ -]?(?:day|week|month)|next (?:year|quarter|month)|this (?:year|quarter|month)|within|before|early|late|maintenance window|peak season/i));
     const constraint = dualTrack
         ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
         : lastSentence(substantiveStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
-    const stakeholder = lastSentence(substantiveStatements, /decision|stakeholder|CIO|CFO|CTO|director|vice president|VP|executive|procurement|leadership|owner/i);
+    const stakeholder = stakeholderWasCleared(userTurns)
+        ? ''
+        : lastSentence(substantiveStatements, /decision|stakeholder|CIO|CFO|CTO|director|vice president|VP|executive|procurement|leadership|owner/i);
     const organization = hasArizonaSvar
         ? 'State of Arizona agency; Arizona SVAR purchasing path raised for specialist validation.'
         : lastSentence(substantiveStatements, /county|city|agency|company|firm|hospital|health system|manufactur|distribution|university|school district/i);

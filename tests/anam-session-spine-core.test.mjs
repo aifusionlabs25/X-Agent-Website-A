@@ -239,6 +239,46 @@ test('authoritative transcript polling waits for session completion and normaliz
     assert.ok(calls.every(call => call.init.body === undefined));
 });
 
+test('bounded transcript transport accepts a provider envelope above two megabytes', async () => {
+    const launch = createAmyAnamLaunch('browser-session-large-provider-envelope', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const responses = [
+        jsonResponse({
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: { zeroDataRetention: false },
+        }),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 2,
+            messages: [
+                { role: 'persona', message: 'The working view is open.' },
+                { role: 'user', message: 'Please send the post-session follow-up.' },
+            ],
+            providerEnvelopePadding: 'x'.repeat(3 * 1024 * 1024),
+        }),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0],
+        sleep: async () => undefined,
+        fetchImpl: async url => {
+            const response = responses.shift();
+            assert.ok(response, 'Unexpected fetch: ' + url);
+            return response;
+        },
+    });
+
+    assert.equal(result.status, 'ready');
+    assert.equal(result.turns.length, 2);
+});
 test('Anam skip-turn silence is discarded without rejecting the completed transcript', async () => {
     const launch = createAmyAnamLaunch('browser-session-skip-turn', PERSONA_ID, 1_900_000_000_000);
     const completedAt = '2030-03-17T17:47:10.000Z';
