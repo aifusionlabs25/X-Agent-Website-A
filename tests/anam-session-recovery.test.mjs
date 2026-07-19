@@ -248,6 +248,9 @@ test('the recovery route is scheduler-compatible, bearer-authenticated, and has 
     assert.match(route, /export async function GET\(request: Request\)/);
     assert.match(route, /export async function POST\(request: Request\)/);
     assert.match(route, /isAmyAnamRecoveryRequestAuthorized\(request\)/);
+    assert.match(route, /Targeted recovery requires POST/);
+    assert.match(route, /requeueAmyAnamProviderResponseFailure\(targetSessionId\)/);
+    assert.match(route, /finalizeAmyAnamSession\(targetSessionId\)/);
     assert.match(
         route,
         /if \(!recoveryConfig\.gatesOpen\) \{[\s\S]*?Amy session recovery is unavailable[\s\S]*?status: 503/,
@@ -262,4 +265,8 @@ test('the recovery route is scheduler-compatible, bearer-authenticated, and has 
     assert.match(store, /'ZRANGEBYSCORE'/);
     assert.match(store, /recovery-drain-lock:v1/);
     assert.match(store, /'NX',[\s\S]*'EX',[\s\S]*55/);
+    assert.match(
+        store,
+        /current\.state ~= 'failed' or current\.failureCode ~= 'provider_response'/,
+    );
 });
