@@ -65,6 +65,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeIdentityToolHandler: (() => void) | null = null;
         let removeEmailToolHandler: (() => void) | null = null;
         let completedUserTurns = 0;
+        let workbenchRevision = 0;
         let confirmedMemoryName: string | null = null;
         const videoElement = videoRef.current;
 
@@ -186,6 +187,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler(toolName, {
                             onStart: async (payload) => {
                                 if (isMounted) {
+                                    workbenchRevision += 1;
+                                    const synchronizedTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
+                                    setWorkbenchTurns([...synchronizedTurns]);
                                     if (view === 'roadmap') {
                                         const topic = typeof payload.arguments?.topic === 'string'
                                             ? payload.arguments.topic.trim().slice(0, 2_000)
@@ -200,7 +204,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     setWorkbenchView(view);
                                     setWorkbenchOpen(true);
                                 }
-                                return confirmation;
+                                return JSON.stringify({
+                                status: 'view_rebuilt',
+                                view,
+                                revision: workbenchRevision,
+                                currentSessionUserTurns: transcriptRef.current.filter((turn) => turn.role === 'user').length,
+                                instruction: `${confirmation} Confirm only that the working view is open and rebuilt from the latest current-session turns. Do not claim a named fact or track is visible unless it is present in the current conversation.`,
+                            });
                             },
                         }));
                     };
@@ -273,7 +283,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
-                    if (messageEvent.role === 'user' && messageEvent.endOfSpeech) completedUserTurns += 1;
                     if (messageEvent.role !== currentRoleRef.current) {
                         if (currentMessageRef.current) {
                             recordTurn(currentRoleRef.current, currentMessageRef.current);
@@ -287,6 +296,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     if (messageEvent.endOfSpeech) {
                         if (currentMessageRef.current) {
                             recordTurn(messageEvent.role, currentMessageRef.current);
+                            if (messageEvent.role === 'user') {
+                                completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
+                            }
                         }
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
@@ -349,8 +361,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     ? payload.arguments.preferredName.trim()
                                     : '';
                                 const memoryAccessConfirmed = payload.arguments.memoryAccessConfirmed === true;
-                                if (!preferredName || !memoryAccessConfirmed) {
-                                    throw new Error('Ask for the preferred name and explicit permission to check previous notes.');
+                                if (!preferredName || /^(?:user|visitor|guest|customer)$/i.test(preferredName) || !memoryAccessConfirmed) {
+                                    throw new Error('Ask "What name would you like me to use?" and separately ask permission to check previous notes.');
                                 }
                                 if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
                                     throw new Error('The private session is not ready. Continue the conversation and try once more.');
