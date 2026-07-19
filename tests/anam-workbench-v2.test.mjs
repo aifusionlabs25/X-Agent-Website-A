@@ -90,6 +90,30 @@ test('Supplied ERP and municipal session produces accurate working views', () =>
     assert.equal(model.visualBrief.slides[0].summary, model.brief.objective);
 });
 
+test('Arizona SVAR and AI additions rebuild the brief and roadmap as three distinct tracks', () => {
+    const turns = [
+        { role: 'user', content: 'The ERP cutover with its tight overnight outage window is still central, plus municipal subcontract pre-scoping while prime flow-down is unknown.' },
+        { role: 'user', content: 'This is for a State of Arizona agency and they mentioned SVAR, S-V-A-R.' },
+        { role: 'user', content: 'Leadership also wants a separate AI discovery track for migration runbooks, technical documentation search, telemetry analysis, and an internal IT assistant.' },
+        { role: 'user', content: 'Please regenerate the live brief with all three tracks.' },
+    ];
+    const topic = 'ERP cutover, Arizona SFAR prescoping, and AI discovery';
+    const model = buildAmyWorkbenchModel(turns, topic);
+
+    assert.equal(model.lane, 'Azure ERP, Arizona SVAR, and AI discovery');
+    assert.match(model.brief.objective, /three distinct tracks/i);
+    assert.match(model.brief.objective, /Arizona SVAR software purchasing path/i);
+    assert.match(model.brief.objective, /AI opportunities/i);
+    assert.ok(model.brief.priorities.some((item) => /not a compliance approval process/i.test(item)));
+    assert.ok(model.facts.some((fact) => fact.section === 'Procurement' && /Software Value-Added Reseller/i.test(fact.value)));
+    assert.doesNotMatch(JSON.stringify(model), /S-V-A-R|Arizona SFAR|Statewide Vendor Authorization/i);
+    assert.match(model.roadmap.title, /ERP cutover.*Arizona SVAR.*AI discovery/i);
+    assert.ok(model.roadmap.phases.some((phase) => phase.title === 'Arizona SVAR purchasing path'));
+    assert.ok(model.roadmap.phases.some((phase) => phase.title === 'AI discovery workstream'));
+    assert.ok(model.brief.openQuestions.some((question) => /agency or contract-controlled information/i.test(question)));
+    assert.ok(model.brief.openQuestions.some((question) => /agency AI policy/i.test(question)));
+});
+
 test('Roadmap topic is session-specific without becoming an approval claim', () => {
     const topic = 'Modernize 1,200 Windows 11 endpoints with Intune in controlled waves before peak season.';
     const model = buildAmyWorkbenchModel([{ role: 'user', content: 'Please show me a phased endpoint roadmap.' }], topic);
@@ -161,6 +185,9 @@ test('Amy player registers all five visual handlers and keeps workbench local to
     }
     assert.match(player, /isAmyCara4Variant\(sessionVariant\)/);
     assert.match(player, /current\.slice\(-59\)/);
+    assert.match(player, /transcriptRef\.current\.slice\(-120\)/);
+    assert.match(player, /status: 'view_rebuilt'/);
+    assert.match(player, /currentSessionUserTurns/);
 });
 
 test('Catalog is directional and never claims live commerce data', () => {
