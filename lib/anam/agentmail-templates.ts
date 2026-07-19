@@ -26,6 +26,7 @@ type TemplateInput = {
 
 const INSIGHT_NAVY = '#071425';
 const INSIGHT_MAGENTA = '#ae0a46';
+const AMY_REJOIN_URL = 'https://xagent.aifusionlabs.app/demo/amy?variant=cara4';
 const EMAIL_ACTION_PATTERN = /\b(?:email|e-mail|follow[- ]?up|send (?:it|that|this)|pulse session|before (?:we )?(?:close|wrap)|wrap up)\b/i;
 
 function escapeHtml(value: unknown): string {
@@ -66,6 +67,11 @@ function safeName(value: unknown): string {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 80) || 'there';
+}
+
+function safeFirstName(value: unknown): string {
+    const name = safeName(value);
+    return name === 'there' ? name : name.split(' ')[0].slice(0, 40) || 'there';
 }
 
 function validFact(fact: AmyWorkbenchFact): boolean {
@@ -163,6 +169,7 @@ function transcriptSnapshot(turns: AmyTranscriptTurn[]): string[] {
 export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const generatedAt = input.generatedAt ?? new Date().toISOString();
     const name = safeName(input.displayName);
+    const firstName = safeFirstName(input.displayName);
     const facts = input.model.facts.filter(validFact);
     const objectiveCandidate = clean(input.model.brief.objective, 700);
     const objective = objectiveCandidate && !EMAIL_ACTION_PATTERN.test(objectiveCandidate)
@@ -195,10 +202,23 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const ended = formatPhoenixDate(input.sessionEndedAt);
     const generated = formatPhoenixDate(generatedAt);
     const transcript = transcriptSnapshot(input.turns);
+    const customerValue = unique([
+        objective,
+        guardrail ? `Protect the stated operating guardrail: ${guardrail}` : '',
+        workloads ? `Maintain continuity for the critical workload: ${workloads}` : '',
+        timing ? `Work toward the stated timing: ${timing}` : '',
+    ], 5);
+    const pursuitPlan = unique([
+        `Assign an Insight opportunity owner and align the appropriate ${environment || clean(input.model.lane, 120) || 'technology'} specialists before outreach.`,
+        guardrail ? `Open the follow-up by confirming the non-negotiable guardrail: ${guardrail}` : '',
+        `Use the next working session to advance this decision: ${nextStep}`,
+        openQuestions[0] ? `Resolve the first qualification gap: ${openQuestions[0]}` : '',
+        timing ? `Anchor the pursuit plan and decision gates to the stated timing: ${timing}` : '',
+    ], 5);
 
     const visitorBody = `
-<p style="margin:0;color:#172033;font-size:16px;line-height:25px;">Hi ${escapeHtml(name)},</p>
-<p style="margin:14px 0 0;color:#435166;font-size:15px;line-height:24px;">Thank you for speaking with Amy. Your conversation has been organized into a concise working recap so you and the Insight team can continue from the same context.</p>
+<p style="margin:0;color:#172033;font-size:16px;line-height:25px;">Hi ${escapeHtml(firstName)},</p>
+<p style="margin:14px 0 0;color:#435166;font-size:15px;line-height:24px;">Thanks again for speaking with me. I organized the key points we discussed so you and the Insight team can continue from the same context.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:24px;background:#f7f8fa;border-left:4px solid ${INSIGHT_MAGENTA};"><tr><td style="padding:18px 20px;">
 <div style="font-size:11px;line-height:15px;letter-spacing:.12em;text-transform:uppercase;color:${INSIGHT_MAGENTA};font-weight:700;">Conversation objective</div>
 <div style="margin-top:8px;color:#263548;font-size:15px;line-height:24px;">${escapeHtml(objective)}</div>
@@ -206,17 +226,23 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
 ${highlights.length ? `<div style="margin-top:28px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">What we heard</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:9px;">${bulletRows(highlights)}</table>` : ''}
 <div style="margin-top:28px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Suggested next step</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:11px;background:#fff7fa;border:1px solid #f2cedc;"><tr><td style="padding:17px 19px;color:#5f2340;font-size:14px;line-height:22px;font-weight:600;">${escapeHtml(nextStep)}</td></tr></table>
-<p style="margin:28px 0 0;color:#435166;font-size:14px;line-height:22px;">Reply to this email if you would like to correct the working recap, add context, or request human follow-up.</p>
-<p style="margin:22px 0 0;color:#435166;font-size:14px;line-height:22px;">Best regards,<br><strong style="color:#172033;">Amy</strong><br>Insight Enterprise SDR</p>`;
+<p style="margin:28px 0 0;color:#435166;font-size:14px;line-height:22px;">I shared this working recap with the Insight team. The appropriate specialists will review it and follow up with you from here.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:22px;background:#f7f8fa;"><tr><td style="padding:18px 20px;">
+<div style="color:#263548;font-size:14px;line-height:22px;">Have an update, or want to share Amy with a colleague? Use the link below. Each person should check in with their own email so conversations stay organized.</div>
+<div style="margin-top:14px;"><a href="${AMY_REJOIN_URL}" style="display:inline-block;background:${INSIGHT_NAVY};color:#ffffff;text-decoration:none;padding:11px 17px;font-size:14px;line-height:18px;font-weight:700;">Reconnect with Amy</a></div>
+</td></tr></table>
+<p style="margin:22px 0 0;color:#435166;font-size:14px;line-height:22px;">Talk soon,<br><strong style="color:#172033;">Amy</strong><br>Insight Enterprise SDR</p>`;
     const visitorText = [
-        `Hi ${name},`, '',
-        'Thank you for speaking with Amy. Your conversation has been organized into a concise working recap.', '',
+        `Hi ${firstName},`, '',
+        'Thanks again for speaking with me. I organized the key points we discussed so you and the Insight team can continue from the same context.', '',
         `Conversation objective: ${objective}`, '',
         ...textSection('What we heard', highlights),
         `Suggested next step: ${nextStep}`, '',
-        'Reply to this email if you would like to correct the working recap, add context, or request human follow-up.', '',
-        'Best regards,', 'Amy', 'Insight Enterprise SDR', '',
-        'Amy is an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination.',
+        'I shared this working recap with the Insight team. The appropriate specialists will review it and follow up with you from here.', '',
+        'Have an update, or want to share Amy with a colleague? Each person should check in with their own email so conversations stay organized.',
+        `Reconnect with me: ${AMY_REJOIN_URL}`, '',
+        'Talk soon,', 'Amy', 'Insight Enterprise SDR', '',
+        "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination.",
     ].join('\n');
 
     const adminDetails = [
@@ -260,6 +286,7 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
         ...highlights,
     ], 8);
     const intakeBody = `
+<p style="margin:0 0 22px;color:#435166;font-size:14px;line-height:22px;">I completed a conversation with ${escapeHtml(name)} and organized the verified context below for Sales and Operations. Use it to prepare a focused follow-up without introducing unsupported assumptions.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e1e6ec;border-collapse:collapse;">
 ${detailRow('Contact', name)}${detailRow('Verified email', input.verifiedEmail)}${detailRow('Opportunity lane', clean(input.model.lane, 150))}${detailRow('Session ID', input.externalSessionId)}
 </table>
@@ -267,8 +294,10 @@ ${detailRow('Contact', name)}${detailRow('Verified email', input.verifiedEmail)}
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:10px;background:#f7f8fa;border-left:4px solid ${INSIGHT_MAGENTA};"><tr><td style="padding:18px 20px;color:#263548;font-size:14px;line-height:22px;">${escapeHtml(objective)}</td></tr></table>
 ${intakeContext.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Scope and operating context</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(intakeContext)}</table>` : ''}
 ${priorities.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Priorities and guardrails</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(priorities)}</table>` : ''}
-<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Recommended action</div>
+${customerValue.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Customer value and urgency</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(customerValue)}</table>` : ''}
+<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Recommended next-meeting objective</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:10px;background:#fff7fa;border:1px solid #f2cedc;"><tr><td style="padding:17px 19px;color:#5f2340;font-size:14px;line-height:22px;font-weight:600;">${escapeHtml(nextStep)}</td></tr></table>
+${pursuitPlan.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Recommended pursuit plan</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(pursuitPlan)}</table>` : ''}
 ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Qualification gaps for the team</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(openQuestions)}</table>` : ''}
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:27px;background:#fff8e7;border:1px solid #efd79b;"><tr><td style="padding:16px 18px;color:#6b4b09;font-size:13px;line-height:21px;">Internal planning input only. Validate scope, ownership, contract eligibility, compliance, pricing, availability, and timing before making a customer commitment.</td></tr></table>`;
     const intakeText = [
@@ -277,10 +306,13 @@ ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height
         `Verified email: ${input.verifiedEmail}`,
         `Opportunity lane: ${clean(input.model.lane, 150)}`,
         `Session ID: ${input.externalSessionId}`, '',
+        `I completed a conversation with ${name} and organized the verified context below for Sales and Operations.`, '',
         `Opportunity snapshot: ${objective}`, '',
         ...textSection('Scope and operating context', intakeContext),
         ...textSection('Priorities and guardrails', priorities),
-        `Recommended action: ${nextStep}`, '',
+        ...textSection('Customer value and urgency', customerValue),
+        `Recommended next-meeting objective: ${nextStep}`, '',
+        ...textSection('Recommended pursuit plan', pursuitPlan),
         ...textSection('Qualification gaps for the team', openQuestions),
         'Internal planning input only. Validate scope, ownership, contract eligibility, compliance, pricing, availability, and timing before making a customer commitment.',
     ].join('\n');
@@ -288,15 +320,15 @@ ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height
     const subjectContext = clean(input.model.lane, 90) || 'Technology planning';
     return {
         visitor: {
-            subject: `${subjectContext} | Your conversation with Amy`,
+            subject: `${subjectContext} | A follow-up from Amy`,
             text: visitorText,
             html: shell({
-                preview: `Your ${subjectContext.toLowerCase()} conversation with Amy, organized with a practical next step.`,
-                eyebrow: 'Insight · Conversation follow-up',
-                title: 'Your conversation, clearly captured.',
-                subtitle: 'A concise working recap and a practical path forward.',
+                preview: `My recap of our ${subjectContext.toLowerCase()} conversation and the practical next step.`,
+                eyebrow: 'Insight · Follow-up from Amy',
+                title: "Here's the recap I promised.",
+                subtitle: 'The key points we discussed and a practical path forward.',
                 body: visitorBody,
-                footer: 'Amy is an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination.',
+                footer: "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination.",
             }),
         },
         admin: {
