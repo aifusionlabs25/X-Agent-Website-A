@@ -122,8 +122,10 @@ test('Evan browser integration requires secure typed check-in and explicit conse
     ]);
     assert.match(demo, /EvanContactGate/);
     assert.match(player, /send_mullins_follow_up_email/);
+    assert.match(player, /Never say a quote, estimate, price, booking, or appointment will be emailed/);
     assert.match(route, /rawEmailReturned: false/);
     assert.match(route, /createAmyAnamContactToken/);
     assert.match(tool, /userConfirmed/);
-    assert.match(tool, /final transcript/);
+    assert.match(tool, /conversation recap/);
+    assert.match(tool, /does not create, attach, deliver, or promise a quote/);
 });
