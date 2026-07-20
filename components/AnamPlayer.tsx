@@ -494,8 +494,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     status: result.status, queued: true, sent: false, duplicate: result.duplicate,
                                     receiptId: result.receiptId,
                                     instruction: result.duplicate
-                                        ? 'Confirm briefly that the Mullins follow-up is already scheduled for after the session. Do not say it was sent yet.'
-                                        : 'Confirm briefly that the visitor summary and Mullins team follow-up will be emailed after this session ends. Do not say anything was sent yet. Continue naturally.',
+                                        ? 'Confirm briefly that the conversation recap is already scheduled for after the session. Do not say it was sent, and do not mention a quote or estimate being emailed.'
+                                        : 'Confirm briefly that the conversation recap will be emailed after this session ends. If a quote, estimate, or walkthrough was discussed, say Mullins staff must separately review that request. Never say a quote, estimate, price, booking, or appointment will be emailed, included, prepared, sent, or confirmed. Continue naturally.',
                                 });
                             },
                         },

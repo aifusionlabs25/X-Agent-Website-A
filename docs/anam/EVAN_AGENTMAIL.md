@@ -12,7 +12,7 @@ Evan uses the same security and delivery pattern as Amy, translated to the Anam 
 
 ## Messages
 
-- Visitor: thank-you, working recap, Mullins phone/email/address/website, and a clear non-quote disclaimer.
+- Visitor: thank-you, working conversation recap, Mullins phone/email/address/website, and a clear statement that the message is not a quote, estimate, booking, price, or appointment.
 - Mullins Admin: operational session summary and sanitized transcript. Default recipient: `aifusionlabs@gmail.com`.
 - Mullins Sales: move details, quote/walkthrough brief, captured requirements, missing information, and sanitized transcript. Default recipient: `aifusionlabs@gmail.com`.
 
@@ -33,4 +33,5 @@ See `.env.example` for the optional overrides.
 - No send until the final Anam transcript and durable session receipt exist.
 - Visitor delivery must be confirmed; ambiguous delivery is not retried automatically.
 - Email permission does not book a move, confirm a quote, guarantee availability, or create an appointment.
+- Evan must never say that the visitor email contains or will later deliver a quote. The internal Sales brief only asks Mullins staff to review the captured quote or walkthrough request.
 - Transcript contact data is redacted before templating; the verified typed email is used only in the recipient and authorized internal headers.

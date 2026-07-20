@@ -53,6 +53,11 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /three messages are scheduled/i);
     assert.match(prompt, /never visible to you/i);
     assert.match(prompt, /No tool books a move/i);
+    assert.match(prompt, /Never ask whether it is okay to end the call/i);
+    assert.match(prompt, /Treat "I'm set for now,".*as clear closing intent/i);
+    assert.match(prompt, /Call `end_call` immediately with confirmation/i);
+    assert.match(prompt, /Never say a quote or estimate will be emailed/i);
+    assert.match(prompt, /Mullins staff must separately review any estimate or walkthrough request/i);
 });
 
 test('managed persona uses patient turn detection and disables silence prompts and shutdown', async () => {
