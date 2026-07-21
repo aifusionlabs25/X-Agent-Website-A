@@ -28,6 +28,7 @@ const sources = new Map(await Promise.all(sourceFiles.map(async relativePath => 
     await readFile(new URL(relativePath, import.meta.url), 'utf8'),
 ])));
 const completionRoute = sources.get('../app/api/anam/session/complete/route.ts');
+const bindRoute = sources.get('../app/api/anam/session/bind/route.ts');
 const clientSpine = sources.get('../lib/anam/session-spine-client.ts');
 const finalizer = sources.get('../lib/anam/session-finalizer.ts');
 const sessionStore = sources.get('../lib/anam/session-spine-store.ts');
@@ -39,11 +40,16 @@ test('session-spine and Hermes shadow files keep outbound automation isolated to
     const forbiddenInvocation = /\b(?:new\s+Resend|emails\.send|appendLead|analyzeTranscript|runAmyPostSessionAnalysis)\b/i;
 
     for (const [relativePath, source] of sources) {
-        if (relativePath !== '../lib/anam/session-finalizer.ts') {
+        if (
+            relativePath !== '../lib/anam/session-finalizer.ts'
+            && relativePath !== '../app/api/anam/session/bind/route.ts'
+        ) {
             assert.doesNotMatch(source, forbiddenImport, `${relativePath} imported an outbound service`);
         }
         assert.doesNotMatch(source, forbiddenInvocation, `${relativePath} invoked an outbound service`);
     }
+    assert.match(bindRoute, /queueEvanAnamConversationFollowUp/);
+    assert.doesNotMatch(bindRoute, /sendEvanAnamConversationFollowUp|dispatchEvanAnamPostSessionFollowUp|sendAmyEmailWithAgentMail|messages\/send/);
 });
 
 test('the completion route rejects client transcript fields and returns explicit canary no-outbound receipts', () => {
@@ -119,6 +125,17 @@ test('both live and QA clients bind SESSION_READY and deduplicate completion', (
     assert.match(qaHook, /removeListener\(AnamEvent\.SESSION_READY, handleSessionReady\)/);
 });
 
+test('Evan follow-up intent is reserved only after verified binding and never sends provider email', () => {
+    const verified = bindRoute.indexOf('await verifyAnamSessionForLaunch');
+    const bound = bindRoute.indexOf('await bindAmyAnamLaunch');
+    const queued = bindRoute.indexOf('await queueEvanAnamConversationFollowUp');
+    assert.ok(verified >= 0 && bound > verified && queued > bound);
+    assert.match(bindRoute, /launch\.resolvedPersonaId === EVAN_PERSONA_ID/);
+    assert.match(bindRoute, /contact\.purpose !== 'evan_follow_up'/);
+    assert.match(bindRoute, /evanFollowUpQueued/);
+    assert.match(bindRoute, /outbound:\s*false/);
+});
+
 test('email delivery occurs only after final transcript retrieval and durable session receipt', () => {
     const transcriptFetch = finalizer.indexOf('const transcript = await fetchCompletedAnamTranscript');
     const receiptWrite = finalizer.indexOf('await writeAmyAnamReceipt(session, finalization, receipt');
@@ -129,4 +146,3 @@ test('email delivery occurs only after final transcript retrieval and durable se
     assert.match(finalizer, /turns:\s*transcript\.status === 'ready' \? transcript\.turns : \[\]/);
     assert.doesNotMatch(player, /sendAmyAnamFollowUpEmail\([\s\S]*transcript:/);
 });
-

@@ -172,22 +172,37 @@ test('AgentMail attachment validation fails closed before contacting the provide
     assert.equal(called, false);
 });
 
-test('Evan browser integration requires secure typed check-in and explicit consent tool', async () => {
-    const [demo, player, route, tool] = await Promise.all([
+test('Evan browser integration requires scoped check-in consent, bind-time intent, and farewell-first close', async () => {
+    const [demo, player, gate, route, bind, contactToken, emailTool, endTool] = await Promise.all([
         readFile(new URL('../app/demo/[slug]/page.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../components/evan/EvanContactGate.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../app/api/anam/evan/access/route.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../app/api/anam/session/bind/route.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../lib/anam/contact-token.ts', import.meta.url), 'utf8'),
         readFile(new URL('../config/anam/evan-agentmail-client-tool.json', import.meta.url), 'utf8'),
+        readFile(new URL('../config/anam/evan-end-session-client-tool.json', import.meta.url), 'utf8'),
     ]);
     assert.match(demo, /EvanContactGate/);
     assert.match(player, /send_mullins_follow_up_email/);
     assert.match(player, /registerToolCallHandler\(\s*'end_mullins_session'/s);
     assert.match(player, /requestedCloseReason = 'user_requested_end'/);
-    assert.match(player, /await anamClient\.stopStreaming\(\)/);
-    assert.match(player, /Never say a quote, estimate, price, booking, or appointment will be emailed/);
+    assert.match(player, /evanCloseCoordinator\?\.arm\(\)/);
+    assert.match(player, /completeFarewell\(\)/);
+    assert.doesNotMatch(player, /Closing immediately after confirmed farewell/);
+    assert.match(gate, /type="checkbox"/);
+    assert.match(gate, /checked=\{followUpConsent\}/);
+    assert.match(gate, /Email me one conversation recap[\s\S]*Mullins Admin and Sales/);
+    assert.match(gate, /JSON\.stringify\(\{ displayName, email, followUpConsent \}\)/);
+    assert.match(route, /body\.followUpConsent !== true/);
+    assert.match(route, /purpose: 'evan_follow_up'/);
     assert.match(route, /rawEmailReturned: false/);
-    assert.match(route, /createAmyAnamContactToken/);
-    assert.match(tool, /userConfirmed/);
-    assert.match(tool, /conversation recap/);
-    assert.match(tool, /does not create, attach, deliver, or promise a quote/);
+    assert.match(bind, /queueEvanAnamConversationFollowUp/);
+    assert.match(bind, /contact\.purpose !== 'evan_follow_up'/);
+    assert.match(bind, /outbound: false/);
+    assert.match(contactToken, /purpose\?: 'evan_follow_up'/);
+    assert.match(emailTool, /userConfirmed/);
+    assert.match(emailTool, /does not create, attach, deliver, or promise a quote/);
+    assert.match(endTool, /"awaitResult": true/);
+    assert.match(endTool, /farewell_required/);
 });

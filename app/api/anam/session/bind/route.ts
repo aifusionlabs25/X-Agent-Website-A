@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { verifyAnamSessionForLaunch, AnamSessionApiError } from '@/lib/anam/session-api';
 import { EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
+import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
+import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
 import {
     AmyAnamRequestError,
     isTrustedBrowserOrigin,
@@ -77,6 +79,8 @@ export async function POST(request: Request) {
         if (status === 'bound' || status === 'duplicate') {
             const memoryConfig = readAmyAnamMemoryConfig();
             let memoryIdentityLinked = false;
+            let evanFollowUpQueued = false;
+            let evanFollowUpDuplicate = false;
             if (memoryConfig.gatesOpen && launch.resolvedPersonaId !== EVAN_PERSONA_ID) {
                 const memoryLinkStatus = await linkAmyAnamSessionMemoryIdentity({
                     browserSessionId: browserSession.id,
@@ -88,11 +92,32 @@ export async function POST(request: Request) {
                 memoryIdentityLinked = memoryLinkStatus === 'linked'
                     || memoryLinkStatus === 'duplicate';
             }
+            if (launch.resolvedPersonaId === EVAN_PERSONA_ID) {
+                const contact = readAmyAnamContactFromRequest({
+                    request,
+                    browserSessionId: browserSession.id,
+                    secret: config.signingSecret,
+                });
+                if (!contact?.displayName || contact.purpose !== 'evan_follow_up') {
+                    return noStoreJson({ error: 'Evan follow-up consent was not confirmed' }, { status: 409 });
+                }
+                const queued = await queueEvanAnamConversationFollowUp({
+                    externalSessionId: sessionId,
+                    browserSessionId: browserSession.id,
+                    displayName: contact.displayName,
+                    email: contact.email,
+                    contactSecret: config.signingSecret,
+                });
+                evanFollowUpQueued = queued.queued;
+                evanFollowUpDuplicate = queued.duplicate;
+            }
             return noStoreJson({
                 bound: true,
                 duplicate: status === 'duplicate',
                 canary: true,
                 memoryIdentityLinked,
+                evanFollowUpQueued,
+                evanFollowUpDuplicate,
                 outbound: false,
             });
         }

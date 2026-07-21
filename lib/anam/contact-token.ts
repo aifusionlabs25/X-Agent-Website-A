@@ -17,7 +17,14 @@ type ContactPayload = {
     sid: string;
     email: string;
     displayName?: string;
+    purpose?: 'evan_follow_up';
     exp: number;
+};
+
+export type AmyAnamContact = {
+    email: string;
+    displayName?: string;
+    purpose?: 'evan_follow_up';
 };
 
 function encryptionKey(secret: string): Buffer {
@@ -57,6 +64,7 @@ export function createAmyAnamContactToken(input: {
     browserSessionId: string;
     email: string;
     displayName?: string;
+    purpose?: 'evan_follow_up';
     secret: string;
     now?: number;
 }): string {
@@ -67,6 +75,7 @@ export function createAmyAnamContactToken(input: {
         email: normalizeAmyAnamMemoryEmail(input.email),
         exp: now + AMY_ANAM_CONTACT_TTL_SECONDS * 1_000,
         ...(input.displayName?.trim() ? { displayName: input.displayName.normalize('NFKC').trim().slice(0, 120) } : {}),
+        ...(input.purpose === 'evan_follow_up' ? { purpose: input.purpose } : {}),
     };
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', encryptionKey(input.secret), iv);
@@ -88,7 +97,7 @@ export function readAmyAnamContactToken(input: {
     browserSessionId: string;
     secret: string;
     now?: number;
-}): { email: string; displayName?: string } | null {
+}): AmyAnamContact | null {
     try {
         const [version, ivValue, ciphertextValue, tagValue, ...extra] = input.token.split('.');
         if (
@@ -123,6 +132,7 @@ export function readAmyAnamContactToken(input: {
             ...(typeof payload.displayName === 'string' && payload.displayName.trim()
                 ? { displayName: payload.displayName.normalize('NFKC').trim().slice(0, 120) }
                 : {}),
+            ...(payload.purpose === 'evan_follow_up' ? { purpose: payload.purpose } : {}),
         };
     } catch {
         return null;
@@ -134,7 +144,7 @@ export function readAmyAnamContactFromRequest(input: {
     browserSessionId: string;
     secret: string;
     now?: number;
-}): { email: string; displayName?: string } | null {
+}): AmyAnamContact | null {
     const token = cookieValue(input.request, AMY_ANAM_CONTACT_COOKIE);
     if (!token) return null;
     return readAmyAnamContactToken({
