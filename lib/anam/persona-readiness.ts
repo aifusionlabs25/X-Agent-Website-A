@@ -28,7 +28,7 @@ export const EVAN_REQUIRED_TOOL_NAMES = [
     'Knowledge_Evan_Mullins_Moving',
     'skip_turn',
     'send_mullins_follow_up_email',
-    'end_call',
+    'end_mullins_session',
 ] as const;
 
 export const EVAN_REQUIRED_PROMPT_MARKERS = [

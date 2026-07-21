@@ -65,6 +65,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeClientListeners: (() => void) | null = null;
         let removeIdentityToolHandler: (() => void) | null = null;
         let removeEmailToolHandler: (() => void) | null = null;
+        let removeCloseToolHandler: (() => void) | null = null;
+        let requestedCloseReason: string | null = null;
         let completedUserTurns = 0;
         let workbenchRevision = 0;
         let confirmedMemoryName: string | null = null;
@@ -332,7 +334,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     if (sessionSpineActive) {
                         if (isMounted) setIsFinalizing(true);
                         try {
-                            await completeOnce(String(reason));
+                            await completeOnce(requestedCloseReason ?? String(reason));
                         } catch {
                             console.error('[Amy Anam Spine] Session completion was not confirmed');
                         } finally {
@@ -464,6 +466,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 anamClient.addListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
                 if (isEvan) {
+                    removeCloseToolHandler = anamClient.registerToolCallHandler(
+                        'end_mullins_session',
+                        {
+                            onStart: async () => {
+                                requestedCloseReason = 'user_requested_end';
+                                console.info('[Evan Anam] Closing immediately after confirmed farewell');
+                                await anamClient.stopStreaming();
+                                return JSON.stringify({ status: 'session_closed' });
+                            },
+                        },
+                    );
                     removeEmailToolHandler = anamClient.registerToolCallHandler(
                         'send_mullins_follow_up_email',
                         {
@@ -537,6 +550,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             removeClientListeners?.();
             removeIdentityToolHandler?.();
             removeEmailToolHandler?.();
+            removeCloseToolHandler?.();
             // Cleanup on unmount
             if (activeClient) {
                 void completeOnce('unmount').catch(() => undefined);

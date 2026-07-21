@@ -54,8 +54,12 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /never visible to you/i);
     assert.match(prompt, /No tool books a move/i);
     assert.match(prompt, /Never ask whether it is okay to end the call/i);
-    assert.match(prompt, /Treat "I'm set for now,".*as clear closing intent/i);
-    assert.match(prompt, /Call `end_call` immediately with confirmation/i);
+    assert.match(prompt, /Would you like me to end our call now\?" is forbidden/i);
+    assert.match(prompt, /"take care,".*are already confirmation/i);
+    assert.match(prompt, /Call `end_mullins_session` immediately without speaking first or seeking confirmation/i);
+    assert.match(prompt, /items intended for donation so the team can confirm what transportation options are available/i);
+    assert.match(prompt, /loading order, destination labels, time, and cost/i);
+    assert.match(prompt, /assisted-living or managed-facility name and address/i);
     assert.match(prompt, /Never say a quote or estimate will be emailed/i);
     assert.match(prompt, /Mullins staff must separately review any estimate or walkthrough request/i);
 });
@@ -75,8 +79,13 @@ test('managed persona uses patient turn detection and disables silence prompts a
     assert.match(updater, /personaManifest\.voiceDetectionOptions/);
     assert.match(updater, /voiceDetectionOptions: VOICE_DETECTION_OPTIONS/);
     assert.match(updater, /managedPromptOf/);
+    assert.doesNotMatch(updater, /rollbackName|Pre-update rollback copy/);
+    assert.match(updater, /endSessionToolDefinition/);
+    assert.doesNotMatch(updater, /tools\.find\(item => item\.name === 'end_call'\)/);
     assert.match(audit, /voiceDetectionOptions\.\$\{name\}/);
     assert.match(audit, /managedPromptOf/);
+    assert.match(audit, /end_mullins_session/);
+    assert.doesNotMatch(audit, /'end_call'/);
 });
 
 test('knowledge manifest is complete and excludes internal/Tavus material', async () => {

@@ -29,7 +29,7 @@ node scripts/anam/update-evan-persona.mjs
 node scripts/anam/update-evan-persona.mjs --apply
 ```
 
-The update command defaults to a read-only dry run. `--apply` creates or reuses a dated rollback persona, uploads only missing allowlisted documents, waits for every document to become `READY`, updates the knowledge tool and persona, then performs immediate and delayed read-back verification.
+The update command defaults to a read-only dry run. `--apply` updates only the existing Evan persona, uploads only missing allowlisted documents, waits for every document to become `READY`, updates the knowledge tool and persona, then performs immediate and delayed read-back verification. Git history is the rollback source; the updater does not create extra Anam personas.
 
 ## 2026-07-16 live result
 
@@ -37,8 +37,9 @@ The update command defaults to a read-only dry run. `--apply` creates or reuses 
 - Knowledge bundle SHA-256: `d378ba746bf63af2ec4fa7511c45b8b8abd2a5a7834b192892821e15051753c0`
 - Knowledge folder: `e2967de5-94d6-4134-b35d-16f5c7453434`
 - Knowledge tool: `ad2e09f5-1360-4f4e-b692-8aaaa55cc976`
-- Rollback persona: `8fe1fcdd-172d-4974-afcf-b3608c8181a3`
-- Required live tools: `Knowledge_Evan_Mullins_Moving`, `skip_turn`, `end_call`
+- Historical rollback persona: deleted from Anam after validation to conserve persona capacity.
+- Required live tools: `Knowledge_Evan_Mullins_Moving`, `skip_turn`, `end_mullins_session`
+- `end_mullins_session` closes the website session immediately after unmistakable farewell intent. Evan does not use Anam's built-in two-step `end_call`, which asks a confirmation question.
 - Eight of eight documents reported `READY`; delayed read-back passed.
 
 ## 2026-07-19 responsiveness update

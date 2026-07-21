@@ -25,6 +25,10 @@ const emailToolDefinition = JSON.parse(await fs.readFile(
     new URL('../../config/anam/evan-agentmail-client-tool.json', import.meta.url),
     'utf8',
 ));
+const endSessionToolDefinition = JSON.parse(await fs.readFile(
+    new URL('../../config/anam/evan-end-session-client-tool.json', import.meta.url),
+    'utf8',
+));
 const normalizeLineEndings = value => String(value).replace(/\r\n?/g, '\n');
 const managedPromptOf = value => `${normalizeLineEndings(value).split('\n# TOOLS\n', 1)[0].trim()}\n`;
 const prompt = `${normalizeLineEndings(await fs.readFile(new URL('../../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8')).trim()}\n`;
@@ -63,7 +67,6 @@ function listData(payload) {
 }
 const idOf = value => value?._toolId ?? value?.id ?? null;
 const sortedToolIds = persona => (persona.tools ?? []).map(idOf).filter(Boolean).sort();
-const compactObject = value => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length ? value : undefined;
 
 async function waitForDocuments(groupId) {
     for (let attempt = 0; attempt < 45; attempt += 1) {
@@ -96,9 +99,8 @@ const missingDocuments = documents.filter(document => !existingDocuments.some(ca
 
 const tools = listData(toolPayload);
 const skipTurn = tools.find(item => item.name === 'skip_turn');
-const endCall = tools.find(item => item.name === 'end_call');
 const currentKnowledge = tools.find(item => idOf(item) === CURRENT_KNOWLEDGE_TOOL_ID);
-if (!idOf(skipTurn) || !idOf(endCall) || !currentKnowledge) throw new Error('Required Evan knowledge/skip_turn/end_call tools are unavailable.');
+if (!idOf(skipTurn) || !currentKnowledge) throw new Error('Required Evan knowledge and skip_turn tools are unavailable.');
 const existingEmailTool = tools.find(item => item.name === emailToolDefinition.name);
 let emailTool = existingEmailTool;
 if (apply) {
@@ -112,9 +114,24 @@ if (apply) {
             body: JSON.stringify(emailToolDefinition),
         });
 }
+const existingEndSessionTool = tools.find(item => item.name === endSessionToolDefinition.name);
+let endSessionTool = existingEndSessionTool;
+if (apply) {
+    endSessionTool = idOf(existingEndSessionTool)
+        ? await anam('/tools/' + idOf(existingEndSessionTool), {
+            method: 'PUT',
+            body: JSON.stringify(endSessionToolDefinition),
+        })
+        : await anam('/tools', {
+            method: 'POST',
+            body: JSON.stringify(endSessionToolDefinition),
+        });
+}
 const emailToolId = idOf(emailTool);
+const endSessionToolId = idOf(endSessionTool);
 if (apply && !emailToolId) throw new Error('Evan AgentMail client tool could not be created.');
-const nextToolIds = [CURRENT_KNOWLEDGE_TOOL_ID, idOf(skipTurn), idOf(endCall), ...(emailToolId ? [emailToolId] : [])].sort();
+if (apply && !endSessionToolId) throw new Error('Evan direct-close client tool could not be created.');
+const nextToolIds = [CURRENT_KNOWLEDGE_TOOL_ID, idOf(skipTurn), ...(emailToolId ? [emailToolId] : []), ...(endSessionToolId ? [endSessionToolId] : [])].sort();
 
 const plan = {
     mode: apply ? 'apply' : 'dry-run',
@@ -125,39 +142,14 @@ const plan = {
     missingKnowledgeDocuments: missingDocuments.map(document => document.filename),
     promptSha256: sha256(prompt),
     knowledgeBundleSha256: bundleSha256,
-    toolNames: [KNOWLEDGE_TOOL_NAME, 'skip_turn', 'end_call', emailToolDefinition.name],
+    toolNames: [KNOWLEDGE_TOOL_NAME, 'skip_turn', emailToolDefinition.name, endSessionToolDefinition.name],
     emailToolWillBeCreated: !emailToolId,
+    endSessionToolWillBeCreated: !endSessionToolId,
     voiceDetectionOptions: VOICE_DETECTION_OPTIONS,
 };
 if (!apply) {
     console.log(JSON.stringify(plan, null, 2));
     process.exit(0);
-}
-
-const rollbackName = `Evan Mullins Moving - rollback ${new Date().toISOString().slice(0, 10)}`;
-const personaList = listData(await anam(`/personas?perPage=100&search=${encodeURIComponent(rollbackName)}`));
-let rollback = personaList.find(item => item.name === rollbackName);
-if (!rollback) {
-    rollback = await anam('/personas', {
-        method: 'POST',
-        body: JSON.stringify({
-            name: rollbackName,
-            description: `Pre-update rollback copy of ${EVAN_ID}. Do not publish.`,
-            avatarId: evan.avatar.id,
-            avatarModel: evan.avatarModel,
-            voiceId: evan.voice.id,
-            llmId: evan.llmId,
-            systemPrompt: evan.brain.systemPrompt,
-            initialMessage: evan.initialMessage,
-            skipGreeting: evan.skipGreeting,
-            uninterruptibleGreeting: evan.uninterruptibleGreeting,
-            zeroDataRetention: evan.zeroDataRetention,
-            languageCode: evan.languageCode,
-            toolIds: sortedToolIds(evan),
-            ...(compactObject(evan.voiceDetectionOptions) ? { voiceDetectionOptions: evan.voiceDetectionOptions } : {}),
-            ...(compactObject(evan.voiceGenerationOptions) ? { voiceGenerationOptions: evan.voiceGenerationOptions } : {}),
-        }),
-    });
 }
 
 await anam(`/knowledge/groups/${group.id}`, {
@@ -220,7 +212,7 @@ await new Promise(resolve => setTimeout(resolve, 5_000));
 const delayed = await verifyLive();
 console.log(JSON.stringify({
     ...plan,
-    rollbackPersonaId: rollback.id,
+    rollbackPersonaCreated: false,
     livePromptSha256: sha256(delayed.persona.brain.systemPrompt),
     liveKnowledgeFolderIds: delayed.tool.config.documentFolderIds,
     liveToolNames: delayed.persona.tools.map(tool => tool.name).sort(),
