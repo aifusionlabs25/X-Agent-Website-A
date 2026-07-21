@@ -104,6 +104,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             }
         };
 
+        const snapshotEvanPlannerTurns = () => {
+            const latestTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
+            const pendingContent = currentMessageRef.current.trim();
+            const pendingTurn = pendingContent
+                ? { role: transcriptRole(currentRoleRef.current), content: pendingContent } as AmyWorkbenchTurn
+                : null;
+            if (
+                pendingTurn
+                && pendingTurn.role === 'user'
+                && latestTurns.at(-1)?.content !== pendingTurn.content
+            ) {
+                latestTurns.push(pendingTurn);
+            }
+            return latestTurns.slice(-120);
+        };
+
         const completeOnce = (closeReason: string): Promise<void> => {
             if (!sessionSpineActive || !launchId || !providerSessionId) {
                 return Promise.resolve();
@@ -267,30 +283,29 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 || requested === 'readiness'
                                 ? requested
                                 : 'brief';
-                            const synchronizedTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
-                            const pendingContent = currentMessageRef.current.trim();
-                            const pendingTurn = pendingContent
-                                ? { role: transcriptRole(currentRoleRef.current), content: pendingContent } as AmyWorkbenchTurn
-                                : null;
-                            if (
-                                pendingTurn
-                                && pendingTurn.role === 'user'
-                                && synchronizedTurns.at(-1)?.content !== pendingTurn.content
-                            ) synchronizedTurns.push(pendingTurn);
 
-                            const receiptModel = buildEvanMovePlan(synchronizedTurns);
                             if (isMounted) {
-                                setWorkbenchTurns([...synchronizedTurns]);
                                 setEvanPlannerView(view);
                                 setEvanPlannerOpen(true);
+                                // Read the authoritative refs when React applies the update. This
+                                // prevents an earlier tool snapshot from replacing a newer turn.
+                                setWorkbenchTurns(() => snapshotEvanPlannerTurns());
                                 await new Promise<void>((resolve) => {
                                     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
                                 });
                             }
+
+                            // Re-read after opening so speech chunks arriving during the tool call
+                            // are included both in the visible planner and in the tool receipt.
+                            const refreshedTurns = snapshotEvanPlannerTurns();
+                            if (isMounted) {
+                                setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                            }
+                            const receiptModel = buildEvanMovePlan(refreshedTurns);
                             return JSON.stringify({
                                 status: 'move_planner_opened',
                                 view,
-                                currentSessionUserTurns: synchronizedTurns.filter((turn) => turn.role === 'user').length,
+                                currentSessionUserTurns: refreshedTurns.filter((turn) => turn.role === 'user').length,
                                 visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
                                 instruction: 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
                             });

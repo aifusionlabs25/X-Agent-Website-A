@@ -43,7 +43,7 @@ const CITY_NAMES = [
 
 const compact = (value: string, length = 150) => {
     const clean = value.replace(/\s+/g, ' ').trim();
-    return clean.length > length ? `${clean.slice(0, length - 1).trim()}â€¦` : clean;
+    return clean.length > length ? `${clean.slice(0, length - 3).trim()}...` : clean;
 };
 
 const unique = (values: string[], limit = 8) => [...new Set(values.filter(Boolean))].slice(0, limit);
@@ -56,30 +56,62 @@ const firstMatch = (text: string, patterns: RegExp[]) => {
     return '';
 };
 
-function routeStops(text: string): MovePlanStop[] {
-    const mentions = CITY_NAMES.flatMap((city) => {
+function routeStops(userTurns: string[]): MovePlanStop[] {
+    const mentions = userTurns.flatMap((turn, turnIndex) => CITY_NAMES.flatMap((city) => {
         const pattern = new RegExp(`\\b${city.replace(/ /g, '\\s+')}\\b`, 'gi');
-        return [...text.matchAll(pattern)].map((match) => ({ city, index: match.index ?? 0 }));
-    }).sort((a, b) => a.index - b.index);
+        return [...turn.matchAll(pattern)].map((match) => {
+            const index = match.index ?? 0;
+            const before = turn.slice(Math.max(0, index - 72), index).toLowerCase();
+            const after = turn.slice(index + city.length, index + city.length + 48).toLowerCase();
+            let kind: MovePlanStop['kind'] | null = null;
 
-    const deduped = mentions.filter((mention, index, all) =>
-        all.findIndex((candidate) => candidate.city === mention.city) === index,
+            if (/\b(?:from|origin(?:ating)?(?: is| in| at)?|moving out of|leaving|starting in|starts? in|pickup from)\s*$/.test(before)) {
+                kind = 'Origin';
+            } else if (/\b(?:final destination(?: is| in| at)?|destination(?: is| in| at)?|moving into|new home(?: is| in| at)?|delivering to|deliver to|ending in|to)\s*$/.test(before)) {
+                kind = 'Destination';
+            } else if (/\b(?:additional stop|extra stop|stop(?:ping)?(?: is| in| at)?|pick up(?: is| in| at| from)?|pickup in|storage(?: unit)?(?: is| in| at)?|donation(?: center)?(?: is| in| at)?|garage(?: is| in| at)?)\s*$/.test(before)
+                || /\b(?:storage|donation|facility|assisted living|pickup|pick up|stop)\b/.test(before + after)) {
+                kind = 'Additional stop';
+            }
+
+            return { city, turnIndex, index, kind };
+        });
+    })).sort((a, b) => a.turnIndex - b.turnIndex || a.index - b.index);
+
+    if (!mentions.length) return [];
+
+    // Explicit role statements are authoritative. A later correction replaces the
+    // earlier origin or destination instead of turning it into an extra stop.
+    let origin = '';
+    let destination = '';
+    const additionalStops: string[] = [];
+    for (const mention of mentions) {
+        if (mention.kind === 'Origin') origin = mention.city;
+        else if (mention.kind === 'Destination') destination = mention.city;
+        else if (mention.kind === 'Additional stop' && !additionalStops.includes(mention.city)) {
+            additionalStops.push(mention.city);
+        }
+    }
+
+    const orderedCities = unique(mentions.map((mention) => mention.city), CITY_NAMES.length);
+    const explicitlyRoutedCities = new Set(
+        mentions
+            .filter((mention) => mention.kind === 'Origin' || mention.kind === 'Destination')
+            .map((mention) => mention.city),
     );
-    if (!deduped.length) return [];
+    origin ||= orderedCities[0] ?? '';
+    destination ||= orderedCities.findLast((city) => city !== origin) ?? '';
 
-    return deduped.map((mention, index) => {
-        const before = text.slice(Math.max(0, mention.index - 42), mention.index).toLowerCase();
-        const after = text.slice(mention.index + mention.city.length, mention.index + mention.city.length + 28).toLowerCase();
-        let kind: MovePlanStop['kind'] = 'Additional stop';
+    const middle = unique([
+        ...additionalStops,
+        ...orderedCities.filter((city) => !explicitlyRoutedCities.has(city)),
+    ], CITY_NAMES.length).filter((city) => city !== origin && city !== destination);
 
-        if (/\b(?:from|origin(?:ating)? in|moving out of|house in)\s*$/.test(before)) kind = 'Origin';
-        else if (/\b(?:to|into|destination(?: is| in)?|new home in|moving into)\s*$/.test(before)) kind = 'Destination';
-        else if (/\b(?:storage|garage|donation|facility|assisted living|pickup|stop)\b/.test(before + after)) kind = 'Additional stop';
-        else if (index === 0) kind = 'Origin';
-        else if (index === deduped.length - 1) kind = 'Destination';
-
-        return { city: mention.city, kind };
-    });
+    return [
+        origin ? { city: origin, kind: 'Origin' as const } : null,
+        ...middle.map((city) => ({ city, kind: 'Additional stop' as const })),
+        destination ? { city: destination, kind: 'Destination' as const } : null,
+    ].filter((stop): stop is MovePlanStop => stop !== null);
 }
 
 const LABEL_RULES: Array<[RegExp, string]> = [
@@ -96,6 +128,10 @@ const LABEL_RULES: Array<[RegExp, string]> = [
 ];
 
 const SPECIALTY_RULES: Array<[RegExp, string]> = [
+    [/\bsectional(?: sofa| couch)?\b/i, 'Sectional'],
+    [/\btreadmill\b/i, 'Treadmill'],
+    [/\btool chest\b/i, 'Tool chest'],
+    [/\blarge mirrors?\b/i, 'Large mirrors'],
     [/\bantiques?\b|\bantique furniture\b/i, 'Antiques'],
     [/\bartwork\b|\bfine art\b|\bpaintings?\b/i, 'Artwork'],
     [/\bgrandfather clock\b/i, 'Grandfather clock'],
@@ -145,7 +181,7 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[]): EvanMovePlanMod
         .map((turn) => compact(turn.content, 1_000))
         .filter(Boolean);
     const text = userTurns.join(' ');
-    const stops = routeStops(text);
+    const stops = routeStops(userTurns);
     const services = labelsFrom(text, LABEL_RULES);
     if (services.includes('Full packing')) {
         const genericPacking = services.indexOf('Packing support');
@@ -158,6 +194,7 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[]): EvanMovePlanMod
     const timing = firstMatch(text, [
         /\bless than \d+ days?\b/i,
         /\bwithin (?:the next )?\d+ days?\b/i,
+        /\b(?:target(?: date)?(?: is|:)?|targeting|scheduled for|needs? to be|has to be) (?:the )?\d{1,2}(?:st|nd|rd|th)?\b/i,
         /\bby (?:the )?\d{1,2}(?:st|nd|rd|th)?\b/i,
         /\bon (?:the )?\d{1,2}(?:st|nd|rd|th)?(?: of [A-Z][a-z]+)?\b/i,
         /\b(?:next|this) (?:week|month|weekend)\b/i,
@@ -170,7 +207,7 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[]): EvanMovePlanMod
     ]);
 
     const highlights: MovePlanSignal[] = [
-        stops.length ? { label: 'Route', value: stops.map((stop) => stop.city).join(' â†’ ') } : null,
+        stops.length ? { label: 'Route', value: stops.map((stop) => stop.city).join(' \u2192 ') } : null,
         timing ? { label: 'Timing', value: timing } : null,
         propertyScope ? { label: 'Property / scope', value: propertyScope } : null,
         services.length ? { label: 'Requested support', value: services.join(', ') } : null,
@@ -219,4 +256,3 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[]): EvanMovePlanMod
         totalCategories: categories.length,
     };
 }
-
