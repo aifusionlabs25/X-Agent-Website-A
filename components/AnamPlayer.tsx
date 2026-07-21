@@ -23,6 +23,7 @@ import {
 } from '@/lib/anam/session-spine-client';
 import { AmyWorkbenchTurn, AmyWorkbenchView, buildAmyWorkbenchModel } from '@/lib/anam/workbench-v2';
 import { buildEvanMovePlan, EvanMovePlannerView } from '@/lib/anam/evan-move-planner';
+import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -73,6 +74,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeEmailToolHandler: (() => void) | null = null;
         let removeCloseToolHandler: (() => void) | null = null;
         let requestedCloseReason: string | null = null;
+        let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
         let completedUserTurns = 0;
         let workbenchRevision = 0;
         let confirmedMemoryName: string | null = null;
@@ -189,6 +191,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const anamClient = createClient(sessionToken, clientOptions);
 
                 activeClient = anamClient;
+                if (isEvan) {
+                    evanCloseCoordinator = createEvanFarewellCloseCoordinator({
+                        stopStreaming: () => anamClient.stopStreaming(),
+                        onStopError: () => console.error('[Evan Anam] Farewell close was not confirmed'),
+                    });
+                }
                 const cancelWorkbenchHandlers: Array<() => void> = [];
                 if (workbenchEnabled) {
                     const registerView = (
@@ -368,6 +376,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
                             }
                         }
+                        if (transcriptRole(messageEvent.role) === 'agent') {
+                            evanCloseCoordinator?.completeFarewell();
+                        }
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
                     }
@@ -376,6 +387,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleConnectionClosed = async (reason: ConnectionClosedCode) => {
                     if (closeHandled) return;
                     closeHandled = true;
+                    evanCloseCoordinator?.dispose();
                     console.log('Anam connection closed');
 
                     if (sessionSpineActive) {
@@ -518,9 +530,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         {
                             onStart: async () => {
                                 requestedCloseReason = 'user_requested_end';
-                                console.info('[Evan Anam] Closing immediately after confirmed farewell');
-                                await anamClient.stopStreaming();
-                                return JSON.stringify({ status: 'session_closed' });
+                                const armed = evanCloseCoordinator?.arm() === true;
+                                console.info('[Evan Anam] Farewell close armed', { armed });
+                                return JSON.stringify({
+                                    status: armed ? 'farewell_required' : 'farewell_already_armed',
+                                    instruction: 'Say exactly one brief warm farewell now: "Thank you for speaking with Mullins Moving. Take care." Do not ask a question, add a recap, or mention ending the call. The browser will close after the farewell finishes.',
+                                });
                             },
                         },
                     );
@@ -598,6 +613,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             removeIdentityToolHandler?.();
             removeEmailToolHandler?.();
             removeCloseToolHandler?.();
+            evanCloseCoordinator?.dispose();
             // Cleanup on unmount
             if (activeClient) {
                 void completeOnce('unmount').catch(() => undefined);
@@ -704,5 +720,3 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         </div>
     );
 }
-
-

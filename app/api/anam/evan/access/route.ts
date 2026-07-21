@@ -17,8 +17,9 @@ function json(body: unknown, init?: ResponseInit) {
     response.headers.set('Cache-Control', 'no-store');
     return response;
 }
-const status = (authenticated: boolean, displayName: string | null = null) => ({
-    required: true, authenticated, displayName, secureEmailCaptured: authenticated, rawEmailReturned: false,
+const status = (authenticated: boolean, displayName: string | null = null, followUpAuthorized = false) => ({
+    required: true, authenticated, displayName, secureEmailCaptured: authenticated,
+    followUpAuthorized, rawEmailReturned: false,
 });
 
 export async function GET(request: Request) {
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
         const browser = readAmyAnamBrowserSession(request, spine.signingSecret);
         if (!browser) return json(status(false));
         const contact = readAmyAnamContactFromRequest({ request, browserSessionId: browser.id, secret: spine.signingSecret });
-        return json(status(Boolean(contact), contact?.displayName ?? null));
+        return json(status(Boolean(contact), contact?.displayName ?? null, contact?.purpose === 'evan_follow_up'));
     } catch {
         return json({ error: 'Evan email check-in is temporarily unavailable' }, { status: 503 });
     }
@@ -50,17 +51,25 @@ export async function POST(request: Request) {
             status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) },
         });
         const body = await readBoundedJsonObject(request, 4 * 1024);
+        const allowedFields = new Set(['displayName', 'email', 'followUpConsent']);
+        if (Object.keys(body).some(key => !allowedFields.has(key))) {
+            return json({ error: 'Check-in contained unsupported fields' }, { status: 400 });
+        }
         const displayName = typeof body.displayName === 'string'
             ? body.displayName.normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, 120) : '';
         const email = normalizeAmyAnamMemoryEmail(typeof body.email === 'string' ? body.email : '');
         if (displayName.length < 2 || /^(?:user|visitor|guest|customer)$/i.test(displayName)) {
             return json({ error: 'Enter the name you would like Mullins to use' }, { status: 400 });
         }
+        if (body.followUpConsent !== true) {
+            return json({ error: 'Choose the session follow-up option to continue' }, { status: 400 });
+        }
         const created = createAmyAnamBrowserSessionWithSecret(spine.signingSecret);
         const token = createAmyAnamContactToken({
-            browserSessionId: created.session.id, displayName, email, secret: spine.signingSecret,
+            browserSessionId: created.session.id, displayName, email,
+            purpose: 'evan_follow_up', secret: spine.signingSecret,
         });
-        const response = json(status(true, displayName));
+        const response = json(status(true, displayName, true));
         response.cookies.set(AMY_ANAM_BROWSER_COOKIE, created.token, amyAnamCookieOptions());
         response.cookies.set(AMY_ANAM_CONTACT_COOKIE, token, amyAnamContactCookieOptions());
         return response;

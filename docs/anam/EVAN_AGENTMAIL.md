@@ -4,11 +4,10 @@ Evan uses the same security and delivery pattern as Amy, translated to the Anam 
 
 ## What happens
 
-1. The visitor types a name and email in the secure website check-in. The email is encrypted in an HttpOnly, session-bound cookie and is never supplied to Evan or Anam.
-2. During the conversation Evan must receive explicit permission before calling `send_mullins_follow_up_email`.
-3. The tool queues a content-free, Redis-backed intent. It does not send during the call.
-4. After Anam reports the session closed, the backend verifies session ownership, retrieves the final Anam transcript, writes the durable session receipt, and then attempts exactly one three-message AgentMail bundle.
-5. Delivery receipts are namespaced to Evan and prevent duplicate sends.
+1. The visitor types a name and email and checks the required follow-up authorization in the secure website check-in. The email and Evan-specific authorization are encrypted in an HttpOnly, session-bound cookie and are never supplied to Evan or Anam.
+2. When the verified Evan session binds, the backend queues a content-free, Redis-backed intent. It does not send during the call. A later `send_mullins_follow_up_email` call is an idempotent status confirmation, not a second request.
+3. After Anam reports the session closed, the backend verifies session ownership, retrieves the final Anam transcript, writes the durable session receipt, and then attempts exactly one three-message AgentMail bundle.
+4. Delivery receipts are namespaced to Evan and prevent duplicate sends.
 
 ## Messages
 
@@ -32,6 +31,6 @@ See `.env.example` for the optional overrides.
 - No Tavus webhook/session code.
 - No send until the final Anam transcript and durable session receipt exist.
 - Visitor delivery must be confirmed; ambiguous delivery is not retried automatically.
-- Email permission does not book a move, confirm a quote, guarantee availability, or create an appointment.
+- The explicit check-in authorization does not book a move, confirm a quote, guarantee availability, or create an appointment.
 - Evan must never say that the visitor email contains or will later deliver a quote. The internal Sales brief only asks Mullins staff to review the captured quote or walkthrough request.
 - Transcript contact data is redacted before templating; the verified typed email is used only in the recipient and authorized internal headers.

@@ -85,6 +85,9 @@ export async function POST(request: Request) {
             && session.externalSessionId === sessionId;
         const isEvan = session?.resolvedPersonaId === EVAN_PERSONA_ID
             && launch?.resolvedPersonaId === EVAN_PERSONA_ID;
+        if (isEvan && contact.purpose !== 'evan_follow_up') {
+            return noStoreJson({ error: 'Evan follow-up consent was not confirmed' }, { status: 409 });
+        }
         const displayName = isEvan ? contact.displayName : identity?.displayName;
         if (!ownershipMatches || !displayName) {
             return noStoreJson({ error: 'Email session ownership could not be confirmed' }, { status: 409 });

@@ -1,6 +1,6 @@
 {
   "name": "end_mullins_session",
-  "description": "Immediately close Evan's current browser session without a confirmation question, but only after the visitor gives unmistakable closing intent such as goodbye, bye, take care, I'm all set, that's all, nothing else, or an explicit request to finish. The visitor's clear farewell is already confirmation. Call this tool silently and never ask whether to end, hang up, disconnect, or close the call.",
+  "description": "Arm Evan's confirmed-farewell close handshake after unmistakable closing intent. The visitor's goodbye, bye, take care, I'm all set, that's all, nothing else, or explicit request to finish is already confirmation. Call silently and never ask whether to end. The client returns farewell_required, keeps the audio stream open for exactly one brief warm farewell, and closes only after that farewell finishes.",
   "type": "CLIENT",
   "disableInterruptions": true,
   "config": {
@@ -10,6 +10,7 @@
       "required": [],
       "additionalProperties": false
     },
-    "awaitResult": false
+    "awaitResult": true,
+    "toolTimeoutSeconds": 15
   }
 }

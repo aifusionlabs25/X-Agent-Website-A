@@ -51,12 +51,15 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /Never silently guess or change a person's name/i);
     assert.match(prompt, /send_mullins_follow_up_email/);
     assert.match(prompt, /three messages are scheduled/i);
+    assert.match(prompt, /required check-in includes explicit consent/i);
+    assert.match(prompt, /backend reserves the three-message follow-up when the verified Evan session binds/i);
     assert.match(prompt, /never visible to you/i);
     assert.match(prompt, /No tool books a move/i);
     assert.match(prompt, /Never ask whether it is okay to end the call/i);
     assert.match(prompt, /Would you like me to end our call now\?" is forbidden/i);
     assert.match(prompt, /"take care,".*are already confirmation/i);
     assert.match(prompt, /Call `end_mullins_session` immediately without speaking first or seeking confirmation/i);
+    assert.match(prompt, /when `end_mullins_session` returns `farewell_required`[\s\S]*Thank you for speaking with Mullins Moving\. Take care\./i);
     assert.match(prompt, /items intended for donation so the team can confirm what transportation options are available/i);
     assert.match(prompt, /loading order, destination labels, time, and cost/i);
     assert.match(prompt, /assisted-living or managed-facility name and address/i);

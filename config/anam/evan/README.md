@@ -38,8 +38,9 @@ The update command defaults to a read-only dry run. `--apply` updates only the e
 - Knowledge folder: `e2967de5-94d6-4134-b35d-16f5c7453434`
 - Knowledge tool: `ad2e09f5-1360-4f4e-b692-8aaaa55cc976`
 - Historical rollback persona: deleted from Anam after validation to conserve persona capacity.
-- Required live tools: `Knowledge_Evan_Mullins_Moving`, `skip_turn`, `end_mullins_session`
-- `end_mullins_session` closes the website session immediately after unmistakable farewell intent. Evan does not use Anam's built-in two-step `end_call`, which asks a confirmation question.
+- Required live tools: `Knowledge_Evan_Mullins_Moving`, `skip_turn`, `end_mullins_session`, `send_mullins_follow_up_email`, `show_move_planner`
+- `end_mullins_session` arms a one-farewell close handshake after unmistakable closing intent. The browser waits for Evan's brief goodbye before closing and never asks for a second confirmation.
+- Evan's required secure check-in captures scoped follow-up authorization. The backend pre-queues the transcript-first three-message bundle when the verified session binds; it does not depend on the model remembering an email tool call.
 - Eight of eight documents reported `READY`; delayed read-back passed.
 
 ## 2026-07-19 responsiveness update

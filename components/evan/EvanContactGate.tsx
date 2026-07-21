@@ -9,6 +9,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
     const [submitting, setSubmitting] = useState(false);
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
+    const [followUpConsent, setFollowUpConsent] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -23,7 +24,8 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
         try {
             const response = await fetch('/api/anam/evan/access', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin', cache: 'no-store', body: JSON.stringify({ displayName, email }),
+                credentials: 'same-origin', cache: 'no-store',
+                body: JSON.stringify({ displayName, email, followUpConsent }),
             });
             const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
             if (!response.ok || payload.authenticated !== true) {
@@ -56,7 +58,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Meet Evan.</h1>
                 <p className="mt-4 text-base leading-7 text-zinc-300">
                     Enter your name and email before the conversation. Evan never sees or repeats the address.
-                    If you ask for a follow-up during the call, the Mullins team can send your recap after the session ends.
+                    Your recap and the Mullins team briefs are prepared only after the session transcript is complete.
                 </p>
                 <form className="mt-8 space-y-5" onSubmit={submit}>
                     <label className="block"><span className="text-sm font-medium text-zinc-200">Name</span>
@@ -67,14 +69,26 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                         <input required type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)}
                             className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-white outline-none focus:border-emerald-300/60" placeholder="you@example.com" />
                     </label>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm leading-6 text-zinc-300">
+                        <input
+                            required
+                            type="checkbox"
+                            checked={followUpConsent}
+                            onChange={event => setFollowUpConsent(event.target.checked)}
+                            className="mt-1 h-4 w-4 shrink-0 accent-emerald-300"
+                        />
+                        <span>
+                            Email me one conversation recap after this session and share the internal session briefs with Mullins Admin and Sales.
+                        </span>
+                    </label>
                     {error && <p role="alert" className="rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-200">{error}</p>}
                     <button type="submit" disabled={submitting}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-300 px-5 py-3 font-semibold text-[#07100b] hover:bg-emerald-200 disabled:opacity-60">
-                        {submitting ? 'Securing check-in?' : 'Continue to Evan'} {!submitting && <ArrowRight className="h-4 w-4" />}
+                        {submitting ? 'Securing check-in?' : 'Continue & schedule recap'} {!submitting && <ArrowRight className="h-4 w-4" />}
                     </button>
                 </form>
                 <p className="mt-6 flex gap-2 text-xs leading-5 text-zinc-500"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
-                    Your address is encrypted, session-bound, and used only if you explicitly request the three-message follow-up during this conversation.
+                    Your address and follow-up choice are encrypted and session-bound. The three-message bundle is sent only after the final transcript is available.
                 </p>
             </section>
         </main>

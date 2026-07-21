@@ -47,6 +47,26 @@ test('checked-in email is encrypted, session-bound, expiring, and tamper-evident
         secret: SECRET,
         now: now + 1_000,
     }), { email: 'rvicks@gmail.com' });
+    const evanToken = createAmyAnamContactToken({
+        browserSessionId: BROWSER_ID,
+        email: 'rvicks@gmail.com',
+        displayName: 'Rob Vicks',
+        purpose: 'evan_follow_up',
+        secret: SECRET,
+        now,
+    });
+    assert.deepEqual(readAmyAnamContactToken({
+        token: evanToken,
+        browserSessionId: BROWSER_ID,
+        secret: SECRET,
+        now: now + 1_000,
+    }), { email: 'rvicks@gmail.com', displayName: 'Rob Vicks', purpose: 'evan_follow_up' });
+    assert.equal(readAmyAnamContactToken({
+        token,
+        browserSessionId: BROWSER_ID,
+        secret: SECRET,
+        now: now + 1_000,
+    })?.purpose, undefined);
     assert.equal(readAmyAnamContactToken({
         token,
         browserSessionId: 'ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee',
@@ -235,4 +255,3 @@ test('email permission queues without sending, then finalization sends the compl
     assert.match(storedReceipts, /"rawEmailStored":false/);
     assert.match(storedReceipts, /"messageContentStored":false/);
 });
-
