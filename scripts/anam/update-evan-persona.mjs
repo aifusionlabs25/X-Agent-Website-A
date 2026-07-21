@@ -29,6 +29,10 @@ const endSessionToolDefinition = JSON.parse(await fs.readFile(
     new URL('../../config/anam/evan-end-session-client-tool.json', import.meta.url),
     'utf8',
 ));
+const movePlannerToolDefinition = JSON.parse(await fs.readFile(
+    new URL('../../config/anam/evan-move-planner-client-tool.json', import.meta.url),
+    'utf8',
+));
 const normalizeLineEndings = value => String(value).replace(/\r\n?/g, '\n');
 const managedPromptOf = value => `${normalizeLineEndings(value).split('\n# TOOLS\n', 1)[0].trim()}\n`;
 const prompt = `${normalizeLineEndings(await fs.readFile(new URL('../../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8')).trim()}\n`;
@@ -127,11 +131,26 @@ if (apply) {
             body: JSON.stringify(endSessionToolDefinition),
         });
 }
+const existingMovePlannerTool = tools.find(item => item.name === movePlannerToolDefinition.name);
+let movePlannerTool = existingMovePlannerTool;
+if (apply) {
+    movePlannerTool = idOf(existingMovePlannerTool)
+        ? await anam('/tools/' + idOf(existingMovePlannerTool), {
+            method: 'PUT',
+            body: JSON.stringify(movePlannerToolDefinition),
+        })
+        : await anam('/tools', {
+            method: 'POST',
+            body: JSON.stringify(movePlannerToolDefinition),
+        });
+}
 const emailToolId = idOf(emailTool);
 const endSessionToolId = idOf(endSessionTool);
+const movePlannerToolId = idOf(movePlannerTool);
 if (apply && !emailToolId) throw new Error('Evan AgentMail client tool could not be created.');
 if (apply && !endSessionToolId) throw new Error('Evan direct-close client tool could not be created.');
-const nextToolIds = [CURRENT_KNOWLEDGE_TOOL_ID, idOf(skipTurn), ...(emailToolId ? [emailToolId] : []), ...(endSessionToolId ? [endSessionToolId] : [])].sort();
+if (apply && !movePlannerToolId) throw new Error('Evan Move Planner client tool could not be created.');
+const nextToolIds = [CURRENT_KNOWLEDGE_TOOL_ID, idOf(skipTurn), ...(emailToolId ? [emailToolId] : []), ...(endSessionToolId ? [endSessionToolId] : []), ...(movePlannerToolId ? [movePlannerToolId] : [])].sort();
 
 const plan = {
     mode: apply ? 'apply' : 'dry-run',
@@ -142,9 +161,10 @@ const plan = {
     missingKnowledgeDocuments: missingDocuments.map(document => document.filename),
     promptSha256: sha256(prompt),
     knowledgeBundleSha256: bundleSha256,
-    toolNames: [KNOWLEDGE_TOOL_NAME, 'skip_turn', emailToolDefinition.name, endSessionToolDefinition.name],
+    toolNames: [KNOWLEDGE_TOOL_NAME, 'skip_turn', emailToolDefinition.name, endSessionToolDefinition.name, movePlannerToolDefinition.name],
     emailToolWillBeCreated: !emailToolId,
     endSessionToolWillBeCreated: !endSessionToolId,
+    movePlannerToolWillBeCreated: !movePlannerToolId,
     voiceDetectionOptions: VOICE_DETECTION_OPTIONS,
 };
 if (!apply) {
@@ -220,3 +240,4 @@ console.log(JSON.stringify({
     knowledgeDocuments: readyDocuments.map(document => ({ filename: document.filename, status: document.status })),
     delayedReadbackPassed: true,
 }, null, 2));
+

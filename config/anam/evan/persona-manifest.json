@@ -17,5 +17,6 @@
   "zeroDataRetention": false,
   "enableAudioPassthrough": false,
   "knowledgeToolName": "Knowledge_Evan_Mullins_Moving",
-  "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_mullins_session", "send_mullins_follow_up_email"]
+  "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_mullins_session", "send_mullins_follow_up_email", "show_move_planner"]
 }
+

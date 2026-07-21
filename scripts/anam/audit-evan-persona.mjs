@@ -5,7 +5,7 @@ const API_BASE = 'https://api.anam.ai/v1';
 const EVAN_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
 const JAMES_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
 const TOOL_NAME = 'Knowledge_Evan_Mullins_Moving';
-const REQUIRED_TOOLS = [TOOL_NAME, 'skip_turn', 'end_mullins_session', 'send_mullins_follow_up_email'];
+const REQUIRED_TOOLS = [TOOL_NAME, 'skip_turn', 'end_mullins_session', 'send_mullins_follow_up_email', 'show_move_planner'];
 const localEnv = await fs.readFile(new URL('../../.env.local', import.meta.url), 'utf8').catch(() => '');
 const env = Object.fromEntries(localEnv.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#') && line.includes('=')).map(line => { const at = line.indexOf('='); return [line.slice(0, at).trim(), line.slice(at + 1).trim().replace(/^['"]|['"]$/g, '')]; }));
 const apiKey = process.env.ANAM_API_KEY?.trim() || env.ANAM_API_KEY?.trim();
@@ -68,3 +68,4 @@ console.log(JSON.stringify({
     knowledgeDocuments: relevant.map(document => ({ filename: document.filename, status: document.status })).sort((a, b) => a.filename.localeCompare(b.filename)),
     attachedToolNames: [...names].sort(),
 }, null, 2));
+

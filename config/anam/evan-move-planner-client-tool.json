@@ -1,0 +1,23 @@
+{
+  "name": "show_move_planner",
+  "description": "Rebuild and open Evan's Live Move Planner only when the visitor asks to see the move plan, captured details, route, move list, readiness, or what Evan has heard. Select the most relevant view. The display uses only current-session conversation signals and excludes contact details. It is a working aid, not a quote, estimate, booking, inventory guarantee, confirmed route, or operational approval. Call silently, wait for the result, and confirm only that the requested working view is open. Do not call during a farewell.",
+  "type": "CLIENT",
+  "disableInterruptions": false,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": ["brief", "route", "inventory", "readiness"],
+          "description": "Use brief for the overall move summary, route for origins/destinations/stops, inventory for services/specialty/access/care signals, and readiness for missing details and staff-review preparation."
+        }
+      },
+      "required": ["view"],
+      "additionalProperties": false
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 10
+  }
+}
+

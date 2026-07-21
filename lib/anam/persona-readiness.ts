@@ -29,6 +29,7 @@ export const EVAN_REQUIRED_TOOL_NAMES = [
     'skip_turn',
     'send_mullins_follow_up_email',
     'end_mullins_session',
+    'show_move_planner',
 ] as const;
 
 export const EVAN_REQUIRED_PROMPT_MARKERS = [
@@ -205,3 +206,4 @@ export async function readEvanPersonaReadiness(
     }
     return inspectEvanPersonaReadiness(persona);
 }
+

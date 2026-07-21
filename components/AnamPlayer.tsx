@@ -6,8 +6,9 @@ import {
     ConnectionClosedCode,
     MessageStreamEvent,
 } from '@anam-ai/js-sdk';
-import { BrainCircuit } from 'lucide-react';
+import { BrainCircuit, Truck } from 'lucide-react';
 import AmyAnamWorkbenchV2 from '@/components/amy/AmyAnamWorkbenchV2';
+import EvanMovePlanner from '@/components/evan/EvanMovePlanner';
 import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
@@ -21,6 +22,7 @@ import {
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
 import { AmyWorkbenchTurn, AmyWorkbenchView, buildAmyWorkbenchModel } from '@/lib/anam/workbench-v2';
+import { buildEvanMovePlan, EvanMovePlannerView } from '@/lib/anam/evan-move-planner';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -41,8 +43,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [workbenchTurns, setWorkbenchTurns] = useState<AmyWorkbenchTurn[]>([]);
     const [roadmapTopic, setRoadmapTopic] = useState('');
     const [catalogQuery, setCatalogQuery] = useState('');
+    const [evanPlannerOpen, setEvanPlannerOpen] = useState(false);
+    const [evanPlannerView, setEvanPlannerView] = useState<EvanMovePlannerView>('brief');
     const workbenchEnabled = isAmyCara4Variant(sessionVariant)
         && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
+    const evanPlannerEnabled = personaId === EVAN_PERSONA_ID
+        && process.env.NEXT_PUBLIC_EVAN_MOVE_PLANNER_ENABLED !== 'false';
 
     const onCloseRef = useRef(onClose);
     useEffect(() => {
@@ -83,13 +89,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setWorkbenchTurns([]);
         setRoadmapTopic('');
         setCatalogQuery('');
+        setEvanPlannerOpen(false);
+        setEvanPlannerView('brief');
 
         const recordTurn = (role: string, content: string) => {
             const normalized = content.trim();
             if (!normalized) return;
             const turn = { role: transcriptRole(role), content: normalized } as AmyWorkbenchTurn;
             transcriptRef.current = [...transcriptRef.current.slice(-399), turn];
-            if (workbenchEnabled) {
+            if (workbenchEnabled || evanPlannerEnabled) {
                 setWorkbenchTurns((current) => [...current.slice(-59), turn]);
             }
         };
@@ -241,6 +249,45 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     registerView('show_solution_roadmap', 'roadmap', "Opened Amy's illustrative Roadmap for the current conversation.");
                     registerView('show_visual_brief', 'visual', "Opened Amy's Visual Brief for the current conversation.");
                     registerView('show_solution_catalog', 'catalog', "Opened Amy's directional solution categories. Live pricing and inventory are not shown.");
+                }
+                if (evanPlannerEnabled) {
+                    cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler('show_move_planner', {
+                        onStart: async (payload) => {
+                            const requested = payload.arguments?.view;
+                            const view: EvanMovePlannerView = requested === 'route'
+                                || requested === 'inventory'
+                                || requested === 'readiness'
+                                ? requested
+                                : 'brief';
+                            const synchronizedTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
+                            const pendingContent = currentMessageRef.current.trim();
+                            const pendingTurn = pendingContent
+                                ? { role: transcriptRole(currentRoleRef.current), content: pendingContent } as AmyWorkbenchTurn
+                                : null;
+                            if (
+                                pendingTurn
+                                && pendingTurn.role === 'user'
+                                && synchronizedTurns.at(-1)?.content !== pendingTurn.content
+                            ) synchronizedTurns.push(pendingTurn);
+
+                            const receiptModel = buildEvanMovePlan(synchronizedTurns);
+                            if (isMounted) {
+                                setWorkbenchTurns([...synchronizedTurns]);
+                                setEvanPlannerView(view);
+                                setEvanPlannerOpen(true);
+                                await new Promise<void>((resolve) => {
+                                    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                                });
+                            }
+                            return JSON.stringify({
+                                status: 'move_planner_opened',
+                                view,
+                                currentSessionUserTurns: synchronizedTurns.filter((turn) => turn.role === 'user').length,
+                                visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
+                                instruction: 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
+                            });
+                        },
+                    }));
                 }
                 const memoryPolicyContext = tokenPayload.memoryPolicyContextAvailable === true
                     && typeof tokenPayload.memoryPolicyContext === 'string'
@@ -561,7 +608,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 videoElement.srcObject = null;
             }
         };
-    }, [personaId, sessionVariant, audioBridge, workbenchEnabled]);
+    }, [personaId, sessionVariant, audioBridge, workbenchEnabled, evanPlannerEnabled]);
 
     return (
         <div className="relative w-full h-full bg-zinc-950 flex flex-col items-center justify-center">
@@ -595,7 +642,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${workbenchEnabled && workbenchOpen ? 'lg:pr-[min(56vw,820px)]' : ''}`}>
+            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(58vw,860px)]' : ''}`}>
                 <video
                     ref={videoRef}
                     id="persona-video"
@@ -628,9 +675,34 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 />
             )}
 
+            {evanPlannerEnabled && !evanPlannerOpen && !error && !isConnecting && (
+                <button
+                    type="button"
+                    onClick={() => setEvanPlannerOpen(true)}
+                    className="absolute right-5 top-5 z-30 inline-flex items-center gap-2 border border-[#f6c09a]/35 bg-[#163a28]/90 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.12em] text-[#fffaf0] shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 hover:border-[#f18a50] hover:bg-[#1c4933]"
+                    data-testid="open-evan-move-planner"
+                >
+                    <span className="relative flex h-5 w-5 items-center justify-center">
+                        <span className="absolute inset-0 animate-ping rounded-full bg-[#e76f31]/25" />
+                        <Truck size={16} className="relative text-[#f18a50]" />
+                    </span>
+                    Live Move Planner
+                </button>
+            )}
+
+            {evanPlannerEnabled && (
+                <EvanMovePlanner
+                    isOpen={evanPlannerOpen}
+                    turns={workbenchTurns}
+                    requestedView={evanPlannerView}
+                    onClose={() => setEvanPlannerOpen(false)}
+                />
+            )}
+
             {/* Optional: Add a subtle animated grid overlay for the "HUD" feel */}
             <div className="pointer-events-none absolute inset-0 bg-white opacity-[0.03] mix-blend-overlay"></div>
         </div>
     );
 }
+
 
