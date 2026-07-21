@@ -43,6 +43,23 @@ const latestTestTurns = [
     { role: 'user', content: 'You can reach me at 480-555-0186. I will be expecting their call.' },
 ];
 
+const attachedSessionTurns = [
+    { role: 'agent', content: 'Tell me about the move you are planning.' },
+    { role: 'user', content: "We're moving from our house in Gilbert to our new home in Queen Creek, with a storage unit in Mesa." },
+    { role: 'user', content: 'Mesa needs to be the second stop before Queen Creek.' },
+    { role: 'user', content: "It is about three weeks from now, aiming for the 15th. We'll need full packing for the kitchen." },
+    { role: 'user', content: 'The large items include a sectional, treadmill, tool chest, large mirrors, artwork, and a grandfather clock.' },
+    { role: 'user', content: "There are stairs at the Gilbert house and a narrow driveway at the Queen Creek destination. I don't have the exact street addresses yet." },
+    { role: 'agent', content: 'What number should the team use if you want a call?' },
+    { role: 'user', content: 'Call me at 80-555-0186.' },
+];
+
+const ordinaryMoveTurns = [
+    { role: 'agent', content: 'What kind of move are you planning?' },
+    { role: 'user', content: 'I am moving from a two-bedroom apartment in Tempe to Chandler on the 10th of August.' },
+    { role: 'user', content: 'I need packing help for a sectional. The Tempe apartment has an elevator.' },
+];
+
 test('Evan AgentMail config uses the verified Hermes Hal inbox and separate admin/sales lanes', () => {
     const config = readEvanAnamAgentMailConfig(env);
     assert.equal(config.effectiveGateOpen, true);
@@ -54,15 +71,77 @@ test('Evan AgentMail config uses the verified Hermes Hal inbox and separate admi
 test('Evan intake turns the latest test into concise, useful, non-duplicated categories', () => {
     const intake = buildEvanMovingIntake(latestTestTurns);
     assert.deepEqual(intake.moveType, ['Senior move', 'Residential move', 'Multi-stop move']);
-    assert.match(intake.originDestination.join(' '), /Mesa/i);
-    assert.match(intake.originDestination.join(' '), /Chandler/i);
-    assert.match(intake.originDestination.join(' '), /Surprise/i);
-    assert.match(intake.timing.join(' '), /28th/);
+    assert.deepEqual(intake.originDestination, ['Mesa \u2192 Chandler \u2192 Surprise']);
+    assert.deepEqual(intake.timing, ['Target day: 28th (month not confirmed)']);
     assert.match(intake.access.join(' '), /narrow driveway/i);
-    assert.match(intake.customerCare.join(' '), /walker|elderly/i);
-    assert.match(intake.coverageQuestions.join(' '), /insured/i);
-    assert.match(intake.quoteRequests.join(' '), /quote|ballpark/i);
+    assert.match(intake.customerCare.join(' '), /Mobility considerations|Senior comfort/i);
+    assert.match(intake.coverageQuestions.join(' '), /coverage/i);
+    assert.match(intake.quoteRequests.join(' '), /quote/i);
     assert.equal(intake.moveType.some(item => /dashboard/i.test(item)), false);
+});
+
+test('attached-session intake normalizes the corrected route and keeps only genuine blockers', () => {
+    const intake = buildEvanMovingIntake(attachedSessionTurns);
+    assert.deepEqual(intake.moveType, ['Residential move', 'Multi-stop move']);
+    assert.deepEqual(intake.originDestination, ['Gilbert \u2192 Mesa \u2192 Queen Creek']);
+    assert.deepEqual(intake.timing, ['About three weeks; target day: 15th (month not confirmed)']);
+    assert.deepEqual(intake.services, ['Full kitchen packing']);
+    assert.deepEqual(intake.inventory, [
+        'Sectional',
+        'Treadmill',
+        'Tool chest',
+        'Large mirrors',
+        'Artwork',
+        'Grandfather clock',
+    ]);
+    assert.deepEqual(intake.access, ['Stairs at Gilbert origin', 'Narrow driveway at Queen Creek destination']);
+    assert.deepEqual(intake.customerCare, []);
+    assert.deepEqual(intake.quoteRequests, []);
+    assert.deepEqual(intake.coverageQuestions, []);
+    assert.deepEqual(intake.walkthrough, []);
+    assert.deepEqual(intake.missing, [
+        'month / year for the requested target day',
+        'home size / room count',
+        'storage-unit access details',
+        'exact street addresses',
+        'valid callback number if phone follow-up is preferred',
+    ]);
+
+    const bundle = buildEvanEmailBundle({
+        displayName: 'Jordan',
+        verifiedEmail: 'jordan@example.com',
+        externalSessionId: 'attached-session',
+        sessionStartedAt: '2026-07-20T10:00:00Z',
+        sessionEndedAt: '2026-07-20T10:08:00Z',
+        turns: attachedSessionTurns,
+    });
+    assert.match(bundle.sales.text, /Route: Gilbert \u2192 Mesa \u2192 Queen Creek/);
+    assert.match(bundle.sales.text, /Full kitchen packing/);
+    assert.match(bundle.sales.text, /Specialty \/ high-care items\n- Sectional\n- Treadmill\n- Tool chest\n- Large mirrors\n- Artwork\n- Grandfather clock/);
+    assert.match(bundle.sales.text, /Critical details to confirm before quoting/);
+    assert.doesNotMatch(bundle.sales.text, /Senior \/ mobility care|Customer-care priorities|Valuation \/ coverage questions|Walkthrough preference|Time-sensitive request/);
+    assert.doesNotMatch(bundle.sales.text, /\b(?:I|we) (?:will|can|promise|guarantee|send|provide)\b/i);
+    assert.doesNotMatch(bundle.sales.html, /Not captured - confirm with customer/);
+});
+
+test('ordinary non-senior move does not invent care, urgency, coverage, or walkthrough sections', () => {
+    const bundle = buildEvanEmailBundle({
+        displayName: 'Taylor',
+        verifiedEmail: 'taylor@example.com',
+        externalSessionId: 'ordinary-session',
+        sessionStartedAt: '2026-08-01T16:00:00Z',
+        sessionEndedAt: '2026-08-01T16:04:00Z',
+        turns: ordinaryMoveTurns,
+    });
+    assert.deepEqual(bundle.intake.moveType, ['Residential move']);
+    assert.deepEqual(bundle.intake.originDestination, ['Tempe \u2192 Chandler']);
+    assert.deepEqual(bundle.intake.timing, ['Target day: 10th of August']);
+    assert.deepEqual(bundle.intake.services, ['Packing support']);
+    assert.deepEqual(bundle.intake.inventory, ['Sectional']);
+    assert.deepEqual(bundle.intake.customerCare, []);
+    assert.deepEqual(bundle.intake.coverageQuestions, []);
+    assert.deepEqual(bundle.intake.walkthrough, []);
+    assert.doesNotMatch(bundle.sales.text, /Senior \/ mobility care|Customer-care priorities|Valuation \/ coverage questions|Walkthrough preference|Time-sensitive request/);
 });
 
 test('the three Evan emails are polished for their audience and Admin receives a sanitized transcript attachment', () => {
@@ -84,10 +163,10 @@ test('the three Evan emails are polished for their audience and Admin receives a
 
     assert.match(bundle.sales.subject, /^\[ACTION\]/);
     assert.match(bundle.sales.text, /Authorized callback: 480-555-0186/);
-    assert.match(bundle.sales.text, /Senior-care priorities/);
+    assert.match(bundle.sales.text, /Customer-care priorities/);
     assert.match(bundle.sales.text, /Valuation \/ coverage questions/);
     assert.match(bundle.sales.text, /Recommended rep action plan/);
-    assert.match(bundle.sales.text, /Mullins staff verifies feasibility and availability, then prepares and delivers the quote/);
+    assert.match(bundle.sales.text, /Mullins staff determines feasibility and prepares any quote/);
     assert.doesNotMatch(bundle.sales.text, /Conversation detail|dashboard|Mr\. Gates/i);
 
     assert.match(bundle.admin.subject, /4m 06s - transcript attached/);

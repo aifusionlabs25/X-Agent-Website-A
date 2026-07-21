@@ -166,7 +166,7 @@ export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose 
                                                     <div className="border border-[#183a28]/15 bg-[#fffdf8] p-4 shadow-[0_8px_25px_rgba(31,72,50,0.07)] sm:col-span-2">
                                                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c95f2b]">Route at a glance</p>
                                                         <p className="mt-2 font-serif text-2xl leading-tight text-[#173825]">
-                                                            {model.stops.length ? model.stops.map((stop) => stop.city).join(' â†’ ') : 'Route still being clarified'}
+                                                            {model.stops.length ? model.stops.map((stop) => stop.city).join(' \u2192 ') : 'Route still being clarified'}
                                                         </p>
                                                     </div>
                                                     <div className="border border-[#183a28]/15 bg-[#e76f31] p-4 text-white shadow-[0_8px_25px_rgba(139,63,25,0.2)]">
@@ -261,7 +261,7 @@ export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose 
                                                     <div>
                                                         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#efaa79]">Intake readiness</p>
                                                         <h3 className="mt-1 font-serif text-3xl">{model.readiness}% complete</h3>
-                                                        <p className="mt-2 max-w-md text-sm leading-6 text-white/65">A useful working measureâ€”not a quote, booking, or operational approval.</p>
+                                                        <p className="mt-2 max-w-md text-sm leading-6 text-white/65">A useful working measure - not a quote, booking, or operational approval.</p>
                                                     </div>
                                                     <div className="relative h-24 w-24 flex-none rounded-full" style={{ background: `conic-gradient(#ed7a3e ${model.readiness}%, rgba(255,255,255,.12) 0)` }}>
                                                         <div className="absolute inset-[7px] flex items-center justify-center rounded-full bg-[#173825] font-serif text-2xl">{model.capturedCategories}/{model.totalCategories}</div>
@@ -289,7 +289,7 @@ export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose 
                                                 {model.uncertainties.length > 0 && (
                                                     <div className="mt-6 border border-[#cf8f56]/35 bg-[#fff1dc] p-4">
                                                         <div className="flex items-center gap-2 text-[#9b4a26]"><AlertTriangle size={17} /><p className="text-xs font-bold uppercase tracking-[0.14em]">Customer-stated uncertainty</p></div>
-                                                        <ul className="mt-3 space-y-2 text-sm leading-6 text-[#765842]">{model.uncertainties.map((item) => <li key={item}>â€œ{item}â€</li>)}</ul>
+                                                        <ul className="mt-3 space-y-2 text-sm leading-6 text-[#765842]">{model.uncertainties.map((item) => <li key={item}>&quot;{item}&quot;</li>)}</ul>
                                                     </div>
                                                 )}
                                             </section>
@@ -311,4 +311,3 @@ export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose 
         </AnimatePresence>
     );
 }
-

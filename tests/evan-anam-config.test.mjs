@@ -48,6 +48,9 @@ test('managed prompt enforces reliability and action honesty', async () => {
     for (const marker of EVAN_REQUIRED_PROMPT_MARKERS) assert.ok(prompt.includes(marker));
     assert.match(prompt, /at most one meaningful next question/i);
     assert.match(prompt, /Do not restart the intake/i);
+    assert.match(prompt, /relaxed, patient, and conversational/i);
+    assert.match(prompt, /Ask one useful moving-detail question at a time/i);
+    assert.match(prompt, /complete date including month and flexibility/i);
     assert.match(prompt, /Never silently guess or change a person's name/i);
     assert.match(prompt, /send_mullins_follow_up_email/);
     assert.match(prompt, /three messages are scheduled/i);
@@ -65,6 +68,20 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /assisted-living or managed-facility name and address/i);
     assert.match(prompt, /Never say a quote or estimate will be emailed/i);
     assert.match(prompt, /Mullins staff must separately review any estimate or walkthrough request/i);
+    assert.match(prompt, /you can refresh the Live Move Planner whenever the visitor adds or corrects move details/i);
+    assert.match(prompt, /call `show_move_planner` again after capturing the correction/i);
+    assert.match(prompt, /Never say an item, stop, route order, or other detail was added, corrected, saved, or is accurate unless the receipt supports that visible fact/i);
+    assert.match(prompt, /Once the session has ended, new changes must go to the Mullins team/i);
+});
+
+test('move planner tool supports live corrections without unsupported update claims', async () => {
+    const tool = JSON.parse(await readFile(new URL('../config/anam/evan-move-planner-client-tool.json', import.meta.url), 'utf8'));
+    assert.match(tool.description, /explicitly asks to add, change, correct, update, or refresh planner details during the active session/i);
+    assert.match(tool.description, /Call it again after an explicit correction/i);
+    assert.match(tool.description, /never claim that a requested update was made, saved, or is accurate when the receipt does not support it/i);
+    assert.match(tool.description, /after the session ends must go to Mullins staff/i);
+    assert.match(tool.config.parameters.properties.view.description, /stop-order corrections/i);
+    assert.match(tool.config.parameters.properties.view.description, /items, packing, services, access/i);
 });
 
 test('managed persona uses patient turn detection and disables silence prompts and shutdown', async () => {

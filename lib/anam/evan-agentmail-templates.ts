@@ -1,4 +1,5 @@
 import type { AmyTranscriptTurn } from './session-spine.ts';
+import { buildEvanMovePlan } from './evan-move-planner.ts';
 
 export type EvanMovingIntake = {
     moveType: string[];
@@ -36,19 +37,6 @@ const escapeHtml = (value: unknown) => clean(value, 30_000)
 
 const unique = (items: string[], max = 8) => [...new Set(items.map(item => clean(item, 360)).filter(Boolean))].slice(0, max);
 
-function fragmentLines(lines: string[]): string[] {
-    return unique(lines.flatMap(line => line
-        .split(/(?<=[.!?])\s+|[,;]\s+|\s+(?:and|but|so|plus)\s+/i)
-        .map(fragment => fragment
-            .replace(/^(?:hi\s+evan|yes|also|and actually|all right|okay)[,.:;\s-]*/i, '')
-            .trim())
-        .filter(fragment => fragment.length >= 4)), 80);
-}
-
-function matching(fragments: string[], pattern: RegExp, max = 6): string[] {
-    return unique(fragments.filter(fragment => pattern.test(fragment)), max);
-}
-
 function append(intake: string[], value: string) {
     if (value && !intake.includes(value)) intake.push(value);
 }
@@ -63,69 +51,159 @@ export function redactEvanTranscript(turns: AmyTranscriptTurn[]): AmyTranscriptT
 }
 
 export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingIntake {
-    const lines = turns.filter(turn => turn.role === 'user').map(turn => clean(turn.content)).filter(Boolean);
-    const fragments = fragmentLines(lines).map(fragment => fragment.replace(/^(?:plus|and|but|so|there(?:'s| is))\s+/i, '').trim());
-    const moveType: string[] = [];
-    if (lines.some(line => /\b(elderly|senior|walker|retirement)\b/i.test(line))) append(moveType, 'Senior move');
-    if (lines.some(line => /\b(house|home|apartment|condo|residential)\b/i.test(line))) append(moveType, 'Residential move');
-    if (lines.some(line => /\b(storage unit|multiple (?:stops|locations)|two (?:stops|locations))\b/i.test(line))) append(moveType, 'Multi-stop move');
-    append(moveType, matching(fragments, /\b(commercial|office|military|long[- ]distance|labor[- ]only|pod|rental truck)\b/i, 1)[0] ?? '');
+    const userTurns = turns
+        .filter(turn => turn.role === 'user')
+        .map(turn => ({ role: 'user' as const, content: clean(turn.content, 2_000) }))
+        .filter(turn => Boolean(turn.content));
+    const text = userTurns.map(turn => turn.content).join(' ');
+    const plan = buildEvanMovePlan(userTurns);
 
-    const buckets = {
-        originDestination: [] as string[], timing: [] as string[], access: [] as string[],
-        inventory: [] as string[], services: [] as string[], customerCare: [] as string[],
-        quoteRequests: [] as string[], coverageQuestions: [] as string[], walkthrough: [] as string[],
-        contactPreferences: [] as string[], unknowns: [] as string[],
-    };
-    for (const fragment of fragments) {
-        if (/\b(local dashboard is intentionally read-only|read-only nope|system prompt|skip_turn)\b/i.test(fragment)) continue;
-        if (/\b(not sure|do not know|don't know|have to check|need to check|do not have|don't have|not captured|unknown|unsure)\b/i.test(fragment)) append(buckets.unknowns, fragment);
-        else if (/\b(insured|insurance|coverage|valuation|liability|protection)\b/i.test(fragment)) append(buckets.coverageQuestions, fragment);
-        else if (/\b(quote|ballpark|price|pricing|estimate|compare|competitor|rough number)\b/i.test(fragment)) append(buckets.quoteRequests, fragment);
-        else if (/\b(call|phone|text|email|reach me|contact me|waiting for|expecting)\b/i.test(fragment)) append(buckets.contactPreferences, fragment);
-        else if (/\b(walk[- ]?through|virtual|video|in person|appointment|visit|facetime|zoom|teams|meet)\b/i.test(fragment)) append(buckets.walkthrough, fragment);
-        else if (/\b(by the \d{1,2}(?:st|nd|rd|th)?|within \d+|less than \d+|date|week|month|deadline|urgent|as soon|quickly|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(fragment)) append(buckets.timing, fragment);
-        else if (/\b(elderly|senior|walker|wheelchair|mobility|stress|stressed|chaotic|smooth|quiet|medical|accessible|caregiver)\b/i.test(fragment)) append(buckets.customerCare, fragment);
-        else if (/\b(stair|stairs|staircase|elevator|loading dock|parking|driveway|doorway|long carry|gate|gated|access|hoa|coi|certificate of insurance|building|dock|alley)\b/i.test(fragment)) append(buckets.access, fragment);
-        else if (/\b(piano|safe|art|artwork|antique|fragile|glass|grandfather clock|pool table|gun safe|appliance|furniture|boxes|inventory|high[- ]value|specialty|oversized)\b/i.test(fragment)) append(buckets.inventory, fragment);
-        else if (/\b(pack|packing|unpack|unpacking|crate|crating|labor|white[- ]glove|disassembly|assembly|pod|rental truck)\b/i.test(fragment)) append(buckets.services, fragment);
-        else if (/\b(from|to|out of|into|origin|destination|pickup|drop[- ]?off|phoenix|scottsdale|tempe|mesa|glendale|chandler|gilbert|surprise|arizona|AZ)\b/i.test(fragment)) append(buckets.originDestination, fragment);
-    }
-    const propertyScope = unique([
-        lines.some(line => /\b(house|home)\b/i.test(line)) ? 'House / home' : '',
-        lines.some(line => /\b(apartment|condo)\b/i.test(line)) ? 'Apartment / condo' : '',
-        lines.some(line => /\bstorage unit\b/i.test(line)) ? 'Storage unit' : '',
-        ...matching(fragments, /\b(studio|\d+[- ]bedroom|bedroom|bathroom|square feet|sq\.?\s*ft|story|stories|floor|office|warehouse)\b/i, 4),
+    const routeStops = [...plan.stops];
+    const cityPattern = '(Phoenix|Mesa|Chandler|Surprise|Scottsdale|Tempe|Gilbert|Glendale|Queen Creek|Peoria|Goodyear|Avondale|Buckeye)';
+    const secondStopMatch = text.match(new RegExp('\\b' + cityPattern + '\\b[^.!?]{0,50}\\b(?:come|be)\\s+(?:the\\s+)?second stop\\b', 'i'));
+    if (secondStopMatch) moveStopBefore(routeStops, secondStopMatch[1], routeStops[1]?.city ?? '');
+    const beforeMatch = text.match(new RegExp('\\b' + cityPattern + '\\b[^.!?]{0,80}\\bbefore\\s+\\b' + cityPattern + '\\b', 'i'));
+    if (beforeMatch) moveStopBefore(routeStops, beforeMatch[1], beforeMatch[2]);
+
+    const moveType: string[] = [];
+    if (/\b(elderly|senior|walker|wheelchair|retirement|assisted living)\b/i.test(text)) append(moveType, 'Senior move');
+    if (/\b(house|home|apartment|condo|residential)\b/i.test(text)) append(moveType, 'Residential move');
+    if (routeStops.length > 2 || /\bstorage unit\b/i.test(text)) append(moveType, 'Multi-stop move');
+    if (/\b(commercial|office)\b/i.test(text)) append(moveType, 'Commercial move');
+    if (/\b(long[- ]distance|out of state)\b/i.test(text)) append(moveType, 'Long-distance move');
+
+    const timing: string[] = [];
+    const relativeWindow = text.match(/\b(?:about|approximately|roughly)?\s*((?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+weeks?)\b/i)?.[1];
+    const target = text.match(/\b(?:aiming for|target(?:ing)?|by|on)\s+(?:the\s+)?(\d{1,2})(st|nd|rd|th)?(?:\s+(?:of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december))?\b/i);
+    const ordinal = target ? target[1] + (target[2] ?? ordinalSuffix(Number(target[1]))) : '';
+    const targetLabel = target?.[3] ? ordinal + ' of ' + capitalize(target[3]) : ordinal ? ordinal + ' (month not confirmed)' : '';
+    if (relativeWindow && targetLabel) append(timing, 'About ' + relativeWindow.toLowerCase() + '; target day: ' + targetLabel);
+    else if (targetLabel) append(timing, 'Target day: ' + targetLabel);
+    else if (relativeWindow) append(timing, 'About ' + relativeWindow.toLowerCase());
+    else if (plan.timing) append(timing, capitalize(plan.timing));
+
+    const kitchenPacking = /\b(?:full packing\b[^.!?]{0,35}\bkitchen\b|full kitchen packing)\b/i.test(text);
+    const services = unique([
+        kitchenPacking ? 'Full kitchen packing' : '',
+        !kitchenPacking && /\bfull packing\b/i.test(text) ? 'Full packing' : '',
+        !kitchenPacking && !/\bfull packing\b/i.test(text) && /\bpacking\b/i.test(text) ? 'Packing support' : '',
+        /\bunpacking\b/i.test(text) ? 'Unpacking' : '',
+        /\blabor[- ]only\b/i.test(text) ? 'Labor-only support' : '',
+        /\bdisassembl(?:e|y|ing)\b/i.test(text) ? 'Furniture disassembly' : '',
     ]);
+    const inventoryRules: Array<[RegExp, string]> = [
+        [/\bsectional(?: sofa)?\b/i, 'Sectional'],
+        [/\btreadmill\b/i, 'Treadmill'],
+        [/\btool chest\b/i, 'Tool chest'],
+        [/\blarge mirrors?\b/i, 'Large mirrors'],
+        [/\bartwork\b|\bfine art\b/i, 'Artwork'],
+        [/\bgrandfather clock\b/i, 'Grandfather clock'],
+        [/\bpianos?\b/i, 'Piano'],
+        [/\bantiques?\b|\bantique furniture\b/i, 'Antiques'],
+        [/\bsafes?\b/i, 'Safe'],
+        [/\bpool table\b/i, 'Pool table'],
+    ];
+    const inventory = unique(inventoryRules
+        .filter(([pattern]) => pattern.test(text))
+        .map(([, label]) => label));
+
+    const origin = routeStops.find(stop => stop.kind === 'Origin')?.city ?? routeStops[0]?.city;
+    const destination = [...routeStops].reverse().find(stop => stop.kind === 'Destination')?.city ?? routeStops.at(-1)?.city;
+    const access = unique([
+        /\bstairs?\b|\bstaircase\b/i.test(text) ? 'Stairs' + (origin ? ' at ' + origin + ' origin' : '') : '',
+        /\bnarrow driveway\b/i.test(text) ? 'Narrow driveway' + (destination ? ' at ' + destination + ' destination' : '') : '',
+        /\belevator\b/i.test(text) ? 'Elevator requirements' : '',
+        /\bloading dock\b|\bloading window\b/i.test(text) ? 'Loading access requirements' : '',
+        /\bparking\b/i.test(text) ? 'Parking constraints' : '',
+    ]);
+    const customerCare = unique(plan.carePriorities.filter(item => !/time-sensitive/i.test(item)));
+    const quoteRequests = /\b(quote|ballpark|price|pricing|estimate|compare|competitor|rough number)\b/i.test(text)
+        ? ['Quote requested']
+        : [];
+    const coverageQuestions = /\b(insured|insurance|coverage|valuation|liability|protection)\b/i.test(text)
+        ? ['Valuation / coverage explanation requested']
+        : [];
+    const walkthrough = unique([
+        /\bvirtual (?:walk[- ]?through|survey)\b/i.test(text) ? 'Virtual walkthrough requested' : '',
+        /\bin[- ]person (?:walk[- ]?through|survey|estimate)\b/i.test(text) ? 'In-person walkthrough requested' : '',
+    ]);
+    const unknowns = unique([
+        /\b(?:can't|cannot|do not|don't) (?:give|provide) exact addresses?\b/i.test(text)
+            ? 'Exact street addresses not yet available'
+            : '',
+        /\bstorage(?: unit)?\b[^.!?]{0,80}\b(?:not sure|don't know|do not know|have to check|need to check|unknown)\b/i.test(text)
+            ? 'Storage-unit access needs confirmation'
+            : '',
+        /\b(?:do not|don't) have (?:a )?(?:full|complete) inventory\b/i.test(text)
+            ? 'Complete inventory / approximate volume needs confirmation'
+            : '',
+    ]);
+    const propertyScope = unique([
+        plan.propertyScope ? capitalize(plan.propertyScope) : '',
+        /\bstorage unit\b/i.test(text) ? 'Storage unit stop' : '',
+    ]);
+
     const intake: EvanMovingIntake = {
         moveType,
-        originDestination: buckets.originDestination,
-        timing: buckets.timing,
+        originDestination: routeStops.length ? [routeStops.map(stop => stop.city).join(' \u2192 ')] : [],
+        timing,
         propertyScope,
-        access: buckets.access,
-        inventory: buckets.inventory,
-        services: buckets.services,
-        customerCare: buckets.customerCare,
-        quoteRequests: buckets.quoteRequests,
-        coverageQuestions: buckets.coverageQuestions,
-        walkthrough: buckets.walkthrough,
-        contactPreferences: buckets.contactPreferences,
-        unknowns: buckets.unknowns,
+        access,
+        inventory,
+        services,
+        customerCare,
+        quoteRequests,
+        coverageQuestions,
+        walkthrough,
+        contactPreferences: [],
+        unknowns,
         missing: [],
     };
 
     const missing: string[] = [];
     if (!intake.timing.length) missing.push('exact move date or window');
-    if (!intake.propertyScope.some(item => /bedroom|square feet|sq\.?\s*ft/i.test(item))) missing.push('home size / room count');
-    if (!intake.inventory.length || intake.unknowns.some(item => /inventory/i.test(item))) missing.push('complete inventory and approximate volume');
-    if (!intake.walkthrough.length) missing.push('virtual or in-person walkthrough preference');
-    if (!intake.access.length) missing.push('access, parking, stairs, elevator, and building requirements');
-    if (intake.unknowns.some(item => /access/i.test(item))) missing.push('storage-unit access details');
-    missing.push('exact street addresses and destination access details');
+    else if (intake.timing.some(item => /month not confirmed/i.test(item))) missing.push('month / year for the requested target day');
+    if (!intake.propertyScope.some(item => /studio|bedroom|square feet|sq\.?\s*ft/i.test(item))) missing.push('home size / room count');
+    if (!intake.inventory.length || intake.unknowns.some(item => /inventory|volume/i.test(item))) {
+        missing.push('complete inventory and approximate volume');
+    }
+    if (!intake.access.length) missing.push('origin and destination access requirements');
+    const storageAccessCaptured = /\bstorage unit\b[^.!?]{0,100}\b(stairs?|elevator|parking|driveway|gate|loading|ground floor|access)\b/i.test(text);
+    if (/\bstorage unit\b/i.test(text) && !storageAccessCaptured) missing.push('storage-unit access details');
+    const addressUnavailable = intake.unknowns.some(item => /street addresses/i.test(item));
+    if (addressUnavailable || !/\b\d{1,6}\s+[A-Za-z0-9]/.test(text)) missing.push('exact street addresses');
+    if (/\b(?:phone|contact number|reach me|call me)\b/i.test(text) && !findAuthorizedCallbackPhone(turns)) {
+        missing.push('valid callback number if phone follow-up is preferred');
+    }
     intake.missing = unique(missing, 8);
     return intake;
 }
 
+function moveStopBefore(
+    stops: Array<{ city: string; kind: 'Origin' | 'Destination' | 'Additional stop' }>,
+    earlierCity: string,
+    laterCity: string,
+) {
+    const earlierIndex = stops.findIndex(stop => stop.city.toLowerCase() === earlierCity.toLowerCase());
+    const laterIndex = stops.findIndex(stop => stop.city.toLowerCase() === laterCity.toLowerCase());
+    if (earlierIndex < 0 || laterIndex < 0 || earlierIndex < laterIndex) return;
+    const [earlier] = stops.splice(earlierIndex, 1);
+    stops.splice(laterIndex, 0, earlier);
+}
+
+function ordinalSuffix(value: number): string {
+    const remainder100 = value % 100;
+    if (remainder100 >= 11 && remainder100 <= 13) return 'th';
+    if (value % 10 === 1) return 'st';
+    if (value % 10 === 2) return 'nd';
+    if (value % 10 === 3) return 'rd';
+    return 'th';
+}
+
+function capitalize(value: string): string {
+    const normalized = clean(value, 160);
+    return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : '';
+}
 function findAuthorizedCallbackPhone(turns: AmyTranscriptTurn[]): string | null {
     for (const turn of turns) {
         if (turn.role !== 'user' || !/\b(call|phone|reach me|contact me)\b/i.test(turn.content)) continue;
@@ -238,9 +316,9 @@ export function buildEvanEmailBundle(input: {
     const questionCount = turns.filter(turn => turn.role === 'user')
         .reduce((total, turn) => total + (turn.content.match(/\?/g)?.length ?? 0), 0);
     const priorityFlags = unique([
-        intake.timing.some(item => /urgent|quick|less than|by the/i.test(item)) ? 'Time-sensitive request' : '',
+        intake.timing.some(item => /urgent|less than|within \d+ days|as soon/i.test(item)) ? 'Time-sensitive request' : '',
         intake.customerCare.length ? 'Senior / mobility care' : '',
-        intake.originDestination.length >= 2 ? 'Multiple locations' : '',
+        intake.originDestination.some(item => item.split(' \u2192 ').length > 2) ? 'Multiple locations' : '',
         intake.inventory.length ? 'Specialty items' : '',
         intake.quoteRequests.length ? 'Quote requested' : '',
     ]);
@@ -277,45 +355,63 @@ export function buildEvanEmailBundle(input: {
         footer: 'This email is a conversation recap. It is not a binding quote, estimate, booking, price, availability confirmation, or statement of insurance coverage.',
     });
 
-    const salesSections: Array<[string, string[]]> = [
-        ['Route / locations', intake.originDestination],
-        ['Timing requested', intake.timing],
-        ['Property / scope', intake.propertyScope],
+    const salesSections = ([
         ['Services requested', intake.services],
         ['Specialty / high-care items', intake.inventory],
         ['Access considerations', intake.access],
-        ['Senior-care priorities', intake.customerCare],
-        ['Quote / comparison request', intake.quoteRequests],
+        ['Customer-care priorities', intake.customerCare],
+        ['Quote request', intake.quoteRequests],
         ['Valuation / coverage questions', intake.coverageQuestions],
         ['Walkthrough preference', intake.walkthrough],
-    ];
+    ] as Array<[string, string[]]>).filter(([, items]) => items.length > 0);
+    const repActions = unique([
+        callbackPhone
+            ? 'Contact the customer at the authorized callback number.'
+            : 'Contact the customer at the verified email address.',
+        intake.missing.length ? 'Confirm: ' + intake.missing.join('; ') + '.' : '',
+        intake.customerCare.length ? 'Plan around these customer-care priorities: ' + intake.customerCare.join('; ') + '.' : '',
+        intake.inventory.length ? 'Review handling requirements for the listed specialty / high-care items.' : '',
+        intake.coverageQuestions.length ? 'Explain applicable valuation / coverage options without implying automatic full insurance.' : '',
+        intake.walkthrough.length ? 'Coordinate the requested walkthrough format after availability is confirmed.' : '',
+        'After the open details are verified, Mullins staff determines feasibility and prepares any quote.',
+    ], 8);
     const salesText = [
         'MULLINS SALES - MOVE FOLLOW-UP BRIEF',
-        `Priority: ${priorityFlags.join(' | ') || 'Standard follow-up'}`, '',
-        `Customer: ${name}`,
-        `Verified email: ${clean(input.verifiedEmail, 254)} (authoritative secure check-in address)`,
-        `Authorized callback: ${callbackPhone ?? 'Not captured - use verified email'}`, '',
-        ...salesSections.flatMap(([title, items]) => [title, ...((items.length ? items : ['Not captured - confirm with customer']).map(item => `- ${item}`)), '']),
-        'Critical details to confirm before quoting', ...intake.missing.map(item => `- ${item}`), '',
+        'Priority: ' + (priorityFlags.join(' | ') || 'Standard follow-up'), '',
+        'Customer: ' + name,
+        'Verified email: ' + clean(input.verifiedEmail, 254) + ' (authoritative secure check-in address)',
+        'Authorized callback: ' + (callbackPhone ?? 'Not captured - use verified email'), '',
+        'Move at a glance',
+        '- Route: ' + listText(intake.originDestination),
+        '- Timing: ' + listText(intake.timing),
+        '- Property / scope: ' + listText(intake.propertyScope), '',
+        ...salesSections.flatMap(([title, items]) => [title, ...items.map(item => '- ' + item), '']),
+        ...(intake.missing.length
+            ? ['Critical details to confirm before quoting', ...intake.missing.map(item => '- ' + item), '']
+            : []),
         'Recommended rep action plan',
-        '1. Contact the customer and acknowledge the time-sensitive, senior-care nature of the move.',
-        '2. Confirm exact dates, all addresses, access restrictions, complete inventory, and service scope.',
-        '3. Arrange a virtual or in-person pre-move walkthrough if needed.',
-        '4. Explain valuation / coverage options for specialty items; do not characterize them as automatically fully insured.',
-        '5. Mullins staff verifies feasibility and availability, then prepares and delivers the quote.', '',
-        'No quote, booking, crew availability, finish-time guarantee, or coverage commitment was made by Evan.',
+        ...repActions.map((item, index) => String(index + 1) + '. ' + item), '',
+        'No quote, booking, crew availability, or finish-time guarantee was made by Evan.',
+        ...(intake.coverageQuestions.length ? ['No valuation or coverage commitment was made by Evan.'] : []),
     ].join('\n');
 
+    const atAGlanceRows: Array<[string, string]> = [
+        ['Priority flags', priorityFlags.join(' | ') || 'Standard follow-up'],
+        ['Customer', name],
+        ['Verified email', clean(input.verifiedEmail, 254) + ' (secure check-in; authoritative)'],
+        ['Authorized callback', callbackPhone ?? 'Not captured - use verified email'],
+        ['Route', listText(intake.originDestination)],
+        ['Timing', listText(intake.timing)],
+        ['Property / scope', listText(intake.propertyScope)],
+    ];
+    const actionList = '<ol style="margin:0;padding:0 0 0 22px;color:#27384d">'
+        + repActions.map(item => '<li style="margin-bottom:9px">' + escapeHtml(item) + '</li>').join('')
+        + '</ol>';
     const salesRows = [
-        section('Lead at a glance', detailRows([
-            ['Priority flags', priorityFlags.join(' | ') || 'Standard follow-up'],
-            ['Customer', name],
-            ['Verified email', `${clean(input.verifiedEmail, 254)} (secure check-in; authoritative)`],
-            ['Authorized callback', callbackPhone ?? 'Not captured - use verified email'],
-        ])),
-        ...salesSections.map(([title, items]) => section(title, bullets(items.length ? items : ['Not captured - confirm with customer']))),
-        section('Critical details to confirm before quoting', bullets(intake.missing)),
-        section('Recommended rep action plan', '<ol style="margin:0;padding:0 0 0 22px;color:#27384d"><li style="margin-bottom:9px">Contact the customer and acknowledge the time-sensitive, senior-care nature of the move.</li><li style="margin-bottom:9px">Confirm exact dates, all addresses, access restrictions, complete inventory, and service scope.</li><li style="margin-bottom:9px">Arrange a virtual or in-person pre-move walkthrough if needed.</li><li style="margin-bottom:9px">Explain valuation / coverage options for specialty items; do not characterize them as automatically fully insured.</li><li>Mullins staff verifies feasibility and availability, then prepares and delivers the quote.</li></ol>'),
+        section('Lead at a glance', detailRows(atAGlanceRows)),
+        ...salesSections.map(([title, items]) => section(title, bullets(items))),
+        ...(intake.missing.length ? [section('Critical details to confirm before quoting', bullets(intake.missing))] : []),
+        section('Recommended rep action plan', actionList),
     ].join('');
 
     const adminSummary = recap.slice(0, 5);
@@ -380,9 +476,9 @@ export function buildEvanEmailBundle(input: {
                 preheader: `${priorityFlags.join(', ') || 'New Mullins move lead'} - ${name}.`,
                 eyebrow: 'Mullins sales action brief',
                 title: `Prepare the next step for ${name}`,
-                intro: '<p style="margin:0 0 10px">Use this distilled intake to make the customer follow-up specific and efficient.</p><p style="margin:0;padding:12px 14px;background:#fff4e8;border-left:4px solid #ef6c22"><strong>Boundary:</strong> Evan did not issue a quote or confirm booking, crew availability, finish time, or coverage. Mullins staff owns those decisions.</p>',
+                intro: '<p style="margin:0 0 10px">Use this distilled intake to make the customer follow-up specific and efficient.</p><p style="margin:0;padding:12px 14px;background:#fff4e8;border-left:4px solid #ef6c22"><strong>Boundary:</strong> Evan did not issue a quote or confirm booking, crew availability, or finish time. Mullins staff owns those decisions.</p>',
                 rows: salesRows,
-                footer: 'Internal Mullins Moving sales brief. Verify all consequential details directly with the customer before quoting, scheduling, or describing valuation / coverage.',
+                footer: 'Internal Mullins Moving sales brief. Verify all consequential details directly with the customer before quoting or scheduling.',
             }),
         },
     };
