@@ -1,13 +1,23 @@
 const AGENTMAIL_DEFAULT_API_BASE = 'https://api.agentmail.to';
 const MAX_EMAIL_BODY_CHARACTERS = 30_000;
+const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_BYTES = 512 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 768 * 1024;
 
 type AgentMailEnvironment = Record<string, string | undefined>;
+
+export type AmyEmailAttachment = {
+    filename: string;
+    contentType: string;
+    content: string;
+};
 
 export type AmyEmailMessage = {
     to: string;
     subject: string;
     text: string;
     html: string;
+    attachments?: AmyEmailAttachment[];
 };
 
 export type AmyAgentMailSendResult = {
@@ -31,6 +41,31 @@ function normalizeRecipient(input: unknown): string {
         throw new Error('AgentMail recipient was invalid');
     }
     return recipient;
+}
+
+function normalizeAttachments(input: AmyEmailAttachment[] | undefined) {
+    if (!input?.length) return undefined;
+    if (input.length > MAX_ATTACHMENTS) throw new Error('AgentMail attachment count exceeded');
+    let totalBytes = 0;
+    const attachments = input.map(item => {
+        const filename = boundedText(item.filename, 120);
+        const contentType = boundedText(item.contentType, 120).toLowerCase();
+        const content = String(item.content ?? '').normalize('NFKC');
+        const bytes = Buffer.byteLength(content, 'utf8');
+        if (!filename || /[\\/\x00-\x1f]/.test(filename)) throw new Error('AgentMail attachment filename was invalid');
+        if (!/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+;-]*(?:\s*;\s*charset=[a-z0-9_-]+)?$/i.test(contentType)) {
+            throw new Error('AgentMail attachment content type was invalid');
+        }
+        if (!content || bytes > MAX_ATTACHMENT_BYTES) throw new Error('AgentMail attachment content was invalid');
+        totalBytes += bytes;
+        return {
+            content: Buffer.from(content, 'utf8').toString('base64'),
+            filename,
+            content_type: contentType,
+        };
+    });
+    if (totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) throw new Error('AgentMail total attachment size exceeded');
+    return attachments;
 }
 
 export function readAmyAgentMailProviderConfig(
@@ -64,6 +99,7 @@ export async function sendAmyEmailWithAgentMail(
     const subject = boundedText(message.subject, 200);
     const text = boundedText(message.text, MAX_EMAIL_BODY_CHARACTERS);
     const html = boundedText(message.html, MAX_EMAIL_BODY_CHARACTERS);
+    const attachments = normalizeAttachments(message.attachments);
     if (!subject || (!text && !html)) throw new Error('AgentMail message was incomplete');
 
     let response: Response;
@@ -81,6 +117,7 @@ export async function sendAmyEmailWithAgentMail(
                     subject,
                     text,
                     html,
+                    ...(attachments ? { attachments } : {}),
                 }),
                 cache: 'no-store',
                 signal: AbortSignal.timeout(8_000),
