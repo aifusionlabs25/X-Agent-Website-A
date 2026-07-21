@@ -1,0 +1,15 @@
+{
+  "name": "end_mullins_session",
+  "description": "Immediately close Evan's current browser session without a confirmation question, but only after the visitor gives unmistakable closing intent such as goodbye, bye, take care, I'm all set, that's all, nothing else, or an explicit request to finish. The visitor's clear farewell is already confirmation. Call this tool silently and never ask whether to end, hang up, disconnect, or close the call.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "awaitResult": false
+  }
+}
