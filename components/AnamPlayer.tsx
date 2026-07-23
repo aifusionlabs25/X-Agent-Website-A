@@ -642,7 +642,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     }, [personaId, sessionVariant, audioBridge, workbenchEnabled, evanPlannerEnabled]);
 
     return (
-        <div className="relative w-full h-full bg-zinc-950 flex flex-col items-center justify-center">
+        <div className={`relative flex h-full w-full flex-col items-center justify-center ${evanPlannerEnabled ? 'bg-[#100718]' : 'bg-zinc-950'}`}>
             {error && (
                 <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 p-6 flex flex-col items-center text-center z-10">
                     <p className="text-red-400 font-bold mb-4">{error}</p>
@@ -656,16 +656,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             )}
 
             {isConnecting && !error && (
-                <div className="absolute inset-0 flex items-center justify-center z-10 bg-zinc-950/50 backdrop-blur-sm">
+                <div className={`absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm ${evanPlannerEnabled ? 'bg-[#100718]/88' : 'bg-zinc-950/50'}`}>
                     <div className="flex flex-col items-center space-y-4">
-                        <div className="w-12 h-12 border-4 border-zinc-700 border-t-white rounded-full animate-spin"></div>
-                        <p className="text-white text-sm tracking-widest uppercase animate-pulse">Establishing Neural Link...</p>
+                        <div className={`h-12 w-12 animate-spin rounded-full border-4 ${evanPlannerEnabled ? 'border-[#5d24d6]/40 border-t-[#ffc857]' : 'border-zinc-700 border-t-white'}`}></div>
+                        <p className={`animate-pulse text-sm uppercase tracking-widest ${evanPlannerEnabled ? 'text-[#ffdc8a]' : 'text-white'}`}>
+                            {evanPlannerEnabled ? 'Preparing your Mullins concierge…' : 'Establishing Neural Link...'}
+                        </p>
                     </div>
                 </div>
             )}
 
             {isFinalizing && !error && (
-                <div className="absolute inset-0 flex items-center justify-center z-30 bg-zinc-950/70 backdrop-blur-sm">
+                <div className={`absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm ${evanPlannerEnabled ? 'bg-[#100718]/80' : 'bg-zinc-950/70'}`}>
                     <div className="flex flex-col items-center space-y-3">
                         <div className="w-10 h-10 border-4 border-zinc-700 border-t-emerald-300 rounded-full animate-spin"></div>
                         <p className="text-emerald-200 text-xs tracking-widest uppercase">Securing session record...</p>
@@ -710,12 +712,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 <button
                     type="button"
                     onClick={() => setEvanPlannerOpen(true)}
-                    className="absolute right-5 top-5 z-30 inline-flex items-center gap-2 border border-[#f6c09a]/35 bg-[#163a28]/90 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.12em] text-[#fffaf0] shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 hover:border-[#f18a50] hover:bg-[#1c4933]"
+                    className="absolute right-5 top-20 z-30 inline-flex items-center gap-2 rounded-xl border border-[#ffc857]/35 bg-[#5d24d6]/88 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.12em] text-white shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 hover:border-[#ffc857]/70 hover:bg-[#6f34e8]"
                     data-testid="open-evan-move-planner"
                 >
                     <span className="relative flex h-5 w-5 items-center justify-center">
-                        <span className="absolute inset-0 animate-ping rounded-full bg-[#e76f31]/25" />
-                        <Truck size={16} className="relative text-[#f18a50]" />
+                        <span className="absolute inset-0 animate-ping rounded-full bg-[#ffc857]/25" />
+                        <Truck size={16} className="relative text-[#ffc857]" />
                     </span>
                     Live Move Planner
                 </button>

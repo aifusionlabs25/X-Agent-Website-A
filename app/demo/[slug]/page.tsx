@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { notFound, useRouter } from 'next/navigation';
 import { use } from 'react';
 import { ALL_AGENTS } from '@/lib/agents';
@@ -25,6 +26,7 @@ export default function DemoPage({ params, searchParams }: Props) {
 
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) return notFound();
+    const isEvan = agent.slug === 'evan';
 
     const rawVariant = Array.isArray(resolvedSearchParams.variant)
         ? resolvedSearchParams.variant[0]
@@ -82,15 +84,39 @@ export default function DemoPage({ params, searchParams }: Props) {
 
     const experience = (
         <main
-            className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden"
+            className={`fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden ${isEvan ? 'bg-[#100718]' : 'bg-black'}`}
             data-anam-variant={sessionVariant ?? 'public'}
             data-anam-audio-bridge={audioBridge ?? 'default'}
         >
+            {isEvan && (
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between border-b border-white/10 bg-[#160925]/88 px-4 py-3 shadow-[0_8px_35px_rgba(0,0,0,.25)] backdrop-blur-md sm:px-6">
+                    <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white p-1">
+                            <Image
+                                src="/agents/thumbnails/Evan Mullins Moving logo.png"
+                                alt="Mullins Moving"
+                                width={44}
+                                height={44}
+                                className="h-full w-full object-contain"
+                            />
+                        </span>
+                        <div>
+                            <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">Mullins Moving</p>
+                            <p className="text-sm font-bold text-white">Live with Evan</p>
+                        </div>
+                    </div>
+                    <span className="hidden items-center gap-2 rounded-full border border-[#ffc857]/20 bg-[#ffc857]/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#ffdc8a] sm:inline-flex">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-[#ffc857]" />
+                        Concierge session
+                    </span>
+                </div>
+            )}
+
             {/* Minimal bottom nav to return - Centered and High Visibility */}
             <div className="absolute bottom-10 left-0 w-full z-20 flex justify-center items-center pointer-events-none">
                 <Link
                     href={returnHref}
-                    className="pointer-events-auto flex items-center gap-2 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full transition-all text-sm font-bold uppercase tracking-widest hover:scale-105"
+                    className={`pointer-events-auto flex items-center gap-2 px-6 py-3 text-sm font-bold uppercase tracking-widest backdrop-blur-md transition-all hover:scale-105 ${isEvan ? 'rounded-xl border border-[#ffc857]/35 bg-[#5d24d6]/80 text-white shadow-[0_12px_35px_rgba(0,0,0,.3)] hover:bg-[#6f34e8]' : 'rounded-full border border-white/20 bg-black/60 text-white hover:bg-black/80'}`}
                 >
                     <LogOut size={18} />
                     Exit
@@ -122,7 +148,7 @@ export default function DemoPage({ params, searchParams }: Props) {
             </div>
 
             {/* Cinematic overlay effects */}
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] z-10" />
+            <div className={`pointer-events-none absolute inset-0 z-10 ${isEvan ? 'bg-[radial-gradient(circle_at_center,transparent_42%,rgba(16,7,24,.74)_100%)] ring-1 ring-inset ring-[#ffc857]/15' : 'bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)]'}`} />
         </main>
     );
 

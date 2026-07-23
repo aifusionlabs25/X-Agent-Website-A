@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ALL_AGENTS } from '@/lib/agents';
 import { Play } from 'lucide-react';
+import EvanLandingPage from '@/components/evan/EvanLandingPage';
 
 interface Props {
     params: Promise<{ slug: string }>;
@@ -17,6 +18,7 @@ export default async function AgentDetailPage({ params }: Props) {
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) notFound();
     const isAmy = agent.slug === 'amy';
+    if (agent.slug === 'evan') return <EvanLandingPage agent={agent} />;
 
     return (
         <main className="min-h-screen bg-zinc-950 pt-20">

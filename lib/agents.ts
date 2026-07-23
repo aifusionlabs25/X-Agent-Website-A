@@ -105,7 +105,7 @@ export const ALL_AGENTS: AgentData[] = [
     role: "Moving Concierge",
     personaId: "4b7e933a-ea04-4b84-b418-72c0762545e6",
     thumbnailSrc: "/agents/thumbnails/Evan Mullins Moving.png",
-    accentColor: "#f97316",
+    accentColor: "#ffc857",
     liveUrl: "/demo/evan",
     tenant: "Mullins Moving",
     companyUrl: "https://www.mullins-moving.com/",
