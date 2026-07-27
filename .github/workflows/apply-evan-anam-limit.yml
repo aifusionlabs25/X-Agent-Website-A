@@ -1,0 +1,38 @@
+name: Apply Evan Anam tool limit
+
+on:
+  push:
+    branches:
+      - codex/evan-anam-tool-limit
+    paths:
+      - .github/evan-anam-limit.patch.gz.b64
+      - .github/workflows/apply-evan-anam-limit.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-tool-limit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/evan-anam-tool-limit
+
+      - name: Apply tested Anam tool-limit patch
+        run: |
+          base64 --decode .github/evan-anam-limit.patch.gz.b64 > /tmp/evan-anam-limit.patch.gz
+          gzip --decompress --stdout /tmp/evan-anam-limit.patch.gz > /tmp/evan-anam-limit.patch
+          git apply --check /tmp/evan-anam-limit.patch
+          git apply /tmp/evan-anam-limit.patch
+
+      - name: Commit clean hotfix
+        run: |
+          git rm .github/evan-anam-limit.patch.gz.b64 .github/workflows/apply-evan-anam-limit.yml
+          git add config/anam/evan-move-planner-client-tool.json tests/evan-anam-config.test.mjs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Keep Evan planner tool within Anam limit"
+          git push origin HEAD:codex/evan-anam-tool-limit
