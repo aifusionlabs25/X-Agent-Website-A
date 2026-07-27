@@ -78,6 +78,7 @@ test('managed prompt enforces reliability and action honesty', async () => {
 
 test('move planner tool supports live corrections without unsupported update claims', async () => {
     const tool = JSON.parse(await readFile(new URL('../config/anam/evan-move-planner-client-tool.json', import.meta.url), 'utf8'));
+    assert.ok(tool.description.length <= 1024, 'Anam tool descriptions must remain within the platform limit');
     assert.match(tool.description, /explicitly asks to add, change, correct, update, or refresh planner details during the active session/i);
     assert.match(tool.description, /Call it again after an explicit correction/i);
     assert.match(tool.description, /live city map, stops, or stop order/i);
