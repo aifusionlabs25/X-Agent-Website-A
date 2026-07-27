@@ -1,0 +1,40 @@
+name: Apply exact Evan route map lockfile
+
+on:
+  push:
+    branches:
+      - codex/evan-live-route-map
+    paths:
+      - .github/evan-lock.patch.gz.b64
+      - .github/workflows/apply-exact-evan-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-exact-lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out route-map branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/evan-live-route-map
+          fetch-depth: 0
+
+      - name: Restore and apply exact tested lockfile diff
+        run: |
+          git checkout f0838b1958142cca5739fd167e344818791cd7d4 -- package-lock.json
+          base64 --decode .github/evan-lock.patch.gz.b64 > /tmp/evan-lock.patch.gz
+          gzip --decompress --stdout /tmp/evan-lock.patch.gz > /tmp/evan-lock.patch
+          git apply --check /tmp/evan-lock.patch
+          git apply /tmp/evan-lock.patch
+
+      - name: Commit exact lockfile
+        run: |
+          git rm .github/evan-lock.patch.gz.b64 .github/workflows/apply-exact-evan-lock.yml
+          git add package-lock.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Apply exact Evan route map lockfile"
+          git push origin HEAD:codex/evan-live-route-map
