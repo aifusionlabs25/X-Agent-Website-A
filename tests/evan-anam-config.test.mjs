@@ -70,6 +70,8 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /Mullins staff must separately review any estimate or walkthrough request/i);
     assert.match(prompt, /you can refresh the Live Move Planner whenever the visitor adds or corrects move details/i);
     assert.match(prompt, /call `show_move_planner` again after capturing the correction/i);
+    assert.match(prompt, /location map, stops, or their order/i);
+    assert.match(prompt, /city-center pins and a stop-order line/i);
     assert.match(prompt, /Never say an item, stop, route order, or other detail was added, corrected, saved, or is accurate unless the receipt supports that visible fact/i);
     assert.match(prompt, /Once the session has ended, new changes must go to the Mullins team/i);
 });
@@ -78,6 +80,8 @@ test('move planner tool supports live corrections without unsupported update cla
     const tool = JSON.parse(await readFile(new URL('../config/anam/evan-move-planner-client-tool.json', import.meta.url), 'utf8'));
     assert.match(tool.description, /explicitly asks to add, change, correct, update, or refresh planner details during the active session/i);
     assert.match(tool.description, /Call it again after an explicit correction/i);
+    assert.match(tool.description, /live city map, stops, or stop order/i);
+    assert.match(tool.description, /city-center pins and a stop-order line/i);
     assert.match(tool.description, /never claim that a requested update was made, saved, or is accurate when the receipt does not support it/i);
     assert.match(tool.description, /after the session ends must go to Mullins staff/i);
     assert.match(tool.config.parameters.properties.view.description, /stop-order corrections/i);

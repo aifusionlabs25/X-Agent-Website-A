@@ -1,6 +1,6 @@
 {
   "name": "show_move_planner",
-  "description": "Rebuild, refresh, and open Evan's Live Move Planner when the visitor asks to see the move plan, captured details, route, move list, readiness, or what Evan has heard, or explicitly asks to add, change, correct, update, or refresh planner details during the active session. Call it again after an explicit correction and select the most relevant view. Use route for stops or stop order; inventory for items, packing, access, or care needs; readiness for missing preparation details; and brief for an overall recap. The display uses only current-session conversation signals and excludes contact details. It is a working aid, not a quote, estimate, booking, inventory guarantee, confirmed route, or operational approval. Call silently and wait for the result. Confirm only visible facts supported by the receipt; never claim that a requested update was made, saved, or is accurate when the receipt does not support it. New changes after the session ends must go to Mullins staff. Do not call during a farewell.",
+  "description": "Rebuild, refresh, and open Evan's Live Move Planner when the visitor asks to see the move plan, captured details, map, route, move list, readiness, or what Evan has heard, or explicitly asks to add, change, correct, update, or refresh planner details during the active session. Call it again after an explicit correction and select the most relevant view. Use route for the live city map, stops, or stop order; inventory for items, packing, access, or care needs; readiness for missing preparation details; and brief for an overall recap. The display uses only current-session conversation signals and excludes contact details. Its map uses city-center pins and a stop-order line until exact addresses are confirmed. It is a working aid, not a quote, estimate, booking, inventory guarantee, confirmed route, or operational approval. Call silently and wait for the result. Confirm only visible facts supported by the receipt; never claim that a requested update was made, saved, or is accurate when the receipt does not support it. New changes after the session ends must go to Mullins staff. Do not call during a farewell.",
   "type": "CLIENT",
   "disableInterruptions": false,
   "config": {
@@ -10,7 +10,7 @@
         "view": {
           "type": "string",
           "enum": ["brief", "route", "inventory", "readiness"],
-          "description": "Use brief for the overall move summary, route for origins, destinations, stops, or stop-order corrections, inventory for items, packing, services, access, specialty, or care corrections, and readiness for missing details and staff-review preparation."
+          "description": "Use brief for the overall move summary, route for the live location map, origins, destinations, stops, or stop-order corrections, inventory for items, packing, services, access, specialty, or care corrections, and readiness for missing details and staff-review preparation."
         }
       },
       "required": ["view"],

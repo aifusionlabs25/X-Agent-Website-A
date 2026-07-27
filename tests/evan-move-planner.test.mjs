@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import test from 'node:test';
 import {
+    buildGoogleMapsDirectionsUrl,
     buildEvanMovePlan,
     EVAN_MOVE_PLANNER_BOUNDARY,
+    getMovePlanStopCoordinates,
 } from '../lib/anam/evan-move-planner.ts';
 
 test('Evan Move Planner starts empty without inventing move details', () => {
@@ -111,6 +113,25 @@ test('Evan Move Planner incorporates details appended after the initial working 
     assert.ok(refreshed.specialtyItems.includes('Large mirrors'));
 });
 
+test('Evan Move Planner provides map coordinates and an ordered Google Maps handoff', () => {
+    const model = buildEvanMovePlan([
+        { role: 'user', content: 'We are moving from Gilbert to Queen Creek with a storage stop in Mesa.' },
+    ]);
+
+    assert.deepEqual(model.stops.map((stop) => stop.city), ['Gilbert', 'Mesa', 'Queen Creek']);
+    assert.deepEqual(getMovePlanStopCoordinates(model.stops[0]), {
+        latitude: 33.3528,
+        longitude: -111.789,
+    });
+
+    const googleMapsUrl = new URL(buildGoogleMapsDirectionsUrl(model.stops));
+    assert.equal(googleMapsUrl.hostname, 'www.google.com');
+    assert.equal(googleMapsUrl.pathname, '/maps/dir/');
+    assert.equal(googleMapsUrl.searchParams.get('origin'), 'Gilbert, Arizona');
+    assert.equal(googleMapsUrl.searchParams.get('destination'), 'Queen Creek, Arizona');
+    assert.equal(googleMapsUrl.searchParams.get('waypoints'), 'Mesa, Arizona');
+});
+
 test('Move Planner boundary explicitly prevents quote and booking assumptions', () => {
     assert.match(EVAN_MOVE_PLANNER_BOUNDARY, /working view only/i);
     assert.match(EVAN_MOVE_PLANNER_BOUNDARY, /pricing/i);
@@ -120,6 +141,7 @@ test('Move Planner boundary explicitly prevents quote and booking assumptions', 
 test('Anam player exposes the Move Planner only for Evan sessions', async () => {
     const player = await fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
     const planner = await fs.readFile(new URL('../components/evan/EvanMovePlanner.tsx', import.meta.url), 'utf8');
+    const routeMap = await fs.readFile(new URL('../components/evan/EvanRouteMap.tsx', import.meta.url), 'utf8');
     const prompt = await fs.readFile(new URL('../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8');
     const updater = await fs.readFile(new URL('../scripts/anam/update-evan-persona.mjs', import.meta.url), 'utf8');
     const tool = JSON.parse(await fs.readFile(new URL('../config/anam/evan-move-planner-client-tool.json', import.meta.url), 'utf8'));
@@ -130,6 +152,10 @@ test('Anam player exposes the Move Planner only for Evan sessions', async () => 
     assert.match(player, /<EvanMovePlanner/);
     assert.match(planner, /No quote or booking created/);
     assert.match(planner, /data-testid="evan-move-planner"/);
+    assert.match(planner, /<EvanRouteMap stops=\{model\.stops\}/);
+    assert.match(routeMap, /data-testid="evan-route-map"/);
+    assert.match(routeMap, /Open in Google Maps/);
+    assert.match(routeMap, /OpenStreetMap contributors/);
     assert.match(player, /registerToolCallHandler\('show_move_planner'/);
     assert.match(player, /const snapshotEvanPlannerTurns/);
     assert.match(player, /const refreshedTurns = snapshotEvanPlannerTurns\(\)/);
