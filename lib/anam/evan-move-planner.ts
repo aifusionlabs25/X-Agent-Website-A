@@ -15,6 +15,11 @@ export type MovePlanStop = {
     kind: 'Origin' | 'Destination' | 'Additional stop';
 };
 
+export type MovePlanCoordinates = {
+    latitude: number;
+    longitude: number;
+};
+
 export interface EvanMovePlanModel {
     status: 'listening' | 'building';
     stops: MovePlanStop[];
@@ -40,6 +45,56 @@ const CITY_NAMES = [
     'Paradise Valley', 'Fountain Hills', 'Sun City', 'Cave Creek', 'Carefree',
     'Litchfield Park', 'Maricopa', 'Tucson', 'Flagstaff', 'Prescott', 'Sedona',
 ];
+
+const CITY_COORDINATES: Record<string, MovePlanCoordinates> = {
+    Phoenix: { latitude: 33.4484, longitude: -112.0740 },
+    Mesa: { latitude: 33.4152, longitude: -111.8315 },
+    Chandler: { latitude: 33.3062, longitude: -111.8413 },
+    Surprise: { latitude: 33.6292, longitude: -112.3679 },
+    Scottsdale: { latitude: 33.4942, longitude: -111.9261 },
+    Tempe: { latitude: 33.4255, longitude: -111.9400 },
+    Gilbert: { latitude: 33.3528, longitude: -111.7890 },
+    Glendale: { latitude: 33.5387, longitude: -112.1860 },
+    'Queen Creek': { latitude: 33.2487, longitude: -111.6343 },
+    Peoria: { latitude: 33.5806, longitude: -112.2374 },
+    Goodyear: { latitude: 33.4353, longitude: -112.3577 },
+    Avondale: { latitude: 33.4356, longitude: -112.3496 },
+    Buckeye: { latitude: 33.3703, longitude: -112.5838 },
+    'Paradise Valley': { latitude: 33.5312, longitude: -111.9426 },
+    'Fountain Hills': { latitude: 33.6042, longitude: -111.7257 },
+    'Sun City': { latitude: 33.5975, longitude: -112.2718 },
+    'Cave Creek': { latitude: 33.8334, longitude: -111.9507 },
+    Carefree: { latitude: 33.8223, longitude: -111.9182 },
+    'Litchfield Park': { latitude: 33.4934, longitude: -112.3577 },
+    Maricopa: { latitude: 33.0581, longitude: -112.0476 },
+    Tucson: { latitude: 32.2226, longitude: -110.9747 },
+    Flagstaff: { latitude: 35.1983, longitude: -111.6513 },
+    Prescott: { latitude: 34.5400, longitude: -112.4685 },
+    Sedona: { latitude: 34.8697, longitude: -111.7610 },
+};
+
+export function getMovePlanStopCoordinates(stop: MovePlanStop): MovePlanCoordinates | null {
+    return CITY_COORDINATES[stop.city] ?? null;
+}
+
+export function buildGoogleMapsDirectionsUrl(stops: MovePlanStop[]): string {
+    const cities = stops.map((stop) => `${stop.city}, Arizona`).filter(Boolean);
+    if (!cities.length) return '';
+
+    if (cities.length === 1) {
+        const search = new URLSearchParams({ api: '1', query: cities[0] });
+        return `https://www.google.com/maps/search/?${search.toString()}`;
+    }
+
+    const directions = new URLSearchParams({
+        api: '1',
+        travelmode: 'driving',
+        origin: cities[0],
+        destination: cities.at(-1) ?? cities[0],
+    });
+    if (cities.length > 2) directions.set('waypoints', cities.slice(1, -1).join('|'));
+    return `https://www.google.com/maps/dir/?${directions.toString()}`;
+}
 
 const compact = (value: string, length = 150) => {
     const clean = value.replace(/\s+/g, ' ').trim();

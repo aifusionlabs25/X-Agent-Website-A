@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 :root {
   --background: #09090b;
@@ -24,4 +25,94 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #6366f1;
+}
+
+
+.evan-route-map .leaflet-tile {
+  filter: saturate(0.62) sepia(0.08) hue-rotate(228deg) brightness(1.04);
+}
+
+.evan-route-map .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.88);
+  color: #6f5e7d;
+  font-size: 9px;
+}
+
+.evan-route-map .leaflet-control-attribution a {
+  color: #5d24d6;
+}
+
+.evan-route-map .leaflet-bar {
+  overflow: hidden;
+  border: 1px solid rgba(50, 16, 100, 0.18);
+  border-radius: 999px;
+  box-shadow: 0 7px 20px rgba(42, 16, 80, 0.16);
+}
+
+.evan-route-map .leaflet-bar a {
+  border: 0;
+  background: #ffffff;
+  color: #5d24d6;
+}
+
+.evan-route-map .leaflet-bar a:hover {
+  background: #f1e9fb;
+  color: #321064;
+}
+
+.evan-route-marker-shell {
+  border: 0;
+  background: transparent;
+}
+
+.evan-route-marker {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #ffffff;
+  border-radius: 999px 999px 999px 5px;
+  background: var(--evan-pin);
+  box-shadow: 0 8px 20px rgba(42, 16, 80, 0.3);
+  color: #ffffff;
+  transform: rotate(-45deg);
+}
+
+.evan-route-marker b {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+
+.evan-route-map .leaflet-popup-content-wrapper,
+.evan-route-map .leaflet-popup-tip {
+  background: #2a1050;
+  color: #ffffff;
+}
+
+.evan-route-map .leaflet-popup-content-wrapper {
+  border-radius: 7px;
+  box-shadow: 0 15px 40px rgba(42, 16, 80, 0.26);
+}
+
+.evan-route-popup {
+  display: grid;
+  gap: 3px;
+  min-width: 120px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.evan-route-popup strong {
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.evan-route-popup span {
+  color: #ffdc8a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }

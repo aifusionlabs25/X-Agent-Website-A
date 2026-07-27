@@ -25,6 +25,7 @@ import {
     EvanMovePlannerTurn,
     EvanMovePlannerView,
 } from '@/lib/anam/evan-move-planner';
+import EvanRouteMap from '@/components/evan/EvanRouteMap';
 
 interface EvanMovePlannerProps {
     isOpen: boolean;
@@ -205,7 +206,9 @@ export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose 
                                             <section>
                                                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">Pickup to placement</p>
                                                 <h3 className="mt-1 font-serif text-3xl">Move route</h3>
-                                                <p className="mt-2 text-sm leading-6 text-[#746180]">Stops appear in the order mentioned. Mullins staff will confirm addresses, access, and routing.</p>
+                                                <p className="mt-2 text-sm leading-6 text-[#746180]">Each location becomes a numbered pin as Evan hears it. Mullins staff will confirm addresses, access, and final routing.</p>
+
+                                                <EvanRouteMap stops={model.stops} />
 
                                                 <div className="relative mt-7 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
                                                     {model.stops.length ? model.stops.map((stop, index) => (
