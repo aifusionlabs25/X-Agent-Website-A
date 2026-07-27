@@ -1,0 +1,508 @@
+diff --git a/app/globals.css b/app/globals.css
+index 94d5595..2a015f0 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -1,4 +1,5 @@
+ @import "tailwindcss";
++@import "leaflet/dist/leaflet.css";
+ 
+ :root {
+   --background: #09090b;
+@@ -25,3 +26,93 @@ body {
+ ::-webkit-scrollbar-thumb:hover {
+   background: #6366f1;
+ }
++
++
++.evan-route-map .leaflet-tile {
++  filter: saturate(0.62) sepia(0.08) hue-rotate(228deg) brightness(1.04);
++}
++
++.evan-route-map .leaflet-control-attribution {
++  background: rgba(255, 255, 255, 0.88);
++  color: #6f5e7d;
++  font-size: 9px;
++}
++
++.evan-route-map .leaflet-control-attribution a {
++  color: #5d24d6;
++}
++
++.evan-route-map .leaflet-bar {
++  overflow: hidden;
++  border: 1px solid rgba(50, 16, 100, 0.18);
++  border-radius: 999px;
++  box-shadow: 0 7px 20px rgba(42, 16, 80, 0.16);
++}
++
++.evan-route-map .leaflet-bar a {
++  border: 0;
++  background: #ffffff;
++  color: #5d24d6;
++}
++
++.evan-route-map .leaflet-bar a:hover {
++  background: #f1e9fb;
++  color: #321064;
++}
++
++.evan-route-marker-shell {
++  border: 0;
++  background: transparent;
++}
++
++.evan-route-marker {
++  display: flex;
++  width: 36px;
++  height: 36px;
++  align-items: center;
++  justify-content: center;
++  border: 3px solid #ffffff;
++  border-radius: 999px 999px 999px 5px;
++  background: var(--evan-pin);
++  box-shadow: 0 8px 20px rgba(42, 16, 80, 0.3);
++  color: #ffffff;
++  transform: rotate(-45deg);
++}
++
++.evan-route-marker b {
++  font-size: 12px;
++  font-variant-numeric: tabular-nums;
++  line-height: 1;
++  transform: rotate(45deg);
++}
++
++.evan-route-map .leaflet-popup-content-wrapper,
++.evan-route-map .leaflet-popup-tip {
++  background: #2a1050;
++  color: #ffffff;
++}
++
++.evan-route-map .leaflet-popup-content-wrapper {
++  border-radius: 7px;
++  box-shadow: 0 15px 40px rgba(42, 16, 80, 0.26);
++}
++
++.evan-route-popup {
++  display: grid;
++  gap: 3px;
++  min-width: 120px;
++  font-family: ui-sans-serif, system-ui, sans-serif;
++}
++
++.evan-route-popup strong {
++  color: #ffffff;
++  font-size: 13px;
++}
++
++.evan-route-popup span {
++  color: #ffdc8a;
++  font-size: 10px;
++  font-weight: 700;
++  letter-spacing: 0.12em;
++  text-transform: uppercase;
++}
+diff --git a/components/evan/EvanMovePlanner.tsx b/components/evan/EvanMovePlanner.tsx
+index d97a3a3..e08552c 100644
+--- a/components/evan/EvanMovePlanner.tsx
++++ b/components/evan/EvanMovePlanner.tsx
+@@ -25,6 +25,7 @@ import {
+     EvanMovePlannerTurn,
+     EvanMovePlannerView,
+ } from '@/lib/anam/evan-move-planner';
++import EvanRouteMap from '@/components/evan/EvanRouteMap';
+ 
+ interface EvanMovePlannerProps {
+     isOpen: boolean;
+@@ -205,7 +206,9 @@ export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose
+                                             <section>
+                                                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">Pickup to placement</p>
+                                                 <h3 className="mt-1 font-serif text-3xl">Move route</h3>
+-                                                <p className="mt-2 text-sm leading-6 text-[#746180]">Stops appear in the order mentioned. Mullins staff will confirm addresses, access, and routing.</p>
++                                                <p className="mt-2 text-sm leading-6 text-[#746180]">Each location becomes a numbered pin as Evan hears it. Mullins staff will confirm addresses, access, and final routing.</p>
++
++                                                <EvanRouteMap stops={model.stops} />
+ 
+                                                 <div className="relative mt-7 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
+                                                     {model.stops.length ? model.stops.map((stop, index) => (
+diff --git a/components/evan/EvanRouteMap.tsx b/components/evan/EvanRouteMap.tsx
+new file mode 100644
+index 0000000..7caa6b7
+--- /dev/null
++++ b/components/evan/EvanRouteMap.tsx
+@@ -0,0 +1,157 @@
++'use client';
++
++import { useEffect, useMemo, useRef, useState } from 'react';
++import { ExternalLink, LocateFixed, MapPinned } from 'lucide-react';
++import {
++    buildGoogleMapsDirectionsUrl,
++    getMovePlanStopCoordinates,
++    MovePlanStop,
++} from '@/lib/anam/evan-move-planner';
++
++interface EvanRouteMapProps {
++    stops: MovePlanStop[];
++}
++
++const markerColor = (stop: MovePlanStop) => {
++    if (stop.kind === 'Origin') return '#5d24d6';
++    if (stop.kind === 'Destination') return '#e4a323';
++    return '#9568df';
++};
++
++export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
++    const mapContainerRef = useRef<HTMLDivElement>(null);
++    const [mapReady, setMapReady] = useState(false);
++    const mappedStops = useMemo(() => stops.flatMap((stop, index) => {
++        const coordinates = getMovePlanStopCoordinates(stop);
++        return coordinates ? [{ stop, index, coordinates }] : [];
++    }), [stops]);
++    const googleMapsUrl = useMemo(() => buildGoogleMapsDirectionsUrl(stops), [stops]);
++
++    useEffect(() => {
++        const container = mapContainerRef.current;
++        if (!container || !mappedStops.length) return undefined;
++
++        let disposed = false;
++        let map: import('leaflet').Map | null = null;
++
++        void import('leaflet').then((L) => {
++            if (disposed) return;
++
++            map = L.map(container, {
++                attributionControl: true,
++                zoomControl: false,
++                scrollWheelZoom: false,
++            });
++
++            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
++                attribution: '&copy; OpenStreetMap contributors',
++                maxZoom: 19,
++            }).addTo(map);
++            L.control.zoom({ position: 'bottomright' }).addTo(map);
++
++            const latLngs = mappedStops.map(({ coordinates }) => (
++                [coordinates.latitude, coordinates.longitude] as [number, number]
++            ));
++
++            if (latLngs.length > 1) {
++                L.polyline(latLngs, {
++                    color: '#5d24d6',
++                    opacity: 0.86,
++                    weight: 5,
++                    lineCap: 'round',
++                    lineJoin: 'round',
++                }).addTo(map);
++            }
++
++            mappedStops.forEach(({ stop, index, coordinates }) => {
++                const icon = L.divIcon({
++                    className: 'evan-route-marker-shell',
++                    html: `<span class="evan-route-marker" style="--evan-pin:${markerColor(stop)}"><b>${index + 1}</b></span>`,
++                    iconAnchor: [18, 42],
++                    iconSize: [36, 42],
++                    popupAnchor: [0, -42],
++                });
++
++                L.marker([coordinates.latitude, coordinates.longitude], {
++                    icon,
++                    keyboard: true,
++                    title: `${index + 1}. ${stop.city} — ${stop.kind}`,
++                })
++                    .addTo(map as import('leaflet').Map)
++                    .bindPopup(
++                        `<div class="evan-route-popup"><strong>${index + 1}. ${stop.city}</strong><span>${stop.kind}</span></div>`,
++                    );
++            });
++
++            if (latLngs.length === 1) {
++                map.setView(latLngs[0], 10);
++            } else {
++                map.fitBounds(L.latLngBounds(latLngs), {
++                    maxZoom: 10,
++                    padding: [38, 38],
++                });
++            }
++
++            window.setTimeout(() => map?.invalidateSize(), 80);
++            setMapReady(true);
++        });
++
++        return () => {
++            disposed = true;
++            map?.remove();
++        };
++    }, [mappedStops]);
++
++    if (!mappedStops.length) return null;
++
++    return (
++        <div className="mt-6 overflow-hidden border border-[#321064]/15 bg-white shadow-[0_18px_48px_rgba(42,16,80,0.12)]" data-testid="evan-route-map">
++            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#321064]/10 bg-[#2a1050] px-4 py-3 text-white sm:px-5">
++                <div className="flex items-center gap-3">
++                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#ffc857] text-[#2a1050]">
++                        <MapPinned size={18} />
++                    </span>
++                    <div>
++                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ffdc8a]">Live city map</p>
++                        <p className="text-sm font-semibold">{mappedStops.length} mapped {mappedStops.length === 1 ? 'location' : 'locations'}</p>
++                    </div>
++                </div>
++                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/7 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/70">
++                    <LocateFixed size={13} className={mapReady ? 'text-[#ffc857]' : 'animate-pulse text-white/35'} />
++                    City-level working route
++                </span>
++            </div>
++
++            <div className="relative">
++                <div ref={mapContainerRef} className="evan-route-map h-[310px] w-full bg-[#eee7f8] sm:h-[360px]" aria-label="Working map of move locations" />
++                {!mapReady && (
++                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#eee7f8] text-sm font-semibold text-[#684a83]">
++                        Building the working route…
++                    </div>
++                )}
++                <div className="pointer-events-none absolute left-3 top-3 z-[500] hidden max-w-[220px] sm:block border border-[#321064]/10 bg-white/92 px-3 py-2 shadow-[0_8px_24px_rgba(42,16,80,0.13)] backdrop-blur">
++                    <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#7540cf]">Planning preview</p>
++                    <p className="mt-1 text-[11px] leading-4 text-[#6c5a79]">Pins use city centers. The line shows stop order—not driving directions.</p>
++                </div>
++            </div>
++
++            <div className="flex flex-col gap-3 border-t border-[#321064]/10 bg-[#faf7fd] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
++                <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#71617c]">
++                    <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#5d24d6]" /> Origin</span>
++                    <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#9568df]" /> Additional stop</span>
++                    <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#e4a323]" /> Destination</span>
++                </div>
++                {googleMapsUrl && (
++                    <a
++                        href={googleMapsUrl}
++                        target="_blank"
++                        rel="noreferrer"
++                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-[#5d24d6] px-4 py-2 text-xs font-bold text-white shadow-[0_8px_22px_rgba(93,36,214,0.24)] transition hover:-translate-y-0.5 hover:bg-[#4d1cbc]"
++                    >
++                        Open in Google Maps <ExternalLink size={14} />
++                    </a>
++                )}
++            </div>
++        </div>
++    );
++}
+diff --git a/config/anam/evan-move-planner-client-tool.json b/config/anam/evan-move-planner-client-tool.json
+index 7381d2e..1b04f41 100644
+--- a/config/anam/evan-move-planner-client-tool.json
++++ b/config/anam/evan-move-planner-client-tool.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "show_move_planner",
+-  "description": "Rebuild, refresh, and open Evan's Live Move Planner when the visitor asks to see the move plan, captured details, route, move list, readiness, or what Evan has heard, or explicitly asks to add, change, correct, update, or refresh planner details during the active session. Call it again after an explicit correction and select the most relevant view. Use route for stops or stop order; inventory for items, packing, access, or care needs; readiness for missing preparation details; and brief for an overall recap. The display uses only current-session conversation signals and excludes contact details. It is a working aid, not a quote, estimate, booking, inventory guarantee, confirmed route, or operational approval. Call silently and wait for the result. Confirm only visible facts supported by the receipt; never claim that a requested update was made, saved, or is accurate when the receipt does not support it. New changes after the session ends must go to Mullins staff. Do not call during a farewell.",
++  "description": "Rebuild, refresh, and open Evan's Live Move Planner when the visitor asks to see the move plan, captured details, map, route, move list, readiness, or what Evan has heard, or explicitly asks to add, change, correct, update, or refresh planner details during the active session. Call it again after an explicit correction and select the most relevant view. Use route for the live city map, stops, or stop order; inventory for items, packing, access, or care needs; readiness for missing preparation details; and brief for an overall recap. The display uses only current-session conversation signals and excludes contact details. Its map uses city-center pins and a stop-order line until exact addresses are confirmed. It is a working aid, not a quote, estimate, booking, inventory guarantee, confirmed route, or operational approval. Call silently and wait for the result. Confirm only visible facts supported by the receipt; never claim that a requested update was made, saved, or is accurate when the receipt does not support it. New changes after the session ends must go to Mullins staff. Do not call during a farewell.",
+   "type": "CLIENT",
+   "disableInterruptions": false,
+   "config": {
+@@ -10,7 +10,7 @@
+         "view": {
+           "type": "string",
+           "enum": ["brief", "route", "inventory", "readiness"],
+-          "description": "Use brief for the overall move summary, route for origins, destinations, stops, or stop-order corrections, inventory for items, packing, services, access, specialty, or care corrections, and readiness for missing details and staff-review preparation."
++          "description": "Use brief for the overall move summary, route for the live location map, origins, destinations, stops, or stop-order corrections, inventory for items, packing, services, access, specialty, or care corrections, and readiness for missing details and staff-review preparation."
+         }
+       },
+       "required": ["view"],
+diff --git a/config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md b/config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md
+index ae62a78..84c2d09 100644
+--- a/config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md
++++ b/config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md
+@@ -82,10 +82,10 @@ For prohibited items, claims, loss or damage, valuation, insurance, cancellation
+ - Never ask whether it is okay to end the call. Do not say "Would you like me to end our call now?", "Would you like to end our conversation now?", "Should I end the call?", or any equivalent confirmation question.
+ - Treat "I'm set for now," "that's all for now," "I'm all set," "nothing else," "take care," a direct goodbye, or an explicit request to end as clear closing intent. Call `end_mullins_session` immediately without speaking first or seeking confirmation; when it returns `farewell_required`, give exactly the one prescribed farewell and do not restart.
+ - A bare "thanks," "okay," or short acknowledgment without closing language is not closing intent. Acknowledge briefly or use `skip_turn`; never turn ambiguity into an end-call question.
+-- The website includes a current-session Live Move Planner. When the visitor explicitly asks to see the move plan, captured details, route, move list, readiness, or what you heard, call `show_move_planner` silently with the matching view: `brief`, `route`, `inventory`, or `readiness`.
+-- During the active session, you can refresh the Live Move Planner whenever the visitor adds or corrects move details. When the visitor explicitly asks to add, change, correct, update, refresh, or show those details in the planner, call `show_move_planner` again after capturing the correction, using `route` for stops or their order, `inventory` for items, packing, access, or care needs, `readiness` for missing preparation details, and `brief` for an overall recap.
++- The website includes a current-session Live Move Planner. When the visitor explicitly asks to see the move plan, captured details, map, route, move list, readiness, or what you heard, call `show_move_planner` silently with the matching view: `brief`, `route`, `inventory`, or `readiness`.
++- During the active session, you can refresh the Live Move Planner whenever the visitor adds or corrects move details. When the visitor explicitly asks to add, change, correct, update, refresh, or show those details in the planner, call `show_move_planner` again after capturing the correction, using `route` for the location map, stops, or their order, `inventory` for items, packing, access, or care needs, `readiness` for missing preparation details, and `brief` for an overall recap.
+ - Open or refresh the Move Planner only on an explicit request. After a successful receipt, confirm briefly that the requested working view is open or refreshed. Refer only to visible facts supported by the tool receipt. Never say an item, stop, route order, or other detail was added, corrected, saved, or is accurate unless the receipt supports that visible fact. If the receipt does not confirm it, say you could not verify the visible update and note the detail for Mullins staff instead.
+-- The planner uses the active conversation. Once the session has ended, new changes must go to the Mullins team. The planner is not a quote, estimate, booking, confirmed route, inventory guarantee, CRM record, or operational approval.
++- The planner uses the active conversation. Its map uses city-center pins and a stop-order line until Mullins confirms exact addresses; it does not claim driving directions. Once the session has ended, new changes must go to the Mullins team. The planner is not a quote, estimate, booking, confirmed route, inventory guarantee, CRM record, or operational approval.
+ 
+ <!-- EVAN_AGENTMAIL_START -->
+ Evan has one verified outbound action: `send_mullins_follow_up_email`. The visitor's email was typed into the secure website check-in and is never visible to you. The required check-in includes explicit consent for one visitor recap plus the internal Mullins Admin and Sales briefs. Never ask them to say, spell, repeat, or confirm an email address, and do not ask for email permission again during the call.
+diff --git a/lib/anam/evan-move-planner.ts b/lib/anam/evan-move-planner.ts
+index e40d446..d7a53d5 100644
+--- a/lib/anam/evan-move-planner.ts
++++ b/lib/anam/evan-move-planner.ts
+@@ -15,6 +15,11 @@ export type MovePlanStop = {
+     kind: 'Origin' | 'Destination' | 'Additional stop';
+ };
+ 
++export type MovePlanCoordinates = {
++    latitude: number;
++    longitude: number;
++};
++
+ export interface EvanMovePlanModel {
+     status: 'listening' | 'building';
+     stops: MovePlanStop[];
+@@ -41,6 +46,56 @@ const CITY_NAMES = [
+     'Litchfield Park', 'Maricopa', 'Tucson', 'Flagstaff', 'Prescott', 'Sedona',
+ ];
+ 
++const CITY_COORDINATES: Record<string, MovePlanCoordinates> = {
++    Phoenix: { latitude: 33.4484, longitude: -112.0740 },
++    Mesa: { latitude: 33.4152, longitude: -111.8315 },
++    Chandler: { latitude: 33.3062, longitude: -111.8413 },
++    Surprise: { latitude: 33.6292, longitude: -112.3679 },
++    Scottsdale: { latitude: 33.4942, longitude: -111.9261 },
++    Tempe: { latitude: 33.4255, longitude: -111.9400 },
++    Gilbert: { latitude: 33.3528, longitude: -111.7890 },
++    Glendale: { latitude: 33.5387, longitude: -112.1860 },
++    'Queen Creek': { latitude: 33.2487, longitude: -111.6343 },
++    Peoria: { latitude: 33.5806, longitude: -112.2374 },
++    Goodyear: { latitude: 33.4353, longitude: -112.3577 },
++    Avondale: { latitude: 33.4356, longitude: -112.3496 },
++    Buckeye: { latitude: 33.3703, longitude: -112.5838 },
++    'Paradise Valley': { latitude: 33.5312, longitude: -111.9426 },
++    'Fountain Hills': { latitude: 33.6042, longitude: -111.7257 },
++    'Sun City': { latitude: 33.5975, longitude: -112.2718 },
++    'Cave Creek': { latitude: 33.8334, longitude: -111.9507 },
++    Carefree: { latitude: 33.8223, longitude: -111.9182 },
++    'Litchfield Park': { latitude: 33.4934, longitude: -112.3577 },
++    Maricopa: { latitude: 33.0581, longitude: -112.0476 },
++    Tucson: { latitude: 32.2226, longitude: -110.9747 },
++    Flagstaff: { latitude: 35.1983, longitude: -111.6513 },
++    Prescott: { latitude: 34.5400, longitude: -112.4685 },
++    Sedona: { latitude: 34.8697, longitude: -111.7610 },
++};
++
++export function getMovePlanStopCoordinates(stop: MovePlanStop): MovePlanCoordinates | null {
++    return CITY_COORDINATES[stop.city] ?? null;
++}
++
++export function buildGoogleMapsDirectionsUrl(stops: MovePlanStop[]): string {
++    const cities = stops.map((stop) => `${stop.city}, Arizona`).filter(Boolean);
++    if (!cities.length) return '';
++
++    if (cities.length === 1) {
++        const search = new URLSearchParams({ api: '1', query: cities[0] });
++        return `https://www.google.com/maps/search/?${search.toString()}`;
++    }
++
++    const directions = new URLSearchParams({
++        api: '1',
++        travelmode: 'driving',
++        origin: cities[0],
++        destination: cities.at(-1) ?? cities[0],
++    });
++    if (cities.length > 2) directions.set('waypoints', cities.slice(1, -1).join('|'));
++    return `https://www.google.com/maps/dir/?${directions.toString()}`;
++}
++
+ const compact = (value: string, length = 150) => {
+     const clean = value.replace(/\s+/g, ' ').trim();
+     return clean.length > length ? `${clean.slice(0, length - 3).trim()}...` : clean;
+diff --git a/package.json b/package.json
+index accf210..300bf75 100644
+--- a/package.json
++++ b/package.json
+@@ -27,6 +27,7 @@
+     "embla-carousel-react": "^8.6.0",
+     "framer-motion": "^12.34.3",
+     "googleapis": "^171.4.0",
++    "leaflet": "^1.9.4",
+     "lucide-react": "^0.575.0",
+     "next": "^16.2.3",
+     "openai": "^6.25.0",
+@@ -36,6 +37,7 @@
+   },
+   "devDependencies": {
+     "@tailwindcss/postcss": "^4",
++    "@types/leaflet": "^1.9.21",
+     "@types/node": "^20",
+     "@types/react": "^19",
+     "@types/react-dom": "^19",
+diff --git a/tests/evan-anam-config.test.mjs b/tests/evan-anam-config.test.mjs
+index 7be20b7..7f9a17d 100644
+--- a/tests/evan-anam-config.test.mjs
++++ b/tests/evan-anam-config.test.mjs
+@@ -69,7 +69,9 @@ test('managed prompt enforces reliability and action honesty', async () => {
+     assert.match(prompt, /Never say a quote or estimate will be emailed/i);
+     assert.match(prompt, /Mullins staff must separately review any estimate or walkthrough request/i);
+     assert.match(prompt, /you can refresh the Live Move Planner whenever the visitor adds or corrects move details/i);
+-    assert.match(prompt, /call `show_move_planner` again after capturing the correction/i);
++    assert.match(prompt, /call `show_move_planner` again after capturing the correction/i);
++    assert.match(prompt, /location map, stops, or their order/i);
++    assert.match(prompt, /city-center pins and a stop-order line/i);
+     assert.match(prompt, /Never say an item, stop, route order, or other detail was added, corrected, saved, or is accurate unless the receipt supports that visible fact/i);
+     assert.match(prompt, /Once the session has ended, new changes must go to the Mullins team/i);
+ });
+@@ -77,7 +79,9 @@ test('managed prompt enforces reliability and action honesty', async () => {
+ test('move planner tool supports live corrections without unsupported update claims', async () => {
+     const tool = JSON.parse(await readFile(new URL('../config/anam/evan-move-planner-client-tool.json', import.meta.url), 'utf8'));
+     assert.match(tool.description, /explicitly asks to add, change, correct, update, or refresh planner details during the active session/i);
+-    assert.match(tool.description, /Call it again after an explicit correction/i);
++    assert.match(tool.description, /Call it again after an explicit correction/i);
++    assert.match(tool.description, /live city map, stops, or stop order/i);
++    assert.match(tool.description, /city-center pins and a stop-order line/i);
+     assert.match(tool.description, /never claim that a requested update was made, saved, or is accurate when the receipt does not support it/i);
+     assert.match(tool.description, /after the session ends must go to Mullins staff/i);
+     assert.match(tool.config.parameters.properties.view.description, /stop-order corrections/i);
+diff --git a/tests/evan-move-planner.test.mjs b/tests/evan-move-planner.test.mjs
+index 343b43a..a114c1f 100644
+--- a/tests/evan-move-planner.test.mjs
++++ b/tests/evan-move-planner.test.mjs
+@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
+ import fs from 'node:fs/promises';
+ import test from 'node:test';
+ import {
++    buildGoogleMapsDirectionsUrl,
+     buildEvanMovePlan,
+     EVAN_MOVE_PLANNER_BOUNDARY,
++    getMovePlanStopCoordinates,
+ } from '../lib/anam/evan-move-planner.ts';
+ 
+ test('Evan Move Planner starts empty without inventing move details', () => {
+@@ -111,6 +113,25 @@ test('Evan Move Planner incorporates details appended after the initial working
+     assert.ok(refreshed.specialtyItems.includes('Large mirrors'));
+ });
+ 
++test('Evan Move Planner provides map coordinates and an ordered Google Maps handoff', () => {
++    const model = buildEvanMovePlan([
++        { role: 'user', content: 'We are moving from Gilbert to Queen Creek with a storage stop in Mesa.' },
++    ]);
++
++    assert.deepEqual(model.stops.map((stop) => stop.city), ['Gilbert', 'Mesa', 'Queen Creek']);
++    assert.deepEqual(getMovePlanStopCoordinates(model.stops[0]), {
++        latitude: 33.3528,
++        longitude: -111.789,
++    });
++
++    const googleMapsUrl = new URL(buildGoogleMapsDirectionsUrl(model.stops));
++    assert.equal(googleMapsUrl.hostname, 'www.google.com');
++    assert.equal(googleMapsUrl.pathname, '/maps/dir/');
++    assert.equal(googleMapsUrl.searchParams.get('origin'), 'Gilbert, Arizona');
++    assert.equal(googleMapsUrl.searchParams.get('destination'), 'Queen Creek, Arizona');
++    assert.equal(googleMapsUrl.searchParams.get('waypoints'), 'Mesa, Arizona');
++});
++
+ test('Move Planner boundary explicitly prevents quote and booking assumptions', () => {
+     assert.match(EVAN_MOVE_PLANNER_BOUNDARY, /working view only/i);
+     assert.match(EVAN_MOVE_PLANNER_BOUNDARY, /pricing/i);
+@@ -120,6 +141,7 @@ test('Move Planner boundary explicitly prevents quote and booking assumptions',
+ test('Anam player exposes the Move Planner only for Evan sessions', async () => {
+     const player = await fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
+     const planner = await fs.readFile(new URL('../components/evan/EvanMovePlanner.tsx', import.meta.url), 'utf8');
++    const routeMap = await fs.readFile(new URL('../components/evan/EvanRouteMap.tsx', import.meta.url), 'utf8');
+     const prompt = await fs.readFile(new URL('../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8');
+     const updater = await fs.readFile(new URL('../scripts/anam/update-evan-persona.mjs', import.meta.url), 'utf8');
+     const tool = JSON.parse(await fs.readFile(new URL('../config/anam/evan-move-planner-client-tool.json', import.meta.url), 'utf8'));
+@@ -130,6 +152,10 @@ test('Anam player exposes the Move Planner only for Evan sessions', async () =>
+     assert.match(player, /<EvanMovePlanner/);
+     assert.match(planner, /No quote or booking created/);
+     assert.match(planner, /data-testid="evan-move-planner"/);
++    assert.match(planner, /<EvanRouteMap stops=\{model\.stops\}/);
++    assert.match(routeMap, /data-testid="evan-route-map"/);
++    assert.match(routeMap, /Open in Google Maps/);
++    assert.match(routeMap, /OpenStreetMap contributors/);
+     assert.match(player, /registerToolCallHandler\('show_move_planner'/);
+     assert.match(player, /const snapshotEvanPlannerTurns/);
+     assert.match(player, /const refreshedTurns = snapshotEvanPlannerTurns\(\)/);
