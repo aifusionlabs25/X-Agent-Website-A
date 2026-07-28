@@ -6,7 +6,7 @@ const EVAN_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
 const JAMES_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
 const CURRENT_KNOWLEDGE_TOOL_ID = 'ad2e09f5-1360-4f4e-b692-8aaaa55cc976';
 const KNOWLEDGE_TOOL_NAME = 'Knowledge_Evan_Mullins_Moving';
-const INITIAL_MESSAGE = "Hi, I'm Evan with Mullins Moving. I can help answer questions and get the right move details to the team. What kind of move are you planning?";
+const INITIAL_MESSAGE = "Hi, I'm Evan with Mullins Moving. Tell me a little about the move you're planning, and I'll help you work through the details.";
 const apply = process.argv.includes('--apply');
 
 const localEnv = await fs.readFile(new URL('../../.env.local', import.meta.url), 'utf8').catch(() => '');
