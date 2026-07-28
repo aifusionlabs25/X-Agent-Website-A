@@ -9,7 +9,6 @@ import {
     MessageCircleQuestion,
     Play,
     ShieldCheck,
-    Sparkles,
     Truck,
 } from 'lucide-react';
 import type { AgentData } from '@/lib/agents';
@@ -41,15 +40,15 @@ const TEST_PROMPTS = [
 
 export default function EvanLandingPage({ agent }: { agent: AgentData }) {
     return (
-        <main className="relative min-h-screen overflow-hidden bg-[#100718] pt-20 text-white">
+        <main className="relative min-h-screen overflow-hidden bg-[#100718] text-white">
             <div className="pointer-events-none absolute inset-0">
                 <div className="absolute -left-48 top-16 h-[34rem] w-[34rem] rounded-full bg-[#5d24d6]/20 blur-[120px]" />
                 <div className="absolute -right-40 top-1/3 h-[30rem] w-[30rem] rounded-full bg-[#ffc857]/10 blur-[120px]" />
                 <div className="absolute inset-0 opacity-[0.05] [background-image:linear-gradient(rgba(255,255,255,.32)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.32)_1px,transparent_1px)] [background-size:64px_64px]" />
             </div>
 
-            <section className="relative mx-auto max-w-7xl px-5 pb-16 pt-6 sm:px-8 lg:px-10">
-                <div className="flex flex-col gap-3 border-b border-white/10 pb-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65 sm:flex-row sm:items-center sm:justify-between">
+            <section className="relative mx-auto max-w-6xl px-5 pb-14 pt-5 sm:px-8 lg:px-10">
+                <div className="flex items-center border-b border-white/10 pb-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65">
                     <div className="flex items-center gap-3">
                         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white p-1.5 shadow-[0_0_30px_rgba(255,200,87,.2)]">
                             <Image
@@ -62,28 +61,20 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                         </span>
                         <span>Mullins Moving × AI Fusion Labs</span>
                     </div>
-                    <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#ffc857]/20 bg-[#ffc857]/10 px-3 py-2 text-[#ffdc8a]">
-                        <span className="h-2 w-2 animate-pulse rounded-full bg-[#ffc857]" />
-                        Private pilot preview
-                    </span>
                 </div>
 
-                <div className="grid items-center gap-12 py-12 lg:grid-cols-[1.02fr_.98fr] lg:gap-16 lg:py-16">
+                <div className="grid items-center gap-9 py-9 lg:grid-cols-[.94fr_1.06fr] lg:gap-12 lg:py-12">
                     <div>
-                        <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.22em] text-[#ffc857]">
-                            <Sparkles size={15} />
-                            Prepared for Mullins Moving
-                        </p>
-                        <h1 className="mt-5 max-w-3xl font-[Georgia] text-[clamp(2.65rem,6vw,5.4rem)] font-bold leading-[.93] tracking-[-0.055em] text-white">
+                        <h1 className="max-w-2xl font-[Georgia] text-[clamp(2.35rem,4.7vw,4.15rem)] font-bold leading-[.98] tracking-[-0.045em] text-white">
                             Meet Evan, your moving concierge built for{' '}
                             <span className="text-[#ffc857]">calm, qualified intake.</span>
                         </h1>
-                        <p className="mt-6 max-w-2xl text-base leading-7 text-[#ded3eb] sm:text-lg sm:leading-8">
+                        <p className="mt-5 max-w-xl text-sm leading-6 text-[#ded3eb] sm:text-base sm:leading-7">
                             Evan helps Mullins capture more complete quote requests, answer common service questions,
                             and prepare a cleaner human handoff—24 hours a day, without sounding like a generic bot.
                         </p>
 
-                        <div className="mt-7 max-w-2xl border-l-2 border-[#ffc857] bg-white/[0.045] px-5 py-4">
+                        <div className="mt-6 max-w-xl border-l-2 border-[#ffc857] bg-white/[0.045] px-4 py-3">
                             <p className="text-sm font-bold text-white">Built around the real moving journey</p>
                             <p className="mt-1 text-sm leading-6 text-white/60">
                                 Service-area questions, packing needs, special handling, access constraints,
@@ -91,7 +82,7 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                             </p>
                         </div>
 
-                        <div className="mt-8 flex flex-wrap gap-3">
+                        <div className="mt-7 flex flex-wrap gap-3">
                             <Link
                                 href={agent.liveUrl}
                                 className="group inline-flex items-center gap-2 rounded-lg bg-[#ffc857] px-6 py-3.5 text-sm font-extrabold text-[#271041] shadow-[0_12px_35px_rgba(255,200,87,.2)] transition hover:-translate-y-0.5 hover:bg-[#ffd77d]"
@@ -116,7 +107,7 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                         </p>
                     </div>
 
-                    <div className="relative">
+                    <div className="relative mx-auto w-full max-w-[620px]">
                         <div className="absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-[#6f34e8]/25 via-transparent to-[#ffc857]/20 blur-2xl" />
                         <div className="relative overflow-hidden rounded-[1.6rem] border border-white/15 bg-[#1a0b28] p-2 shadow-[0_28px_90px_rgba(0,0,0,.5)]">
                             <div className="relative aspect-[16/11] overflow-hidden rounded-[1.2rem] bg-[#251135]">
@@ -126,30 +117,19 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                                     fill
                                     priority
                                     sizes="(max-width: 1024px) 100vw, 48vw"
-                                    className="object-cover object-top"
+                                    className="object-contain"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#12061d] via-transparent to-transparent" />
-                                <Link
-                                    href={agent.liveUrl}
-                                    aria-label="Start Evan live demo"
-                                    className="absolute left-1/2 top-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/55 bg-[#5d24d6]/85 text-white shadow-[0_16px_45px_rgba(0,0,0,.4)] backdrop-blur-md transition hover:scale-105 hover:bg-[#6f34e8]"
-                                >
-                                    <Play size={27} fill="currentColor" className="ml-1" />
-                                </Link>
-                                <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-4">
-                                    <div>
-                                        <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">Live concierge</p>
-                                        <p className="mt-1 font-[Georgia] text-2xl font-bold text-white">Evan is ready</p>
-                                    </div>
-                                    <span className="rounded-full border border-white/15 bg-black/45 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/75 backdrop-blur-md">
-                                        Voice + video
-                                    </span>
+                                <div className="absolute inset-x-4 bottom-4 flex items-center justify-between gap-4 rounded-xl border border-white/12 bg-[#12061d]/80 px-4 py-3 backdrop-blur-md">
+                                    <p className="font-[Georgia] text-xl font-bold text-white sm:text-2xl">Evan is ready</p>
+                                    <Link
+                                        href={agent.liveUrl}
+                                        className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#ffc857] px-4 py-2.5 text-xs font-extrabold text-[#271041] transition hover:-translate-y-0.5 hover:bg-[#ffd77d] sm:text-sm"
+                                    >
+                                        <Play size={15} fill="currentColor" />
+                                        Start
+                                    </Link>
                                 </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 px-2 py-3 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-white/65 sm:text-xs">
-                                <span className="rounded-md bg-white/5 px-2 py-2">Mullins trained</span>
-                                <span className="rounded-md bg-white/5 px-2 py-2">Live planner</span>
-                                <span className="rounded-md bg-white/5 px-2 py-2">Email handoff</span>
                             </div>
                         </div>
                     </div>

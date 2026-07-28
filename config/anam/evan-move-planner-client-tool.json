@@ -1,22 +1,79 @@
 {
-  "name": "show_move_planner",
-  "description": "Open or refresh Evan's Live Move Planner when the visitor asks to see the move plan, map, route, move list, or readiness, or explicitly asks to add, change, correct, update, or refresh planner details during the active session. Call it again after an explicit correction. Use route for the live city map, stops, or stop order; inventory for items, packing, access, or care needs; readiness for missing details; and brief for the recap. The display uses current-session conversation signals, excludes contact details, and its map uses city-center pins and a stop-order line until exact addresses are confirmed. It is a working aid, not a quote, estimate, booking, inventory guarantee, confirmed route, or operational approval. Call silently and wait for the receipt. Confirm only receipt-supported visible facts; never claim that a requested update was made, saved, or is accurate when the receipt does not support it. New changes after the session ends must go to Mullins staff. Do not call during a farewell.",
-  "type": "CLIENT",
-  "disableInterruptions": false,
-  "config": {
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "view": {
-          "type": "string",
-          "enum": ["brief", "route", "inventory", "readiness"],
-          "description": "Use brief for the overall move summary, route for the live location map, origins, destinations, stops, or stop-order corrections, inventory for items, packing, services, access, specialty, or care corrections, and readiness for missing details and staff-review preparation."
-        }
-      },
-      "required": ["view"],
-      "additionalProperties": false
-    },
-    "awaitResult": true,
-    "toolTimeoutSeconds": 10
-  }
+    "name":  "show_move_planner",
+    "description":  "Open or refresh Evan\u0027s Live Move Planner when the visitor explicitly asks to add, change, correct, update, or refresh planner details during the active session. Call it again after an explicit correction. Use route for the live city map, stops, or stop order; inventory for items, packing, services, access, or care needs; readiness for missing details; and brief for the recap. For a route request, include stops only after the visitor confirms each full street address and send the complete current ordered list. The browser geocodes confirmed addresses; otherwise it uses clearly labeled city-center pins and a stop-order line. Call silently and wait for the receipt. Never claim that a requested update was made, saved, or is accurate when the receipt does not support it. This is a working aid, not a quote, booking, confirmed driving route, or operational approval. Changes after the session ends must go to Mullins staff. Do not call during a farewell.",
+    "type":  "CLIENT",
+    "disableInterruptions":  false,
+    "config":  {
+                   "parameters":  {
+                                      "type":  "object",
+                                      "properties":  {
+                                                         "view":  {
+                                                                      "type":  "string",
+                                                                      "enum":  [
+                                                                                   "brief",
+                                                                                   "route",
+                                                                                   "inventory",
+                                                                                   "readiness"
+                                                                               ],
+                                                                      "description":  "Use route for locations, full street addresses, or stop-order corrections; inventory for items, packing, services, access, or care needs; readiness for missing preparation details; and brief for the overall recap."
+                                                                  },
+                                                         "stops":  {
+                                                                       "type":  "array",
+                                                                       "maxItems":  8,
+                                                                       "description":  "For route updates only: the complete current ordered route. Include a stop only after the visitor confirms the full street address. Omit this field when addresses are incomplete or unconfirmed.",
+                                                                       "items":  {
+                                                                                     "type":  "object",
+                                                                                     "properties":  {
+                                                                                                        "kind":  {
+                                                                                                                     "type":  "string",
+                                                                                                                     "enum":  [
+                                                                                                                                  "origin",
+                                                                                                                                  "additional_stop",
+                                                                                                                                  "destination"
+                                                                                                                              ]
+                                                                                                                 },
+                                                                                                        "address":  {
+                                                                                                                        "type":  "string",
+                                                                                                                        "description":  "The visitor-confirmed full street address, including city and state or ZIP when known."
+                                                                                                                    },
+                                                                                                        "city":  {
+                                                                                                                     "type":  "string",
+                                                                                                                     "description":  "The confirmed city for the stop."
+                                                                                                                 },
+                                                                                                        "label":  {
+                                                                                                                      "type":  "string",
+                                                                                                                      "description":  "Optional concise purpose, such as Home, Storage unit, Donation, or Assisted living."
+                                                                                                                  },
+                                                                                                        "order":  {
+                                                                                                                      "type":  "integer",
+                                                                                                                      "minimum":  1,
+                                                                                                                      "maximum":  8
+                                                                                                                  },
+                                                                                                        "confirmed":  {
+                                                                                                                          "type":  "boolean",
+                                                                                                                          "enum":  [
+                                                                                                                                       true
+                                                                                                                                   ],
+                                                                                                                          "description":  "Must be true. Never submit an address that the visitor has not confirmed."
+                                                                                                                      }
+                                                                                                    },
+                                                                                     "required":  [
+                                                                                                      "kind",
+                                                                                                      "address",
+                                                                                                      "city",
+                                                                                                      "order",
+                                                                                                      "confirmed"
+                                                                                                  ],
+                                                                                     "additionalProperties":  false
+                                                                                 }
+                                                                   }
+                                                     },
+                                      "required":  [
+                                                       "view"
+                                                   ],
+                                      "additionalProperties":  false
+                                  },
+                   "awaitResult":  true,
+                   "toolTimeoutSeconds":  15
+               }
 }

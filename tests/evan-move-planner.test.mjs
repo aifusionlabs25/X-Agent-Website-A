@@ -7,6 +7,8 @@ import {
     EVAN_MOVE_PLANNER_BOUNDARY,
     getMovePlanStopCoordinates,
 } from '../lib/anam/evan-move-planner.ts';
+import { parseEvanRouteToolStops, parseResolvedEvanRouteStops } from '../lib/anam/evan-address-route.ts';
+import { geocodeEvanRouteStop } from '../lib/anam/evan-geocoding.ts';
 
 test('Evan Move Planner starts empty without inventing move details', () => {
     const model = buildEvanMovePlan([]);
@@ -132,6 +134,55 @@ test('Evan Move Planner provides map coordinates and an ordered Google Maps hand
     assert.equal(googleMapsUrl.searchParams.get('waypoints'), 'Mesa, Arizona');
 });
 
+test('confirmed street-address stops override city centers and drive the Google Maps handoff', () => {
+    const confirmedStops = parseResolvedEvanRouteStops([
+        {
+            kind: 'Origin', city: 'Phoenix', address: '4050 E Greenway Rd, Phoenix, AZ 85032',
+            displayAddress: '4050 E GREENWAY RD, PHOENIX, AZ, 85032', confirmed: true,
+            coordinates: { latitude: 33.6264, longitude: -111.9945 }, precision: 'address-range',
+        },
+        {
+            kind: 'Destination', city: 'Phoenix', address: '200 W Washington St, Phoenix, AZ 85003',
+            displayAddress: '200 W WASHINGTON ST, PHOENIX, AZ, 85003', confirmed: true,
+            coordinates: { latitude: 33.4483, longitude: -112.0764 }, precision: 'address-range',
+        },
+    ]);
+    const model = buildEvanMovePlan([{ role: 'user', content: 'We are moving within Phoenix.' }], confirmedStops);
+
+    assert.equal(model.stops.length, 2);
+    assert.deepEqual(getMovePlanStopCoordinates(model.stops[0]), { latitude: 33.6264, longitude: -111.9945 });
+    const mapsUrl = new URL(buildGoogleMapsDirectionsUrl(model.stops));
+    assert.equal(mapsUrl.searchParams.get('origin'), '4050 E GREENWAY RD, PHOENIX, AZ, 85032');
+    assert.equal(mapsUrl.searchParams.get('destination'), '200 W WASHINGTON ST, PHOENIX, AZ, 85003');
+});
+
+test('route tool accepts only complete visitor-confirmed addresses', () => {
+    const stops = parseEvanRouteToolStops([
+        { kind: 'origin', address: '4050 E Greenway Rd, Phoenix, AZ 85032', city: 'Phoenix', order: 1, confirmed: true },
+        { kind: 'destination', address: '200 W Washington St, Phoenix, AZ 85003', city: 'Phoenix', order: 2, confirmed: false },
+        { kind: 'additional_stop', address: 'short', city: 'Mesa', order: 3, confirmed: true },
+    ]);
+    assert.equal(stops.length, 1);
+    assert.equal(stops[0].kind, 'Origin');
+});
+
+test('Census fallback converts a confirmed U.S. street address to a session pin', async () => {
+    const stop = parseEvanRouteToolStops([
+        { kind: 'origin', address: '4050 E Greenway Rd, Phoenix, AZ 85032', city: 'Phoenix', order: 1, confirmed: true },
+    ])[0];
+    const geocoded = await geocodeEvanRouteStop(stop, {
+        fetchImpl: async () => new Response(JSON.stringify({
+            result: { addressMatches: [{
+                matchedAddress: '4050 E GREENWAY RD, PHOENIX, AZ, 85032',
+                coordinates: { x: -111.9945, y: 33.6264 },
+                addressComponents: { city: 'PHOENIX' },
+            }] },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    });
+    assert.equal(geocoded.precision, 'address-range');
+    assert.equal(geocoded.coordinates?.latitude, 33.6264);
+    assert.equal(geocoded.coordinates?.longitude, -111.9945);
+});
 test('Move Planner boundary explicitly prevents quote and booking assumptions', () => {
     assert.match(EVAN_MOVE_PLANNER_BOUNDARY, /working view only/i);
     assert.match(EVAN_MOVE_PLANNER_BOUNDARY, /pricing/i);
@@ -142,6 +193,7 @@ test('Anam player exposes the Move Planner only for Evan sessions', async () => 
     const player = await fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
     const planner = await fs.readFile(new URL('../components/evan/EvanMovePlanner.tsx', import.meta.url), 'utf8');
     const routeMap = await fs.readFile(new URL('../components/evan/EvanRouteMap.tsx', import.meta.url), 'utf8');
+    const geocodeRoute = await fs.readFile(new URL('../app/api/anam/evan/route-geocode/route.ts', import.meta.url), 'utf8');
     const prompt = await fs.readFile(new URL('../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8');
     const updater = await fs.readFile(new URL('../scripts/anam/update-evan-persona.mjs', import.meta.url), 'utf8');
     const tool = JSON.parse(await fs.readFile(new URL('../config/anam/evan-move-planner-client-tool.json', import.meta.url), 'utf8'));
@@ -156,15 +208,43 @@ test('Anam player exposes the Move Planner only for Evan sessions', async () => 
     assert.match(routeMap, /data-testid="evan-route-map"/);
     assert.match(routeMap, /Open in Google Maps/);
     assert.match(routeMap, /OpenStreetMap contributors/);
+    assert.match(routeMap, /street-level/i);
+    assert.match(geocodeRoute, /isTrustedBrowserOrigin/);
+    assert.match(geocodeRoute, /readAmyAnamContactFromRequest/);
+    assert.match(geocodeRoute, /GEOAPIFY_API_KEY/);
     assert.match(player, /registerToolCallHandler\('show_move_planner'/);
     assert.match(player, /const snapshotEvanPlannerTurns/);
     assert.match(player, /const refreshedTurns = snapshotEvanPlannerTurns\(\)/);
     assert.match(player, /setWorkbenchTurns\(\(\) => snapshotEvanPlannerTurns\(\)\)/);
+    assert.match(player, /window\.setInterval\(refreshPlanner, 400\)/);
+    assert.match(player, /pendingRole === 'user'/);
     assert.doesNotMatch(player, /[\u00c3\u00e2]/);
     assert.doesNotMatch(planner, /[\u00c3\u00e2]/);
     assert.match(prompt, /call `show_move_planner` silently/i);
     assert.match(prompt, /not a quote, estimate, booking, confirmed route/i);
     assert.equal(tool.name, 'show_move_planner');
     assert.deepEqual(tool.config.parameters.properties.view.enum, ['brief', 'route', 'inventory', 'readiness']);
+    assert.equal(tool.config.parameters.properties.stops.maxItems, 8);
+    assert.deepEqual(tool.config.parameters.properties.stops.items.properties.confirmed.enum, [true]);
+    assert.match(prompt, /repeat the full address back briefly/i);
+    assert.match(prompt, /complete current ordered route/i);
     assert.match(updater, /movePlannerToolDefinition/);
+});
+
+test('Evan pages use the simplified, contained presentation', async () => {
+    const [landing, demo, player, header] = await Promise.all([
+        fs.readFile(new URL('../components/evan/EvanLandingPage.tsx', import.meta.url), 'utf8'),
+        fs.readFile(new URL('../app/demo/[slug]/page.tsx', import.meta.url), 'utf8'),
+        fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'),
+        fs.readFile(new URL('../components/layout/SiteHeader.tsx', import.meta.url), 'utf8'),
+    ]);
+
+    assert.doesNotMatch(landing, /Private pilot preview|Prepared for Mullins Moving|Mullins trained|Voice \+ video/);
+    assert.match(landing, /Evan is ready/);
+    assert.match(landing, /className="object-contain"/);
+    assert.match(landing, /\sStart\s/);
+    assert.match(header, /pathname === '\/agents\/evan'/);
+    assert.match(header, /pathname === '\/demo\/evan'/);
+    assert.match(demo, /px-4 pb-24 pt-20/);
+    assert.match(player, /max-w-\[1080px\]/);
 });

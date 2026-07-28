@@ -3,10 +3,12 @@
 import Image from 'next/image';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail, ShieldCheck, Truck } from 'lucide-react';
+import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
 
 export default function EvanContactGate({ children }: { children: ReactNode }) {
-    const [ready, setReady] = useState(false);
-    const [checking, setChecking] = useState(true);
+    const localTestMode = isEvanLocalTestMode();
+    const [ready, setReady] = useState(localTestMode);
+    const [checking, setChecking] = useState(!localTestMode);
     const [submitting, setSubmitting] = useState(false);
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
@@ -14,9 +16,10 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (localTestMode) return;
         void fetch('/api/anam/evan/access', { method: 'DELETE', credentials: 'same-origin', cache: 'no-store' })
             .catch(() => undefined).finally(() => setChecking(false));
-    }, []);
+    }, [localTestMode]);
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();

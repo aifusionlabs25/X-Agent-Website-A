@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 import { EVAN_PERSONA_ID, EVAN_REQUIRED_PROMPT_MARKERS, EVAN_REQUIRED_TOOL_NAMES, inspectEvanPersonaReadiness, readEvanPersonaReadiness } from '../lib/anam/persona-readiness.ts';
+import { isEvanLocalTestMode } from '../lib/anam/evan-local-test-mode.ts';
 
 const healthyPersona = () => ({
     id: EVAN_PERSONA_ID,
@@ -135,5 +136,12 @@ test('token route allowlists personas and fails closed before minting an unready
     assert.ok(allowlist > 0 && allowlist < token);
     assert.ok(readiness > 0 && readiness < token);
     assert.match(route, /status: 503/);
+    assert.match(route, /isEvanLocalTestMode/);
     assert.doesNotMatch(route, /missingToolNames[^\n]*error:/);
+});
+
+test('Evan local test mode is development-only', () => {
+    assert.equal(isEvanLocalTestMode('development', 'true'), true);
+    assert.equal(isEvanLocalTestMode('production', 'true'), false);
+    assert.equal(isEvanLocalTestMode('development', 'false'), false);
 });

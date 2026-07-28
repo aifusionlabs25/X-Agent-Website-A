@@ -24,12 +24,14 @@ import {
     EVAN_MOVE_PLANNER_BOUNDARY,
     EvanMovePlannerTurn,
     EvanMovePlannerView,
+    MovePlanStop,
 } from '@/lib/anam/evan-move-planner';
 import EvanRouteMap from '@/components/evan/EvanRouteMap';
 
 interface EvanMovePlannerProps {
     isOpen: boolean;
     turns: EvanMovePlannerTurn[];
+    addressStops?: MovePlanStop[];
     requestedView?: EvanMovePlannerView;
     onClose: () => void;
 }
@@ -70,12 +72,14 @@ function DetailChip({ children }: { children: string }) {
     );
 }
 
-export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose }: EvanMovePlannerProps) {
-    const [view, setView] = useState<EvanMovePlannerView>('brief');
-    const model = useMemo(() => buildEvanMovePlan(turns), [turns]);
+export default function EvanMovePlanner({ isOpen, turns, addressStops = [], requestedView, onClose }: EvanMovePlannerProps) {
+    const [view, setView] = useState<EvanMovePlannerView>(requestedView ?? 'brief');
+    const model = useMemo(() => buildEvanMovePlan(turns, addressStops), [turns, addressStops]);
 
     useEffect(() => {
-        if (isOpen && requestedView) setView(requestedView);
+        if (!isOpen || !requestedView) return undefined;
+        const frame = window.requestAnimationFrame(() => setView(requestedView));
+        return () => window.cancelAnimationFrame(frame);
     }, [isOpen, requestedView]);
 
     useEffect(() => {
@@ -206,23 +210,28 @@ export default function EvanMovePlanner({ isOpen, turns, requestedView, onClose 
                                             <section>
                                                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">Pickup to placement</p>
                                                 <h3 className="mt-1 font-serif text-3xl">Move route</h3>
-                                                <p className="mt-2 text-sm leading-6 text-[#746180]">Each location becomes a numbered pin as Evan hears it. Mullins staff will confirm addresses, access, and final routing.</p>
+                                                <p className="mt-2 text-sm leading-6 text-[#746180]">Confirmed street addresses become live pins. Approximate city pins remain clearly labeled until an address can be matched.</p>
 
                                                 <EvanRouteMap stops={model.stops} />
 
                                                 <div className="relative mt-7 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
                                                     {model.stops.length ? model.stops.map((stop, index) => (
-                                                        <div key={`${stop.city}-${stop.kind}`} className="relative pb-8 last:pb-0">
+                                                        <div key={`${stop.kind}-${stop.displayAddress ?? stop.address ?? stop.city}-${index}`} className="relative pb-8 last:pb-0">
                                                             <div className={`absolute -left-[45px] top-0 flex h-7 w-7 items-center justify-center rounded-full border-4 border-[#faf7fd] text-xs font-bold text-white ${stop.kind === 'Origin' ? 'bg-[#5d24d6]' : stop.kind === 'Destination' ? 'bg-[#f6b93b]' : 'bg-[#9b6ee5]'}`}>
                                                                 {index + 1}
                                                             </div>
                                                             <div className="border border-[#321064]/15 bg-[#ffffff] p-4 shadow-[0_8px_24px_rgba(31,72,50,0.07)]">
                                                                 <div className="flex items-start justify-between gap-4">
-                                                                    <div>
-                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f708b]">{stop.kind}</p>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f708b]">{stop.kind}{stop.label ? ` · ${stop.label}` : ''}</p>
                                                                         <p className="mt-1 font-serif text-2xl text-[#2a1050]">{stop.city}</p>
+                                                                        {stop.displayAddress && <p className="mt-2 text-sm font-semibold leading-5 text-[#5d4670]">{stop.displayAddress}</p>}
+                                                                        <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${stop.precision === 'address' ? 'bg-[#e8f7ed] text-[#237644]' : stop.precision === 'address-range' ? 'bg-[#fff3d5] text-[#8b6414]' : stop.precision === 'unresolved' ? 'bg-[#fde8e8] text-[#a33d3d]' : 'bg-[#eee7f8] text-[#6d35c5]'}`}>
+                                                                            {stop.precision === 'address' ? <Check size={11} /> : <MapPin size={11} />}
+                                                                            {stop.precision === 'address' ? 'Exact address pin' : stop.precision === 'address-range' ? 'Street-range pin' : stop.precision === 'unresolved' ? 'Address needs confirmation' : 'City-level pin'}
+                                                                        </span>
                                                                     </div>
-                                                                    <MapPin size={20} className="text-[#d99b20]" />
+                                                                    <MapPin size={20} className="flex-none text-[#d99b20]" />
                                                                 </div>
                                                             </div>
                                                         </div>

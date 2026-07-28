@@ -22,7 +22,12 @@ import {
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
 import { AmyWorkbenchTurn, AmyWorkbenchView, buildAmyWorkbenchModel } from '@/lib/anam/workbench-v2';
-import { buildEvanMovePlan, EvanMovePlannerView } from '@/lib/anam/evan-move-planner';
+import { buildEvanMovePlan, EvanMovePlannerView, MovePlanStop } from '@/lib/anam/evan-move-planner';
+import {
+    parseEvanRouteToolStops,
+    parseResolvedEvanRouteStops,
+    routeToolStopsToMovePlanStops,
+} from '@/lib/anam/evan-address-route';
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
 
 interface AnamPlayerProps {
@@ -32,7 +37,7 @@ interface AnamPlayerProps {
     onClose?: () => void;
 }
 
-const transcriptRole = (role: string) => role === 'user' ? 'user' : 'agent';
+const transcriptRole = (role: string) => /^(?:user|human|customer)$/i.test(role.trim()) ? 'user' : 'agent';
 
 export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onClose }: AnamPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -46,6 +51,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [catalogQuery, setCatalogQuery] = useState('');
     const [evanPlannerOpen, setEvanPlannerOpen] = useState(false);
     const [evanPlannerView, setEvanPlannerView] = useState<EvanMovePlannerView>('brief');
+    const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[]>([]);
     const workbenchEnabled = isAmyCara4Variant(sessionVariant)
         && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
     const evanPlannerEnabled = personaId === EVAN_PERSONA_ID
@@ -59,6 +65,37 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const transcriptRef = useRef<{ role: string; content: string }[]>([]);
     const currentMessageRef = useRef<string>('');
     const currentRoleRef = useRef<string>('');
+    const evanAddressStopsRef = useRef<MovePlanStop[]>([]);
+
+    useEffect(() => {
+        if (!evanPlannerEnabled || !evanPlannerOpen) return;
+
+        const refreshPlanner = () => {
+            const latestTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
+            const pendingContent = currentMessageRef.current.trim();
+            const pendingRole = transcriptRole(currentRoleRef.current);
+            if (
+                pendingContent
+                && pendingRole === 'user'
+                && latestTurns.at(-1)?.content !== pendingContent
+            ) {
+                latestTurns.push({ role: 'user', content: pendingContent });
+            }
+            setWorkbenchTurns((current) => {
+                const next = latestTurns.slice(-120);
+                const unchanged = current.length === next.length
+                    && current.every((turn, index) => (
+                        turn.role === next[index]?.role
+                        && turn.content === next[index]?.content
+                    ));
+                return unchanged ? current : next;
+            });
+        };
+
+        refreshPlanner();
+        const intervalId = window.setInterval(refreshPlanner, 400);
+        return () => window.clearInterval(intervalId);
+    }, [evanPlannerEnabled, evanPlannerOpen]);
 
     useEffect(() => {
         let activeClient: AnamClient | null = null;
@@ -93,6 +130,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setCatalogQuery('');
         setEvanPlannerOpen(false);
         setEvanPlannerView('brief');
+        evanAddressStopsRef.current = [];
+        setEvanAddressStops([]);
 
         const recordTurn = (role: string, content: string) => {
             const normalized = content.trim();
@@ -283,10 +322,41 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 || requested === 'readiness'
                                 ? requested
                                 : 'brief';
+                            const requestedRouteStops = parseEvanRouteToolStops(payload.arguments?.stops);
+                            let routeStopsForReceipt = evanAddressStopsRef.current;
 
                             if (isMounted) {
                                 setEvanPlannerView(view);
                                 setEvanPlannerOpen(true);
+                            }
+
+                            if (requestedRouteStops.length) {
+                                const pendingStops = routeToolStopsToMovePlanStops(requestedRouteStops);
+                                routeStopsForReceipt = pendingStops;
+                                evanAddressStopsRef.current = pendingStops;
+                                if (isMounted) setEvanAddressStops(pendingStops);
+
+                                try {
+                                    const response = await fetch('/api/anam/evan/route-geocode', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        credentials: 'same-origin',
+                                        cache: 'no-store',
+                                        body: JSON.stringify({ stops: requestedRouteStops }),
+                                    });
+                                    const result = await response.json().catch(() => null) as { stops?: unknown } | null;
+                                    const resolvedStops = response.ok ? parseResolvedEvanRouteStops(result?.stops) : [];
+                                    routeStopsForReceipt = resolvedStops.length === requestedRouteStops.length
+                                        ? resolvedStops
+                                        : pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                } catch {
+                                    routeStopsForReceipt = pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                }
+                                evanAddressStopsRef.current = routeStopsForReceipt;
+                                if (isMounted) setEvanAddressStops(routeStopsForReceipt);
+                            }
+
+                            if (isMounted) {
                                 // Read the authoritative refs when React applies the update. This
                                 // prevents an earlier tool snapshot from replacing a newer turn.
                                 setWorkbenchTurns(() => snapshotEvanPlannerTurns());
@@ -298,16 +368,25 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             // Re-read after opening so speech chunks arriving during the tool call
                             // are included both in the visible planner and in the tool receipt.
                             const refreshedTurns = snapshotEvanPlannerTurns();
-                            if (isMounted) {
-                                setWorkbenchTurns(() => snapshotEvanPlannerTurns());
-                            }
-                            const receiptModel = buildEvanMovePlan(refreshedTurns);
+                            if (isMounted) setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                            const receiptModel = buildEvanMovePlan(refreshedTurns, routeStopsForReceipt);
+                            const streetPins = routeStopsForReceipt.filter((stop) => (
+                                stop.precision === 'address' || stop.precision === 'address-range'
+                            )).length;
+                            const unresolvedAddresses = routeStopsForReceipt.filter((stop) => stop.precision === 'unresolved').length;
                             return JSON.stringify({
-                                status: 'move_planner_opened',
+                                status: requestedRouteStops.length ? 'move_route_refreshed' : 'move_planner_opened',
                                 view,
                                 currentSessionUserTurns: refreshedTurns.filter((turn) => turn.role === 'user').length,
+                                streetPins,
+                                unresolvedAddresses,
                                 visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
-                                instruction: 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
+                                visibleStops: routeStopsForReceipt.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
+                                instruction: unresolvedAddresses
+                                    ? 'The requested working Move Planner view is open, but one or more street addresses could not be verified. Say that briefly and ask the visitor to restate only the unresolved address. Do not claim the route is confirmed.'
+                                    : streetPins
+                                        ? 'The requested working Move Planner route is open with receipt-supported street-level pins. Confirm that briefly. Do not call it a confirmed driving route, quote, booking, or operational approval.'
+                                        : 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
                             });
                         },
                     }));
@@ -675,13 +754,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <div className={`h-full w-full transition-[padding] duration-500 ease-out ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(58vw,860px)]' : ''}`}>
+            <div className={`flex h-full w-full items-center justify-center transition-[padding] duration-500 ease-out ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(58vw,860px)]' : ''}`}>
                 <video
                     ref={videoRef}
                     id="persona-video"
                     autoPlay
                     playsInline
-                    className={`w-full h-full object-contain transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
+                    className={`${evanPlannerEnabled ? 'aspect-video h-auto max-h-full w-full max-w-[1080px] rounded-2xl object-contain shadow-[0_28px_90px_rgba(0,0,0,.45)]' : 'h-full w-full object-contain'} transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
                 />
             </div>
 
@@ -727,6 +806,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 <EvanMovePlanner
                     isOpen={evanPlannerOpen}
                     turns={workbenchTurns}
+                    addressStops={evanAddressStops}
                     requestedView={evanPlannerView}
                     onClose={() => setEvanPlannerOpen(false)}
                 />

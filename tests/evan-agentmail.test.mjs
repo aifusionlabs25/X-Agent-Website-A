@@ -276,6 +276,7 @@ test('Evan browser integration requires scoped check-in consent, bind-time inten
     assert.match(route, /body\.followUpConsent !== true/);
     assert.match(route, /purpose: 'evan_follow_up'/);
     assert.match(route, /rawEmailReturned: false/);
+    assert.match(gate, /isEvanLocalTestMode/);
     assert.match(bind, /queueEvanAnamConversationFollowUp/);
     assert.match(bind, /contact\.purpose !== 'evan_follow_up'/);
     assert.match(bind, /outbound: false/);

@@ -124,7 +124,7 @@ export default function DemoPage({ params, searchParams }: Props) {
             </div>
 
             {/* The Anam Player takes over the screen */}
-            <div className={`w-full h-full relative ${isQaMode ? 'z-30' : ''}`}>
+            <div className={`relative h-full w-full ${isEvan ? 'px-4 pb-24 pt-20 sm:px-7 sm:pb-20 sm:pt-20' : ''} ${isQaMode ? 'z-30' : ''}`}>
                 {agent.personaId ? (
                     isQaMode ? (
                         <AgentQaChat

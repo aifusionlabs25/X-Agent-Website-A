@@ -13,6 +13,12 @@ export type MovePlanSignal = {
 export type MovePlanStop = {
     city: string;
     kind: 'Origin' | 'Destination' | 'Additional stop';
+    address?: string;
+    displayAddress?: string;
+    label?: string;
+    confirmed?: boolean;
+    coordinates?: MovePlanCoordinates;
+    precision?: 'address' | 'address-range' | 'city' | 'pending' | 'unresolved';
 };
 
 export type MovePlanCoordinates = {
@@ -74,25 +80,25 @@ const CITY_COORDINATES: Record<string, MovePlanCoordinates> = {
 };
 
 export function getMovePlanStopCoordinates(stop: MovePlanStop): MovePlanCoordinates | null {
-    return CITY_COORDINATES[stop.city] ?? null;
+    return stop.coordinates ?? CITY_COORDINATES[stop.city] ?? null;
 }
 
 export function buildGoogleMapsDirectionsUrl(stops: MovePlanStop[]): string {
-    const cities = stops.map((stop) => `${stop.city}, Arizona`).filter(Boolean);
-    if (!cities.length) return '';
+    const locations = stops.map((stop) => stop.displayAddress || stop.address || `${stop.city}, Arizona`).filter(Boolean);
+    if (!locations.length) return '';
 
-    if (cities.length === 1) {
-        const search = new URLSearchParams({ api: '1', query: cities[0] });
+    if (locations.length === 1) {
+        const search = new URLSearchParams({ api: '1', query: locations[0] });
         return `https://www.google.com/maps/search/?${search.toString()}`;
     }
 
     const directions = new URLSearchParams({
         api: '1',
         travelmode: 'driving',
-        origin: cities[0],
-        destination: cities.at(-1) ?? cities[0],
+        origin: locations[0],
+        destination: locations.at(-1) ?? locations[0],
     });
-    if (cities.length > 2) directions.set('waypoints', cities.slice(1, -1).join('|'));
+    if (locations.length > 2) directions.set('waypoints', locations.slice(1, -1).join('|'));
     return `https://www.google.com/maps/dir/?${directions.toString()}`;
 }
 
@@ -230,13 +236,14 @@ function uncertaintySignals(userTurns: string[]) {
         .map((sentence) => compact(sentence, 115))), 4);
 }
 
-export function buildEvanMovePlan(turns: EvanMovePlannerTurn[]): EvanMovePlanModel {
+export function buildEvanMovePlan(turns: EvanMovePlannerTurn[], confirmedStops: MovePlanStop[] = []): EvanMovePlanModel {
     const userTurns = turns
         .filter((turn) => turn.role === 'user')
         .map((turn) => compact(turn.content, 1_000))
         .filter(Boolean);
     const text = userTurns.join(' ');
-    const stops = routeStops(userTurns);
+    const transcriptStops = routeStops(userTurns);
+    const stops = confirmedStops.length ? confirmedStops.slice(0, 8) : transcriptStops;
     const services = labelsFrom(text, LABEL_RULES);
     if (services.includes('Full packing')) {
         const genericPacking = services.indexOf('Packing support');
