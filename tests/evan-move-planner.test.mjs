@@ -209,6 +209,10 @@ test('Anam player exposes the Move Planner only for Evan sessions', async () => 
     assert.match(routeMap, /Open in Google Maps/);
     assert.match(routeMap, /OpenStreetMap contributors/);
     assert.match(routeMap, /street-level/i);
+    assert.match(routeMap, /data-testid="evan-route-map-fullscreen"/);
+    assert.match(routeMap, /createPortal\(mapPanel, document\.body\)/);
+    assert.match(routeMap, /Exit full-screen map/);
+    assert.match(routeMap, /event\.stopImmediatePropagation\(\)/);
     assert.match(geocodeRoute, /isTrustedBrowserOrigin/);
     assert.match(geocodeRoute, /readAmyAnamContactFromRequest/);
     assert.match(geocodeRoute, /GEOAPIFY_API_KEY/);

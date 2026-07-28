@@ -50,6 +50,14 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /at most one meaningful next question/i);
     assert.match(prompt, /Do not restart the intake/i);
     assert.match(prompt, /relaxed, patient, and conversational/i);
+    assert.match(prompt, /thoughtful, experienced moving concierge, not a scripted intake bot/i);
+    assert.match(prompt, /Vary brief acknowledgments and question openings/i);
+    assert.match(prompt, /Do not end every turn with a question/i);
+    assert.match(prompt, /instead of sounding like the next field on a form/i);
+    assert.match(prompt, /never read it as a whole number/i);
+    assert.match(prompt, /area code, three-digit prefix, then four-digit line number/i);
+    assert.match(prompt, /Say zero as "oh"/i);
+    assert.match(prompt, /Did I get that right\?/i);
     assert.match(prompt, /Ask one useful moving-detail question at a time/i);
     assert.match(prompt, /complete date including month and flexibility/i);
     assert.match(prompt, /Never silently guess or change a person's name/i);
@@ -92,6 +100,7 @@ test('move planner tool supports live corrections without unsupported update cla
 
 test('managed persona uses patient turn detection and disables silence prompts and shutdown', async () => {
     const manifest = JSON.parse(await readFile(new URL('../config/anam/evan/persona-manifest.json', import.meta.url), 'utf8'));
+    assert.equal(manifest.initialMessage, "Hi, I'm Evan with Mullins Moving. Tell me a little about the move you're planning, and I'll help you work through the details.");
     assert.deepEqual(manifest.voiceDetectionOptions, {
         endOfSpeechSensitivity: 0.05,
         silenceBeforeAutoEndTurnSeconds: 3,

@@ -5,7 +5,7 @@
   "doNotUseReason": "This ID is the live James Knowles Law Firm persona as verified on 2026-07-16.",
   "expectedName": "Evan Mullins Moving Concierge",
   "expectedAvatarModel": "cara-4",
-  "initialMessage": "Hi, I'm Evan with Mullins Moving. I can help answer questions and get the right move details to the team. What kind of move are you planning?",
+  "initialMessage": "Hi, I'm Evan with Mullins Moving. Tell me a little about the move you're planning, and I'll help you work through the details.",
   "voiceDetectionOptions": {
     "endOfSpeechSensitivity": 0.05,
     "silenceBeforeAutoEndTurnSeconds": 3,
