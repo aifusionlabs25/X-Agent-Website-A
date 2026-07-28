@@ -18,6 +18,13 @@ const markerColor = (stop: MovePlanStop) => {
     return '#9568df';
 };
 
+const escapeMapHtml = (value: string) => value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
 export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const [mapReady, setMapReady] = useState(false);
@@ -26,6 +33,7 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
         return coordinates ? [{ stop, index, coordinates }] : [];
     }), [stops]);
     const googleMapsUrl = useMemo(() => buildGoogleMapsDirectionsUrl(stops), [stops]);
+    const streetLevelCount = mappedStops.filter(({ stop }) => stop.precision === 'address' || stop.precision === 'address-range').length;
 
     useEffect(() => {
         const container = mapContainerRef.current;
@@ -33,6 +41,7 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
 
         let disposed = false;
         let map: import('leaflet').Map | null = null;
+        setMapReady(false);
 
         void import('leaflet').then((L) => {
             if (disposed) return;
@@ -72,22 +81,25 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                     popupAnchor: [0, -42],
                 });
 
+                const visibleLocation = stop.displayAddress || stop.address || stop.city;
+                const popupLocation = escapeMapHtml(visibleLocation);
+                const popupKind = escapeMapHtml(stop.kind);
                 L.marker([coordinates.latitude, coordinates.longitude], {
                     icon,
                     keyboard: true,
-                    title: `${index + 1}. ${stop.city} — ${stop.kind}`,
+                    title: `${index + 1}. ${visibleLocation} — ${stop.kind}`,
                 })
                     .addTo(map as import('leaflet').Map)
                     .bindPopup(
-                        `<div class="evan-route-popup"><strong>${index + 1}. ${stop.city}</strong><span>${stop.kind}</span></div>`,
+                        `<div class="evan-route-popup"><strong>${index + 1}. ${popupLocation}</strong><span>${popupKind}</span></div>`,
                     );
             });
 
             if (latLngs.length === 1) {
-                map.setView(latLngs[0], 10);
+                map.setView(latLngs[0], streetLevelCount ? 15 : 10);
             } else {
                 map.fitBounds(L.latLngBounds(latLngs), {
-                    maxZoom: 10,
+                    maxZoom: streetLevelCount ? 14 : 10,
                     padding: [38, 38],
                 });
             }
@@ -100,7 +112,7 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
             disposed = true;
             map?.remove();
         };
-    }, [mappedStops]);
+    }, [mappedStops, streetLevelCount]);
 
     if (!mappedStops.length) return null;
 
@@ -112,13 +124,13 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                         <MapPinned size={18} />
                     </span>
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ffdc8a]">Live city map</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ffdc8a]">Live route map</p>
                         <p className="text-sm font-semibold">{mappedStops.length} mapped {mappedStops.length === 1 ? 'location' : 'locations'}</p>
                     </div>
                 </div>
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/7 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/70">
                     <LocateFixed size={13} className={mapReady ? 'text-[#ffc857]' : 'animate-pulse text-white/35'} />
-                    City-level working route
+                    {streetLevelCount ? `${streetLevelCount} street-level ${streetLevelCount === 1 ? 'pin' : 'pins'}` : 'City-level working route'}
                 </span>
             </div>
 
@@ -131,7 +143,7 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                 )}
                 <div className="pointer-events-none absolute left-3 top-3 z-[500] hidden max-w-[220px] sm:block border border-[#321064]/10 bg-white/92 px-3 py-2 shadow-[0_8px_24px_rgba(42,16,80,0.13)] backdrop-blur">
                     <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#7540cf]">Planning preview</p>
-                    <p className="mt-1 text-[11px] leading-4 text-[#6c5a79]">Pins use city centers. The line shows stop order—not driving directions.</p>
+                    <p className="mt-1 text-[11px] leading-4 text-[#6c5a79]">Confirmed addresses use street-level pins. The line shows stop order—not driving directions.</p>
                 </div>
             </div>
 
