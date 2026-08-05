@@ -3,32 +3,11 @@ import Link from 'next/link';
 import {
     ArrowRight,
     CheckCircle2,
-    ClipboardCheck,
-    MapPinned,
-    MessageCircleQuestion,
     Play,
     ShieldCheck,
     Truck,
 } from 'lucide-react';
 import type { AgentData } from '@/lib/agents';
-
-const CUSTOMER_STEPS = [
-    {
-        icon: MessageCircleQuestion,
-        title: 'Ask your moving questions',
-        body: 'Get clear answers about services, packing, specialty items, access, and the estimate process.',
-    },
-    {
-        icon: MapPinned,
-        title: 'Build your move plan live',
-        body: 'Share locations and moving details while Evan organizes a working route and move brief on screen.',
-    },
-    {
-        icon: ClipboardCheck,
-        title: 'Prepare the next step',
-        body: 'Give the Mullins team a cleaner starting point for reviewing your move and estimate request.',
-    },
-];
 
 export default function EvanLandingPage({ agent }: { agent: AgentData }) {
     return (
@@ -62,7 +41,7 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                     </div>
                 </header>
 
-                <div className="grid flex-1 items-center gap-7 py-6 lg:min-h-0 lg:grid-cols-[.88fr_1.12fr] lg:gap-10 lg:py-5 xl:gap-14">
+                <div className="grid flex-1 items-center gap-7 py-6 lg:min-h-0 lg:grid-cols-[.82fr_1.18fr] lg:gap-8 lg:py-4 xl:gap-12">
                     <div className="relative z-10">
                         <p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">
                             <Truck size={15} />
@@ -105,10 +84,10 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                         </div>
                     </div>
 
-                    <div className="relative mx-auto w-full max-w-[760px] lg:h-[min(64vh,620px)] lg:min-h-[420px]">
+                    <div className="relative mx-auto w-full max-w-[760px] lg:h-[min(58vh,520px)] lg:min-h-[360px]">
                         <div className="absolute -inset-5 rounded-[2.2rem] bg-gradient-to-br from-[#6f34e8]/30 via-transparent to-[#ffc857]/18 blur-2xl" />
                         <div className="relative h-full overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#20102d] p-2 shadow-[0_28px_90px_rgba(0,0,0,.48)]">
-                            <div className="relative aspect-[16/11] h-full max-h-[620px] min-h-[390px] overflow-hidden rounded-[1.35rem] bg-[#281338] lg:aspect-auto">
+                            <div className="relative aspect-[16/11] h-full min-h-0 overflow-hidden rounded-[1.35rem] bg-[#281338] lg:aspect-auto">
                                 <Image
                                     src={agent.thumbnailSrc}
                                     alt="Evan, Mullins Moving virtual concierge"
@@ -136,20 +115,6 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                     </div>
                 </div>
 
-                <div className="grid shrink-0 gap-3 border-t border-white/10 py-4 md:grid-cols-3">
-                    {CUSTOMER_STEPS.map(({ icon: Icon, title, body }, index) => (
-                        <div key={title} className="flex gap-3 rounded-xl border border-white/8 bg-white/[0.035] px-4 py-3.5">
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5d24d6]/35 text-[#ffc857]">
-                                <Icon size={17} />
-                            </span>
-                            <div>
-                                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/35">Step {index + 1}</p>
-                                <h2 className="mt-0.5 text-sm font-bold text-white">{title}</h2>
-                                <p className="mt-1 text-xs leading-5 text-white/48">{body}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
             </section>
         </main>
     );

@@ -250,6 +250,9 @@ test('Evan pages use the simplified, contained presentation', async () => {
     assert.match(landing, /Start planning with Evan/);
     assert.match(landing, /Your Mullins Moving concierge/);
     assert.match(landing, /lg:h-\[100svh\]/);
+    assert.match(landing, /lg:h-\[min\(58vh,520px\)\]/);
+    assert.match(landing, /aspect-\[16\/11\] h-full min-h-0/);
+    assert.doesNotMatch(landing, /CUSTOMER_STEPS|Ask your moving questions|Build your move plan live/);
     assert.match(landing, /Evan is ready/);
     assert.match(landing, /className="object-contain"/);
     assert.match(landing, /\sStart\s/);
