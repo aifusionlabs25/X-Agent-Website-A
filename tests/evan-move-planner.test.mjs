@@ -214,7 +214,8 @@ test('Anam player exposes the Move Planner only for Evan sessions', async () => 
     assert.match(routeMap, /Exit full-screen map/);
     assert.match(routeMap, /event\.stopImmediatePropagation\(\)/);
     assert.match(geocodeRoute, /isTrustedBrowserOrigin/);
-    assert.match(geocodeRoute, /readAmyAnamContactFromRequest/);
+    assert.match(geocodeRoute, /readAmyAnamBrowserSession/);
+    assert.doesNotMatch(geocodeRoute, /readAmyAnamContactFromRequest/);
     assert.match(geocodeRoute, /GEOAPIFY_API_KEY/);
     assert.match(player, /registerToolCallHandler\('show_move_planner'/);
     assert.match(player, /const snapshotEvanPlannerTurns/);
@@ -236,19 +237,26 @@ test('Anam player exposes the Move Planner only for Evan sessions', async () => 
 });
 
 test('Evan pages use the simplified, contained presentation', async () => {
-    const [landing, demo, player, header] = await Promise.all([
+    const [landing, demo, player, header, footer] = await Promise.all([
         fs.readFile(new URL('../components/evan/EvanLandingPage.tsx', import.meta.url), 'utf8'),
         fs.readFile(new URL('../app/demo/[slug]/page.tsx', import.meta.url), 'utf8'),
         fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'),
         fs.readFile(new URL('../components/layout/SiteHeader.tsx', import.meta.url), 'utf8'),
+        fs.readFile(new URL('../components/layout/SiteFooter.tsx', import.meta.url), 'utf8'),
     ]);
 
-    assert.doesNotMatch(landing, /Private pilot preview|Prepared for Mullins Moving|Mullins trained|Voice \+ video/);
+    assert.doesNotMatch(landing, /Private pilot preview|Prepared for Mullins Moving|Mullins trained|Voice \+ video|AI Fusion Labs|pilot discussion|What to test/);
+    assert.match(landing, /Planning a move\?/);
+    assert.match(landing, /Start planning with Evan/);
+    assert.match(landing, /Your Mullins Moving concierge/);
+    assert.match(landing, /lg:h-\[100svh\]/);
     assert.match(landing, /Evan is ready/);
     assert.match(landing, /className="object-contain"/);
     assert.match(landing, /\sStart\s/);
     assert.match(header, /pathname === '\/agents\/evan'/);
     assert.match(header, /pathname === '\/demo\/evan'/);
+    assert.match(footer, /pathname === '\/agents\/evan'/);
+    assert.match(footer, /pathname === '\/demo\/evan'/);
     assert.match(demo, /px-4 pb-24 pt-20/);
     assert.match(player, /max-w-\[1080px\]/);
 });

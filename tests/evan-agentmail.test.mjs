@@ -251,13 +251,15 @@ test('AgentMail attachment validation fails closed before contacting the provide
     assert.equal(called, false);
 });
 
-test('Evan browser integration requires scoped check-in consent, bind-time intent, and farewell-first close', async () => {
-    const [demo, player, gate, route, bind, contactToken, emailTool, endTool] = await Promise.all([
+test('Evan browser integration makes email optional while preserving secure guest sessions and farewell-first close', async () => {
+    const [demo, player, gate, route, tokenRoute, bind, geocodeRoute, contactToken, emailTool, endTool] = await Promise.all([
         readFile(new URL('../app/demo/[slug]/page.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../components/evan/EvanContactGate.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../app/api/anam/evan/access/route.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../app/api/anam-token/route.ts', import.meta.url), 'utf8'),
         readFile(new URL('../app/api/anam/session/bind/route.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../app/api/anam/evan/route-geocode/route.ts', import.meta.url), 'utf8'),
         readFile(new URL('../lib/anam/contact-token.ts', import.meta.url), 'utf8'),
         readFile(new URL('../config/anam/evan-agentmail-client-tool.json', import.meta.url), 'utf8'),
         readFile(new URL('../config/anam/evan-end-session-client-tool.json', import.meta.url), 'utf8'),
@@ -269,17 +271,33 @@ test('Evan browser integration requires scoped check-in consent, bind-time inten
     assert.match(player, /evanCloseCoordinator\?\.arm\(\)/);
     assert.match(player, /completeFarewell\(\)/);
     assert.doesNotMatch(player, /Closing immediately after confirmed farewell/);
+
     assert.match(gate, /type="checkbox"/);
     assert.match(gate, /checked=\{followUpConsent\}/);
     assert.match(gate, /Email me one conversation recap[\s\S]*Mullins Admin and Sales/);
-    assert.match(gate, /JSON\.stringify\(\{ displayName, email, followUpConsent \}\)/);
+    assert.match(gate, /\? \{ guest: true \}/);
+    assert.match(gate, /\{ displayName, email, followUpConsent \}/);
+    assert.match(gate, /Continue without email/);
+    assert.match(gate, /Email is optional/);
+    assert.match(gate, /isEvanLocalTestMode/);
+
+    assert.match(route, /body\.guest === true/);
+    assert.match(route, /Guest access cannot include contact details/);
     assert.match(route, /body\.followUpConsent !== true/);
     assert.match(route, /purpose: 'evan_follow_up'/);
+    assert.match(route, /optional: true/);
     assert.match(route, /rawEmailReturned: false/);
-    assert.match(gate, /isEvanLocalTestMode/);
+
+    assert.match(tokenRoute, /Choose an email recap or continue without email first/);
+    assert.match(tokenRoute, /contact\?\.purpose === 'evan_follow_up'/);
+    assert.doesNotMatch(tokenRoute, /Complete the secure Evan email check-in first/);
     assert.match(bind, /queueEvanAnamConversationFollowUp/);
-    assert.match(bind, /contact\.purpose !== 'evan_follow_up'/);
+    assert.match(bind, /if \(contact\?\.displayName && contact\.purpose === 'evan_follow_up'\)/);
+    assert.doesNotMatch(bind, /Evan follow-up consent was not confirmed/);
     assert.match(bind, /outbound: false/);
+    assert.match(geocodeRoute, /readAmyAnamBrowserSession/);
+    assert.doesNotMatch(geocodeRoute, /readAmyAnamContactFromRequest/);
+
     assert.match(contactToken, /purpose\?: 'evan_follow_up'/);
     assert.match(emailTool, /userConfirmed/);
     assert.match(emailTool, /does not create, attach, deliver, or promise a quote/);

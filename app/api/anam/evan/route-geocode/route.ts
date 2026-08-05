@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { parseEvanRouteToolStops } from '@/lib/anam/evan-address-route';
 import { geocodeEvanRouteStop } from '@/lib/anam/evan-geocoding';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
-import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
 import {
     isTrustedBrowserOrigin,
     readAmyAnamBrowserSession,
@@ -30,14 +29,6 @@ async function authorize(request: Request): Promise<Response | null> {
     }
     const browser = readAmyAnamBrowserSession(request, spine.signingSecret);
     if (!browser) return noStoreJson({ error: 'Evan session check-in is required' }, { status: 401 });
-    const contact = readAmyAnamContactFromRequest({
-        request,
-        browserSessionId: browser.id,
-        secret: spine.signingSecret,
-    });
-    if (!contact || contact.purpose !== 'evan_follow_up') {
-        return noStoreJson({ error: 'Evan session check-in is required' }, { status: 401 });
-    }
     const rate = await consumeAmyAnamDistributedRateLimit({
         fingerprint: requestFingerprint(request, 'evan-route-geocode'),
         limit: 24,

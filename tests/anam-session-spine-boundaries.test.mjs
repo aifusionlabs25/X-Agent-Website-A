@@ -125,13 +125,14 @@ test('both live and QA clients bind SESSION_READY and deduplicate completion', (
     assert.match(qaHook, /removeListener\(AnamEvent\.SESSION_READY, handleSessionReady\)/);
 });
 
-test('Evan follow-up intent is reserved only after verified binding and never sends provider email', () => {
+test('Evan follow-up is optional and only an opted-in contact is queued after verified binding', () => {
     const verified = bindRoute.indexOf('await verifyAnamSessionForLaunch');
     const bound = bindRoute.indexOf('await bindAmyAnamLaunch');
     const queued = bindRoute.indexOf('await queueEvanAnamConversationFollowUp');
     assert.ok(verified >= 0 && bound > verified && queued > bound);
     assert.match(bindRoute, /launch\.resolvedPersonaId === EVAN_PERSONA_ID/);
-    assert.match(bindRoute, /contact\.purpose !== 'evan_follow_up'/);
+    assert.match(bindRoute, /contact\?\.displayName && contact\.purpose === 'evan_follow_up'/);
+    assert.doesNotMatch(bindRoute, /Evan follow-up consent was not confirmed/);
     assert.match(bindRoute, /evanFollowUpQueued/);
     assert.match(bindRoute, /outbound:\s*false/);
 });

@@ -1,6 +1,12 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export default function SiteFooter() {
+    const pathname = usePathname();
+    if (pathname === '/agents/evan' || pathname === '/demo/evan') return null;
+
     return (
         <footer className="bg-zinc-950 border-t border-zinc-800 py-12 px-8">
             <div className="max-w-screen-xl mx-auto">

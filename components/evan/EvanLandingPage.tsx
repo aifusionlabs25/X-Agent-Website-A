@@ -2,10 +2,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {
     ArrowRight,
-    CalendarDays,
+    CheckCircle2,
     ClipboardCheck,
-    Clock3,
-    MailCheck,
+    MapPinned,
     MessageCircleQuestion,
     Play,
     ShieldCheck,
@@ -13,121 +12,123 @@ import {
 } from 'lucide-react';
 import type { AgentData } from '@/lib/agents';
 
-const CAPABILITIES = [
+const CUSTOMER_STEPS = [
+    {
+        icon: MessageCircleQuestion,
+        title: 'Ask your moving questions',
+        body: 'Get clear answers about services, packing, specialty items, access, and the estimate process.',
+    },
+    {
+        icon: MapPinned,
+        title: 'Build your move plan live',
+        body: 'Share locations and moving details while Evan organizes a working route and move brief on screen.',
+    },
     {
         icon: ClipboardCheck,
-        title: 'Quote-ready intake',
-        body: 'Captures origin, destination, timing, access, services, specialty items, and the details Mullins needs for follow-up.',
+        title: 'Prepare the next step',
+        body: 'Give the Mullins team a cleaner starting point for reviewing your move and estimate request.',
     },
-    {
-        icon: ShieldCheck,
-        title: 'Approved answers only',
-        body: 'Uses Mullins-approved information, avoids unsupported promises, and hands uncertain decisions to the team.',
-    },
-    {
-        icon: MailCheck,
-        title: 'Three-part email handoff',
-        body: 'Prepares a customer recap plus concise Admin and Sales briefs after the final session transcript is available.',
-    },
-];
-
-const TEST_PROMPTS = [
-    'Can you move me from Phoenix to Flagstaff?',
-    'Can you help pack fragile items?',
-    'How soon can I get a quote?',
-    'What information do you need from me?',
 ];
 
 export default function EvanLandingPage({ agent }: { agent: AgentData }) {
     return (
-        <main className="relative min-h-screen overflow-hidden bg-[#100718] text-white">
+        <main className="relative min-h-[100svh] overflow-x-hidden bg-[#12071c] text-white lg:h-[100svh] lg:overflow-hidden">
             <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -left-48 top-16 h-[34rem] w-[34rem] rounded-full bg-[#5d24d6]/20 blur-[120px]" />
-                <div className="absolute -right-40 top-1/3 h-[30rem] w-[30rem] rounded-full bg-[#ffc857]/10 blur-[120px]" />
-                <div className="absolute inset-0 opacity-[0.05] [background-image:linear-gradient(rgba(255,255,255,.32)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.32)_1px,transparent_1px)] [background-size:64px_64px]" />
+                <div className="absolute -left-40 -top-36 h-[34rem] w-[34rem] rounded-full bg-[#5d24d6]/24 blur-[120px]" />
+                <div className="absolute -right-24 bottom-0 h-[26rem] w-[26rem] rounded-full bg-[#ffc857]/12 blur-[110px]" />
+                <div className="absolute inset-0 opacity-[0.045] [background-image:linear-gradient(rgba(255,255,255,.28)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.28)_1px,transparent_1px)] [background-size:58px_58px]" />
             </div>
 
-            <section className="relative mx-auto max-w-6xl px-5 pb-14 pt-5 sm:px-8 lg:px-10">
-                <div className="flex items-center border-b border-white/10 pb-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white/65">
-                    <div className="flex items-center gap-3">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white p-1.5 shadow-[0_0_30px_rgba(255,200,87,.2)]">
+            <section className="relative mx-auto flex min-h-[100svh] w-full max-w-[1480px] flex-col px-5 py-4 sm:px-8 lg:h-full lg:min-h-0 lg:px-10 lg:py-5 xl:px-14">
+                <header className="flex shrink-0 items-center justify-between border-b border-white/10 pb-4">
+                    <div className="flex items-center gap-3.5">
+                        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white p-1.5 shadow-[0_0_35px_rgba(255,200,87,.18)]">
                             <Image
                                 src={agent.logoSrc ?? '/agents/thumbnails/Evan Mullins Moving logo.png'}
                                 alt="Mullins Moving"
-                                width={48}
-                                height={48}
+                                width={58}
+                                height={58}
                                 className="h-full w-full object-contain"
                             />
                         </span>
-                        <span>Mullins Moving × AI Fusion Labs</span>
+                        <div>
+                            <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">Mullins Moving</p>
+                            <p className="mt-0.5 text-xs font-semibold text-white/58">Top Tier Moving. Driven with Heart.</p>
+                        </div>
                     </div>
-                </div>
+                    <div className="hidden items-center gap-2 text-xs font-semibold text-white/58 sm:flex">
+                        <ShieldCheck size={15} className="text-[#ffc857]" />
+                        Your planning conversation stays private
+                    </div>
+                </header>
 
-                <div className="grid items-center gap-9 py-9 lg:grid-cols-[.94fr_1.06fr] lg:gap-12 lg:py-12">
-                    <div>
-                        <h1 className="max-w-2xl font-[Georgia] text-[clamp(2.35rem,4.7vw,4.15rem)] font-bold leading-[.98] tracking-[-0.045em] text-white">
-                            Meet Evan, your moving concierge built for{' '}
-                            <span className="text-[#ffc857]">calm, qualified intake.</span>
+                <div className="grid flex-1 items-center gap-7 py-6 lg:min-h-0 lg:grid-cols-[.88fr_1.12fr] lg:gap-10 lg:py-5 xl:gap-14">
+                    <div className="relative z-10">
+                        <p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">
+                            <Truck size={15} />
+                            Your Mullins Moving concierge
+                        </p>
+                        <h1 className="mt-4 max-w-[680px] font-[Georgia] text-[clamp(2.65rem,4.35vw,4.65rem)] font-bold leading-[.96] tracking-[-0.045em]">
+                            Planning a move?
+                            <span className="mt-1 block text-[#ffc857]">Start with Evan.</span>
                         </h1>
-                        <p className="mt-5 max-w-xl text-sm leading-6 text-[#ded3eb] sm:text-base sm:leading-7">
-                            Evan helps Mullins capture more complete quote requests, answer common service questions,
-                            and prepare a cleaner human handoff—24 hours a day, without sounding like a generic bot.
+                        <p className="mt-5 max-w-[610px] text-base leading-7 text-[#ded2e9] lg:text-[1.05rem]">
+                            Tell Evan what you are moving, where it is going, and what matters most. He can answer common questions and organize the details for a smoother conversation with the Mullins team.
                         </p>
 
-                        <div className="mt-6 max-w-xl border-l-2 border-[#ffc857] bg-white/[0.045] px-4 py-3">
-                            <p className="text-sm font-bold text-white">Built around the real moving journey</p>
-                            <p className="mt-1 text-sm leading-6 text-white/60">
-                                Service-area questions, packing needs, special handling, access constraints,
-                                estimate intake, and next-step coordination.
-                            </p>
+                        <div className="mt-6 grid max-w-[620px] gap-2.5 sm:grid-cols-2">
+                            {[
+                                'Ask about packing and moving services',
+                                'Map multiple pickup and delivery stops',
+                                'Flag stairs, access, and specialty items',
+                                'Prepare details for an estimate review',
+                            ].map((item) => (
+                                <p key={item} className="flex items-start gap-2 text-sm leading-5 text-white/72">
+                                    <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#ffc857]" />
+                                    {item}
+                                </p>
+                            ))}
                         </div>
 
-                        <div className="mt-7 flex flex-wrap gap-3">
+                        <div className="mt-7 flex flex-wrap items-center gap-4">
                             <Link
                                 href={agent.liveUrl}
-                                className="group inline-flex items-center gap-2 rounded-lg bg-[#ffc857] px-6 py-3.5 text-sm font-extrabold text-[#271041] shadow-[0_12px_35px_rgba(255,200,87,.2)] transition hover:-translate-y-0.5 hover:bg-[#ffd77d]"
+                                className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#ffc857] px-6 text-sm font-extrabold text-[#271041] shadow-[0_14px_40px_rgba(255,200,87,.18)] transition hover:-translate-y-0.5 hover:bg-[#ffda7f] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ffc857]"
                             >
                                 <Play size={17} fill="currentColor" />
-                                Start the Evan demo
+                                Start planning with Evan
+                                <ArrowRight size={16} className="transition group-hover:translate-x-0.5" />
                             </Link>
-                            <a
-                                href="https://calendly.com/aifusionlabs"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 rounded-lg border border-[#8153df]/70 bg-[#5d24d6]/30 px-6 py-3.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:border-[#a783ee] hover:bg-[#5d24d6]/50"
-                            >
-                                <CalendarDays size={17} />
-                                Schedule pilot discussion
-                            </a>
+                            <p className="max-w-[250px] text-xs leading-5 text-white/45">
+                                No quote or booking is created. Mullins staff confirms pricing, availability, and scheduling.
+                            </p>
                         </div>
-                        <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-white/45">
-                            <ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#ffc857]" />
-                            Private screening experience. Evan gathers planning details but does not issue quotes,
-                            confirm bookings, or promise crew availability.
-                        </p>
                     </div>
 
-                    <div className="relative mx-auto w-full max-w-[620px]">
-                        <div className="absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-[#6f34e8]/25 via-transparent to-[#ffc857]/20 blur-2xl" />
-                        <div className="relative overflow-hidden rounded-[1.6rem] border border-white/15 bg-[#1a0b28] p-2 shadow-[0_28px_90px_rgba(0,0,0,.5)]">
-                            <div className="relative aspect-[16/11] overflow-hidden rounded-[1.2rem] bg-[#251135]">
+                    <div className="relative mx-auto w-full max-w-[760px] lg:h-[min(64vh,620px)] lg:min-h-[420px]">
+                        <div className="absolute -inset-5 rounded-[2.2rem] bg-gradient-to-br from-[#6f34e8]/30 via-transparent to-[#ffc857]/18 blur-2xl" />
+                        <div className="relative h-full overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#20102d] p-2 shadow-[0_28px_90px_rgba(0,0,0,.48)]">
+                            <div className="relative aspect-[16/11] h-full max-h-[620px] min-h-[390px] overflow-hidden rounded-[1.35rem] bg-[#281338] lg:aspect-auto">
                                 <Image
                                     src={agent.thumbnailSrc}
                                     alt="Evan, Mullins Moving virtual concierge"
                                     fill
                                     priority
-                                    sizes="(max-width: 1024px) 100vw, 48vw"
+                                    sizes="(max-width: 1024px) 100vw, 55vw"
                                     className="object-contain"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#12061d] via-transparent to-transparent" />
-                                <div className="absolute inset-x-4 bottom-4 flex items-center justify-between gap-4 rounded-xl border border-white/12 bg-[#12061d]/80 px-4 py-3 backdrop-blur-md">
-                                    <p className="font-[Georgia] text-xl font-bold text-white sm:text-2xl">Evan is ready</p>
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#13071e] via-transparent to-transparent" />
+                                <div className="absolute inset-x-4 bottom-4 flex items-center justify-between gap-4 rounded-xl border border-white/12 bg-[#13071e]/86 px-4 py-3 backdrop-blur-md sm:inset-x-5 sm:bottom-5 sm:px-5 sm:py-4">
+                                    <div>
+                                        <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#ffc857]">Live moving support</p>
+                                        <p className="mt-1 font-[Georgia] text-xl font-bold text-white sm:text-2xl">Evan is ready when you are</p>
+                                    </div>
                                     <Link
                                         href={agent.liveUrl}
-                                        className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#ffc857] px-4 py-2.5 text-xs font-extrabold text-[#271041] transition hover:-translate-y-0.5 hover:bg-[#ffd77d] sm:text-sm"
+                                        aria-label="Start planning your move with Evan"
+                                        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#ffc857] text-[#271041] transition hover:scale-105 hover:bg-[#ffdc85]"
                                     >
-                                        <Play size={15} fill="currentColor" />
-                                        Start
+                                        <Play size={18} fill="currentColor" />
                                     </Link>
                                 </div>
                             </div>
@@ -135,74 +136,19 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                     </div>
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-[1.08fr_.92fr]">
-                    <section className="rounded-[1.4rem] border border-white/12 bg-white/[0.035] p-6 sm:p-8">
-                        <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">Concierge capabilities</p>
-                        <h2 className="mt-2 font-[Georgia] text-3xl font-bold tracking-tight sm:text-4xl">What Evan is designed to handle</h2>
-                        <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">
-                            A focused front door for customers who need useful answers and a confident next step.
-                        </p>
-                        <div className="mt-6 space-y-3">
-                            {CAPABILITIES.map(({ icon: Icon, title, body }) => (
-                                <div key={title} className="group flex gap-4 rounded-xl border border-white/10 bg-[#160a21]/65 p-4 transition hover:border-[#ffc857]/30 hover:bg-[#1c0d2a]">
-                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ffc857] text-[#321052]">
-                                        <Icon size={18} strokeWidth={2.4} />
-                                    </span>
-                                    <div>
-                                        <h3 className="font-bold text-white">{title}</h3>
-                                        <p className="mt-1 text-sm leading-6 text-white/55">{body}</p>
-                                    </div>
-                                </div>
-                            ))}
+                <div className="grid shrink-0 gap-3 border-t border-white/10 py-4 md:grid-cols-3">
+                    {CUSTOMER_STEPS.map(({ icon: Icon, title, body }, index) => (
+                        <div key={title} className="flex gap-3 rounded-xl border border-white/8 bg-white/[0.035] px-4 py-3.5">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5d24d6]/35 text-[#ffc857]">
+                                <Icon size={17} />
+                            </span>
+                            <div>
+                                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/35">Step {index + 1}</p>
+                                <h2 className="mt-0.5 text-sm font-bold text-white">{title}</h2>
+                                <p className="mt-1 text-xs leading-5 text-white/48">{body}</p>
+                            </div>
                         </div>
-                    </section>
-
-                    <section className="rounded-[1.4rem] border border-[#7d48dd]/35 bg-[#5d24d6]/10 p-6 sm:p-8">
-                        <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">
-                            <MessageCircleQuestion size={15} />
-                            Screening guide
-                        </p>
-                        <h2 className="mt-2 font-[Georgia] text-3xl font-bold tracking-tight sm:text-4xl">What to test</h2>
-                        <p className="mt-3 text-sm leading-6 text-white/55">
-                            Ask questions a real moving prospect would ask, then note what Evan should know, avoid, or hand off.
-                        </p>
-                        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                            {TEST_PROMPTS.map((prompt, index) => (
-                                <div key={prompt} className="min-h-32 rounded-xl border border-white/10 bg-[#14091f]/75 p-4">
-                                    <span className="font-[Georgia] text-2xl font-bold text-[#ffc857]">0{index + 1}</span>
-                                    <p className="mt-3 text-sm font-semibold leading-5 text-white/80">{prompt}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                </div>
-
-                <section className="relative mt-7 overflow-hidden rounded-[1.5rem] border border-[#ffc857]/25 bg-[#2a1050] p-7 sm:p-9">
-                    <div className="absolute right-0 top-0 h-full w-2/5 bg-[radial-gradient(circle_at_center,rgba(255,200,87,.18),transparent_68%)]" />
-                    <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">
-                                <Clock3 size={14} />
-                                Ready for a real pilot
-                            </p>
-                            <h2 className="mt-2 font-[Georgia] text-3xl font-bold sm:text-4xl">Refine Evan with the Mullins team.</h2>
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#d9caeb]">
-                                Run the conversation, review the live Move Planner, and identify the final knowledge or workflow changes needed for launch.
-                            </p>
-                        </div>
-                        <Link
-                            href={agent.liveUrl}
-                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#ffc857] px-6 py-3.5 text-sm font-extrabold text-[#271041] transition hover:-translate-y-0.5 hover:bg-[#ffda84]"
-                        >
-                            Review Evan
-                            <ArrowRight size={17} />
-                        </Link>
-                    </div>
-                </section>
-
-                <div className="mt-9 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6 text-xs text-white/35">
-                    <p className="flex items-center gap-2"><Truck size={14} className="text-[#ffc857]" /> Mullins Moving virtual concierge pilot</p>
-                    <p>Designed and powered by AI Fusion Labs</p>
+                    ))}
                 </div>
             </section>
         </main>
