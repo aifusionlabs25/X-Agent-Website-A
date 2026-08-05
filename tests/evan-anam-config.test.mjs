@@ -63,9 +63,11 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /Never silently guess or change a person's name/i);
     assert.match(prompt, /send_mullins_follow_up_email/);
     assert.match(prompt, /three messages are scheduled/i);
-    assert.match(prompt, /required check-in includes explicit consent/i);
-    assert.match(prompt, /backend reserves the three-message follow-up when the verified Evan session binds/i);
+    assert.match(prompt, /Email follow-up is optional/i);
+    assert.match(prompt, /backend reserves the three-message bundle when the verified Evan session binds/i);
     assert.match(prompt, /never visible to you/i);
+    assert.match(prompt, /Continuing without email is a normal guest option/i);
+    assert.match(prompt, /Never ask for, spell, repeat, or confirm an email address during the conversation/i);
     assert.match(prompt, /No tool books a move/i);
     assert.match(prompt, /Never ask whether it is okay to end the call/i);
     assert.match(prompt, /Would you like me to end our call now\?" is forbidden/i);

@@ -168,14 +168,14 @@ export async function POST(req: Request) {
 
             let browserSession = readAmyAnamBrowserSession(req, spineConfig.signingSecret);
             if (!browserSession && isAmyCara4 && memoryConfig.gatesOpen) {
-            if (!browserSession && isEvan) {
                 return noStoreJson(
-                    { error: 'Complete the secure Evan email check-in first' },
+                    { error: 'Amy memory check-in is required' },
                     { status: 401 },
                 );
             }
+            if (!browserSession && isEvan) {
                 return noStoreJson(
-                    { error: 'Amy memory check-in is required' },
+                    { error: 'Choose an email recap or continue without email first' },
                     { status: 401 },
                 );
             }
@@ -210,13 +210,8 @@ export async function POST(req: Request) {
                     browserSessionId: browserSession.id,
                     secret: spineConfig.signingSecret,
                 });
-                if (!contact) {
-                    return noStoreJson(
-                        { error: 'Complete the secure Evan email check-in first' },
-                        { status: 401 },
-                    );
-                }
-                agentMailAvailable = evanAgentMailConfig.effectiveGateOpen;
+                agentMailAvailable = evanAgentMailConfig.effectiveGateOpen
+                    && contact?.purpose === 'evan_follow_up';
             }
 
             const browserRate = await consumeAmyAnamDistributedRateLimit({

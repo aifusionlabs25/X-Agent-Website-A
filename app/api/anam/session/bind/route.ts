@@ -98,18 +98,17 @@ export async function POST(request: Request) {
                     browserSessionId: browserSession.id,
                     secret: config.signingSecret,
                 });
-                if (!contact?.displayName || contact.purpose !== 'evan_follow_up') {
-                    return noStoreJson({ error: 'Evan follow-up consent was not confirmed' }, { status: 409 });
+                if (contact?.displayName && contact.purpose === 'evan_follow_up') {
+                    const queued = await queueEvanAnamConversationFollowUp({
+                        externalSessionId: sessionId,
+                        browserSessionId: browserSession.id,
+                        displayName: contact.displayName,
+                        email: contact.email,
+                        contactSecret: config.signingSecret,
+                    });
+                    evanFollowUpQueued = queued.queued;
+                    evanFollowUpDuplicate = queued.duplicate;
                 }
-                const queued = await queueEvanAnamConversationFollowUp({
-                    externalSessionId: sessionId,
-                    browserSessionId: browserSession.id,
-                    displayName: contact.displayName,
-                    email: contact.email,
-                    contactSecret: config.signingSecret,
-                });
-                evanFollowUpQueued = queued.queued;
-                evanFollowUpDuplicate = queued.duplicate;
             }
             return noStoreJson({
                 bound: true,
