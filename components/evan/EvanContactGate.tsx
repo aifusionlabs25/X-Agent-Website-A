@@ -72,47 +72,46 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                 <div className="absolute inset-0 opacity-[0.045] [background-image:linear-gradient(rgba(255,255,255,.28)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.28)_1px,transparent_1px)] [background-size:56px_56px]" />
             </div>
 
-            <section className="relative grid w-full max-w-6xl overflow-hidden rounded-[1.75rem] border border-white/12 bg-[#170a22]/96 shadow-[0_32px_120px_rgba(0,0,0,.55)] lg:h-[min(84svh,760px)] lg:grid-cols-[.9fr_1.1fr]">
-                <div className="relative hidden overflow-hidden border-r border-white/10 lg:block">
-                    <Image
-                        src="/agents/thumbnails/Evan Mullins Moving.png"
-                        alt="Evan, Mullins Moving virtual concierge"
-                        fill
-                        priority
-                        sizes="42vw"
-                        className="object-contain object-bottom"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#2a1050]/30 via-transparent to-[#12071d]" />
-                    <div className="absolute inset-x-0 top-0 p-8 xl:p-10">
-                        <div className="flex items-center gap-3">
-                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white p-1.5">
-                                <Image
-                                    src="/agents/thumbnails/Evan Mullins Moving logo.png"
-                                    alt="Mullins Moving"
-                                    width={52}
-                                    height={52}
-                                    className="h-full w-full object-contain"
-                                />
-                            </span>
-                            <div>
-                                <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">Mullins Moving</p>
-                                <p className="text-xs font-semibold text-white/55">Top Tier Moving. Driven with Heart.</p>
-                            </div>
+            <section className="relative grid w-full max-w-6xl overflow-hidden rounded-[1.75rem] border border-white/12 bg-[#170a22]/96 shadow-[0_32px_120px_rgba(0,0,0,.55)] lg:h-[min(88svh,720px)] lg:max-h-[calc(100svh-32px)] lg:grid-cols-[.8fr_1.2fr]">
+                <div className="hidden min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] border-r border-white/10 bg-[#1c0b2b] lg:grid">
+                    <div className="flex items-center gap-3 px-8 pt-7">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white p-1.5">
+                            <Image
+                                src="/agents/thumbnails/Evan Mullins Moving logo.png"
+                                alt="Mullins Moving"
+                                width={48}
+                                height={48}
+                                className="h-full w-full object-contain"
+                            />
+                        </span>
+                        <div>
+                            <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857]">Mullins Moving</p>
+                            <p className="text-xs font-semibold text-white/55">Top Tier Moving. Driven with Heart.</p>
                         </div>
-                        <h1 className="mt-7 max-w-md font-[Georgia] text-4xl font-bold leading-[1.04] xl:text-[2.8rem]">
-                            A calmer way to start planning your move.
-                        </h1>
-                        <p className="mt-4 max-w-md text-sm leading-6 text-[#ded2e9]">
-                            Ask questions, organize locations and move details, and review your working Move Planner with Evan.
-                        </p>
                     </div>
-                    <div className="absolute inset-x-8 bottom-7 grid gap-2 text-xs text-white/65 xl:inset-x-10">
-                        <p className="flex items-center gap-2"><ShieldCheck size={15} className="text-[#ffc857]" /> Private, session-bound conversation</p>
-                        <p className="flex items-center gap-2"><Truck size={15} className="text-[#ffc857]" /> Live Move Planner included either way</p>
+
+                    <div className="relative mx-6 min-h-0 overflow-hidden">
+                        <Image
+                            src="/agents/thumbnails/Evan Mullins Moving.png"
+                            alt="Evan, Mullins Moving virtual concierge"
+                            fill
+                            priority
+                            sizes="40vw"
+                            className="object-contain object-center"
+                        />
+                        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#1c0b2b] to-transparent" />
+                    </div>
+
+                    <div className="px-8 pb-7">
+                        <h1 className="font-[Georgia] text-2xl font-bold leading-tight">A calmer start to your move.</h1>
+                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/65">
+                            <p className="flex items-center gap-2"><ShieldCheck size={14} className="text-[#ffc857]" /> Private conversation</p>
+                            <p className="flex items-center gap-2"><Truck size={14} className="text-[#ffc857]" /> Live Move Planner</p>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex min-h-0 flex-col justify-center p-6 sm:p-8 lg:p-9 xl:p-11">
+                <div className="flex min-h-0 flex-col justify-center overflow-y-auto p-5 sm:p-7 lg:p-7 xl:p-8">
                     <div className="flex items-center gap-3 lg:hidden">
                         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white p-1.5">
                             <Image
@@ -127,12 +126,12 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                     </div>
 
                     <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857] lg:mt-0">Before you meet Evan</p>
-                    <h2 className="mt-2 font-[Georgia] text-3xl font-bold tracking-tight sm:text-4xl">Choose how you want to begin.</h2>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d7cbe2]">
-                        Want a written conversation recap? Add your name and email below. Prefer not to share contact information? Continue as a guest and use Evan and the Live Move Planner normally.
+                    <h2 className="mt-2 font-[Georgia] text-[clamp(1.8rem,2.5vw,2.45rem)] font-bold leading-tight tracking-tight">Choose how you want to begin.</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-5 text-[#d7cbe2]">
+                        Add your name and email for a written recap, or continue as a guest. Evan and the Live Move Planner are available either way.
                     </p>
 
-                    <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={submitEmail}>
+                    <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={submitEmail}>
                         <label className="block">
                             <span className="flex items-center gap-2 text-sm font-bold text-white/85"><UserRound size={15} /> Name</span>
                             <input
@@ -140,7 +139,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                                 autoComplete="name"
                                 value={displayName}
                                 onChange={event => setDisplayName(event.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-[#ffc857]/70 focus:ring-2 focus:ring-[#ffc857]/10"
+                                className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-2.5 text-white outline-none transition placeholder:text-white/30 focus:border-[#ffc857]/70 focus:ring-2 focus:ring-[#ffc857]/10"
                                 placeholder="Your name"
                             />
                         </label>
@@ -152,11 +151,11 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                                 autoComplete="email"
                                 value={email}
                                 onChange={event => setEmail(event.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-[#ffc857]/70 focus:ring-2 focus:ring-[#ffc857]/10"
+                                className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-2.5 text-white outline-none transition placeholder:text-white/30 focus:border-[#ffc857]/70 focus:ring-2 focus:ring-[#ffc857]/10"
                                 placeholder="you@example.com"
                             />
                         </label>
-                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3.5 text-xs leading-5 text-[#d7cbe2] transition hover:border-[#8f61e5]/50 sm:col-span-2">
+                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-[#d7cbe2] transition hover:border-[#8f61e5]/50 sm:col-span-2">
                             <input
                                 required
                                 type="checkbox"
@@ -172,14 +171,14 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                         <button
                             type="submit"
                             disabled={submitting !== null}
-                            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#ffc857] px-5 font-extrabold text-[#2b1043] shadow-[0_12px_30px_rgba(255,200,87,.14)] transition hover:-translate-y-0.5 hover:bg-[#ffd77d] disabled:translate-y-0 disabled:opacity-60 sm:col-span-2"
+                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#ffc857] px-5 font-extrabold text-[#2b1043] shadow-[0_12px_30px_rgba(255,200,87,.14)] transition hover:-translate-y-0.5 hover:bg-[#ffd77d] disabled:translate-y-0 disabled:opacity-60 sm:col-span-2"
                         >
                             {submitting === 'email' ? 'Securing your recap...' : 'Email my recap and continue'}
                             {submitting !== 'email' && <ArrowRight className="h-4 w-4" />}
                         </button>
                     </form>
 
-                    <div className="my-4 flex items-center gap-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/30">
+                    <div className="my-3 flex items-center gap-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/30">
                         <span className="h-px flex-1 bg-white/10" />
                         Or
                         <span className="h-px flex-1 bg-white/10" />
@@ -189,13 +188,13 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                         type="button"
                         disabled={submitting !== null}
                         onClick={() => void requestAccess('guest')}
-                        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#8f61e5]/55 bg-[#5d24d6]/18 px-5 font-bold text-white transition hover:-translate-y-0.5 hover:border-[#b091ed] hover:bg-[#5d24d6]/30 disabled:translate-y-0 disabled:opacity-60"
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#8f61e5]/55 bg-[#5d24d6]/18 px-5 font-bold text-white transition hover:-translate-y-0.5 hover:border-[#b091ed] hover:bg-[#5d24d6]/30 disabled:translate-y-0 disabled:opacity-60"
                     >
                         {submitting === 'guest' ? 'Opening Evan...' : 'Continue without email'}
                         {submitting !== 'guest' && <ArrowRight className="h-4 w-4" />}
                     </button>
 
-                    <p className="mt-4 flex gap-2 text-[11px] leading-5 text-white/38">
+                    <p className="mt-3 flex gap-2 text-[11px] leading-5 text-white/38">
                         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-[#ffc857]/75" />
                         Email is optional. Guest conversations still include Evan and the Live Move Planner, but no customer recap or email follow-up will be sent.
                     </p>

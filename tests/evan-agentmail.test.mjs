@@ -279,6 +279,10 @@ test('Evan browser integration makes email optional while preserving secure gues
     assert.match(gate, /\{ displayName, email, followUpConsent \}/);
     assert.match(gate, /Continue without email/);
     assert.match(gate, /Email is optional/);
+    assert.match(gate, /grid-rows-\[auto_minmax\(0,1fr\)_auto\]/);
+    assert.match(gate, /lg:h-\[min\(88svh,720px\)\]/);
+    assert.match(gate, /overflow-y-auto/);
+    assert.doesNotMatch(gate, /absolute inset-x-0 top-0/);
     assert.match(gate, /isEvanLocalTestMode/);
 
     assert.match(route, /body\.guest === true/);
