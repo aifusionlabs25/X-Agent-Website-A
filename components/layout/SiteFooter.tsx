@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 export default function SiteFooter() {
     const pathname = usePathname();
-    if (pathname === '/agents/evan' || pathname === '/demo/evan') return null;
+    if (pathname === '/agents/evan' || pathname.startsWith('/demo/')) return null;
 
     return (
         <footer className="bg-zinc-950 border-t border-zinc-800 py-12 px-8">
@@ -16,7 +16,7 @@ export default function SiteFooter() {
                     <div>
                         <p className="text-white font-bold text-lg mb-2">AI Fusion Labs</p>
                         <p className="text-zinc-500 text-sm leading-relaxed max-w-xs">
-                            Founder-led AI studio with deep experience automating lead follow-ups and CRM chaos for SMBs.
+                            Founder-led AI studio building practical voice, video, intake, and workflow agents for growing teams.
                         </p>
                     </div>
 
@@ -24,11 +24,10 @@ export default function SiteFooter() {
                     <div>
                         <p className="text-zinc-400 font-semibold text-sm uppercase tracking-wider mb-3">Quick Links</p>
                         <nav className="flex flex-col gap-2 text-sm">
-                            <Link href="#agents" className="text-zinc-500 hover:text-white transition-colors">Agents</Link>
-                            <Link href="#how-it-works" className="text-zinc-500 hover:text-white transition-colors">How It Works</Link>
-                            <Link href="#pricing" className="text-zinc-500 hover:text-white transition-colors">Pricing</Link>
-                            <Link href="#faq" className="text-zinc-500 hover:text-white transition-colors">FAQ</Link>
-                            <Link href="#beta-signup" className="text-zinc-500 hover:text-white transition-colors">Join Beta</Link>
+                            <Link href="/#agents" className="text-zinc-500 hover:text-white transition-colors">Agents</Link>
+                            <Link href="/#how-it-works" className="text-zinc-500 hover:text-white transition-colors">How It Works</Link>
+                            <Link href="/#faq" className="text-zinc-500 hover:text-white transition-colors">FAQ</Link>
+                            <Link href="/#beta-signup" className="text-zinc-500 hover:text-white transition-colors">Join Beta</Link>
                         </nav>
                     </div>
 
@@ -36,16 +35,16 @@ export default function SiteFooter() {
                     <div>
                         <p className="text-zinc-400 font-semibold text-sm uppercase tracking-wider mb-3">Connect</p>
                         <nav className="flex flex-col gap-2 text-sm mb-4">
-                            <a href="#" className="text-zinc-500 hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">
+                            <a href="https://linkedin.com/company/aifusionlabs" className="text-zinc-500 hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">
                                 LinkedIn
                             </a>
                             <a href="https://x.com/AI_FusionLabs" className="text-zinc-500 hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">
                                 X (Twitter)
                             </a>
                         </nav>
-                        <Link href="#" className="text-zinc-600 hover:text-zinc-400 text-xs underline underline-offset-2 transition-colors">
-                            Privacy Policy
-                        </Link>
+                        <a href="mailto:aifusionlabs@gmail.com" className="text-zinc-600 hover:text-zinc-400 text-xs underline underline-offset-2 transition-colors">
+                            Contact AI Fusion Labs
+                        </a>
                     </div>
                 </div>
 

@@ -73,9 +73,9 @@ export default function HeroBillboard() {
                                     transition={{ delay: 0.4 }}
                                     className="text-zinc-300 text-sm sm:text-base leading-relaxed mb-8 max-w-xl"
                                 >
-                                    X Agents are trained strictly on your Knowledge Bank — meaning zero hallucinations, ever. From instant lead qualification to handling tier-1 service tickets, your visitors feel like they&apos;re speaking face-to-face with a real person, hands-free. Built by a founder with deep experience in automating lead follow-ups and CRM chaos for SMBs. Connect to your tools via webhook and embed anywhere.
+                                    X Agents combine real-time voice and avatar video with approved knowledge and workflow guardrails. They can support tasks such as lead qualification, intake, and tier-1 service routing while making uncertainty visible and handing off when a human is needed. Integrations and capabilities are configured for each deployment.
                                     <br /><br />
-                                    <span className="font-semibold text-indigo-300">Clients see 50–70% ops efficiency gains →</span>
+                                    <span className="font-semibold text-indigo-300">Explore practical sales, intake, and service workflows →</span>
                                 </motion.p>
 
                                 <div className="flex flex-col sm:flex-row gap-4">

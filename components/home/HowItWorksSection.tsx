@@ -12,7 +12,7 @@ const steps = [
         icon: Wrench,
         step: '02',
         title: 'We Build Your Custom Agent',
-        desc: 'Using our proprietary engine, we design and train a lifelike AI agent loaded with your exact Knowledge Bank—zero hallucinations.',
+        desc: 'We configure a real-time agent with your approved source material, workflow rules, escalation paths, and brand guidance.',
     },
     {
         icon: Plug,
@@ -23,25 +23,25 @@ const steps = [
     {
         icon: Rocket,
         step: '04',
-        title: 'Deploy & Monitor',
-        desc: 'Go live instantly. Track lead scores, conversation analytics, and ROI through real-time dashboards and email alerts.',
+        title: 'Validate, Launch & Monitor',
+        desc: 'We test the approved journey before launch, then monitor the integrations and outcomes included in your project scope.',
     },
 ];
 
 const caseStudies = [
     {
         title: 'AI Lead Automation',
-        description: 'Inbound form → AI agent qualifies & follows up → CRM updated automatically.',
+        description: 'Example: inbound request → guided qualification → reviewed follow-up or CRM handoff.',
         image: '/diagrams/flow-lead-automation.png',
     },
     {
         title: 'CRM Pipeline Optimization',
-        description: 'Before: scattered leads and missed follow-ups. After: structured pipeline with zero drop-off.',
+        description: 'Example: organize intake data and route the next step into an existing pipeline.',
         image: '/diagrams/flow-crm-optimization.png',
     },
     {
         title: 'Lifelike Voice Engagement',
-        description: 'Visitor lands → AI greets with live video → hands-free conversation → lead captured & routed.',
+        description: 'Example: visitor starts a voice-and-video conversation → agent gathers context → approved handoff.',
         image: '/diagrams/flow-voice-engagement.png',
     },
 ];
@@ -53,10 +53,10 @@ export default function HowItWorksSection() {
                 <div className="text-center mb-16">
                     <p className="text-indigo-400 text-sm font-semibold tracking-widest uppercase mb-3">How It Works</p>
                     <h2 className="text-white text-3xl md:text-4xl font-bold mb-4">
-                        From Pain Point to Production in Weeks, Not Months
+                        From Workflow Pain to a Testable Agent
                     </h2>
                     <p className="text-zinc-400 text-base max-w-2xl mx-auto">
-                        We handle the complexity. You get a battle-ready AI agent deployed on your website, embedded in your CRM, or fielding calls—fast.
+                        We scope the workflow, configure the experience, connect approved tools, and validate the customer journey. Timing and channels depend on the integration.
                     </p>
                 </div>
 
@@ -81,7 +81,7 @@ export default function HowItWorksSection() {
 
                 {/* Visual Case Studies */}
                 <div className="text-center mb-12">
-                    <p className="text-indigo-400 text-sm font-semibold tracking-widest uppercase mb-3">Use Cases</p>
+                    <p className="text-indigo-400 text-sm font-semibold tracking-widest uppercase mb-3">Illustrative Workflows</p>
                     <h3 className="text-white text-2xl md:text-3xl font-bold mb-4">
                         See It in Action
                     </h3>

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
-export function middleware(_request: NextRequest) {
+export function proxy() {
     if (process.env.MAINTENANCE_MODE === 'true') {
         // Return a sleek, branded HTML response
         return new NextResponse(

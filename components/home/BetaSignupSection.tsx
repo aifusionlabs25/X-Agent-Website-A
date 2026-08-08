@@ -40,12 +40,12 @@ export default function BetaSignupSection() {
         <section id="beta-signup" className="bg-zinc-950 py-24 px-8">
             <div className="max-w-screen-md mx-auto">
                 <div className="text-center mb-12">
-                    <p className="text-indigo-400 text-sm font-semibold tracking-widest uppercase mb-3">Limited Beta</p>
+                    <p className="text-indigo-400 text-sm font-semibold tracking-widest uppercase mb-3">Pilot Inquiry</p>
                     <h2 className="text-white text-3xl md:text-4xl font-bold mb-4">
                         Join the Beta Pilot — Get a Custom Demo
                     </h2>
                     <p className="text-zinc-400 text-base max-w-lg mx-auto">
-                        We&apos;re onboarding a small group of SMBs to co-build the future of AI-powered sales and ops. Spots are limited.
+                        Tell us about the sales, intake, service, or operations workflow you want to improve. We&apos;ll follow up to discuss fit and scope.
                     </p>
                 </div>
 
@@ -53,7 +53,7 @@ export default function BetaSignupSection() {
                     <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-10 text-center">
                         <p className="text-emerald-400 text-xl font-semibold mb-2">You&apos;re In! 🎉</p>
                         <p className="text-zinc-300 mb-3">Thanks for signing up for the Beta Pilot.</p>
-                        <p className="text-zinc-400 text-sm">Check your email for next steps — we&apos;ll reach out within 24 hours to schedule a quick discovery call and start building your custom agent.</p>
+                        <p className="text-zinc-400 text-sm">We received your request and will follow up using the email address you provided.</p>
                     </div>
                 ) : (
                     <form ref={formRef} onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 space-y-5">
@@ -113,6 +113,10 @@ export default function BetaSignupSection() {
                         {status === 'error' && (
                             <p className="text-red-400 text-sm">Something went wrong. Please try again.</p>
                         )}
+
+                        <p className="text-zinc-500 text-xs leading-relaxed">
+                            Do not submit confidential information. By submitting, you agree that AI Fusion Labs may contact you about this request.
+                        </p>
 
                         <button
                             type="submit"
