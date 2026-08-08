@@ -25,6 +25,13 @@ test('the shared public registry contains only the eight active shared agents', 
     assert.equal(ALL_AGENTS.some((agent) => agent.slug === 'luke'), false);
 });
 
+test('Claire uses a generic public role without restaurant-platform affiliation', () => {
+    const claire = ALL_AGENTS.find((agent) => agent.slug === 'claire');
+
+    assert.equal(claire?.role, 'Restaurant Reservation Specialist');
+    assert.doesNotMatch(claire?.role ?? '', /OpenTable|Fleming/i);
+});
+
 test('Jordan remains a standalone external deployment', async () => {
     assert.equal(EXTERNAL_AGENTS.length, 1);
     assert.deepEqual(EXTERNAL_AGENTS[0], {

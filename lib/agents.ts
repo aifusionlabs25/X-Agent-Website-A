@@ -68,7 +68,7 @@ export const ALL_AGENTS: AgentData[] = [
   {
     slug: "claire",
     name: "CLAIRE",
-    role: "OpenTable Concierge",
+    role: "Restaurant Reservation Specialist",
     personaId: "d7560a16-dae5-4426-b338-9fbdc6412824",
     thumbnailSrc: "/agents/thumbnails/Claire Flemings OpenTable.jpg",
     accentColor: "#f43f5e",

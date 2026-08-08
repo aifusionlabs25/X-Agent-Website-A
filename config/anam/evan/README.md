@@ -25,11 +25,40 @@ Internal strategy, Tavus/PAL runtime instructions, test-specific answers, draft 
 ```powershell
 npm test
 npm run anam:audit:evan
+npm run anam:repair:evan-prompt -- --backup-dir C:\ABSOLUTE\PRIVATE\EVAN-BACKUPS
 node scripts/anam/update-evan-persona.mjs
 node scripts/anam/update-evan-persona.mjs --apply
 ```
 
 The update command defaults to a read-only dry run. `--apply` updates only the existing Evan persona, uploads only missing allowlisted documents, waits for every document to become `READY`, updates the knowledge tool and persona, then performs immediate and delayed read-back verification. Git history is the rollback source; the updater does not create extra Anam personas.
+
+## Emergency prompt-only repair
+
+Use `anam:repair:evan-prompt` when Evan's live persona is otherwise correct but the managed prompt markers or prompt hash are out of sync. This is a separate, narrow control plane from the broad updater above. It never creates or updates tools, knowledge groups, or documents.
+
+The backup directory is mandatory, must be an absolute path outside this Git worktree, and should be on an encrypted or access-restricted local volume. Every run first creates a timestamped subdirectory containing the complete provider persona, every attached tool object, referenced knowledge-group and document metadata, a repair plan, a prompt rollback artifact, and rollback instructions. Those files are intentionally sensitive: they contain the provider prompt and may contain private provider configuration. The command does not print prompt contents, tool contents, or the API key.
+
+First perform the default dry run and inspect `repair-plan.json` without displaying the snapshot or rollback artifact in a shared terminal:
+
+```powershell
+npm run anam:repair:evan-prompt -- --backup-dir C:\ABSOLUTE\PRIVATE\EVAN-BACKUPS
+```
+
+The dry run makes only provider GET requests. It validates the exact Evan ID, the protected James ID, Evan/Mullins and James/Knowles names, Cara 4, all attached tool IDs, and referenced knowledge groups. If and only if that snapshot is reviewed, apply the canonical prompt with the exact confirmation phrase:
+
+```powershell
+npm run anam:repair:evan-prompt -- --backup-dir C:\ABSOLUTE\PRIVATE\EVAN-BACKUPS --apply CONFIRM_EVAN_PROMPT_ONLY
+```
+
+The apply path performs one sparse Evan persona PUT whose entire body is `{ "systemPrompt": "..." }`; it does not resend or update the name, greeting, voice settings, tool IDs, or any other provider field. Immediate and five-second delayed GETs must match the canonical managed-prompt hash and all four managed markers, while the stable non-prompt persona fingerprint must remain unchanged. Anam can append a generated `# TOOLS` section on read-back, so hashing and rollback intentionally use only the managed prompt before that delimiter. Provider timestamps and the signed `videoUrl` / `idleVideoUrl` fields inside avatar objects are excluded because they rotate on ordinary GET requests; durable avatar identity and model fields remain covered. Any mismatch fails the command and leaves the pre-repair snapshot and rollback artifact on disk.
+
+To restore the exact prompt captured before an apply, use the absolute rollback artifact path from that run and a new backup directory. Rollback first snapshots the then-current live state, preserves its non-prompt settings, and changes only the prompt:
+
+```powershell
+npm run anam:repair:evan-prompt -- --backup-dir C:\ABSOLUTE\PRIVATE\EVAN-ROLLBACKS --rollback-artifact C:\ABSOLUTE\PRIVATE\EVAN-BACKUPS\evan-prompt-repair-TIMESTAMP\rollback-artifact.json --apply CONFIRM_EVAN_PROMPT_ROLLBACK
+```
+
+This mechanism cannot make a provider PUT atomic. If Anam accepts the PUT but a read-back check fails, stop using the broad updater, retain the generated artifacts, and use the reviewed rollback command. Restrict and eventually securely dispose of old backup artifacts according to the project's secret-handling policy.
 
 ## 2026-07-16 live result
 
