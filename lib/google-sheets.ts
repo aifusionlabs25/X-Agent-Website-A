@@ -1,8 +1,22 @@
 
 import { google } from 'googleapis';
 
+interface LeadData {
+    conversation_id?: string;
+    lead_name?: string | null;
+    lead_email?: string | null;
+    lead_phone?: string | null;
+    inquiry_type?: string;
+    budget?: string;
+    timeline?: string;
+    qualification_status?: string;
+    competitors_or_blockers?: string[];
+    recommended_next_steps?: string[];
+    tavus_recording_url?: string;
+}
+
 export class GoogleSheetsService {
-    private auth: any;
+    private auth?: InstanceType<typeof google.auth.GoogleAuth>;
     private sheetId: string;
 
     constructor() {
@@ -35,7 +49,7 @@ export class GoogleSheetsService {
         }
     }
 
-    async appendLead(data: any): Promise<boolean> {
+    async appendLead(data: LeadData): Promise<boolean> {
         if (!this.auth || !this.sheetId) {
             console.error('[GoogleSheets] ❌ Cannot append: Missing Auth or Sheet ID');
             return false;
@@ -73,7 +87,11 @@ export class GoogleSheetsService {
             console.log('[GoogleSheets] ✅ Row appended successfully.');
             return true;
 
-        } catch (error: any) {
+        } catch (error: unknown) {
+            if (!(error instanceof Error)) {
+                console.error('[GoogleSheets] Append Failed:', String(error));
+                return false;
+            }
             console.error('[GoogleSheets] ❌ Append Failed:', error.message);
             return false;
         }

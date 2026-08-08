@@ -1,21 +1,51 @@
+import type { Metadata } from 'next';
 import HeroBillboard from '@/components/home/HeroBillboard';
 import AgentCarouselRow from '@/components/home/AgentCarouselRow';
 import TechSpecsSection from '@/components/home/TechSpecsSection';
 import HowItWorksSection from '@/components/home/HowItWorksSection';
-import PricingSection from '@/components/home/PricingSection';
-import TestimonialsSection from '@/components/home/TestimonialsSection';
 import FAQSection from '@/components/home/FAQSection';
 import BetaSignupSection from '@/components/home/BetaSignupSection';
-import { ALL_AGENTS, SALES_AGENTS, SERVICE_AGENTS } from '@/lib/agents';
+import {
+  ALL_AGENTS,
+  EXTERNAL_AGENTS,
+  SALES_AGENTS,
+  SERVICE_AGENTS,
+  type AgentCardData,
+  type AgentData,
+} from '@/lib/agents';
+
+export const metadata: Metadata = {
+  title: { absolute: 'X Agents | AI Fusion Labs' },
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: 'X Agents | AI Fusion Labs',
+    description: 'Interactive AI agent demos for sales, intake, service, and operations workflows.',
+    url: '/',
+    siteName: 'AI Fusion Labs',
+    type: 'website',
+    locale: 'en_US',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'X Agents by AI Fusion Labs',
+      },
+    ],
+  },
+};
 
 export default function HomePage() {
   const hideAmy = process.env.NEXT_PUBLIC_HIDE_AMY === 'true';
 
-  const filterAgents = (agents: any[]) => hideAmy ? agents.filter(a => a.slug !== 'amy') : agents;
+  const filterAgents = (agents: AgentData[]) => hideAmy ? agents.filter(a => a.slug !== 'amy') : agents;
 
   const displaySales = filterAgents(SALES_AGENTS);
   const displayService = filterAgents(SERVICE_AGENTS);
-  const displayAll = filterAgents(ALL_AGENTS);
+  const displayAll: AgentCardData[] = [
+    ...filterAgents(ALL_AGENTS),
+    ...EXTERNAL_AGENTS,
+  ];
 
   return (
     <main className="min-h-screen bg-zinc-950">
@@ -37,23 +67,12 @@ export default function HomePage() {
         <AgentCarouselRow title="Operations & Service Agents" agents={displayService} />
         <AgentCarouselRow title="Full Agent Roster" agents={displayAll} />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pb-12">
-            <p className="text-zinc-600 text-[10px] leading-relaxed max-w-2xl italic">
-                * Taylor and other "Generic" designated agents represent fictional demo scenarios for Canyon Ridge Solutions. These experiences are built to demonstrate cross-industry automation capabilities and do not represent actual client affiliations.
-            </p>
-        </div>
+        <div className="pb-12" />
       </div>
 
 
       {/* How It Works */}
       <HowItWorksSection />
-
-      {/* Pricing - Hidden per user request for demo pilot
-      <PricingSection />
-      */}
-
-      {/* Testimonials */}
-      <TestimonialsSection />
 
       {/* FAQ */}
       <FAQSection />

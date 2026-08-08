@@ -1,13 +1,14 @@
 'use client';
 
 import useEmblaCarousel from 'embla-carousel-react';
-import AgentThumbnail, { AgentData } from './AgentThumbnail';
+import AgentThumbnail from './AgentThumbnail';
+import type { AgentCardData } from '@/lib/agents';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback } from 'react';
 
 interface Props {
     title: string;
-    agents: AgentData[];
+    agents: AgentCardData[];
 }
 
 export default function AgentCarouselRow({ title, agents }: Props) {

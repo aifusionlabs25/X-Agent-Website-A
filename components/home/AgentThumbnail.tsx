@@ -3,24 +3,22 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-
-export interface AgentData {
-    slug: string;
-    name: string;
-    role: string;
-    thumbnailSrc: string;
-    accentColor: string; // e.g. '#6366f1'
-    personaId: string;
-    liveUrl?: string;
-}
+import type { AgentCardData } from '@/lib/agents';
 
 interface Props {
-    agent: AgentData;
+    agent: AgentCardData;
 }
 
 export default function AgentThumbnail({ agent }: Props) {
+    const href = agent.externalUrl ?? `/agents/${agent.slug}`;
+
     return (
-        <Link href={`/agents/${agent.slug}`} className="block flex-shrink-0 w-[160px] sm:w-[180px]">
+        <Link
+            href={href}
+            className="block flex-shrink-0 w-[160px] sm:w-[180px]"
+            target={agent.externalUrl ? '_blank' : undefined}
+            rel={agent.externalUrl ? 'noopener noreferrer' : undefined}
+        >
             <motion.div
                 className="relative rounded-lg overflow-hidden cursor-pointer"
                 style={{ aspectRatio: '2/3' }}
@@ -34,6 +32,11 @@ export default function AgentThumbnail({ agent }: Props) {
                     className="object-cover"
                     sizes="200px"
                 />
+                {agent.externalUrl && (
+                    <span className="absolute right-2 top-2 rounded-full border border-teal-300/40 bg-zinc-950/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-teal-200 backdrop-blur-sm">
+                        Standalone ↗
+                    </span>
+                )}
                 {/* Bottom gradient + name */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
                 <div className="absolute bottom-0 left-0 p-3">

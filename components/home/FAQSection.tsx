@@ -6,27 +6,27 @@ import { ChevronDown } from 'lucide-react';
 const faqs = [
     {
         question: 'What makes X Agents different from other AI chatbots?',
-        answer: 'X Agents deliver lifelike, real-time video and voice interactions—not just text. Every agent is bound to an approved Knowledge Bank, which means zero hallucinations and zero off-script responses. They\'re purpose-built for sales, ops, and service workflows, not generic chat.',
+        answer: 'X Agents deliver real-time video and voice interactions—not just text. Each agent is configured for a defined workflow with approved source material, escalation rules, and agent-specific tools.',
     },
     {
         question: 'How do you prevent hallucinations?',
-        answer: 'Each X Agent is grounded in a curated Knowledge Bank specific to your business. The agent can only reference verified data, product specs, and approved scripts. If it doesn\'t know the answer, it gracefully escalates instead of guessing.',
+        answer: 'Grounding, instructions, tool limits, and testing reduce unsupported answers, but no generative AI system can promise zero hallucinations. X Agents are instructed to acknowledge uncertainty and escalate rather than invent an answer.',
     },
     {
         question: 'What integrations are supported?',
-        answer: 'X Agents connect to your existing tools via webhooks and API — including popular CRMs, email platforms, and custom integrations. You can also embed agents on any website using a single iframe or our JavaScript SDK.',
+        answer: 'X Agents can connect through APIs, webhooks, email providers, and web embeds. The exact channels and integrations are confirmed during scoping and tested before launch.',
     },
     {
         question: 'How fast can I deploy an agent?',
-        answer: 'Most pilot builds are completed within 2–4 weeks from kickoff, depending on complexity. Simpler workflows move faster, while enterprise integrations with custom training may take a bit longer.',
+        answer: 'Timing depends on the workflow, source material, integrations, security requirements, and review cycle. We define a realistic pilot schedule after discovery rather than promise a one-size-fits-all launch date.',
     },
     {
         question: 'What\'s the pilot process?',
-        answer: 'We start with a 30-minute discovery call to map your workflow pains. From there, we scope the build, configure your agent with a custom Knowledge Bank, integrate with your tools, and deploy to production. You get full analytics and lead intelligence from day one.',
+        answer: 'We start by mapping the workflow and success criteria. From there, we scope the build, configure approved knowledge and guardrails, connect agreed tools, test the full journey, and prepare a controlled launch.',
     },
     {
         question: 'Is my data private and secure?',
-        answer: 'Absolutely. All Knowledge Banks are private to your organization. Conversations can be processed locally or via enterprise-grade encrypted APIs. We never share client data, and all transcripts are stored securely with configurable retention policies.',
+        answer: 'Data handling depends on the selected providers and deployment design. Before production, we document what is collected, where it is processed, who can access it, and the applicable retention settings so the configuration can match your requirements.',
     },
 ];
 

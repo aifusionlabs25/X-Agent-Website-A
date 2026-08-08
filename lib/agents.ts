@@ -1,13 +1,17 @@
 // lib/agents.ts — Single source of truth for all X Agent display data.
 // Thumbnail paths match Nova's exact spec in /public/agents/thumbnails/
 
-export interface AgentData {
+export interface AgentCardData {
   slug: string;
   name: string;
   role: string;
-  personaId: string;
   thumbnailSrc: string;
   accentColor: string;
+  externalUrl?: string;
+}
+
+export interface AgentData extends AgentCardData {
+  personaId: string;
   liveUrl: string;
   tenant?: string; // Fictional tenant name for demo agents
   companyUrl?: string; // Target URL for follow-up
@@ -23,16 +27,6 @@ export const ALL_AGENTS: AgentData[] = [
     thumbnailSrc: "/agents/thumbnails/Dani landing page hero 1.png",
     accentColor: "#6366f1",
     liveUrl: "/demo/dani",
-  },
-  {
-    slug: "taylor",
-    name: "TAYLOR",
-    role: "Generic SDR",
-    personaId: "4183f1fe-9922-4ef5-ad47-9b1949dfdaa4",
-    thumbnailSrc: "/agents/thumbnails/Taylor_Canyon_Ridge_thumb_512.png",
-    accentColor: "#10b981",
-    liveUrl: "/demo/taylor",
-    tenant: "Canyon Ridge Solutions",
   },
   {
     slug: "michael",
@@ -72,15 +66,6 @@ export const ALL_AGENTS: AgentData[] = [
     liveUrl: "/demo/morgan",
   },
   {
-    slug: "luke",
-    name: "LUKE",
-    role: "After Hours Vet Triage",
-    personaId: "29a20fab-794f-42f3-b000-d8999ac45b55",
-    thumbnailSrc: "/agents/thumbnails/luke-vet-triage.png",
-    accentColor: "#8b5cf6",
-    liveUrl: "/demo/luke",
-  },
-  {
     slug: "claire",
     name: "CLAIRE",
     role: "OpenTable Concierge",
@@ -113,9 +98,21 @@ export const ALL_AGENTS: AgentData[] = [
   },
 ];
 
+// Standalone deployments are visible in the portfolio without entering the
+// shared demo router, persona allowlist, transcript pipeline, or finalizer.
+export const EXTERNAL_AGENTS: AgentCardData[] = [
+  {
+    slug: "jordan",
+    name: "JORDAN",
+    role: "Enterprise Technology Strategist",
+    thumbnailSrc: "/agents/thumbnails/jordan-harborlane.jpg",
+    accentColor: "#2dd4bf",
+    externalUrl: "https://jordan-harborlane-cara4-robs-projects-e72bad73.vercel.app",
+  },
+];
+
 // Sales row
 export const SALES_AGENTS: AgentData[] = [
-  ALL_AGENTS.find((a) => a.slug === "taylor")!,
   ALL_AGENTS.find((a) => a.slug === "michael")!,
   ALL_AGENTS.find((a) => a.slug === "sarah-netic")!,
   ALL_AGENTS.find((a) => a.slug === "amy")!,
@@ -125,7 +122,6 @@ export const SALES_AGENTS: AgentData[] = [
 export const SERVICE_AGENTS: AgentData[] = [
   ALL_AGENTS.find((a) => a.slug === "james")!,
   ALL_AGENTS.find((a) => a.slug === "morgan")!,
-  ALL_AGENTS.find((a) => a.slug === "luke")!,
   ALL_AGENTS.find((a) => a.slug === "claire")!,
   ALL_AGENTS.find((a) => a.slug === "evan")!,
 ];

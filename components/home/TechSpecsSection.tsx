@@ -3,23 +3,23 @@ import { Zap, Brain, TrendingUp, Globe } from 'lucide-react';
 const specs = [
     {
         icon: Zap,
-        title: 'Neural Architecture',
-        desc: 'Advanced real-time synthesis — lifelike lip-sync, natural voice, and expressive gestures. Visitors subconsciously feel they\'re talking to a real person, building instant trust.',
+        title: 'Real-Time Agent Experience',
+        desc: 'Real-time voice and avatar video with responsive lip-sync, natural turn-taking, and a clear on-screen AI experience.',
     },
     {
         icon: Brain,
         title: 'Knowledge-First Intelligence',
-        desc: 'Every agent is bound to an approved Knowledge Bank. No hallucinations, no guessing — only verified, on-brand responses.',
+        desc: 'Agents are grounded in approved sources and instructed to avoid guessing, acknowledge uncertainty, and escalate when needed.',
     },
     {
         icon: TrendingUp,
-        title: '50–70% Efficiency Gains',
-        desc: 'X Agents consistently deliver measurable performance improvements — automating follow-ups, qualifying leads, and routing support 24/7.',
+        title: 'Workflow Efficiency',
+        desc: 'Designed to reduce repetitive intake, follow-up, and routing work when paired with verified tools and appropriate human review.',
     },
     {
         icon: Globe,
         title: 'Deploy Anywhere',
-        desc: 'Embed on any website, app, or CRM via a single iframe or SDK snippet. Connect through webhooks and API to your existing tools.',
+        desc: 'Designed for web embedding plus API and webhook integrations. Available channels and integrations vary by project.',
     },
 ];
 
@@ -29,7 +29,7 @@ export default function TechSpecsSection() {
             <div className="max-w-screen-xl mx-auto">
                 <h2 className="text-white text-3xl md:text-4xl font-bold mb-2">Behind the Experience</h2>
                 <p className="text-zinc-400 text-base mb-12 max-w-xl">
-                    Gold-standard engineering principles, battle-tested across every agent we ship.
+                    Engineering safeguards and reusable patterns tested across the current showcase.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

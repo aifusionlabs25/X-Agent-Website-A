@@ -257,9 +257,9 @@ test('Evan pages use the simplified, contained presentation', async () => {
     assert.match(landing, /className="object-contain"/);
     assert.match(landing, /\sStart\s/);
     assert.match(header, /pathname === '\/agents\/evan'/);
-    assert.match(header, /pathname === '\/demo\/evan'/);
+    assert.match(header, /pathname\.startsWith\('\/demo\/'\)/);
     assert.match(footer, /pathname === '\/agents\/evan'/);
-    assert.match(footer, /pathname === '\/demo\/evan'/);
+    assert.match(footer, /pathname\.startsWith\('\/demo\/'\)/);
     assert.match(demo, /px-4 pb-24 pt-20/);
     assert.match(player, /max-w-\[1080px\]/);
 });

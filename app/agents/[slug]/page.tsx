@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -11,6 +12,44 @@ interface Props {
 
 export function generateStaticParams() {
     return ALL_AGENTS.map((a) => ({ slug: a.slug }));
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+    const { slug } = await params;
+    const agent = ALL_AGENTS.find((candidate) => candidate.slug === slug);
+
+    if (!agent) {
+        return {
+            title: 'Agent not found',
+            robots: { index: false, follow: false },
+        };
+    }
+
+    const title = `${agent.name} — ${agent.role}`;
+    const description = `Meet ${agent.name}, an interactive AI agent demo configured for ${agent.role.toLowerCase()} workflows.`;
+    const canonical = `/agents/${agent.slug}`;
+
+    return {
+        title,
+        description,
+        alternates: { canonical },
+        openGraph: {
+            title: `${title} | AI Fusion Labs`,
+            description,
+            url: canonical,
+            siteName: 'AI Fusion Labs',
+            type: 'website',
+            locale: 'en_US',
+            images: [
+                {
+                    url: '/opengraph-image',
+                    width: 1200,
+                    height: 630,
+                    alt: 'X Agents by AI Fusion Labs',
+                },
+            ],
+        },
+    };
 }
 
 export default async function AgentDetailPage({ params }: Props) {
@@ -29,6 +68,7 @@ export default async function AgentDetailPage({ params }: Props) {
                         src={agent.thumbnailSrc}
                         alt={agent.name}
                         fill
+                        loading="eager"
                         className="object-cover object-[center_38%] blur-[1px] opacity-40"
                         sizes="100vw"
                     />
@@ -37,6 +77,7 @@ export default async function AgentDetailPage({ params }: Props) {
                         src={agent.thumbnailSrc}
                         alt={agent.name}
                         fill
+                        loading="eager"
                         className="object-cover object-top blur-sm scale-105 opacity-40"
                         sizes="100vw"
                     />
@@ -49,7 +90,14 @@ export default async function AgentDetailPage({ params }: Props) {
                         className="relative w-28 h-40 md:w-36 md:h-52 rounded-lg overflow-hidden flex-shrink-0 border-2 shadow-2xl"
                         style={{ borderColor: agent.accentColor }}
                     >
-                        <Image src={agent.thumbnailSrc} alt={agent.name} fill className="object-cover" sizes="200px" />
+                        <Image
+                            src={agent.thumbnailSrc}
+                            alt={agent.name}
+                            fill
+                            loading="eager"
+                            className="object-cover"
+                            sizes="200px"
+                        />
                     </div>
                     <div>
                         <span
@@ -87,9 +135,9 @@ export default async function AgentDetailPage({ params }: Props) {
                 <div className="border-b border-zinc-800 pb-8 mb-8">
                     <h2 className="text-white text-xl font-semibold mb-3">Overview</h2>
                     <p className="text-zinc-400 leading-relaxed">
-                        {agent.name} is a lifelike X Agent built by AI Fusion Labs. Trained on a
-                        curated dataset and powered by real-time video synthesis, {agent.name}{' '}
-                        operates as a {agent.role} — always on, never off-script.
+                        {agent.name} is a real-time voice-and-avatar X Agent built by AI Fusion Labs.
+                        The showcase is configured with curated instructions and source material for
+                        the {agent.role} workflow. Available tools and handoffs vary by agent.
                     </p>
                 </div>
 
@@ -97,11 +145,11 @@ export default async function AgentDetailPage({ params }: Props) {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-10">
                     {[
                         ['Role', agent.role],
-                        ['Platform', 'Neural Architecture'],
-                        ['Language', 'Multilingual (30+)'],
-                        ['Memory', 'Custom Dataset'],
-                        ['Deployment', 'Web Embed / API'],
-                        ['Integrations', 'Webhooks & Tool Calls'],
+                        ['Experience', 'Real-time voice + avatar'],
+                        ['Language', 'Configured per agent'],
+                        ['Knowledge', 'Curated source set'],
+                        ['Session', 'Interactive showcase'],
+                        ['Tools', 'Agent-specific'],
                     ].map(([label, value]) => (
                         <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
                             <p className="text-zinc-500 text-xs mb-1">{label}</p>

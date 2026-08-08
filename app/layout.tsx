@@ -7,12 +7,33 @@ import SiteFooter from '@/components/layout/SiteFooter';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'X Agents by AI Fusion Labs — Autonomous AI for SMB Automation',
-  description: 'X Agents: Lifelike AI for sales/ops automation. Beta pilots for SMBs—join now.',
+  metadataBase: new URL('https://xagent.aifusionlabs.app'),
+  title: {
+    default: 'X Agents | AI Fusion Labs',
+    template: '%s | AI Fusion Labs',
+  },
+  description: 'Interactive AI agent demos for sales, intake, service, and operations workflows.',
+  applicationName: 'X Agents by AI Fusion Labs',
   openGraph: {
-    title: 'X Agents by AI Fusion Labs — Autonomous AI for SMB Automation',
-    description: 'Deploy lifelike AI agents for smarter sales & ops. Zero hallucinations, easy integrations, real-time voice & video.',
+    title: 'X Agents | AI Fusion Labs',
+    description: 'Interactive AI agent demos for sales, intake, service, and operations workflows.',
     siteName: 'AI Fusion Labs',
+    type: 'website',
+    locale: 'en_US',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'X Agents by AI Fusion Labs',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'X Agents | AI Fusion Labs',
+    description: 'Interactive AI agent demos for sales, intake, service, and operations workflows.',
+    images: ['/opengraph-image'],
   },
 };
 
