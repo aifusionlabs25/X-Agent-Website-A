@@ -4,11 +4,15 @@ import test from 'node:test';
 import { buildDaniEmailBundle } from '../lib/anam/dani-agentmail-templates.ts';
 import {
     cancelDaniAnamConversationFollowUp,
+    clearDaniAnamFollowUpAuthorization,
     dispatchDaniAnamPostSessionFollowUp,
     queueDaniAnamConversationFollowUp,
     readDaniAnamAgentMailConfig,
+    readDaniAnamFollowUpAuthorization,
     sendDaniAnamConversationFollowUp,
+    storeDaniAnamFollowUpAuthorization,
 } from '../lib/anam/dani-agentmail.ts';
+import { createAmyAnamContactToken } from '../lib/anam/contact-token.ts';
 import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from '../lib/anam/persona-ids.ts';
 import {
     DANI_AI_SOLUTIONS_VARIANT,
@@ -158,6 +162,37 @@ test('typed opt-in queues once, explicit revocation is durable, and a retry cann
     assert.equal(transport.sent.length, 0);
 });
 
+test('Dani follow-up authorization survives the access-to-bind handoff without storing raw email', async () => {
+    const transport = createMockTransport();
+    const options = { env, fetchImpl: transport.fetchImpl };
+    const browserSessionId = '09680877-2c33-48aa-8316-3359950f7bcd';
+    const token = createAmyAnamContactToken({
+        browserSessionId,
+        displayName: 'Pat',
+        email: 'pat@example.com',
+        purpose: 'dani_follow_up',
+        secret: env.AMY_ANAM_SESSION_SECRET,
+    });
+    const stored = await storeDaniAnamFollowUpAuthorization({
+        browserSessionId,
+        contactToken: token,
+        contactSecret: env.AMY_ANAM_SESSION_SECRET,
+    }, options);
+    assert.deepEqual(stored, { stored: true, rawEmailStored: false });
+    const recovered = await readDaniAnamFollowUpAuthorization({
+        browserSessionId,
+        contactSecret: env.AMY_ANAM_SESSION_SECRET,
+    }, options);
+    assert.equal(recovered?.email, 'pat@example.com');
+    assert.equal(recovered?.displayName, 'Pat');
+    assert.equal(recovered?.purpose, 'dani_follow_up');
+    await clearDaniAnamFollowUpAuthorization(browserSessionId, options);
+    assert.equal(await readDaniAnamFollowUpAuthorization({
+        browserSessionId,
+        contactSecret: env.AMY_ANAM_SESSION_SECRET,
+    }, options), null);
+});
+
 test('Dani sends exactly three messages once after a substantive provider transcript', async () => {
     const transport = createMockTransport();
     const options = { env, fetchImpl: transport.fetchImpl };
@@ -269,11 +304,13 @@ test('Dani browser integration uses agent-scoped typed contact authorization, pr
     assert.doesNotMatch(gate, /method: 'DELETE'/);
     assert.match(access, /purpose: 'dani_follow_up'/);
     assert.match(access, /DANI_ANAM_CONTACT_COOKIE/);
+    assert.match(access, /storeDaniAnamFollowUpAuthorization/);
     assert.doesNotMatch(access, /response\.cookies\.set\(AMY_ANAM_BROWSER_COOKIE, '',/);
     assert.match(contactToken, /xagent_dani_anam_contact/);
     assert.match(tokenRoute, /readDaniAnamContactFromRequest/);
     assert.match(bind, /queueDaniAnamConversationFollowUp/);
     assert.match(bind, /readDaniAnamContactFromRequest/);
+    assert.match(bind, /readDaniAnamFollowUpAuthorization/);
     assert.match(email, /cancelDaniAnamConversationFollowUp/);
     assert.match(email, /const contact = isDani \? daniContact : sharedContact/);
     assert.match(player, /send_dani_follow_up_email/);

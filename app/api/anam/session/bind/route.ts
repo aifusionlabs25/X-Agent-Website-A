@@ -5,7 +5,10 @@ import {
     readAmyAnamContactFromRequest,
     readDaniAnamContactFromRequest,
 } from '@/lib/anam/contact-token';
-import { queueDaniAnamConversationFollowUp } from '@/lib/anam/dani-agentmail';
+import {
+    queueDaniAnamConversationFollowUp,
+    readDaniAnamFollowUpAuthorization,
+} from '@/lib/anam/dani-agentmail';
 import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
 import {
     AmyAnamRequestError,
@@ -104,11 +107,16 @@ export async function POST(request: Request) {
                     || memoryLinkStatus === 'duplicate';
             }
             if (launch.resolvedPersonaId === DANI_PERSONA_ID && launchAgentSlug === 'dani') {
-                const contact = readDaniAnamContactFromRequest({
+                const cookieContact = readDaniAnamContactFromRequest({
                     request,
                     browserSessionId: browserSession.id,
                     secret: config.signingSecret,
                 });
+                const storedContact = cookieContact ? null : await readDaniAnamFollowUpAuthorization({
+                    browserSessionId: browserSession.id,
+                    contactSecret: config.signingSecret,
+                });
+                const contact = cookieContact ?? storedContact;
                 if (contact?.displayName && contact.purpose === 'dani_follow_up') {
                     const queued = await queueDaniAnamConversationFollowUp({
                         externalSessionId: sessionId,
@@ -120,6 +128,12 @@ export async function POST(request: Request) {
                     daniFollowUpQueued = queued.queued;
                     daniFollowUpDuplicate = queued.duplicate;
                 }
+                console.info('[Dani Anam Bind] Follow-up intent result', {
+                    contactSource: cookieContact ? 'cookie' : storedContact ? 'server_authorization' : 'none',
+                    queued: daniFollowUpQueued,
+                    duplicate: daniFollowUpDuplicate,
+                    contactContentLogged: false,
+                });
             }
             if (launch.resolvedPersonaId === EVAN_PERSONA_ID) {
                 const contact = readAmyAnamContactFromRequest({

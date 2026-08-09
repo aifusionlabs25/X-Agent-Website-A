@@ -18,7 +18,12 @@ import {
     readDaniAnamContactFromRequest,
 } from '@/lib/anam/contact-token';
 import { normalizeAmyAnamMemoryEmail } from '@/lib/anam/user-memory';
-import { readDaniAnamAgentMailConfig } from '@/lib/anam/dani-agentmail';
+import {
+    clearDaniAnamFollowUpAuthorization,
+    readDaniAnamAgentMailConfig,
+    readDaniAnamFollowUpAuthorization,
+    storeDaniAnamFollowUpAuthorization,
+} from '@/lib/anam/dani-agentmail';
 
 function json(body: unknown, init?: ResponseInit) {
     const response = NextResponse.json(body, init);
@@ -56,11 +61,17 @@ export async function GET(request: Request) {
         const emailFollowUpAvailable = readDaniAnamAgentMailConfig().effectiveGateOpen;
         const browser = readAmyAnamBrowserSession(request, spine.signingSecret);
         if (!browser) return json(status({ authenticated: false, emailFollowUpAvailable }));
-        const contact = readDaniAnamContactFromRequest({
+        const cookieContact = readDaniAnamContactFromRequest({
             request,
             browserSessionId: browser.id,
             secret: spine.signingSecret,
         });
+        const contact = cookieContact ?? (emailFollowUpAvailable
+            ? await readDaniAnamFollowUpAuthorization({
+                browserSessionId: browser.id,
+                contactSecret: spine.signingSecret,
+            })
+            : null);
         const daniContact = contact?.purpose === 'dani_follow_up' ? contact : null;
         return json(status({
             authenticated: true,
@@ -116,6 +127,9 @@ export async function POST(request: Request) {
             const created = existingBrowser
                 ? null
                 : createAmyAnamBrowserSessionWithSecret(spine.signingSecret);
+            if (existingBrowser) {
+                await clearDaniAnamFollowUpAuthorization(existingBrowser.id);
+            }
             const response = json(status({
                 authenticated: true,
                 guest: true,
@@ -159,6 +173,15 @@ export async function POST(request: Request) {
             email,
             purpose: 'dani_follow_up',
             secret: spine.signingSecret,
+        });
+        await storeDaniAnamFollowUpAuthorization({
+            browserSessionId: browserSession.id,
+            contactToken: token,
+            contactSecret: spine.signingSecret,
+        });
+        console.info('[Dani Anam Access] Follow-up authorization stored', {
+            mode: 'email',
+            rawEmailLogged: false,
         });
         const response = json(status({
             authenticated: true,

@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { readAmyAgentMailProviderConfig, sendAmyEmailWithAgentMail } from '../email/amy-email-provider.ts';
-import { createAmyAnamContactToken, readAmyAnamContactToken } from './contact-token.ts';
+import {
+    AMY_ANAM_CONTACT_TTL_SECONDS,
+    createAmyAnamContactToken,
+    readAmyAnamContactToken,
+} from './contact-token.ts';
 import { buildDaniEmailBundle } from './dani-agentmail-templates.ts';
 import { normalizeAmyTranscript, readAmyAnamSpineConfig } from './session-spine.ts';
 import type { AmyAnamSessionReceipt, AmyAnamSessionRecord, AmyTranscriptTurn } from './session-spine.ts';
@@ -101,6 +105,7 @@ export function readDaniAnamAgentMailConfig(source: NodeJS.ProcessEnv = process.
 const intentKey = (id: string) => `xagent:dani:anam:agentmail:intent:v1:${id}`;
 const attemptKey = (id: string) => `xagent:dani:anam:agentmail:attempt:v1:${id}`;
 const cancellationKey = (id: string) => `xagent:dani:anam:agentmail:cancelled:v1:${id}`;
+const authorizationKey = (browserSessionId: string) => `xagent:dani:anam:agentmail:authorization:v1:${browserSessionId}`;
 
 async function redisCommand(
     command: Array<string | number>,
@@ -150,6 +155,52 @@ function parse<T>(raw: unknown, schemaVersion: string): T | null {
 
 function countDelivered(status: DeliveryStatus): number {
     return Object.values(status).filter(Boolean).length;
+}
+
+export async function storeDaniAnamFollowUpAuthorization(input: {
+    browserSessionId: string;
+    contactToken: string;
+    contactSecret: string;
+}, options: Options = {}) {
+    const contact = readAmyAnamContactToken({
+        token: input.contactToken,
+        browserSessionId: input.browserSessionId,
+        secret: input.contactSecret,
+    });
+    if (!contact || contact.purpose !== 'dani_follow_up' || !contact.displayName) {
+        throw new Error('Dani AgentMail authorization was invalid');
+    }
+    const stored = await redisCommand([
+        'SET',
+        authorizationKey(input.browserSessionId),
+        input.contactToken,
+        'EX',
+        AMY_ANAM_CONTACT_TTL_SECONDS,
+    ], options);
+    if (stored !== 'OK') throw new Error('Dani AgentMail authorization could not be stored');
+    return { stored: true as const, rawEmailStored: false as const };
+}
+
+export async function readDaniAnamFollowUpAuthorization(input: {
+    browserSessionId: string;
+    contactSecret: string;
+}, options: Options = {}) {
+    const token = await redisCommand(['GET', authorizationKey(input.browserSessionId)], options);
+    if (typeof token !== 'string' || !token) return null;
+    const contact = readAmyAnamContactToken({
+        token,
+        browserSessionId: input.browserSessionId,
+        secret: input.contactSecret,
+    });
+    return contact?.purpose === 'dani_follow_up' && contact.displayName ? contact : null;
+}
+
+export async function clearDaniAnamFollowUpAuthorization(
+    browserSessionId: string,
+    options: Options = {},
+) {
+    await redisCommand(['DEL', authorizationKey(browserSessionId)], options, false);
+    return { cleared: true as const };
 }
 
 export async function queueDaniAnamConversationFollowUp(input: {
