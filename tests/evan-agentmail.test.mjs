@@ -252,7 +252,7 @@ test('AgentMail attachment validation fails closed before contacting the provide
 });
 
 test('Evan browser integration makes email optional while preserving secure guest sessions and farewell-first close', async () => {
-    const [demo, player, gate, route, tokenRoute, bind, geocodeRoute, contactToken, emailTool, endTool] = await Promise.all([
+    const [demo, player, gate, route, tokenRoute, bind, geocodeRoute, contactToken, evanAgentMail, emailTool, endTool] = await Promise.all([
         readFile(new URL('../app/demo/[slug]/page.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../components/evan/EvanContactGate.tsx', import.meta.url), 'utf8'),
@@ -261,6 +261,7 @@ test('Evan browser integration makes email optional while preserving secure gues
         readFile(new URL('../app/api/anam/session/bind/route.ts', import.meta.url), 'utf8'),
         readFile(new URL('../app/api/anam/evan/route-geocode/route.ts', import.meta.url), 'utf8'),
         readFile(new URL('../lib/anam/contact-token.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../lib/anam/evan-agentmail.ts', import.meta.url), 'utf8'),
         readFile(new URL('../config/anam/evan-agentmail-client-tool.json', import.meta.url), 'utf8'),
         readFile(new URL('../config/anam/evan-end-session-client-tool.json', import.meta.url), 'utf8'),
     ]);
@@ -302,7 +303,9 @@ test('Evan browser integration makes email optional while preserving secure gues
     assert.match(geocodeRoute, /readAmyAnamBrowserSession/);
     assert.doesNotMatch(geocodeRoute, /readAmyAnamContactFromRequest/);
 
-    assert.match(contactToken, /purpose\?: 'evan_follow_up'/);
+    assert.match(contactToken, /purpose\?: 'dani_follow_up' \| 'evan_follow_up'/);
+    assert.match(evanAgentMail, /purpose: 'evan_follow_up'/);
+    assert.match(evanAgentMail, /contact\.purpose !== 'evan_follow_up'/);
     assert.match(emailTool, /userConfirmed/);
     assert.match(emailTool, /does not create, attach, deliver, or promise a quote/);
     assert.match(endTool, /"awaitResult": true/);

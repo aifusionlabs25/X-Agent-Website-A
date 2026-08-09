@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { verifyAnamSessionForLaunch, AnamSessionApiError } from '@/lib/anam/session-api';
-import { EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
-import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
+import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
+import {
+    readAmyAnamContactFromRequest,
+    readDaniAnamContactFromRequest,
+} from '@/lib/anam/contact-token';
+import { queueDaniAnamConversationFollowUp } from '@/lib/anam/dani-agentmail';
 import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
 import {
     AmyAnamRequestError,
@@ -10,6 +14,7 @@ import {
     readAmyAnamBrowserSession,
     readAmyAnamSpineConfig,
     readBoundedJsonObject,
+    resolveAnamSessionAgentSlug,
 } from '@/lib/anam/session-spine';
 import {
     bindAmyAnamLaunch,
@@ -77,11 +82,17 @@ export async function POST(request: Request) {
         });
 
         if (status === 'bound' || status === 'duplicate') {
+            const launchAgentSlug = resolveAnamSessionAgentSlug(
+                launch.resolvedPersonaId,
+                launch.agentSlug,
+            );
             const memoryConfig = readAmyAnamMemoryConfig();
             let memoryIdentityLinked = false;
+            let daniFollowUpQueued = false;
+            let daniFollowUpDuplicate = false;
             let evanFollowUpQueued = false;
             let evanFollowUpDuplicate = false;
-            if (memoryConfig.gatesOpen && launch.resolvedPersonaId !== EVAN_PERSONA_ID) {
+            if (memoryConfig.gatesOpen && launchAgentSlug === 'amy') {
                 const memoryLinkStatus = await linkAmyAnamSessionMemoryIdentity({
                     browserSessionId: browserSession.id,
                     externalSessionId: sessionId,
@@ -91,6 +102,24 @@ export async function POST(request: Request) {
                 }
                 memoryIdentityLinked = memoryLinkStatus === 'linked'
                     || memoryLinkStatus === 'duplicate';
+            }
+            if (launch.resolvedPersonaId === DANI_PERSONA_ID && launchAgentSlug === 'dani') {
+                const contact = readDaniAnamContactFromRequest({
+                    request,
+                    browserSessionId: browserSession.id,
+                    secret: config.signingSecret,
+                });
+                if (contact?.displayName && contact.purpose === 'dani_follow_up') {
+                    const queued = await queueDaniAnamConversationFollowUp({
+                        externalSessionId: sessionId,
+                        browserSessionId: browserSession.id,
+                        displayName: contact.displayName,
+                        email: contact.email,
+                        contactSecret: config.signingSecret,
+                    });
+                    daniFollowUpQueued = queued.queued;
+                    daniFollowUpDuplicate = queued.duplicate;
+                }
             }
             if (launch.resolvedPersonaId === EVAN_PERSONA_ID) {
                 const contact = readAmyAnamContactFromRequest({
@@ -115,6 +144,8 @@ export async function POST(request: Request) {
                 duplicate: status === 'duplicate',
                 canary: true,
                 memoryIdentityLinked,
+                daniFollowUpQueued,
+                daniFollowUpDuplicate,
                 evanFollowUpQueued,
                 evanFollowUpDuplicate,
                 outbound: false,

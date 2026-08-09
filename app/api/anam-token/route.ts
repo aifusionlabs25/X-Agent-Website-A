@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 import { ALL_AGENTS } from '@/lib/agents';
 import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
+import { readDaniAnamAgentMailConfig } from '@/lib/anam/dani-agentmail';
 import { readEvanAnamAgentMailConfig } from '@/lib/anam/evan-agentmail';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
-import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
+import {
+    readAmyAnamContactFromRequest,
+    readDaniAnamContactFromRequest,
+} from '@/lib/anam/contact-token';
 import { AMY_CARA4_VARIANT, resolveAnamSessionPersona } from '@/lib/anam/session-config';
-import { EVAN_PERSONA_ID, readAmyCara4PersonaReadiness, readEvanPersonaReadiness } from '@/lib/anam/persona-readiness';
+import {
+    DANI_PERSONA_ID,
+    EVAN_PERSONA_ID,
+    readAmyCara4PersonaReadiness,
+    readDaniPersonaReadiness,
+    readEvanPersonaReadiness,
+} from '@/lib/anam/persona-readiness';
 import {
     AMY_ANAM_BROWSER_COOKIE,
     AmyAnamRequestError,
@@ -59,11 +69,13 @@ export async function POST(req: Request) {
         const spineConfig = readAmyAnamSpineConfig();
         const memoryConfig = readAmyAnamMemoryConfig();
         const agentMailConfig = readAmyAnamAgentMailConfig();
+        const daniAgentMailConfig = readDaniAnamAgentMailConfig();
         const evanAgentMailConfig = readEvanAnamAgentMailConfig();
         const isAmyCara4 = resolution.variant === AMY_CARA4_VARIANT;
+        const isDani = resolution.personaId === DANI_PERSONA_ID;
         const isEvan = resolution.personaId === EVAN_PERSONA_ID;
         const evanLocalTestMode = isEvan && isEvanLocalTestMode();
-        if ((isAmyCara4 || (isEvan && !evanLocalTestMode)) && spineConfig.enabled && !spineConfig.gatesOpen) {
+        if ((isAmyCara4 || isDani || (isEvan && !evanLocalTestMode)) && spineConfig.enabled && !spineConfig.gatesOpen) {
             console.error('[Amy Anam Spine] Enabled but unavailable');
             return noStoreJson(
                 { error: 'Amy session tracking is temporarily unavailable' },
@@ -113,6 +125,41 @@ export async function POST(req: Request) {
             }
         }
 
+        if (isDani) {
+            let personaReadiness;
+            try {
+                personaReadiness = await readDaniPersonaReadiness(anamApiKey);
+            } catch {
+                console.error('[Dani Anam Configuration] Preflight unavailable');
+                return noStoreJson(
+                    { error: 'Dani is temporarily unavailable while her configuration is checked.' },
+                    { status: 503 },
+                );
+            }
+            if (!personaReadiness.ready) {
+                console.error('[Dani Anam Configuration] Out of sync', {
+                    personaIdMatches: personaReadiness.personaIdMatches,
+                    identityMatches: personaReadiness.identityMatches,
+                    publishedRevisionMatches: personaReadiness.publishedRevisionMatches,
+                    cara4AvatarConfigured: personaReadiness.cara4AvatarConfigured,
+                    avatarIdMatches: personaReadiness.avatarIdMatches,
+                    voiceIdMatches: personaReadiness.voiceIdMatches,
+                    llmIdMatches: personaReadiness.llmIdMatches,
+                    promptHashMatches: personaReadiness.promptHashMatches,
+                    voiceDetectionConfigured: personaReadiness.voiceDetectionConfigured,
+                    sessionDataRetentionConfigured: personaReadiness.sessionDataRetentionConfigured,
+                    anamTranscriptionPipelineConfigured: personaReadiness.anamTranscriptionPipelineConfigured,
+                    toolAttachmentMatches: personaReadiness.toolAttachmentMatches,
+                    missingToolNames: personaReadiness.missingToolNames,
+                    missingPromptMarkers: personaReadiness.missingPromptMarkers,
+                });
+                return noStoreJson(
+                    { error: 'Dani is temporarily unavailable while her configuration is restored.' },
+                    { status: 503 },
+                );
+            }
+        }
+
         if (isAmyCara4) {
             let personaReadiness;
             try {
@@ -149,7 +196,7 @@ export async function POST(req: Request) {
         let memoryUnlockAvailable = false;
         let agentMailAvailable = false;
 
-        if ((isAmyCara4 || isEvan) && spineConfig.gatesOpen) {
+        if ((isAmyCara4 || isDani || isEvan) && spineConfig.gatesOpen) {
             if (!isTrustedBrowserOrigin(req)) {
                 return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
             }
@@ -176,6 +223,12 @@ export async function POST(req: Request) {
             if (!browserSession && isEvan) {
                 return noStoreJson(
                     { error: 'Choose an email recap or continue without email first' },
+                    { status: 401 },
+                );
+            }
+            if (!browserSession && isDani) {
+                return noStoreJson(
+                    { error: 'Choose Dani email follow-up or continue without email first' },
                     { status: 401 },
                 );
             }
@@ -213,6 +266,15 @@ export async function POST(req: Request) {
                 agentMailAvailable = evanAgentMailConfig.effectiveGateOpen
                     && contact?.purpose === 'evan_follow_up';
             }
+            if (isDani) {
+                const contact = readDaniAnamContactFromRequest({
+                    request: req,
+                    browserSessionId: browserSession.id,
+                    secret: spineConfig.signingSecret,
+                });
+                agentMailAvailable = daniAgentMailConfig.effectiveGateOpen
+                    && contact?.purpose === 'dani_follow_up';
+            }
 
             const browserRate = await consumeAmyAnamDistributedRateLimit({
                 fingerprint: `token-browser:${browserSession.id}`,
@@ -234,7 +296,12 @@ export async function POST(req: Request) {
                 return response;
             }
 
-            launch = createAmyAnamLaunch(browserSession.id, resolution.personaId);
+            launch = createAmyAnamLaunch(
+                browserSession.id,
+                resolution.personaId,
+                Date.now(),
+                isDani ? 'dani' : isEvan ? 'evan' : 'amy',
+            );
             if (!await storeAmyAnamLaunch(launch)) {
                 throw new Error('Amy Anam launch could not be reserved');
             }

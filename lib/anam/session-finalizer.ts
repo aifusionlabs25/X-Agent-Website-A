@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { dispatchAmyAnamPostSessionFollowUp } from './agentmail.ts';
+import { dispatchDaniAnamPostSessionFollowUp } from './dani-agentmail.ts';
 import { dispatchEvanAnamPostSessionFollowUp } from './evan-agentmail.ts';
-import { EVAN_PERSONA_ID } from './persona-readiness.ts';
+import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from './persona-ids.ts';
 import {
     AnamSessionApiError,
     fetchCompletedAnamTranscript,
@@ -15,7 +16,11 @@ import {
     buildAmyAnamHermesShadowQueuedEnvelope,
     enqueueAmyAnamHermesShadowPointer,
 } from './hermes-shadow-store.ts';
-import { buildAmyAnamReceipt } from './session-spine.ts';
+import {
+    buildAmyAnamReceipt,
+    resolveAnamSessionAgentSlug,
+    resolveAnamSessionVariant,
+} from './session-spine.ts';
 import type { AmyAnamSessionReceipt, AmyAnamSessionRecord } from './session-spine.ts';
 import {
     acquireAmyAnamCompletionLock,
@@ -43,7 +48,7 @@ function buildHermesShadowEnvelope(
     session: AmyAnamSessionRecord,
     receipt: AmyAnamSessionReceipt,
 ) {
-    if (session.resolvedPersonaId === EVAN_PERSONA_ID) return undefined;
+    if (resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug) !== 'amy') return undefined;
     let config;
     try {
         config = readAmyAnamHermesShadowConfig();
@@ -95,7 +100,7 @@ export async function ensureAmyAnamHermesShadowQueued(
     receipt: AmyAnamSessionReceipt,
 ): Promise<'closed' | 'duplicate' | 'ineligible' | 'queued'> {
     let config;
-    if (session.resolvedPersonaId === EVAN_PERSONA_ID) return 'ineligible';
+    if (resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug) !== 'amy') return 'ineligible';
     try {
         config = readAmyAnamHermesShadowConfig();
     } catch {
@@ -124,7 +129,18 @@ export async function finalizeAmyAnamSession(
         if (existingReceipt) {
             const existingSession = await readAmyAnamSession(externalSessionId);
             if (existingSession) {
-                await ensureAmyAnamHermesShadowQueued(existingSession, existingReceipt);
+                const normalizedSession = {
+                    ...existingSession,
+                    agentSlug: resolveAnamSessionAgentSlug(
+                        existingSession.resolvedPersonaId,
+                        existingSession.agentSlug,
+                    ),
+                    variant: resolveAnamSessionVariant(
+                        existingSession.resolvedPersonaId,
+                        existingSession.variant,
+                    ),
+                };
+                await ensureAmyAnamHermesShadowQueued(normalizedSession, existingReceipt);
             }
             return 'completed';
         }
@@ -222,6 +238,12 @@ export async function finalizeAmyAnamSession(
             return 'failed';
         }
 
+        session = {
+            ...session,
+            agentSlug: resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug),
+            variant: resolveAnamSessionVariant(session.resolvedPersonaId, session.variant),
+        };
+
         if (newlyBound) {
             await markAmyAnamFinalizationPending({
                 session,
@@ -251,17 +273,26 @@ export async function finalizeAmyAnamSession(
                 closeReason: finalization.closeReason,
                 source: transcript.status === 'ready' ? 'anam_api' : 'unavailable',
                 turns: transcript.status === 'ready' ? transcript.turns : [],
+                variant: session.variant,
             });
             const hermesShadowEnvelope = buildHermesShadowEnvelope(session, receipt);
             await writeAmyAnamReceipt(session, finalization, receipt, { hermesShadowEnvelope });
-            const dispatchFollowUp = session.resolvedPersonaId === EVAN_PERSONA_ID
-                ? dispatchEvanAnamPostSessionFollowUp
-                : dispatchAmyAnamPostSessionFollowUp;
-            const emailResult = await dispatchFollowUp({
-                session,
-                receipt,
-                turns: transcript.status === 'ready' ? transcript.turns : [],
-            }).catch(() => ({ status: 'email_unavailable' as const, sent: false as const }));
+            const dispatchFollowUp = session.resolvedPersonaId === DANI_PERSONA_ID
+                && session.agentSlug === 'dani'
+                ? dispatchDaniAnamPostSessionFollowUp
+                : session.resolvedPersonaId === EVAN_PERSONA_ID
+                    && session.agentSlug === 'evan'
+                    ? dispatchEvanAnamPostSessionFollowUp
+                    : session.agentSlug === 'amy'
+                        ? dispatchAmyAnamPostSessionFollowUp
+                        : null;
+            const emailResult = dispatchFollowUp
+                ? await dispatchFollowUp({
+                    session,
+                    receipt,
+                    turns: transcript.status === 'ready' ? transcript.turns : [],
+                }).catch(() => ({ status: 'email_unavailable' as const, sent: false as const }))
+                : { status: 'email_unavailable' as const, sent: false as const };
             console.info('[Anam AgentMail] Post-session dispatch finished', {
                 status: emailResult.status,
                 sent: emailResult.sent,

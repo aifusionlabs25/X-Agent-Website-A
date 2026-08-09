@@ -7,6 +7,7 @@ import {
 import { normalizeAmyAnamMemoryEmail } from './user-memory.ts';
 
 export const AMY_ANAM_CONTACT_COOKIE = 'xagent_amy_anam_contact';
+export const DANI_ANAM_CONTACT_COOKIE = 'xagent_dani_anam_contact';
 export const AMY_ANAM_CONTACT_TTL_SECONDS = 4 * 60 * 60;
 
 const TOKEN_VERSION = 'v1';
@@ -17,14 +18,14 @@ type ContactPayload = {
     sid: string;
     email: string;
     displayName?: string;
-    purpose?: 'evan_follow_up';
+    purpose?: 'dani_follow_up' | 'evan_follow_up';
     exp: number;
 };
 
 export type AmyAnamContact = {
     email: string;
     displayName?: string;
-    purpose?: 'evan_follow_up';
+    purpose?: 'dani_follow_up' | 'evan_follow_up';
 };
 
 function encryptionKey(secret: string): Buffer {
@@ -60,22 +61,33 @@ export function amyAnamContactCookieOptions(maxAge = AMY_ANAM_CONTACT_TTL_SECOND
     };
 }
 
+export function daniAnamContactCookieOptions(maxAge = AMY_ANAM_CONTACT_TTL_SECONDS) {
+    return amyAnamContactCookieOptions(maxAge);
+}
+
 export function createAmyAnamContactToken(input: {
     browserSessionId: string;
     email: string;
     displayName?: string;
-    purpose?: 'evan_follow_up';
+    purpose?: 'dani_follow_up' | 'evan_follow_up';
     secret: string;
     now?: number;
+    ttlSeconds?: number;
 }): string {
     const now = input.now ?? Date.now();
+    const ttlSeconds = Math.max(
+        60,
+        Math.min(30 * 24 * 60 * 60, Math.trunc(input.ttlSeconds ?? AMY_ANAM_CONTACT_TTL_SECONDS)),
+    );
     const payload: ContactPayload = {
         v: 1,
         sid: input.browserSessionId,
         email: normalizeAmyAnamMemoryEmail(input.email),
-        exp: now + AMY_ANAM_CONTACT_TTL_SECONDS * 1_000,
+        exp: now + ttlSeconds * 1_000,
         ...(input.displayName?.trim() ? { displayName: input.displayName.normalize('NFKC').trim().slice(0, 120) } : {}),
-        ...(input.purpose === 'evan_follow_up' ? { purpose: input.purpose } : {}),
+        ...(input.purpose === 'dani_follow_up' || input.purpose === 'evan_follow_up'
+            ? { purpose: input.purpose }
+            : {}),
     };
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', encryptionKey(input.secret), iv);
@@ -132,7 +144,9 @@ export function readAmyAnamContactToken(input: {
             ...(typeof payload.displayName === 'string' && payload.displayName.trim()
                 ? { displayName: payload.displayName.normalize('NFKC').trim().slice(0, 120) }
                 : {}),
-            ...(payload.purpose === 'evan_follow_up' ? { purpose: payload.purpose } : {}),
+            ...(payload.purpose === 'dani_follow_up' || payload.purpose === 'evan_follow_up'
+                ? { purpose: payload.purpose }
+                : {}),
         };
     } catch {
         return null;
@@ -145,7 +159,25 @@ export function readAmyAnamContactFromRequest(input: {
     secret: string;
     now?: number;
 }): AmyAnamContact | null {
-    const token = cookieValue(input.request, AMY_ANAM_CONTACT_COOKIE);
+    return readAnamContactFromRequest(input, AMY_ANAM_CONTACT_COOKIE);
+}
+
+export function readDaniAnamContactFromRequest(input: {
+    request: Request;
+    browserSessionId: string;
+    secret: string;
+    now?: number;
+}): AmyAnamContact | null {
+    return readAnamContactFromRequest(input, DANI_ANAM_CONTACT_COOKIE);
+}
+
+function readAnamContactFromRequest(input: {
+    request: Request;
+    browserSessionId: string;
+    secret: string;
+    now?: number;
+}, cookieName: string): AmyAnamContact | null {
+    const token = cookieValue(input.request, cookieName);
     if (!token) return null;
     return readAmyAnamContactToken({
         token,

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 2,
+  "verifiedPublishedAt": "2026-08-09T18:36:27.589Z",
+  "personaId": "120cf627-59a6-4a35-8e70-97959a89a4da",
+  "rollbackPersonaId": "61f0fd3e-7937-472a-958d-cdba76b33bf1",
+  "expectedName": "Dani AI Solutions Director",
+  "expectedAvatarId": "58b045b9-ac1d-4ddf-af14-18972618c57b",
+  "expectedAvatarModel": "cara-4",
+  "expectedVoiceId": "90a1acd3-4fc0-11f1-84b0-52bacf74fa75",
+  "expectedLlmId": "a7cf662c-2ace-4de1-a21e-ef0fbf144bb7",
+  "expectedLanguageCode": "en",
+  "initialMessage": "Hi, I'm Dani, the AI Solutions Director at AI Fusion Labs. What business challenge or AI idea would you like to explore?",
+  "voiceDetectionOptions": {
+    "endOfSpeechSensitivity": 0.05,
+    "silenceBeforeAutoEndTurnSeconds": 3,
+    "silenceBeforeSkipTurnSeconds": 0,
+    "silenceBeforeSessionEndSeconds": 0,
+    "speechEnhancementLevel": 0.7
+  },
+  "promptFile": "v2/DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md",
+  "promptSha256": "9da10faa751087237dfb5eb76b25dc937efe78e84197ba874e7f0d96a8e375b3",
+  "knowledgeManifestFile": "v2/knowledge-manifest.json",
+  "emailToolDefinitionFile": "../dani-agentmail-client-tool.json",
+  "zeroDataRetention": false,
+  "enableAudioPassthrough": false,
+  "knowledgeToolName": "Knowledge_Dani_AI_Solutions_Director",
+  "knowledgeToolId": "312d939d-8e3f-45f5-aab1-b2b63fb5022b",
+  "emailToolName": "send_dani_follow_up_email",
+  "emailToolId": "1e44a342-ca25-4c78-bbef-51cded9c8d68",
+  "systemToolIds": {
+    "skip_turn": "69a89bda-9e11-443f-84c0-1cbea75e4fcb",
+    "end_call": "4d05849d-329f-4cd3-996f-f2a28d8135f0"
+  },
+  "requiredToolNames": [
+    "Knowledge_Dani_AI_Solutions_Director",
+    "skip_turn",
+    "end_call",
+    "send_dani_follow_up_email"
+  ]
+}

@@ -25,11 +25,13 @@ async function loadTypeScriptModule(relativePath, replacements = new Map()) {
 }
 
 const sessionConfigModule = await loadTypeScriptModule('lib/anam/session-config.ts');
+const personaIdsModule = await loadTypeScriptModule('lib/anam/persona-ids.ts');
 const sessionSpineModule = await loadTypeScriptModule(
     'lib/anam/session-spine.ts',
     new Map([
         ['@/lib/anam/session-config', sessionConfigModule.moduleUrl],
         ['./session-config.ts', sessionConfigModule.moduleUrl],
+        ['./persona-ids.ts', personaIdsModule.moduleUrl],
     ]),
 );
 const sessionApiModule = await loadTypeScriptModule(

@@ -18,9 +18,9 @@ export const ALL_AGENTS: AgentData[] = [
   {
     slug: "dani",
     name: "Dani",
-    role: "X Agent Director",
-    personaId: "61f0fd3e-7937-472a-958d-cdba76b33bf1",
-    thumbnailSrc: "/agents/thumbnails/Dani landing page hero 1.png",
+    role: "AI Solutions Director",
+    personaId: "120cf627-59a6-4a35-8e70-97959a89a4da",
+    thumbnailSrc: "/agents/thumbnails/dani-x-agent-director-cara4-2026.jpg",
     accentColor: "#6366f1",
     liveUrl: "/demo/dani",
   },

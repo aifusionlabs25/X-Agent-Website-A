@@ -13,8 +13,8 @@ import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
 } from '@/lib/anam/audio-bridge';
-import { sendAmyAnamFollowUpEmail } from '@/lib/anam/agentmail-client';
-import { EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
+import { sendAmyAnamFollowUpEmail, setDaniAnamFollowUpPreference } from '@/lib/anam/agentmail-client';
+import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from '@/lib/anam/persona-ids';
 import { isAmyCara4Variant } from '@/lib/anam/session-config';
 import {
     bindAmyAnamClientSession,
@@ -238,10 +238,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // 2. Initialize Anam Client
                 const isAmyCara4 = isAmyCara4Variant(sessionVariant);
+                const isDani = personaId === DANI_PERSONA_ID;
                 const isEvan = personaId === EVAN_PERSONA_ID;
                 const clientOptions = {
                     ...(audioDeviceId ? { audioDeviceId } : {}),
-                    ...(isAmyCara4 ? { voiceDetection: { endOfSpeechSensitivity: 0.05 } } : {}),
+                    ...(isAmyCara4 || isDani ? { voiceDetection: { endOfSpeechSensitivity: 0.05 } } : {}),
                 };
                 const anamClient = createClient(sessionToken, clientOptions);
 
@@ -611,6 +612,51 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     instruction: result.duplicate
                                         ? 'Confirm briefly that the post-session email is already scheduled. Do not say it was sent yet, and do not end the call automatically.'
                                         : 'Confirm briefly that the follow-up will be emailed after this session ends. Do not say it was sent yet. Then continue naturally and end only when the visitor clearly says they are finished.',
+                                });
+                            },
+                        },
+                    );
+                }
+
+                if (isDani) {
+                    removeEmailToolHandler = anamClient.registerToolCallHandler(
+                        'send_dani_follow_up_email',
+                        {
+                            onStart: async payload => {
+                                if (tokenPayload.agentMailAvailable !== true) {
+                                    return JSON.stringify({
+                                        status: 'email_unavailable',
+                                        instruction: 'Say that no verified website email recap is available for this session. Do not ask for an address, claim anything was sent, or end the conversation.',
+                                    });
+                                }
+                                if (typeof payload.arguments.userConfirmed !== 'boolean') {
+                                    throw new Error('Use true to check the secure opt-in or false only when the visitor revokes it.');
+                                }
+                                if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
+                                    throw new Error('The secure session is not ready. Continue the conversation and try once more.');
+                                }
+                                await bindingPromise;
+                                const result = await setDaniAnamFollowUpPreference({
+                                    launchId,
+                                    sessionId: providerSessionId,
+                                    userConfirmed: payload.arguments.userConfirmed,
+                                });
+                                console.info('[Dani Anam AgentMail] Three-message post-session intent confirmed', {
+                                    status: result.status,
+                                    duplicate: result.duplicate,
+                                    contactContentLogged: false,
+                                });
+                                return JSON.stringify({
+                                    status: result.status,
+                                    queued: result.queued,
+                                    sent: false,
+                                    duplicate: result.duplicate,
+                                    receiptId: result.receiptId,
+                                    instruction: result.status === 'email_cancelled'
+                                        ? 'Confirm briefly that the website follow-up was cancelled. Do not claim any message was sent and do not ask for another address.'
+                                        : result.duplicate
+                                            ? 'Confirm briefly that the Admin record, internal Call Summary, and visitor recap are already scheduled for after this website session. Do not say they were sent.'
+                                            : 'Confirm briefly that the Admin record, internal Call Summary, and visitor recap are scheduled for after this website session and the final transcript is available. Do not say they were sent. Continue naturally.',
                                 });
                             },
                         },

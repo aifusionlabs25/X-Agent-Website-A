@@ -1,0 +1,21 @@
+{
+  "name": "send_dani_follow_up_email",
+  "description": "Read or revoke the secure Dani website follow-up selected by the visitor before the call. The typed opt-in is already authoritative and schedules exactly three messages after the session closes and Anam's final transcript is available: a visitor thank-you and working recap, an AI Fusion Labs Admin record, and an internal Call Summary. Never ask for, spell, repeat, infer, expose, or submit an email address through this tool. If the visitor asks whether follow-up is scheduled, call silently with userConfirmed true. If the visitor says not to email or revokes consent, call immediately with userConfirmed false and confirm cancellation only after email_cancelled. Only email_queued or email_already_queued means scheduled; never claim it was already sent. This client tool is for the AI Fusion Labs website only and must not be used in an Anam meeting, cold outreach, third-party delivery, or automatic call closing.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "userConfirmed": {
+          "type": "boolean",
+          "description": "Use true to verify the visitor's existing secure website opt-in when they ask about follow-up. Use false only when the visitor clearly revokes that opt-in."
+        }
+      },
+      "required": ["userConfirmed"],
+      "additionalProperties": false
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 15
+  }
+}

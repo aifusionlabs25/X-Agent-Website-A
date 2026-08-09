@@ -1,0 +1,2 @@
+export const DANI_PERSONA_ID = '120cf627-59a6-4a35-8e70-97959a89a4da';
+export const EVAN_PERSONA_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';

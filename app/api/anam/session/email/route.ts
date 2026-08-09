@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { queueAmyAnamConversationFollowUp } from '@/lib/anam/agentmail';
+import {
+    cancelDaniAnamConversationFollowUp,
+    queueDaniAnamConversationFollowUp,
+} from '@/lib/anam/dani-agentmail';
 import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
-import { EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
-import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
+import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
+import {
+    readAmyAnamContactFromRequest,
+    readDaniAnamContactFromRequest,
+} from '@/lib/anam/contact-token';
 import {
     AmyAnamRequestError,
     isTrustedBrowserOrigin,
@@ -16,6 +23,7 @@ import {
     readAmyAnamLaunch,
     readAmyAnamSession,
 } from '@/lib/anam/session-spine-store';
+import { resolveAnamSessionAgentSlug } from '@/lib/anam/session-spine';
 import { readAmyAnamBrowserIdentity } from '@/lib/anam/user-memory';
 
 function noStoreJson(body: unknown, init?: ResponseInit) {
@@ -37,12 +45,17 @@ export async function POST(request: Request) {
         if (!browserSession) {
             return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
         }
-        const contact = readAmyAnamContactFromRequest({
+        const sharedContact = readAmyAnamContactFromRequest({
             request,
             browserSessionId: browserSession.id,
             secret: spine.signingSecret,
         });
-        if (!contact) {
+        const daniContact = readDaniAnamContactFromRequest({
+            request,
+            browserSessionId: browserSession.id,
+            secret: spine.signingSecret,
+        });
+        if (!sharedContact && !daniContact) {
             return noStoreJson({ error: 'A private checked-in email is required' }, { status: 409 });
         }
 
@@ -56,8 +69,8 @@ export async function POST(request: Request) {
         if (!isUuid(launchId) || !isUuid(sessionId)) {
             return noStoreJson({ error: 'Valid launch and session IDs are required' }, { status: 400 });
         }
-        if (body.userConfirmed !== true) {
-            return noStoreJson({ error: 'Explicit email permission is required' }, { status: 400 });
+        if (typeof body.userConfirmed !== 'boolean') {
+            return noStoreJson({ error: 'A valid email preference is required' }, { status: 400 });
         }
 
         const rate = await consumeAmyAnamDistributedRateLimit({
@@ -83,19 +96,61 @@ export async function POST(request: Request) {
             && session?.browserSessionId === browserSession.id
             && session.launchId === launchId
             && session.externalSessionId === sessionId;
+        const sessionAgentSlug = session
+            ? resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug)
+            : null;
+        const launchAgentSlug = launch
+            ? resolveAnamSessionAgentSlug(launch.resolvedPersonaId, launch.agentSlug)
+            : null;
         const isEvan = session?.resolvedPersonaId === EVAN_PERSONA_ID
-            && launch?.resolvedPersonaId === EVAN_PERSONA_ID;
+            && launch?.resolvedPersonaId === EVAN_PERSONA_ID
+            && sessionAgentSlug === 'evan'
+            && launchAgentSlug === 'evan';
+        const isDani = session?.resolvedPersonaId === DANI_PERSONA_ID
+            && launch?.resolvedPersonaId === DANI_PERSONA_ID
+            && sessionAgentSlug === 'dani'
+            && launchAgentSlug === 'dani';
+        const contact = isDani ? daniContact : sharedContact;
+        if (!contact) {
+            return noStoreJson({ error: 'Follow-up consent was not confirmed for this persona' }, { status: 409 });
+        }
         if (isEvan && contact.purpose !== 'evan_follow_up') {
             return noStoreJson({ error: 'Evan follow-up consent was not confirmed' }, { status: 409 });
         }
-        const displayName = isEvan ? contact.displayName : identity?.displayName;
-        if (!ownershipMatches || !displayName) {
+        if (isDani && contact.purpose !== 'dani_follow_up') {
+            return noStoreJson({ error: 'Dani follow-up consent was not confirmed' }, { status: 409 });
+        }
+        const isAmy = sessionAgentSlug === 'amy' && launchAgentSlug === 'amy';
+        if (!isAmy && !isDani && !isEvan) {
+            return noStoreJson({ error: 'Email is unavailable for this persona' }, { status: 409 });
+        }
+        if (!ownershipMatches) {
+            return noStoreJson({ error: 'Email session ownership could not be confirmed' }, { status: 409 });
+        }
+        if (body.userConfirmed === false) {
+            if (!isDani) {
+                return noStoreJson({ error: 'Explicit email permission is required' }, { status: 400 });
+            }
+            const result = await cancelDaniAnamConversationFollowUp({
+                externalSessionId: sessionId,
+                browserSessionId: browserSession.id,
+            });
+            return noStoreJson({
+                ...result,
+                rawEmailReturned: false,
+                messageContentReturned: false,
+            });
+        }
+        const displayName = isDani || isEvan ? contact.displayName : identity?.displayName;
+        if (!displayName) {
             return noStoreJson({ error: 'Email session ownership could not be confirmed' }, { status: 409 });
         }
 
-        const queueFollowUp = isEvan
-            ? queueEvanAnamConversationFollowUp
-            : queueAmyAnamConversationFollowUp;
+        const queueFollowUp = isDani
+            ? queueDaniAnamConversationFollowUp
+            : isEvan
+                ? queueEvanAnamConversationFollowUp
+                : queueAmyAnamConversationFollowUp;
         const result = await queueFollowUp({
             externalSessionId: sessionId,
             browserSessionId: browserSession.id,

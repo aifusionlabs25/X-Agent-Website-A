@@ -9,6 +9,7 @@ import { resolveAnamAudioBridge } from '@/lib/anam/audio-bridge';
 import AnamPlayer from '@/components/AnamPlayer';
 import AgentQaChat from '@/components/qa/AgentQaChat';
 import AmyMemoryAccessGate from '@/components/amy/AmyMemoryAccessGate';
+import DaniContactGate from '@/components/dani/DaniContactGate';
 import EvanContactGate from '@/components/evan/EvanContactGate';
 import Link from 'next/link';
 import { LogOut } from 'lucide-react';
@@ -153,6 +154,7 @@ export default function DemoPage({ params, searchParams }: Props) {
     );
 
     if (isAmyCara4Canary) return <AmyMemoryAccessGate>{experience}</AmyMemoryAccessGate>;
+    if (agent.slug === 'dani') return <DaniContactGate>{experience}</DaniContactGate>;
     if (agent.slug === 'evan') return <EvanContactGate>{experience}</EvanContactGate>;
     return experience;
 }

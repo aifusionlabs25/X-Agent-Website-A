@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Square, ArrowRight } from 'lucide-react';
 import GhostlyBackground from './GhostlyBackground';
 import AnamPlayer from '../AnamPlayer';
+import DaniContactGate from '../dani/DaniContactGate';
 
 export default function HeroBillboard() {
     const [isPlaying, setIsPlaying] = useState(false);
@@ -32,8 +33,8 @@ export default function HeroBillboard() {
                             className="absolute inset-0"
                         >
                             <Image
-                                src="/agents/thumbnails/Dani landing page hero 1.png"
-                                alt="Dani – X Agent Director"
+                                src="/agents/thumbnails/dani-x-agent-director-cara4-2026.jpg"
+                                alt="Dani - AI Solutions Director"
                                 fill
                                 priority
                                 className="object-cover object-top"
@@ -54,7 +55,7 @@ export default function HeroBillboard() {
                                     className="text-indigo-400 font-bold tracking-widest text-sm mb-3 uppercase flex items-center gap-2"
                                 >
                                     <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                                    Meet Dani — X Agent Director
+                                    Meet Dani - AI Solutions Director
                                 </motion.p>
                                 <motion.h1
                                     initial={{ opacity: 0, y: 10 }}
@@ -62,9 +63,9 @@ export default function HeroBillboard() {
                                     transition={{ delay: 0.3 }}
                                     className="text-white text-4xl sm:text-5xl md:text-6xl font-black mb-6 leading-[1.1]"
                                 >
-                                    Deploy Lifelike AI Agents for{' '}
+                                    Find the Right AI Fit for{' '}
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-                                        Smarter Sales & Ops
+                                        Your Business Workflow
                                     </span>
                                 </motion.h1>
                                 <motion.p
@@ -73,9 +74,9 @@ export default function HeroBillboard() {
                                     transition={{ delay: 0.4 }}
                                     className="text-zinc-300 text-sm sm:text-base leading-relaxed mb-8 max-w-xl"
                                 >
-                                    X Agents are trained strictly on your Knowledge Bank — meaning zero hallucinations, ever. From instant lead qualification to handling tier-1 service tickets, your visitors feel like they&apos;re speaking face-to-face with a real person, hands-free. Built by a founder with deep experience in automating lead follow-ups and CRM chaos for SMBs. Connect to your tools via webhook and embed anywhere.
+                                    Dani helps you clarify the business problem, compare practical AI solution patterns, and identify what should be validated next—from conversational X Agents and approved knowledge to research, reporting, and workflow automation.
                                     <br /><br />
-                                    <span className="font-semibold text-indigo-300">Clients see 50–70% ops efficiency gains →</span>
+                                    <span className="font-semibold text-indigo-300">Start with the workflow, the evidence, and the human decision—not the buzzwords.</span>
                                 </motion.p>
 
                                 <div className="flex flex-col sm:flex-row gap-4">
@@ -87,7 +88,7 @@ export default function HeroBillboard() {
                                         className="flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 font-bold px-8 py-3.5 rounded-md transition-colors"
                                     >
                                         <Play size={18} className="fill-black" />
-                                        Start Conversation
+                                        Talk with Dani
                                     </motion.button>
                                     <motion.a
                                         initial={{ opacity: 0 }}
@@ -111,10 +112,12 @@ export default function HeroBillboard() {
                             transition={{ duration: 1.2 }}
                             className="fixed inset-0 z-[100] bg-black"
                         >
-                            <AnamPlayer
-                                personaId="61f0fd3e-7937-472a-958d-cdba76b33bf1"
-                                onClose={() => setIsPlaying(false)}
-                            />
+                            <DaniContactGate>
+                                <AnamPlayer
+                                    personaId="120cf627-59a6-4a35-8e70-97959a89a4da"
+                                    onClose={() => setIsPlaying(false)}
+                                />
+                            </DaniContactGate>
                             {/* Overlay End Session Button strictly on the video */}
                             <div className="absolute bottom-8 left-8 md:bottom-16 md:left-16 z-[101]">
                                 <button

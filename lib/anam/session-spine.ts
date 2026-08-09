@@ -1,5 +1,14 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from './persona-ids.ts';
 import { AMY_CARA4_VARIANT } from './session-config.ts';
+
+export const DANI_AI_SOLUTIONS_VARIANT = 'dani-ai-solutions';
+export const EVAN_MULLINS_VARIANT = 'evan-mullins';
+export type AnamSessionAgentSlug = 'amy' | 'dani' | 'evan';
+export type AnamSessionVariant =
+    | typeof AMY_CARA4_VARIANT
+    | typeof DANI_AI_SOLUTIONS_VARIANT
+    | typeof EVAN_MULLINS_VARIANT;
 
 export const AMY_ANAM_BROWSER_COOKIE = 'xagent_amy_anam_session';
 export const AMY_ANAM_BROWSER_TTL_SECONDS = 4 * 60 * 60;
@@ -33,7 +42,8 @@ export type AmyAnamLaunchRecord = {
     launchId: string;
     clientLabel: string;
     resolvedPersonaId: string;
-    variant: typeof AMY_CARA4_VARIANT;
+    agentSlug: AnamSessionAgentSlug;
+    variant: AnamSessionVariant;
     state: 'token_minted' | 'bound';
     createdAt: string;
     boundSessionId?: string;
@@ -48,8 +58,8 @@ export type AmyAnamSessionRecord = {
     clientLabel: string;
     resolvedPersonaId: string;
     provider: 'anam';
-    agentSlug: 'amy';
-    variant: typeof AMY_CARA4_VARIANT;
+    agentSlug: AnamSessionAgentSlug;
+    variant: AnamSessionVariant;
     state: 'bound' | 'close_received' | 'awaiting_transcript' | 'finalization_failed' | 'completed';
     createdAt: string;
     boundAt: string;
@@ -82,7 +92,7 @@ export type AmyAnamSessionReceipt = {
     receiptId: string;
     provider: 'anam';
     externalSessionId: string;
-    variant: typeof AMY_CARA4_VARIANT;
+    variant: AnamSessionVariant;
     status: 'completed' | 'transcript_unavailable';
     completedAt: string;
     closeReason: string;
@@ -242,23 +252,60 @@ export function readAmyAnamBrowserSession(
     }
 }
 
-export function buildAmyAnamClientLabel(launchId: string): string {
-    return `xagent-amy:${launchId}`;
+export function buildAmyAnamClientLabel(
+    launchId: string,
+    agentSlug: AnamSessionAgentSlug = 'amy',
+): string {
+    return `xagent-${agentSlug}:${launchId}`;
+}
+
+function variantForAgent(agentSlug: AnamSessionAgentSlug): AnamSessionVariant {
+    if (agentSlug === 'dani') return DANI_AI_SOLUTIONS_VARIANT;
+    if (agentSlug === 'evan') return EVAN_MULLINS_VARIANT;
+    return AMY_CARA4_VARIANT;
+}
+
+export function resolveAnamSessionAgentSlug(
+    resolvedPersonaId: string,
+    storedAgentSlug?: unknown,
+): AnamSessionAgentSlug {
+    if (resolvedPersonaId === DANI_PERSONA_ID) return 'dani';
+    if (resolvedPersonaId === EVAN_PERSONA_ID) return 'evan';
+    return storedAgentSlug === 'dani' || storedAgentSlug === 'evan' || storedAgentSlug === 'amy'
+        ? storedAgentSlug
+        : 'amy';
+}
+
+export function resolveAnamSessionVariant(
+    resolvedPersonaId: string,
+    storedVariant?: unknown,
+): AnamSessionVariant {
+    const identityVariant = variantForAgent(resolveAnamSessionAgentSlug(resolvedPersonaId));
+    if (resolvedPersonaId === DANI_PERSONA_ID || resolvedPersonaId === EVAN_PERSONA_ID) {
+        return identityVariant;
+    }
+    return storedVariant === DANI_AI_SOLUTIONS_VARIANT
+        || storedVariant === EVAN_MULLINS_VARIANT
+        || storedVariant === AMY_CARA4_VARIANT
+        ? storedVariant
+        : identityVariant;
 }
 
 export function createAmyAnamLaunch(
     browserSessionId: string,
     resolvedPersonaId: string,
     now = Date.now(),
+    agentSlug: AnamSessionAgentSlug = 'amy',
 ): AmyAnamLaunchRecord {
     const launchId = randomUUID();
     return {
         schemaVersion: 'amy_anam_launch_v1',
         browserSessionId,
         launchId,
-        clientLabel: buildAmyAnamClientLabel(launchId),
+        clientLabel: buildAmyAnamClientLabel(launchId, agentSlug),
         resolvedPersonaId,
-        variant: AMY_CARA4_VARIANT,
+        agentSlug,
+        variant: variantForAgent(agentSlug),
         state: 'token_minted',
         createdAt: new Date(now).toISOString(),
     };
@@ -379,6 +426,7 @@ export function buildAmyAnamReceipt(input: {
     closeReason?: string;
     source: 'anam_api' | 'unavailable';
     turns: AmyTranscriptTurn[];
+    variant?: AnamSessionVariant;
     now?: number;
 }): AmyAnamSessionReceipt {
     const now = input.now ?? Date.now();
@@ -393,7 +441,7 @@ export function buildAmyAnamReceipt(input: {
         receiptId,
         provider: 'anam',
         externalSessionId: input.externalSessionId,
-        variant: AMY_CARA4_VARIANT,
+        variant: input.variant ?? AMY_CARA4_VARIANT,
         status: input.source === 'anam_api' ? 'completed' : 'transcript_unavailable',
         completedAt: new Date(now).toISOString(),
         closeReason: boundedString(input.closeReason, 100) || 'unknown',

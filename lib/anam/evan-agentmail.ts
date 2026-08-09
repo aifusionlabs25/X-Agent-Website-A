@@ -127,7 +127,9 @@ export async function queueEvanAnamConversationFollowUp(input: {
             browserSessionId: input.browserSessionId,
             email: input.email,
             displayName: input.displayName,
+            purpose: 'evan_follow_up',
             secret: input.contactSecret,
+            ttlSeconds: TTL,
         }),
         requestedAt: new Date().toISOString(),
         rawEmailStored: false,
@@ -232,7 +234,9 @@ export async function dispatchEvanAnamPostSessionFollowUp(input: {
         browserSessionId: input.session.browserSessionId,
         secret: spine.signingSecret,
     });
-    if (!contact) throw new Error('Evan AgentMail contact token expired or was invalid');
+    if (!contact || contact.purpose !== 'evan_follow_up') {
+        throw new Error('Evan AgentMail contact token expired or was invalid');
+    }
     const result = await sendEvanAnamConversationFollowUp({
         externalSessionId: input.session.externalSessionId,
         displayName: intent.displayName,

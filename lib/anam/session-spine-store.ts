@@ -2,6 +2,8 @@ import {
     AMY_ANAM_LAUNCH_TTL_SECONDS,
     AMY_ANAM_RECORD_TTL_SECONDS,
     readAmyAnamSpineConfig,
+    resolveAnamSessionAgentSlug,
+    resolveAnamSessionVariant,
 } from './session-spine.ts';
 import type {
     AmyAnamFinalizationRecord,
@@ -173,8 +175,18 @@ export async function bindAmyAnamLaunch(input: {
 }, options: StoreOptions = {}): Promise<AmyAnamBindStatus> {
     const now = input.now ?? Date.now();
     const boundAt = new Date(now).toISOString();
+    const agentSlug = resolveAnamSessionAgentSlug(
+        input.launch.resolvedPersonaId,
+        input.launch.agentSlug,
+    );
+    const variant = resolveAnamSessionVariant(
+        input.launch.resolvedPersonaId,
+        input.launch.variant,
+    );
     const updatedLaunch: AmyAnamLaunchRecord = {
         ...input.launch,
+        agentSlug,
+        variant,
         state: 'bound',
         boundSessionId: input.externalSessionId,
         boundAt,
@@ -187,8 +199,8 @@ export async function bindAmyAnamLaunch(input: {
         clientLabel: input.launch.clientLabel,
         resolvedPersonaId: input.launch.resolvedPersonaId,
         provider: 'anam',
-        agentSlug: 'amy',
-        variant: input.launch.variant,
+        agentSlug,
+        variant,
         state: 'bound',
         createdAt: input.launch.createdAt,
         boundAt,
