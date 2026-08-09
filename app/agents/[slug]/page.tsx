@@ -1,9 +1,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ALL_AGENTS } from '@/lib/agents';
 import { Play } from 'lucide-react';
 import EvanLandingPage from '@/components/evan/EvanLandingPage';
+import AmyInsightLanding from '@/components/agents/AmyInsightLanding';
 
 interface Props {
     params: Promise<{ slug: string }>;
@@ -13,34 +15,42 @@ export function generateStaticParams() {
     return ALL_AGENTS.map((a) => ({ slug: a.slug }));
 }
 
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+    const { slug } = await params;
+
+    if (slug === 'amy') {
+        return {
+            title: 'Amy · Senior SDR for Insight',
+            description:
+                'Meet Amy for focused executive discovery, opportunity qualification, and preparation for the right Insight specialist conversation.',
+        };
+    }
+
+    return {};
+}
+
 export default async function AgentDetailPage({ params }: Props) {
     const { slug } = await params;
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) notFound();
-    const isAmy = agent.slug === 'amy';
+
+    if (agent.slug === 'amy') {
+        return <AmyInsightLanding />;
+    }
+
     if (agent.slug === 'evan') return <EvanLandingPage agent={agent} />;
 
     return (
         <main className="min-h-screen bg-zinc-950 pt-20">
             {/* Cinematic backdrop */}
             <div className="relative w-full h-[50vh] overflow-hidden">
-                {isAmy ? (
-                    <Image
-                        src={agent.thumbnailSrc}
-                        alt={agent.name}
-                        fill
-                        className="object-cover object-[center_38%] blur-[1px] opacity-40"
-                        sizes="100vw"
-                    />
-                ) : (
-                    <Image
-                        src={agent.thumbnailSrc}
-                        alt={agent.name}
-                        fill
-                        className="object-cover object-top blur-sm scale-105 opacity-40"
-                        sizes="100vw"
-                    />
-                )}
+                <Image
+                    src={agent.thumbnailSrc}
+                    alt={agent.name}
+                    fill
+                    className="object-cover object-top blur-sm scale-105 opacity-40"
+                    sizes="100vw"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
 
                 {/* Poster + info overlay */}
