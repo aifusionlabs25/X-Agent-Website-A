@@ -12,7 +12,6 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
     const [submitting, setSubmitting] = useState<SubmitMode>(null);
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
-    const [followUpConsent, setFollowUpConsent] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -51,7 +50,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                 cache: 'no-store',
                 body: JSON.stringify(mode === 'guest'
                     ? { guest: true }
-                    : { displayName, email, followUpConsent }),
+                    : { displayName, email, followUpConsent: true }),
             });
             const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
             if (!response.ok || payload.authenticated !== true) {
@@ -101,9 +100,9 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#080b16] via-transparent to-black/15" />
                     <div className="absolute inset-x-0 bottom-0 p-8">
                         <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-cyan-300">AI Fusion Labs</p>
-                        <h1 className="mt-2 text-3xl font-bold leading-tight">Meet Dani.</h1>
+                        <h1 className="mt-2 text-3xl font-bold leading-tight">Hi, I&apos;m Dani.</h1>
                         <p className="mt-3 max-w-md text-sm leading-6 text-slate-300">
-                            Explore the business problem first, then compare the AI—or non-AI—approach worth validating.
+                            I&apos;m with AI Fusion Labs.
                         </p>
                         <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/65">
                             <p className="flex items-center gap-2"><ShieldCheck size={14} className="text-cyan-300" /> Transparent AI</p>
@@ -116,7 +115,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                     <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-cyan-300">Before you meet Dani</p>
                     <h2 className="mt-2 text-[clamp(1.8rem,2.5vw,2.5rem)] font-bold leading-tight tracking-tight">Choose how you want to begin.</h2>
                     <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                        Add your name and email for Dani&apos;s three-part post-call follow-up, or continue as a guest without email.
+                        Add your name and email, or continue as a guest.
                     </p>
 
                     <form className="mt-5 grid gap-3 sm:grid-cols-2" onSubmit={submitEmail}>
@@ -143,25 +142,13 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                 placeholder="you@example.com"
                             />
                         </label>
-                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-slate-300 transition hover:border-indigo-400/50 sm:col-span-2">
-                            <input
-                                required
-                                type="checkbox"
-                                checked={followUpConsent}
-                                onChange={event => setFollowUpConsent(event.target.checked)}
-                                className="mt-0.5 h-4 w-4 shrink-0 accent-cyan-400"
-                            />
-                            <span>
-                                Email me Dani&apos;s thank-you and working recap after the session, and share the Admin record and Call Summary internally with AI Fusion Labs.
-                            </span>
-                        </label>
                         {error && <p role="alert" className="rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-200 sm:col-span-2">{error}</p>}
                         <button
                             type="submit"
                             disabled={submitting !== null}
                             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-5 font-extrabold text-white shadow-[0_12px_30px_rgba(79,70,229,.2)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60 sm:col-span-2"
                         >
-                            {submitting === 'email' ? 'Securing your recap...' : 'Email my recap and continue'}
+                            {submitting === 'email' ? 'Starting Dani...' : 'Start conversation'}
                             {submitting !== 'email' && <ArrowRight className="h-4 w-4" />}
                         </button>
                     </form>
@@ -180,7 +167,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                     </button>
                     <p className="mt-3 flex gap-2 text-[11px] leading-5 text-white/42">
                         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/80" />
-                        Your typed address stays outside Dani&apos;s spoken context. Sessions may be transcribed for the selected recap. Do not share secrets or sensitive records.
+                        Your typed address stays outside Dani&apos;s spoken context. Sessions may be transcribed for post-session follow-up. Do not share secrets or sensitive records.
                     </p>
                 </div>
             </section>

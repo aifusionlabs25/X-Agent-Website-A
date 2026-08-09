@@ -248,7 +248,7 @@ test('legacy Evan records mislabelled as Amy cannot enter Hermes and select Evan
     );
 });
 
-test('Dani browser integration uses agent-scoped typed consent, provider finalization, and no legacy transcript fallback', async () => {
+test('Dani browser integration uses agent-scoped typed contact authorization, provider finalization, and no legacy transcript fallback', async () => {
     const [gate, access, tokenRoute, bind, email, player, finalizer, legacy, tool, contactToken] = await Promise.all([
         readFile(new URL('../components/dani/DaniContactGate.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../app/api/anam/dani/access/route.ts', import.meta.url), 'utf8'),
@@ -261,7 +261,10 @@ test('Dani browser integration uses agent-scoped typed consent, provider finaliz
         readFile(new URL('../config/anam/dani-agentmail-client-tool.json', import.meta.url), 'utf8'),
         readFile(new URL('../lib/anam/contact-token.ts', import.meta.url), 'utf8'),
     ]);
-    assert.match(gate, /Email me Dani&apos;s thank-you and working recap/);
+    assert.doesNotMatch(gate, /Email me Dani&apos;s thank-you and working recap/);
+    assert.doesNotMatch(gate, /type="checkbox"/);
+    assert.match(gate, /Start conversation/);
+    assert.match(gate, /\{ displayName, email, followUpConsent: true \}/);
     assert.match(gate, /Continue without email/);
     assert.doesNotMatch(gate, /method: 'DELETE'/);
     assert.match(access, /purpose: 'dani_follow_up'/);

@@ -113,21 +113,22 @@ export default function HeroBillboard() {
                             className="fixed inset-0 z-[100] bg-black"
                         >
                             <DaniContactGate>
-                                <AnamPlayer
-                                    personaId="120cf627-59a6-4a35-8e70-97959a89a4da"
-                                    onClose={() => setIsPlaying(false)}
-                                />
+                                <>
+                                    <AnamPlayer
+                                        personaId="120cf627-59a6-4a35-8e70-97959a89a4da"
+                                        onClose={() => setIsPlaying(false)}
+                                    />
+                                    <div className="absolute bottom-8 left-8 z-[101] md:bottom-16 md:left-16">
+                                        <button
+                                            onClick={() => setIsPlaying(false)}
+                                            className="flex items-center gap-2 rounded-md bg-red-600 px-7 py-3 text-sm font-bold text-white shadow-lg shadow-red-900/50 transition-colors hover:bg-red-500"
+                                        >
+                                            <Square size={16} className="fill-white" />
+                                            End Session
+                                        </button>
+                                    </div>
+                                </>
                             </DaniContactGate>
-                            {/* Overlay End Session Button strictly on the video */}
-                            <div className="absolute bottom-8 left-8 md:bottom-16 md:left-16 z-[101]">
-                                <button
-                                    onClick={() => setIsPlaying(false)}
-                                    className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white font-bold px-7 py-3 rounded-md text-sm transition-colors shadow-lg shadow-red-900/50"
-                                >
-                                    <Square size={16} className="fill-white" />
-                                    End Session
-                                </button>
-                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>

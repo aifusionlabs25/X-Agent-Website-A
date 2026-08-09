@@ -281,7 +281,15 @@ const liveToolHeadingLines = liveRawPrompt
 
 if (persona.id !== personaManifest.personaId) failures.push('persona ID');
 if (persona.name !== personaManifest.expectedName) failures.push('persona name');
-if (persona.publishedAt !== personaManifest.verifiedPublishedAt) failures.push('verified published revision');
+const livePublishedAtMs = typeof persona.publishedAt === 'string'
+    ? Date.parse(persona.publishedAt)
+    : Number.NaN;
+const minimumPublishedAtMs = Date.parse(personaManifest.verifiedPublishedAt);
+if (
+    !Number.isFinite(livePublishedAtMs)
+    || !Number.isFinite(minimumPublishedAtMs)
+    || livePublishedAtMs < minimumPublishedAtMs
+) failures.push('verified published revision');
 if (persona.description !== managedPersonaDescription) failures.push('persona description');
 if (avatarIdOf(persona) !== personaManifest.expectedAvatarId) failures.push('avatar ID');
 if (persona.avatarModel !== personaManifest.expectedAvatarModel) failures.push('Cara 4 model');

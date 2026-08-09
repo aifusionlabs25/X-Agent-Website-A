@@ -88,7 +88,7 @@ npm run anam:audit:dani
 npm run anam:update:dani -- --apply --confirm=CONFIRM_DANI_CARA4_SYNC --backup-dir="C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam"
 ```
 
-The update API creates or updates the provider draft; it does not publish that draft. After a successful provider read-back, the updater intentionally exits with code `2` and reports `manualPublishRequired: true`. Publish in Anam, record the new exact `publishedAt` in `persona-manifest.json` and the runtime readiness pin, then run `npm run anam:audit:dani`. The audit and website token route both fail closed unless that exact published revision is present.
+The update API creates or updates the provider draft; it does not publish that draft. After a successful provider read-back, the updater intentionally exits with code `2` and reports `manualPublishRequired: true`. Publish in Anam, record the new verified `publishedAt` baseline in `persona-manifest.json` and the runtime readiness pin, then run `npm run anam:audit:dani`. The audit and website token route reject missing or older publication metadata while allowing a later republish of the same fully verified configuration.
 
 The Anam persona may be described as live because the guarded apply and delayed read-back passed. Do not describe the website three-email path as production-live until the website is deployed, its gates are verified, and an opted-in end-to-end call produces the three intended deliveries.
 

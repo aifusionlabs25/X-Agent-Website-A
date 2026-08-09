@@ -47,7 +47,7 @@ export const DANI_EXPECTED_AVATAR_ID = '58b045b9-ac1d-4ddf-af14-18972618c57b';
 export const DANI_EXPECTED_VOICE_ID = '90a1acd3-4fc0-11f1-84b0-52bacf74fa75';
 export const DANI_EXPECTED_LLM_ID = 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7';
 export const DANI_EXPECTED_PROMPT_SHA256 = '9da10faa751087237dfb5eb76b25dc937efe78e84197ba874e7f0d96a8e375b3';
-export const DANI_EXPECTED_PUBLISHED_AT = '2026-08-09T18:36:27.589Z';
+export const DANI_MINIMUM_PUBLISHED_AT = '2026-08-09T18:36:27.589Z';
 
 export const DANI_REQUIRED_TOOL_NAMES = [
     'Knowledge_Dani_AI_Solutions_Director',
@@ -339,7 +339,11 @@ export function inspectDaniPersonaReadiness(
         : '';
     const personaIdMatches = persona.id === DANI_PERSONA_ID;
     const identityMatches = persona.name === DANI_EXPECTED_NAME;
-    const publishedRevisionMatches = persona.publishedAt === DANI_EXPECTED_PUBLISHED_AT;
+    const publishedAtMs = typeof persona.publishedAt === 'string'
+        ? Date.parse(persona.publishedAt)
+        : Number.NaN;
+    const publishedRevisionMatches = Number.isFinite(publishedAtMs)
+        && publishedAtMs >= Date.parse(DANI_MINIMUM_PUBLISHED_AT);
     const cara4AvatarConfigured = persona.avatarModel === 'cara-4';
     const avatarIdMatches = avatarIdFromPersona(persona) === DANI_EXPECTED_AVATAR_ID;
     const voiceIdMatches = voiceIdFromPersona(persona) === DANI_EXPECTED_VOICE_ID;

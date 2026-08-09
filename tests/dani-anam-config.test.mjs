@@ -6,7 +6,7 @@ import {
     DANI_EXPECTED_AVATAR_ID,
     DANI_EXPECTED_LLM_ID,
     DANI_EXPECTED_NAME,
-    DANI_EXPECTED_PUBLISHED_AT,
+    DANI_MINIMUM_PUBLISHED_AT,
     DANI_EXPECTED_PROMPT_SHA256,
     DANI_EXPECTED_VOICE_ID,
     DANI_PERSONA_ID,
@@ -31,7 +31,7 @@ function healthyPersona() {
     return {
         id: DANI_PERSONA_ID,
         name: DANI_EXPECTED_NAME,
-        publishedAt: DANI_EXPECTED_PUBLISHED_AT,
+        publishedAt: DANI_MINIMUM_PUBLISHED_AT,
         avatarModel: 'cara-4',
         avatar: { id: DANI_EXPECTED_AVATAR_ID },
         voice: { id: DANI_EXPECTED_VOICE_ID },
@@ -82,6 +82,9 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
         { ...healthyPersona(), enableAudioPassthrough: true },
     ];
     for (const persona of drifted) assert.equal(inspectDaniPersonaReadiness(persona).ready, false);
+
+    const republished = { ...healthyPersona(), publishedAt: '2026-08-09T19:30:00.000Z' };
+    assert.equal(inspectDaniPersonaReadiness(republished).ready, true);
 });
 
 test('Dani readiness accepts Anam generated tool text outside the managed prompt hash', () => {
@@ -159,7 +162,7 @@ test('manifest and site use the exact published Dani identity and optimized Cara
     assert.equal(manifest.personaId, DANI_PERSONA_ID);
     assert.equal(manifest.rollbackPersonaId, '61f0fd3e-7937-472a-958d-cdba76b33bf1');
     assert.equal(manifest.expectedName, 'Dani AI Solutions Director');
-    assert.equal(manifest.verifiedPublishedAt, DANI_EXPECTED_PUBLISHED_AT);
+    assert.equal(manifest.verifiedPublishedAt, DANI_MINIMUM_PUBLISHED_AT);
     assert.equal(manifest.expectedAvatarId, DANI_EXPECTED_AVATAR_ID);
     assert.equal(manifest.expectedVoiceId, DANI_EXPECTED_VOICE_ID);
     assert.equal(manifest.expectedLlmId, DANI_EXPECTED_LLM_ID);
