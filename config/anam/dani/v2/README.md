@@ -25,7 +25,7 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 ## Contents
 
 - `DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md`: unified website and meeting-safe voice prompt.
-- `knowledge/`: ten public-safe retrieval documents.
+- `knowledge/`: eleven public-safe retrieval documents, including a deliberately limited professional company/founder profile.
 - `knowledge-manifest.json`: versioned knowledge-group definition with the pinned live v2 group ID and exact hashes.
 - `CAPABILITY_CLAIMS_AND_APPROVALS.md`: internal evidence register and unresolved business approvals. Do not upload it to Anam knowledge.
 - `POST_CALL_EMAIL_SOP.md`: backend-owned Admin, Call Summary, and prospect thank-you contract. Do not upload it to public knowledge.

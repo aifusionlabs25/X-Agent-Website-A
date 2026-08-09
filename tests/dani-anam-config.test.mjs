@@ -127,10 +127,10 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /email_queued/);
 });
 
-test('managed Dani KB is an exact ten-file, hashed, public-safe AI solutions allowlist', async () => {
+test('managed Dani KB is an exact eleven-file, hashed, public-safe AI solutions allowlist', async () => {
     const filenames = (await readdir(new URL('knowledge/', knowledgeManifestUrl))).sort();
     assert.deepEqual(filenames, [...knowledgeManifest.documents].sort());
-    assert.equal(filenames.length, 10);
+    assert.equal(filenames.length, 11);
     const fingerprints = [];
     for (const filename of knowledgeManifest.documents) {
         const content = await readFile(new URL(`knowledge/${filename}`, knowledgeManifestUrl), 'utf8');
@@ -153,9 +153,15 @@ test('managed Dani KB is an exact ten-file, hashed, public-safe AI solutions all
     assert.match(proof, /not customer case studies/i);
     const meeting = await readFile(new URL('knowledge/08_meeting_participation_playbook.md', knowledgeManifestUrl), 'utf8');
     const followUp = await readFile(new URL('knowledge/09_post_call_follow_up_boundaries.md', knowledgeManifestUrl), 'utf8');
+    const founder = await readFile(new URL('knowledge/10_ai_fusion_labs_founder_public_profile.md', knowledgeManifestUrl), 'utf8');
     assert.match(meeting, /silent until addressed by its display name/i);
     assert.match(followUp, /native Anam meeting/i);
     assert.match(followUp, /exactly-once/i);
+    assert.match(founder, /Rob Vicks is the founder of AI Fusion Labs/);
+    assert.match(founder, /professional context statement, not a personal biography/i);
+    assert.match(founder, /do not speculate/i);
+    assert.match(founder, /family information|health information|private contact information/i);
+    assert.doesNotMatch(founder, /founded in \d{4}|headquartered in|graduated from|married to/i);
 });
 
 test('manifest and site use the exact published Dani identity and optimized Cara 4 image', async () => {

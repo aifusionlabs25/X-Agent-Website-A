@@ -6,13 +6,13 @@ This directory is the managed source for the Cara 4 Dani persona used by `x-agen
 
 The owner approved Dani's expansion to **Dani AI Solutions Director**, the broader AI Fusion Labs discovery role, and the website three-email follow-up on 2026-08-09.
 
-The v2 Anam apply completed on 2026-08-09. Immediate and delayed provider read-backs verified the exact prompt, models, four-tool set, dedicated knowledge group, and all ten document bytes. The repository also contains the website follow-up implementation; that path is not production-confirmed until the site deploy and end-to-end delivery test pass.
+The v2 Anam apply completed on 2026-08-09. Immediate and delayed provider read-backs verified the exact prompt, models, four-tool set, dedicated knowledge group, and all eleven document bytes. The repository also contains the website follow-up implementation; that path is not production-confirmed until the site deploy and end-to-end delivery test pass.
 
 Implementation status:
 
 | Area | Repository state | Live/provider state |
 |---|---|---|
-| V2 prompt, identity, and ten-file KB | Managed source of truth | Live in Anam; immediate and delayed read-backs passed |
+| V2 prompt, identity, and eleven-file KB | Managed source of truth | Live in Anam; immediate and delayed read-backs passed |
 | Website contact gate and three-email pipeline | Implemented and covered by Dani tests | Requires site deployment, open production gates, and an end-to-end provider test |
 | Anam group-call participation | V2 prompt and KB define silent, name-invoked advisory behavior | Anam supplies meeting transport and name gating |
 | Native Anam meeting follow-up email | Explicitly excluded from the website client tool | Not implemented; no verified recipient-and-consent bridge or native meeting handler |
@@ -36,7 +36,7 @@ The updater verifies the target persona, avatar, voice, LLM, and protected rollb
 ## Managed v2 source
 
 - `v2/DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md`: canonical website and meeting-safe spoken prompt.
-- `v2/knowledge/`: ten public-safe AI Fusion Labs, solution-discovery, X Agent, meeting, and follow-up documents.
+- `v2/knowledge/`: eleven public-safe AI Fusion Labs, founder-profile, solution-discovery, X Agent, meeting, and follow-up documents.
 - `v2/knowledge-manifest.json`: exact document allowlist, fingerprints, bundle hash, provenance, and exclusions.
 - `persona-manifest.json`: pinned identity, model assets, v2 prompt hash, voice behavior, and four required live tools.
 - `../dani-agentmail-client-tool.json`: website-only follow-up status and revocation tool.
@@ -114,7 +114,7 @@ The Anam persona may be described as live because the guarded apply and delayed 
 - V2 knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Exact live tools: `Knowledge_Dani_AI_Solutions_Director`, `skip_turn`, `end_call`, `send_dani_follow_up_email`
-- Ten of ten v2 documents reported `READY` and matched their local byte hashes.
+- Eleven of eleven v2 documents reported `READY` and matched their local byte hashes.
 - Immediate and delayed v2 provider read-backs passed.
 - Protected Cara 3 rollback persona remained unchanged.
 - Published v2 timestamp: `2026-08-09T18:36:27.589Z`

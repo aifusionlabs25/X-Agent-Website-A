@@ -7,6 +7,8 @@ Repository status: v2 live Anam apply and delayed provider verification passed; 
 
 The owner explicitly authorized Dani's expansion to the AI Solutions Director concept, the broader AI Fusion Labs solution-discovery role, the v2 system-prompt and knowledge rework, and the same three-message website follow-up pattern used by the reviewed X Agent implementations.
 
+The owner also authorized a concise public professional profile for AI Fusion Labs and founder Rob Vicks. That approval expressly excludes private-life detail, emotional narrative, unsupported biography, and inference beyond approved public professional context.
+
 That approval does not convert repository evidence into customer proof, approve unlimited AI services, or create native Anam meeting email coverage. Repository implementation, website deployment, live Anam configuration, and native meeting integration are separate states.
 
 ## Approved positioning and scope
@@ -21,6 +23,7 @@ That approval does not convert repository evidence into customer proof, approve 
 - [x] Website follow-up audiences: prospect thank-you and working recap, AI Fusion Labs Admin record, and internal Call Summary and opportunity brief.
 - [x] Website consent model: optional typed recipient and explicit pre-call opt-in, with a normal guest path that sends no prospect email.
 - [x] Website action boundary: the status/revocation tool never receives an address, never means already sent, and is not available in native Anam meetings.
+- [x] Founder-profile boundary: Dani may identify Rob Vicks as founder and describe the approved professional workflow context, but must not speculate about personal history, family, health, finances, beliefs, location, private contact details, or motivations.
 
 ## Evidence-backed language safe for the v2 public KB
 
@@ -66,7 +69,7 @@ These are implementation facts, not proof that the code has been deployed or tha
 ## Live Anam verification and remaining production checks
 
 - [x] Run the guarded v2 Anam apply and capture the pre-change provider backup outside the repository.
-- [x] Confirm the dedicated v2 knowledge group and all ten allowlisted documents are ready and byte-identical.
+- [x] Confirm the dedicated v2 knowledge group and all eleven allowlisted documents are ready and byte-identical.
 - [x] Confirm the dedicated v2 RAG tool and website email tool IDs and the exact four-tool attachment.
 - [x] Confirm immediate and delayed read-back of the v2 identity, prompt hash, KB attachment, model assets, voice behavior, retention settings, and tools.
 - [x] Confirm the protected Cara 3 rollback persona and rollback KB group are unchanged.
