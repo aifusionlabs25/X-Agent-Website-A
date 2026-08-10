@@ -183,6 +183,16 @@ function parse<T>(raw: unknown, schemaVersion: string): T | null {
     return value as T;
 }
 
+function redisResultShape(value: unknown): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return `array:${value.length}`;
+    if (typeof value === 'string') return `string:${value.length}`;
+    if (typeof value === 'object') {
+        return `object:${Object.keys(value as Record<string, unknown>).sort().join(',').slice(0, 80)}`;
+    }
+    return typeof value;
+}
+
 function countDelivered(status: DeliveryStatus): number {
     return Object.values(status).filter(Boolean).length;
 }
@@ -315,7 +325,7 @@ export async function consumeDaniAnamFollowUpOtpChallenge(input: {
         FOLLOW_UP_OTP_MAX_ATTEMPTS,
     ], options);
     if (!Array.isArray(result) || result.length < 1) {
-        throw new Error('Dani follow-up verification returned an invalid result');
+        throw new Error(`Dani follow-up verification returned an invalid result (${redisResultShape(result)})`);
     }
     const status = String(result[0]);
     if (status === 'verified') {

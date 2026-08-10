@@ -28,16 +28,24 @@ test('Dani entry gate uses the editorial studio system without changing access c
     assert.doesNotMatch(gate, /from-indigo|to-cyan|bg-indigo/);
 });
 
-test('Dani live session has route-scoped identity, safe controls, and a true completion return', async () => {
-    const [demo, header, footer] = await Promise.all([
+test('Dani live session has route-scoped identity, safe controls, clean framing, and a true completion return', async () => {
+    const [demo, player, header, footer] = await Promise.all([
         read('../app/demo/[slug]/page.tsx'),
+        read('../components/AnamPlayer.tsx'),
         read('../components/layout/SiteHeader.tsx'),
         read('../components/layout/SiteFooter.tsx'),
     ]);
 
     assert.match(demo, /data-dani-surface=\{isDani \? 'live-session'/);
     assert.match(demo, /AI Fusion Labs \/ Dani/);
-    assert.match(demo, /Clarity, in conversation\./);
+    assert.match(demo, /Working session/);
+    assert.match(demo, /End session/);
+    assert.doesNotMatch(demo, /AI Solutions Director/);
+    assert.doesNotMatch(demo, /Clarity, in conversation\./);
+    assert.doesNotMatch(demo, /One focused question at a time\./);
+    assert.match(player, /personaId === DANI_PERSONA_ID \? 'h-full w-full scale-\[\.97\]/);
+    assert.match(player, /md:scale-\[\.94\]/);
+    assert.match(player, /motion-reduce:transform-none/);
     assert.match(demo, /\/agents\/dani\?session=complete/);
     assert.match(demo, /env\(safe-area-inset-bottom\)/);
     assert.match(header, /pathname === '\/agents\/dani'/);
@@ -59,6 +67,8 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(landing, /Sent only when requested/);
     assert.match(landing, /No CRM update or commercial commitment was made/);
     assert.match(landing, /data-dani-surface=\{sessionComplete \? 'post-session' : 'landing'\}/);
+    assert.doesNotMatch(landing, /Dani \/ AI Fusion Labs/);
+    assert.doesNotMatch(landing, /Clarity before complexity\./);
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
     assert.match(css, /\.entryPortraitImage/);
     assert.match(css, /\.landingPortraitImage/);

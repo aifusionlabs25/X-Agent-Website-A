@@ -80,11 +80,7 @@ export default function DaniEditorialLanding({ sessionComplete }: DaniEditorialL
                         sizes="(max-width: 1023px) 100vw, 44vw"
                         className={styles.landingPortraitImage}
                     />
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,14,12,.05)_50%,rgba(8,14,12,.72)_100%)] lg:bg-[linear-gradient(90deg,rgba(248,244,233,.94)_0%,rgba(248,244,233,.12)_19%,transparent_42%),linear-gradient(180deg,transparent_60%,rgba(8,14,12,.42)_100%)]" />
-                    <div className="absolute inset-x-5 bottom-5 text-white sm:inset-x-8 sm:bottom-8 lg:bottom-10 lg:left-auto lg:right-10 lg:max-w-[18rem] lg:text-right">
-                        <p className={`${styles.mono} text-[9px] font-bold uppercase tracking-[0.17em] text-[#dbffef]`}>Dani / AI Fusion Labs</p>
-                        <p className={`${styles.display} mt-2 text-2xl font-semibold leading-tight tracking-[-.03em] sm:text-3xl`}>Clarity before complexity.</p>
-                    </div>
+                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(54,43,29,.01),rgba(54,43,29,.12))] lg:bg-[linear-gradient(90deg,rgba(248,244,233,.88)_0%,rgba(248,244,233,.08)_18%,transparent_38%),linear-gradient(180deg,rgba(54,43,29,.01),rgba(54,43,29,.1))]" />
                 </div>
             </section>
         </main>

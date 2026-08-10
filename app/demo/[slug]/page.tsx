@@ -144,14 +144,6 @@ export default function DemoPage({ params, searchParams }: Props) {
                 </Link>
             </div>
 
-            {isDani && !isQaMode && (
-                <div className="pointer-events-none absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] left-5 z-20 hidden max-w-md text-white sm:block sm:left-8 lg:bottom-[max(2.25rem,env(safe-area-inset-bottom))] lg:left-10">
-                    <p className={`${daniStyles.mono} text-[9px] font-semibold uppercase tracking-[0.17em] text-[#dbffef]`}>AI Solutions Director</p>
-                    <p className={`${daniStyles.display} mt-2 text-[clamp(2rem,4vw,3.5rem)] font-semibold leading-[.94] tracking-[-.04em]`}>Clarity, in conversation.</p>
-                    <p className="mt-2 max-w-sm text-xs leading-5 text-white/72">One focused question at a time.</p>
-                </div>
-            )}
-
             {/* The Anam Player takes over the screen */}
             <div className={`relative h-full w-full ${isEvan ? 'px-4 pb-24 pt-20 sm:px-7 sm:pb-20 sm:pt-20' : ''} ${isQaMode ? 'z-30' : ''}`}>
                 {agent.personaId ? (
@@ -177,7 +169,7 @@ export default function DemoPage({ params, searchParams }: Props) {
             </div>
 
             {/* Cinematic overlay effects */}
-            <div className={`pointer-events-none absolute inset-0 z-10 ${isEvan ? 'bg-[radial-gradient(circle_at_center,transparent_42%,rgba(16,7,24,.74)_100%)] ring-1 ring-inset ring-[#ffc857]/15' : isDani ? 'bg-[linear-gradient(90deg,rgba(5,8,7,.56),transparent_44%,rgba(5,8,7,.16)),linear-gradient(0deg,rgba(5,8,7,.68),transparent_42%)] ring-1 ring-inset ring-white/10' : 'bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)]'}`} />
+            <div className={`pointer-events-none absolute inset-0 z-10 ${isEvan ? 'bg-[radial-gradient(circle_at_center,transparent_42%,rgba(16,7,24,.74)_100%)] ring-1 ring-inset ring-[#ffc857]/15' : isDani ? 'bg-[radial-gradient(circle_at_center,transparent_58%,rgba(5,8,7,.22)_100%)] ring-1 ring-inset ring-white/10' : 'bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)]'}`} />
         </main>
     );
 
