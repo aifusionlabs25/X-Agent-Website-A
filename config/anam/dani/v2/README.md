@@ -55,11 +55,11 @@ Anam supplies meeting joining, the visible AI disclosure, and group-call name ga
 - Knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
-- Prompt SHA-256: `ef663ada9395b9711ab6bddccabcfd482d86823fc0e5d982a0af9bddcc06799c`
-- KB bundle SHA-256: `1ee1960b8db561e9412fa216af7abb50a29b2dced073b6194689087b79ed7c4d`
+- Prompt SHA-256: `116eb6407a80388ac8eba088b65c5899af93527a0fa3dd00f8c1ce3305cd2eaa`
+- KB bundle SHA-256: `6a570016b8c6232a7d43f7aaa627ce12964ae0eaf5ec704566abc562a22b78af`
 - Immediate and delayed provider verification: passed
 - Protected Cara 3 rollback: unchanged
-- Published at: `2026-08-10T04:44:19.847Z`
+- Published at: `2026-08-10T20:19:52.763Z`
 
 ## Remaining website promotion checks
 

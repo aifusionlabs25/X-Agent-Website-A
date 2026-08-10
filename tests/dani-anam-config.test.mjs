@@ -94,7 +94,7 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
     ];
     for (const persona of drifted) assert.equal(inspectDaniPersonaReadiness(persona).ready, false);
 
-    const republished = { ...healthyPersona(), publishedAt: '2026-08-10T05:00:00.000Z' };
+    const republished = { ...healthyPersona(), publishedAt: '2026-08-10T21:00:00.000Z' };
     assert.equal(inspectDaniPersonaReadiness(republished).ready, true);
 });
 
@@ -150,6 +150,12 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /You are Dani, the AI Solutions Director/i);
     assert.match(prompt, /X Agents are AI Fusion Labs' flagship product, but they are not the answer to every problem/i);
     assert.match(prompt, /Use this order of authority/i);
+    assert.match(prompt, /Live voice contract - highest priority/i);
+    assert.match(prompt, /no more than 45 spoken words by default/i);
+    assert.match(prompt, /honest range.*ballpark.*best guess/is);
+    assert.match(prompt, /low five figures.*mid six figures.*a few weeks/is);
+    assert.match(prompt, /An ambitious team can combine models, APIs, retrieval, workflow frameworks/i);
+    assert.match(prompt, /ends mid-thought.*or did I.*skip_turn/is);
     assert.match(prompt, /Non-negotiable claim gate/i);
     assert.match(prompt, /self-service or no-code X Agent sandbox/i);
     assert.match(prompt, /free pilot or trial/i);
@@ -197,10 +203,10 @@ test('Dani identity tool is dedicated and uses the exact two-field client schema
     assert.notEqual(identityToolDefinition.name, 'confirm_live_identity');
 });
 
-test('managed Dani KB is an exact twelve-file, hashed, public-safe AI solutions allowlist', async () => {
+test('managed Dani KB is an exact thirteen-file, hashed, public-safe AI solutions allowlist', async () => {
     const filenames = (await readdir(new URL('knowledge/', knowledgeManifestUrl))).sort();
     assert.deepEqual(filenames, [...knowledgeManifest.documents].sort());
-    assert.equal(filenames.length, 12);
+    assert.equal(filenames.length, 13);
     const fingerprints = [];
     for (const filename of knowledgeManifest.documents) {
         const content = await readFile(new URL(`knowledge/${filename}`, knowledgeManifestUrl), 'utf8');
@@ -214,7 +220,7 @@ test('managed Dani KB is an exact twelve-file, hashed, public-safe AI solutions 
             { bytes: fingerprint.bytes, sha256: fingerprint.sha256 },
             knowledgeManifest.documentFingerprints[filename],
         );
-        assert.match(content, /Verified: 2026-08-09/);
+        assert.match(content, /Verified: 2026-08-(?:09|10)/);
         assert.doesNotMatch(content, /\bDanny\b|Sales Technician/i);
     }
     assert.equal(normalizedSha256(JSON.stringify(fingerprints)), knowledgeManifest.bundleSha256);
@@ -225,6 +231,7 @@ test('managed Dani KB is an exact twelve-file, hashed, public-safe AI solutions 
     const followUp = await readFile(new URL('knowledge/09_post_call_follow_up_boundaries.md', knowledgeManifestUrl), 'utf8');
     const founder = await readFile(new URL('knowledge/10_ai_fusion_labs_founder_public_profile.md', knowledgeManifestUrl), 'utf8');
     const claimControl = await readFile(new URL('knowledge/11_claim_control_and_safe_hypotheticals.md', knowledgeManifestUrl), 'utf8');
+    const liveVoice = await readFile(new URL('knowledge/12_live_voice_and_commercial_pressure.md', knowledgeManifestUrl), 'utf8');
     assert.match(meeting, /silent until addressed by its display name/i);
     assert.match(followUp, /native Anam meeting/i);
     assert.match(followUp, /exactly-once/i);
@@ -238,6 +245,11 @@ test('managed Dani KB is an exact twelve-file, hashed, public-safe AI solutions 
     assert.match(claimControl, /setup, integration, or deployment in a few hours/i);
     assert.match(claimControl, /Never guess a participant's name/i);
     assert.match(claimControl, /Reduced manual effort is a hypothesis/i);
+    assert.match(liveVoice, /no more than 45 spoken words/i);
+    assert.match(liveVoice, /low five figures.*mid six figures.*four to six weeks.*eight to ten weeks/is);
+    assert.match(liveVoice, /They could build something similar/i);
+    assert.match(liveVoice, /SaaS founder.*conference operator.*healthcare/is);
+    assert.match(liveVoice, /do not fill the answer with an industry estimate/i);
 });
 
 test('Dani red-team QA preserves the observed Boardy interview failure cases', async () => {
@@ -247,6 +259,9 @@ test('Dani red-team QA preserves the observed Boardy interview failure cases', a
     assert.match(qa, /connect our CRM and FAQ and have it running in a few hours/i);
     assert.match(qa, /human-looking avatar always builds trust and empathy/i);
     assert.match(qa, /Never guesses or invents a name/i);
+    assert.match(qa, /honest.*price and delivery range/is);
+    assert.match(qa, /ambitious team could reproduce X Agents/i);
+    assert.match(qa, /no more than 45 spoken words/i);
 });
 
 test('manifest and site use the exact published Dani identity and optimized Cara 4 image', async () => {

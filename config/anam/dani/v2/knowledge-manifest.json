@@ -3,13 +3,13 @@
   "deploymentStatus": "live_verified",
   "agent": "Dani",
   "company": "AI Fusion Labs",
-  "verifiedAt": "2026-08-09",
+  "verifiedAt": "2026-08-10",
   "sourcePersonaId": "120cf627-59a6-4a35-8e70-97959a89a4da",
   "sourceKnowledgeGroupId": "b1fb1df8-540e-4263-9735-0a6434c6bd1a",
   "folderName": "Dani AI Solutions Director Anam KB 2026-08-09 v2",
   "liveGroupId": "0c5a31dd-44f7-4d79-95fc-b6df31bbff4f",
   "toolName": "Knowledge_Dani_AI_Solutions_Director",
-  "bundleSha256": "1ee1960b8db561e9412fa216af7abb50a29b2dced073b6194689087b79ed7c4d",
+  "bundleSha256": "6a570016b8c6232a7d43f7aaa627ce12964ae0eaf5ec704566abc562a22b78af",
   "documents": [
     "00_role_scope_authority.md",
     "01_ai_fusion_labs_approved_capabilities.md",
@@ -22,7 +22,8 @@
     "08_meeting_participation_playbook.md",
     "09_post_call_follow_up_boundaries.md",
     "10_ai_fusion_labs_founder_public_profile.md",
-    "11_claim_control_and_safe_hypotheticals.md"
+    "11_claim_control_and_safe_hypotheticals.md",
+    "12_live_voice_and_commercial_pressure.md"
   ],
   "documentFingerprints": {
     "00_role_scope_authority.md": {
@@ -72,6 +73,10 @@
     "11_claim_control_and_safe_hypotheticals.md": {
       "bytes": 2872,
       "sha256": "5f2dc8be52f77d141bae8698f3184f0e89165396383109fab40aa025b1b56a46"
+    },
+    "12_live_voice_and_commercial_pressure.md": {
+      "bytes": 3694,
+      "sha256": "e2eca348968f270605511e749b7da3f56edddb48acc1737b32e94b4dc8469add"
     }
   },
   "excludedClasses": [
@@ -82,5 +87,5 @@
     "internal approval registers, email templates, strategy, founder coaching, and opportunity scoring",
     "backups, drafts outside this allowlist, test fixtures, and runtime logs"
   ],
-  "sourcePolicy": "The v1 Dani public-safe bundle remains the grounding baseline. V2 adds evidence-backed AI solution pattern language, adaptive discovery, meeting behavior, post-call boundaries, limited approved company and founder context, and an explicit claim-control ledger. Broader categories are framed as areas to evaluate rather than universally available commercial services. The founder profile is professional and public-safe; private biography and speculation are explicitly excluded. No client-specific context or unsupported outcome claim is included."
+  "sourcePolicy": "The v1 Dani public-safe bundle remains the grounding baseline. V2 adds evidence-backed AI solution pattern language, adaptive discovery, meeting behavior, post-call boundaries, limited approved company and founder context, an explicit claim-control ledger, and transcript-derived live-voice and commercial-pressure guardrails. Broader categories are framed as areas to evaluate rather than universally available commercial services. The founder profile is professional and public-safe; private biography and speculation are explicitly excluded. No client-specific context or unsupported outcome claim is included."
 }
