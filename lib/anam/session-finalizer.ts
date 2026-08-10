@@ -351,6 +351,14 @@ export async function finalizeAmyAnamSession(
                 return 'pending';
             }
 
+            if (transcript.status === 'unavailable') {
+                console.warn('[Anam Session] Provider transcript unavailable', {
+                    externalSessionRef: externalSessionId.slice(-8),
+                    reason: transcript.reason,
+                    contentIncluded: false,
+                });
+            }
+
             const receipt = buildAmyAnamReceipt({
                 externalSessionId,
                 closeReason: finalization.closeReason,

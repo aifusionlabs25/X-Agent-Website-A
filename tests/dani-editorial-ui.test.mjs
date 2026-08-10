@@ -69,6 +69,10 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(landing, /data-dani-surface=\{sessionComplete \? 'post-session' : 'landing'\}/);
     assert.doesNotMatch(landing, /Dani \/ AI Fusion Labs/);
     assert.doesNotMatch(landing, /Clarity before complexity\./);
+    assert.match(landing, /lg:grid-cols-\[minmax\(29rem,1\.02fr\)_minmax\(28rem,\.98fr\)\]/);
+    assert.match(landing, /max-w-\[42rem\]/);
+    assert.match(landing, /text-\[clamp\(3rem,4\.6vw,5\.25rem\)\]/);
+    assert.doesNotMatch(landing, /6\.5rem|8\.5rem|max-w-\[50rem\]/);
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
     assert.match(css, /\.entryPortraitImage/);
     assert.match(css, /\.landingPortraitImage/);

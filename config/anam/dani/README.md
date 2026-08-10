@@ -113,16 +113,16 @@ The Anam persona may be described as live because the guarded apply and delayed 
 ## Verified v2 provider record
 
 - Live identity: `Dani AI Solutions Director`
-- Live prompt SHA-256: `604254b51e4d6174294b354a59b5bb1d52a5c399ee7d3444b1dc877715164ebb`
-- Live knowledge bundle SHA-256: `59c78f8e62ed3f30084db5d15abf981b664942f819c1e78640231080c8803ae3`
+- Live prompt SHA-256: `ef663ada9395b9711ab6bddccabcfd482d86823fc0e5d982a0af9bddcc06799c`
+- Live knowledge bundle SHA-256: `1ee1960b8db561e9412fa216af7abb50a29b2dced073b6194689087b79ed7c4d`
 - V2 knowledge group: `0c5a31dd-44f7-4d79-95fc-b6df31bbff4f`
 - V2 knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
 - Exact live tools: `Knowledge_Dani_AI_Solutions_Director`, `skip_turn`, `end_call`, `send_dani_follow_up_email`, `confirm_dani_live_identity`
-- Eleven of eleven v2 documents reported `READY` and matched their local byte hashes.
+- Twelve of twelve v2 documents reported `READY` and matched their local byte hashes.
 - Immediate and delayed v2 provider read-backs passed.
 - Protected Cara 3 rollback persona remained unchanged.
-- Published v2 timestamp: `2026-08-10T01:40:14.103Z`
+- Published v2 timestamp: `2026-08-10T04:44:19.847Z`
 - Final v2 pre-change provider snapshot: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-35-36-201Z.json`
 - Initial v2 attempt snapshot retained at: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-29-47-684Z.json`

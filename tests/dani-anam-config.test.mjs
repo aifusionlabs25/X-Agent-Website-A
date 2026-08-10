@@ -94,7 +94,7 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
     ];
     for (const persona of drifted) assert.equal(inspectDaniPersonaReadiness(persona).ready, false);
 
-    const republished = { ...healthyPersona(), publishedAt: '2026-08-10T02:00:00.000Z' };
+    const republished = { ...healthyPersona(), publishedAt: '2026-08-10T05:00:00.000Z' };
     assert.equal(inspectDaniPersonaReadiness(republished).ready, true);
 });
 
@@ -150,6 +150,12 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /You are Dani, the AI Solutions Director/i);
     assert.match(prompt, /X Agents are AI Fusion Labs' flagship product, but they are not the answer to every problem/i);
     assert.match(prompt, /Use this order of authority/i);
+    assert.match(prompt, /Non-negotiable claim gate/i);
+    assert.match(prompt, /self-service or no-code X Agent sandbox/i);
+    assert.match(prompt, /free pilot or trial/i);
+    assert.match(prompt, /implementation in a few hours/i);
+    assert.match(prompt, /Never guess a participant's name/i);
+    assert.match(prompt, /Do not state that an avatar builds trust/i);
     assert.match(prompt, /Ask at most one meaningful question/i);
     assert.match(prompt, /Do not end every turn with a question/i);
     assert.match(prompt, /Knowledge_Dani_AI_Solutions_Director/);
@@ -191,10 +197,10 @@ test('Dani identity tool is dedicated and uses the exact two-field client schema
     assert.notEqual(identityToolDefinition.name, 'confirm_live_identity');
 });
 
-test('managed Dani KB is an exact eleven-file, hashed, public-safe AI solutions allowlist', async () => {
+test('managed Dani KB is an exact twelve-file, hashed, public-safe AI solutions allowlist', async () => {
     const filenames = (await readdir(new URL('knowledge/', knowledgeManifestUrl))).sort();
     assert.deepEqual(filenames, [...knowledgeManifest.documents].sort());
-    assert.equal(filenames.length, 11);
+    assert.equal(filenames.length, 12);
     const fingerprints = [];
     for (const filename of knowledgeManifest.documents) {
         const content = await readFile(new URL(`knowledge/${filename}`, knowledgeManifestUrl), 'utf8');
@@ -218,6 +224,7 @@ test('managed Dani KB is an exact eleven-file, hashed, public-safe AI solutions 
     const meeting = await readFile(new URL('knowledge/08_meeting_participation_playbook.md', knowledgeManifestUrl), 'utf8');
     const followUp = await readFile(new URL('knowledge/09_post_call_follow_up_boundaries.md', knowledgeManifestUrl), 'utf8');
     const founder = await readFile(new URL('knowledge/10_ai_fusion_labs_founder_public_profile.md', knowledgeManifestUrl), 'utf8');
+    const claimControl = await readFile(new URL('knowledge/11_claim_control_and_safe_hypotheticals.md', knowledgeManifestUrl), 'utf8');
     assert.match(meeting, /silent until addressed by its display name/i);
     assert.match(followUp, /native Anam meeting/i);
     assert.match(followUp, /exactly-once/i);
@@ -226,6 +233,20 @@ test('managed Dani KB is an exact eleven-file, hashed, public-safe AI solutions 
     assert.match(founder, /do not speculate/i);
     assert.match(founder, /family information|health information|private contact information/i);
     assert.doesNotMatch(founder, /founded in \d{4}|headquartered in|graduated from|married to/i);
+    assert.match(claimControl, /self-service or no-code X Agent sandbox/i);
+    assert.match(claimControl, /free pilot, free trial, or zero-cost/i);
+    assert.match(claimControl, /setup, integration, or deployment in a few hours/i);
+    assert.match(claimControl, /Never guess a participant's name/i);
+    assert.match(claimControl, /Reduced manual effort is a hypothesis/i);
+});
+
+test('Dani red-team QA preserves the observed Boardy interview failure cases', async () => {
+    const qa = await readFile(new URL('v2/QA_SCENARIOS.md', configUrl), 'utf8');
+    assert.match(qa, /no-code X Agent sandbox/i);
+    assert.match(qa, /free pilot, trial, or zero-cost/i);
+    assert.match(qa, /connect our CRM and FAQ and have it running in a few hours/i);
+    assert.match(qa, /human-looking avatar always builds trust and empathy/i);
+    assert.match(qa, /Never guesses or invents a name/i);
 });
 
 test('manifest and site use the exact published Dani identity and optimized Cara 4 image', async () => {

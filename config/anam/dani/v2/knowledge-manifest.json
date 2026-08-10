@@ -9,7 +9,7 @@
   "folderName": "Dani AI Solutions Director Anam KB 2026-08-09 v2",
   "liveGroupId": "0c5a31dd-44f7-4d79-95fc-b6df31bbff4f",
   "toolName": "Knowledge_Dani_AI_Solutions_Director",
-  "bundleSha256": "59c78f8e62ed3f30084db5d15abf981b664942f819c1e78640231080c8803ae3",
+  "bundleSha256": "1ee1960b8db561e9412fa216af7abb50a29b2dced073b6194689087b79ed7c4d",
   "documents": [
     "00_role_scope_authority.md",
     "01_ai_fusion_labs_approved_capabilities.md",
@@ -21,7 +21,8 @@
     "07_security_privacy_and_high_impact.md",
     "08_meeting_participation_playbook.md",
     "09_post_call_follow_up_boundaries.md",
-    "10_ai_fusion_labs_founder_public_profile.md"
+    "10_ai_fusion_labs_founder_public_profile.md",
+    "11_claim_control_and_safe_hypotheticals.md"
   ],
   "documentFingerprints": {
     "00_role_scope_authority.md": {
@@ -67,6 +68,10 @@
     "10_ai_fusion_labs_founder_public_profile.md": {
       "bytes": 2434,
       "sha256": "934e4c0236f9f88ac6f320bcc4b920907db5727fe4d54e547cedd6f0e599e511"
+    },
+    "11_claim_control_and_safe_hypotheticals.md": {
+      "bytes": 2872,
+      "sha256": "5f2dc8be52f77d141bae8698f3184f0e89165396383109fab40aa025b1b56a46"
     }
   },
   "excludedClasses": [
@@ -77,5 +82,5 @@
     "internal approval registers, email templates, strategy, founder coaching, and opportunity scoring",
     "backups, drafts outside this allowlist, test fixtures, and runtime logs"
   ],
-  "sourcePolicy": "The v1 Dani public-safe bundle remains the grounding baseline. V2 adds evidence-backed AI solution pattern language, adaptive discovery, meeting behavior, post-call boundaries, and limited approved company and founder context. Broader categories are framed as areas to evaluate rather than universally available commercial services. The founder profile is professional and public-safe; private biography and speculation are explicitly excluded. No client-specific context or unsupported outcome claim is included."
+  "sourcePolicy": "The v1 Dani public-safe bundle remains the grounding baseline. V2 adds evidence-backed AI solution pattern language, adaptive discovery, meeting behavior, post-call boundaries, limited approved company and founder context, and an explicit claim-control ledger. Broader categories are framed as areas to evaluate rather than universally available commercial services. The founder profile is professional and public-safe; private biography and speculation are explicitly excluded. No client-specific context or unsupported outcome claim is included."
 }

@@ -53,7 +53,7 @@ export type CompletedAnamTranscript =
     }
     | {
         status: 'unavailable';
-        reason: 'empty_transcript' | 'zero_data_retention' | 'transcripts_disabled';
+        reason: 'empty_transcript' | 'provider_transcript_missing' | 'zero_data_retention' | 'transcripts_disabled';
         metadata: AnamSessionMetadata;
     };
 
@@ -349,17 +349,26 @@ export async function fetchCompletedAnamTranscript(
         metadata: AnamSessionMetadata;
         graceStartedAt: number | null;
     } | null = null;
+    let finalMissingObservation: {
+        metadata: AnamSessionMetadata;
+        graceStartedAt: number | null;
+    } | null = null;
     let consecutiveEmptyObservations = 0;
+    let consecutiveMissingObservations = 0;
 
     for (const delay of delays) {
         await sleep(delay);
+        let observedMetadata: AnamSessionMetadata | null = null;
         try {
             const metadata = await fetchAnamSessionMetadata(sessionId, options);
+            observedMetadata = metadata;
             verifyAnamSessionMetadata(metadata, launch);
 
             if (!metadata.endTime && !metadata.exitStatus) {
                 finalEmptyObservation = null;
+                finalMissingObservation = null;
                 consecutiveEmptyObservations = 0;
+                consecutiveMissingObservations = 0;
                 continue;
             }
             if (metadata.personaConfig?.zeroDataRetention === true) {
@@ -367,6 +376,8 @@ export async function fetchCompletedAnamTranscript(
             }
 
             const transcript = await fetchTranscriptOnce(sessionId, options);
+            finalMissingObservation = null;
+            consecutiveMissingObservations = 0;
             if (!transcript.transcriptsEnabled) {
                 return { status: 'unavailable', reason: 'transcripts_disabled', metadata };
             }
@@ -396,6 +407,23 @@ export async function fetchCompletedAnamTranscript(
             if (!(error instanceof AnamSessionApiError) || !error.retryable) throw error;
             finalEmptyObservation = null;
             consecutiveEmptyObservations = 0;
+            if (error.status === 404 && (observedMetadata?.endTime || observedMetadata?.exitStatus)) {
+                const providerEndedAt = Date.parse(observedMetadata.endTime ?? '');
+                const locallyReceivedAt = options.emptyTranscriptGraceStartedAt;
+                finalMissingObservation = {
+                    metadata: observedMetadata,
+                    graceStartedAt: Number.isFinite(locallyReceivedAt)
+                        ? Math.max(
+                            Number.isFinite(providerEndedAt) ? providerEndedAt : 0,
+                            locallyReceivedAt as number,
+                        )
+                        : null,
+                };
+                consecutiveMissingObservations += 1;
+                continue;
+            }
+            finalMissingObservation = null;
+            consecutiveMissingObservations = 0;
         }
     }
 
@@ -409,6 +437,19 @@ export async function fetchCompletedAnamTranscript(
             status: 'unavailable',
             reason: 'empty_transcript',
             metadata: finalEmptyObservation.metadata,
+        };
+    }
+
+    if (
+        finalMissingObservation
+        && consecutiveMissingObservations >= 2
+        && finalMissingObservation.graceStartedAt !== null
+        && now() - finalMissingObservation.graceStartedAt >= AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS
+    ) {
+        return {
+            status: 'unavailable',
+            reason: 'provider_transcript_missing',
+            metadata: finalMissingObservation.metadata,
         };
     }
 

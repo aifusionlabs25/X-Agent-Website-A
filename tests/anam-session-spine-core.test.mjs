@@ -493,6 +493,103 @@ test('an enabled zero-message transcript becomes unavailable at the grace bounda
     assert.deepEqual(result.metadata, metadata);
 });
 
+test('a completed session with a missing provider transcript remains pending before the grace boundary', async () => {
+    const launch = createAmyAnamLaunch('browser-session-transcript-missing-fresh', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: completedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const responses = [
+        jsonResponse(metadata),
+        jsonResponse({ error: 'transcript not found' }, 404),
+        jsonResponse(metadata),
+        jsonResponse({ error: 'transcript not found' }, 404),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS - 1,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, { status: 'pending' });
+});
+
+test('a completed session with a persistently missing provider transcript becomes unavailable at the grace boundary', async () => {
+    const launch = createAmyAnamLaunch('browser-session-transcript-missing-expired', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: completedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const responses = [
+        jsonResponse(metadata),
+        jsonResponse({ error: 'transcript not found' }, 404),
+        jsonResponse(metadata),
+        jsonResponse({ error: 'transcript not found' }, 404),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, {
+        status: 'unavailable',
+        reason: 'provider_transcript_missing',
+        metadata,
+    });
+});
+
+test('a completed session with repeated provider errors remains recoverable after the transcript grace boundary', async () => {
+    const launch = createAmyAnamLaunch('browser-session-transcript-provider-errors', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const metadata = {
+        id: SESSION_ID,
+        personaId: PERSONA_ID,
+        clientLabel: launch.clientLabel,
+        startTime: launch.createdAt,
+        endTime: completedAt,
+        exitStatus: 'completed',
+        personaConfig: { zeroDataRetention: false },
+    };
+    const responses = [
+        jsonResponse(metadata),
+        jsonResponse({ error: 'provider unavailable' }, 503),
+        jsonResponse(metadata),
+        jsonResponse({ error: 'provider unavailable' }, 503),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0, 1],
+        now: () => Date.parse(completedAt) + AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS,
+        emptyTranscriptGraceStartedAt: Date.parse(completedAt),
+        sleep: async () => undefined,
+        fetchImpl: async () => responses.shift(),
+    });
+
+    assert.deepEqual(result, { status: 'pending' });
+});
+
 test('empty transcript polling still accepts populated content on the final attempt', async () => {
     const launch = createAmyAnamLaunch('browser-session-empty-then-ready', PERSONA_ID, 1_900_000_000_000);
     const completedAt = '2030-03-17T17:47:10.000Z';

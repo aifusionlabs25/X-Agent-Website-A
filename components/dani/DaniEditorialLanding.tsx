@@ -14,9 +14,9 @@ export default function DaniEditorialLanding({ sessionComplete }: DaniEditorialL
             className={`${styles.root} ${styles.paper} min-h-[100svh] overflow-hidden text-[#151b19]`}
             data-dani-surface={sessionComplete ? 'post-session' : 'landing'}
         >
-            <section className="grid min-h-[100svh] lg:grid-cols-[minmax(34rem,1.13fr)_minmax(30rem,.87fr)]">
-                <div className="relative order-2 flex px-5 py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-10 sm:py-14 lg:order-1 lg:px-[clamp(3.5rem,7vw,8.5rem)] lg:py-[clamp(3rem,6vh,5rem)]">
-                    <div className={`${styles.entrance} my-auto w-full max-w-[50rem]`}>
+            <section className="grid min-h-[100svh] lg:grid-cols-[minmax(29rem,1.02fr)_minmax(28rem,.98fr)]">
+                <div className="relative order-2 flex px-5 py-9 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-10 sm:py-12 lg:order-1 lg:px-[clamp(2.5rem,5vw,6.25rem)] lg:py-[clamp(2rem,4.5vh,3.75rem)]">
+                    <div className={`${styles.entrance} my-auto w-full max-w-[42rem]`}>
                         <Link
                             href="/"
                             className={`${styles.mono} inline-flex items-center text-[10px] font-bold uppercase tracking-[0.16em] text-[#151b19] outline-none focus-visible:ring-2 focus-visible:ring-[#126e64] focus-visible:ring-offset-4 focus-visible:ring-offset-[#f8f4e9]`}
@@ -25,27 +25,27 @@ export default function DaniEditorialLanding({ sessionComplete }: DaniEditorialL
                             AI Fusion Labs
                         </Link>
 
-                        <div className="mt-[clamp(3rem,7vh,5rem)] h-px w-14 bg-[#d55538] lg:mt-[clamp(2.5rem,6vh,4rem)]" aria-hidden="true" />
-                        <p className={`${styles.mono} mt-6 text-[10px] font-bold uppercase tracking-[0.17em] text-[#126e64]`}>
+                        <div className="mt-[clamp(2.5rem,6vh,4rem)] h-px w-14 bg-[#d55538] lg:mt-[clamp(2rem,4.5vh,3rem)]" aria-hidden="true" />
+                        <p className={`${styles.mono} mt-5 text-[10px] font-bold uppercase tracking-[0.17em] text-[#126e64]`}>
                             {sessionComplete ? 'Session complete' : 'AI Solutions Director'}
                         </p>
-                        <h1 className={`${styles.display} mt-3 max-w-[12ch] text-[clamp(3.25rem,6.25vw,6.5rem)] font-semibold leading-[.88] tracking-[-.06em] lg:max-w-[14ch]`}>
+                        <h1 className={`${styles.display} mt-3 max-w-[12ch] text-[clamp(3rem,4.6vw,5.25rem)] font-semibold leading-[.9] tracking-[-.055em] lg:max-w-[14ch]`}>
                             {sessionComplete ? (
                                 <>Good work. You moved the idea forward.</>
                             ) : (
                                 <>Bring the problem. Leave with a clearer path.</>
                             )}
                         </h1>
-                        <p className="mt-7 max-w-[39rem] text-[15px] leading-7 text-[#626861] sm:text-base sm:leading-8">
+                        <p className="mt-6 max-w-[36rem] text-[15px] leading-7 text-[#626861] sm:text-base sm:leading-7">
                             {sessionComplete
                                 ? 'Your conversation is complete. If you requested email follow-up, Dani’s recap will separate what you shared, working inferences, and the points that still need human confirmation.'
                                 : 'Dani helps clarify the business challenge, compare practical AI and non-AI approaches, and identify the next question worth validating.'}
                         </p>
 
-                        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                             <Link
                                 href="/demo/dani"
-                                className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-[3px] bg-[#126e64] px-6 text-sm font-extrabold text-white shadow-[0_14px_34px_rgba(18,110,100,.16)] transition-[transform,background-color,box-shadow] hover:-translate-y-0.5 hover:bg-[#0d5d54] hover:shadow-[0_18px_40px_rgba(18,110,100,.22)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d55538] motion-reduce:transform-none"
+                                className="group inline-flex min-h-12 items-center justify-center gap-3 rounded-[3px] bg-[#126e64] px-6 text-sm font-extrabold text-white shadow-[0_14px_34px_rgba(18,110,100,.16)] transition-[transform,background-color,box-shadow] hover:-translate-y-0.5 hover:bg-[#0d5d54] hover:shadow-[0_18px_40px_rgba(18,110,100,.22)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d55538] motion-reduce:transform-none"
                             >
                                 {sessionComplete ? <RotateCcw aria-hidden="true" size={17} /> : null}
                                 {sessionComplete ? 'Start another session' : 'Start a conversation'}
@@ -53,7 +53,7 @@ export default function DaniEditorialLanding({ sessionComplete }: DaniEditorialL
                             </Link>
                             <Link
                                 href="/"
-                                className="inline-flex min-h-14 items-center justify-center gap-3 rounded-[3px] border border-[#a9a292] px-6 text-sm font-extrabold text-[#151b19] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#126e64] hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64] motion-reduce:transform-none"
+                                className="inline-flex min-h-12 items-center justify-center gap-3 rounded-[3px] border border-[#a9a292] px-6 text-sm font-extrabold text-[#151b19] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#126e64] hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64] motion-reduce:transform-none"
                             >
                                 Explore AI Fusion Labs
                             </Link>
@@ -61,7 +61,7 @@ export default function DaniEditorialLanding({ sessionComplete }: DaniEditorialL
 
                         <DaniMemoryControls placement="inline" />
 
-                        <div className={`${styles.mono} mt-10 border-t border-[#c9c3b4] pt-5 text-[9px] font-semibold uppercase leading-5 tracking-[0.1em] text-[#626861] sm:text-[10px]`}>
+                        <div className={`${styles.mono} mt-8 border-t border-[#c9c3b4] pt-4 text-[9px] font-semibold uppercase leading-5 tracking-[0.1em] text-[#626861] sm:text-[10px]`}>
                             {sessionComplete ? (
                                 <p>Follow-up · Sent only when requested &nbsp; / &nbsp; No CRM update or commercial commitment was made</p>
                             ) : (
