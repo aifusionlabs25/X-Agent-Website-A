@@ -67,7 +67,7 @@ The pipeline is implemented in source, but that does not make it production-live
 
 ## Returning-memory rollout
 
-Dani's memory is isolated from Amy's cookies, secrets, identity tool, consent state, records, and promotion gate. Deploy it in stages and keep both Dani memory kill switches active until the dedicated Anam identity tool and managed prompt have been manually published and audited. The operator checklist, environment contract, fingerprint formula, smoke tests, and emergency close are in [`docs/anam/DANI_RETURNING_MEMORY.md`](../../../docs/anam/DANI_RETURNING_MEMORY.md).
+Dani's memory is isolated from Amy's cookies, secrets, identity tool, consent state, records, and promotion gate. The dedicated Anam identity tool and managed prompt are now published and audited; keep both Dani memory kill switches active until the isolated memory store and production gates are approved. The operator checklist, environment contract, fingerprint formula, smoke tests, and emergency close are in [`docs/anam/DANI_RETURNING_MEMORY.md`](../../../docs/anam/DANI_RETURNING_MEMORY.md).
 
 ## Native Anam meeting boundary
 
@@ -113,15 +113,16 @@ The Anam persona may be described as live because the guarded apply and delayed 
 ## Verified v2 provider record
 
 - Live identity: `Dani AI Solutions Director`
-- Live prompt SHA-256: `9da10faa751087237dfb5eb76b25dc937efe78e84197ba874e7f0d96a8e375b3`
-- Live knowledge bundle SHA-256: `0c9b4fd42964c63dbedcb5a4cf17a19a1489cf82298b59901647dadb1f8be85a`
+- Live prompt SHA-256: `604254b51e4d6174294b354a59b5bb1d52a5c399ee7d3444b1dc877715164ebb`
+- Live knowledge bundle SHA-256: `59c78f8e62ed3f30084db5d15abf981b664942f819c1e78640231080c8803ae3`
 - V2 knowledge group: `0c5a31dd-44f7-4d79-95fc-b6df31bbff4f`
 - V2 knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
-- Exact live tools: `Knowledge_Dani_AI_Solutions_Director`, `skip_turn`, `end_call`, `send_dani_follow_up_email`
+- Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
+- Exact live tools: `Knowledge_Dani_AI_Solutions_Director`, `skip_turn`, `end_call`, `send_dani_follow_up_email`, `confirm_dani_live_identity`
 - Eleven of eleven v2 documents reported `READY` and matched their local byte hashes.
 - Immediate and delayed v2 provider read-backs passed.
 - Protected Cara 3 rollback persona remained unchanged.
-- Published v2 timestamp: `2026-08-09T18:36:27.589Z`
+- Published v2 timestamp: `2026-08-10T01:40:14.103Z`
 - Final v2 pre-change provider snapshot: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-35-36-201Z.json`
 - Initial v2 attempt snapshot retained at: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-29-47-684Z.json`

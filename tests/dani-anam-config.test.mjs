@@ -7,10 +7,6 @@ import {
     DANI_EXPECTED_LLM_ID,
     DANI_EXPECTED_NAME,
     DANI_MINIMUM_PUBLISHED_AT,
-    DANI_NEXT_EXPECTED_PROMPT_SHA256,
-    DANI_NEXT_REQUIRED_PROMPT_MARKERS,
-    DANI_NEXT_REQUIRED_TOOL_IDS,
-    DANI_NEXT_REQUIRED_TOOL_NAMES,
     DANI_EXPECTED_PROMPT_SHA256,
     DANI_EXPECTED_VOICE_ID,
     DANI_PERSONA_ID,
@@ -30,7 +26,7 @@ const manifest = JSON.parse(await readFile(new URL('persona-manifest.json', conf
 const knowledgeManifestUrl = new URL(manifest.knowledgeManifestFile, configUrl);
 const knowledgeManifest = JSON.parse(await readFile(knowledgeManifestUrl, 'utf8'));
 const prompt = await readFile(new URL(manifest.promptFile, configUrl), 'utf8');
-const livePrompt = prompt
+const previousPrompt = prompt
     .replace(/\r\n?/g, '\n')
     .replace(
         /\n\n<!-- DANI_RETURNING_MEMORY_START -->[\s\S]*?<!-- DANI_RETURNING_MEMORY_END -->\n\n/,
@@ -55,20 +51,6 @@ function healthyPersona() {
         tools: DANI_REQUIRED_TOOL_NAMES.map(name => ({ name, id: DANI_REQUIRED_TOOL_IDS[name] })),
         brain: {
             llm: { id: DANI_EXPECTED_LLM_ID },
-            systemPrompt: livePrompt,
-        },
-    };
-}
-
-function healthyNextPersona() {
-    return {
-        ...healthyPersona(),
-        tools: DANI_NEXT_REQUIRED_TOOL_NAMES.map(name => ({
-            name,
-            id: DANI_NEXT_REQUIRED_TOOL_IDS[name],
-        })),
-        brain: {
-            ...healthyPersona().brain,
             systemPrompt: prompt,
         },
     };
@@ -97,13 +79,14 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
     const drifted = [
         { ...healthyPersona(), id: 'wrong-persona' },
         { ...healthyPersona(), name: 'Dani NEW' },
-        { ...healthyPersona(), publishedAt: '2026-08-09T18:00:00.000Z' },
+        { ...healthyPersona(), publishedAt: '2026-08-10T01:40:14.102Z' },
         { ...healthyPersona(), avatarModel: 'cara-3' },
         { ...healthyPersona(), avatar: { id: 'wrong-avatar' } },
         { ...healthyPersona(), voice: { id: 'wrong-voice' } },
         { ...healthyPersona(), brain: { ...healthyPersona().brain, llm: { id: 'wrong-llm' } } },
         { ...healthyPersona(), brain: { ...healthyPersona().brain, systemPrompt: 'stripped prompt' } },
         { ...healthyPersona(), tools: [{ name: 'Knowledge_Liv' }] },
+        { ...healthyPersona(), tools: [...healthyPersona().tools, { name: 'unexpected_tool', id: 'unexpected-tool-id' }] },
         { ...healthyPersona(), tools: healthyPersona().tools.map((tool, index) => index ? tool : { ...tool, id: 'wrong-tool-id' }) },
         { ...healthyPersona(), voiceDetectionOptions: { endOfSpeechSensitivity: 0.8 } },
         { ...healthyPersona(), zeroDataRetention: true },
@@ -111,32 +94,36 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
     ];
     for (const persona of drifted) assert.equal(inspectDaniPersonaReadiness(persona).ready, false);
 
-    const republished = { ...healthyPersona(), publishedAt: '2026-08-09T19:30:00.000Z' };
+    const republished = { ...healthyPersona(), publishedAt: '2026-08-10T02:00:00.000Z' };
     assert.equal(inspectDaniPersonaReadiness(republished).ready, true);
 });
 
 test('Dani readiness accepts Anam generated tool text outside the managed prompt hash', () => {
     const persona = healthyPersona();
-    persona.brain.systemPrompt = `${livePrompt.trim()}\n# TOOLS\nProvider-generated tool instructions`;
+    persona.brain.systemPrompt = `${prompt.trim()}\n# TOOLS\nProvider-generated tool instructions`;
     assert.equal(inspectDaniPersonaReadiness(persona).ready, true);
 });
 
-test('Dani readiness accepts only the exact current or pinned next baseline during provider rollout', () => {
+test('Dani readiness accepts only the exact published five-tool baseline', () => {
     assert.equal(inspectDaniPersonaReadiness(healthyPersona()).ready, true);
-    assert.equal(inspectDaniPersonaReadiness(healthyNextPersona()).ready, true);
-    assert.equal(normalizedSha256(prompt), DANI_NEXT_EXPECTED_PROMPT_SHA256);
-    for (const marker of DANI_NEXT_REQUIRED_PROMPT_MARKERS) assert.ok(prompt.includes(marker));
+    assert.equal(normalizedSha256(prompt), DANI_EXPECTED_PROMPT_SHA256);
+    for (const marker of DANI_REQUIRED_PROMPT_MARKERS) assert.ok(prompt.includes(marker));
 
-    const oldPromptWithNextTools = {
+    const previousPromptWithCurrentTools = {
         ...healthyPersona(),
-        tools: healthyNextPersona().tools,
+        brain: { ...healthyPersona().brain, systemPrompt: previousPrompt },
     };
-    const nextPromptWithOldTools = {
-        ...healthyNextPersona(),
-        tools: healthyPersona().tools,
+    const currentPromptWithPreviousTools = {
+        ...healthyPersona(),
+        tools: healthyPersona().tools.filter(tool => tool.name !== 'confirm_dani_live_identity'),
     };
-    assert.equal(inspectDaniPersonaReadiness(oldPromptWithNextTools).ready, false);
-    assert.equal(inspectDaniPersonaReadiness(nextPromptWithOldTools).ready, false);
+    const previousBaseline = {
+        ...currentPromptWithPreviousTools,
+        brain: { ...healthyPersona().brain, systemPrompt: previousPrompt },
+    };
+    assert.equal(inspectDaniPersonaReadiness(previousPromptWithCurrentTools).ready, false);
+    assert.equal(inspectDaniPersonaReadiness(currentPromptWithPreviousTools).ready, false);
+    assert.equal(inspectDaniPersonaReadiness(previousBaseline).ready, false);
 });
 
 test('Dani live readiness is bounded, no-store, and does not expose the API key', async () => {
@@ -155,9 +142,9 @@ test('Dani live readiness is bounded, no-store, and does not expose the API key'
 });
 
 test('managed Dani prompt covers AI solution discovery, native meeting behavior, action honesty, and website email boundaries', () => {
-    assert.equal(normalizedSha256(livePrompt), DANI_EXPECTED_PROMPT_SHA256);
+    assert.notEqual(normalizedSha256(previousPrompt), DANI_EXPECTED_PROMPT_SHA256);
     assert.equal(normalizedSha256(prompt), manifest.promptSha256);
-    assert.notEqual(manifest.promptSha256, DANI_EXPECTED_PROMPT_SHA256);
+    assert.equal(manifest.promptSha256, DANI_EXPECTED_PROMPT_SHA256);
     for (const marker of DANI_REQUIRED_PROMPT_MARKERS) assert.ok(prompt.includes(marker));
     assert.doesNotMatch(prompt, /\bDanny\b|Sales Technician/i);
     assert.match(prompt, /You are Dani, the AI Solutions Director/i);
@@ -250,10 +237,7 @@ test('manifest and site use the exact published Dani identity and optimized Cara
     assert.equal(manifest.expectedVoiceId, DANI_EXPECTED_VOICE_ID);
     assert.equal(manifest.expectedLlmId, DANI_EXPECTED_LLM_ID);
     assert.deepEqual(manifest.voiceDetectionOptions, DANI_REQUIRED_VOICE_DETECTION);
-    assert.deepEqual(manifest.requiredToolNames, [
-        ...DANI_REQUIRED_TOOL_NAMES,
-        'confirm_dani_live_identity',
-    ]);
+    assert.deepEqual(manifest.requiredToolNames, [...DANI_REQUIRED_TOOL_NAMES]);
     assert.equal(manifest.emailToolName, 'send_dani_follow_up_email');
     assert.equal(manifest.identityToolName, 'confirm_dani_live_identity');
     assert.ok(manifest.identityToolId === null || /^[0-9a-f-]{36}$/i.test(manifest.identityToolId));

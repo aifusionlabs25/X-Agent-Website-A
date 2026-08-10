@@ -42,7 +42,7 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 - Keep `skip_turn` available.
 - Keep `end_call` for website sessions, but the v2 prompt prohibits unauthenticated group-meeting close behavior.
 - Attach `send_dani_follow_up_email` only with the verified website handler, secure typed-recipient consent gate, authoritative Anam transcript finalizer, and exactly-once delivery receipts. Native Anam meetings have no matching handler and are explicitly excluded by the prompt.
-- Attach `confirm_dani_live_identity` only after the Dani-specific backend is deployed with memory fail-closed. It must never be replaced by Amy's identity tool. Manually publish and audit the Anam draft before enabling verified recall; follow [`docs/anam/DANI_RETURNING_MEMORY.md`](../../../../docs/anam/DANI_RETURNING_MEMORY.md).
+- Keep the published and audited `confirm_dani_live_identity` attachment pinned to Dani's dedicated tool ID. It must never be replaced by Amy's identity tool. Keep verified recall disabled until Dani's isolated memory storage and production gates are approved; follow [`docs/anam/DANI_RETURNING_MEMORY.md`](../../../../docs/anam/DANI_RETURNING_MEMORY.md).
 
 ## Meeting responsibility split
 
@@ -54,11 +54,12 @@ Anam supplies meeting joining, the visible AI disclosure, and group-call name ga
 - Knowledge group: `0c5a31dd-44f7-4d79-95fc-b6df31bbff4f`
 - Knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
-- Prompt SHA-256: `9da10faa751087237dfb5eb76b25dc937efe78e84197ba874e7f0d96a8e375b3`
-- KB bundle SHA-256: `0c9b4fd42964c63dbedcb5a4cf17a19a1489cf82298b59901647dadb1f8be85a`
+- Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
+- Prompt SHA-256: `604254b51e4d6174294b354a59b5bb1d52a5c399ee7d3444b1dc877715164ebb`
+- KB bundle SHA-256: `59c78f8e62ed3f30084db5d15abf981b664942f819c1e78640231080c8803ae3`
 - Immediate and delayed provider verification: passed
 - Protected Cara 3 rollback: unchanged
-- Published at: `2026-08-09T18:36:27.589Z`
+- Published at: `2026-08-10T01:40:14.103Z`
 
 ## Remaining website promotion checks
 

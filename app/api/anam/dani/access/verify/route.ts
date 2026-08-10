@@ -34,6 +34,7 @@ function noStoreJson(body: unknown, init?: ResponseInit) {
 }
 
 export async function POST(request: Request) {
+    let verificationStage = 'request_start';
     try {
         if (!isTrustedBrowserOrigin(request)) {
             return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
             );
         }
         if (isDaniAnamFollowUpOtpChallengeId(challengeId)) {
+            verificationStage = 'consume_follow_up_challenge';
             const result = await consumeDaniAnamFollowUpOtpChallenge({
                 challengeId,
                 browserSessionId: browser.id,
@@ -83,6 +85,7 @@ export async function POST(request: Request) {
                     accountExistenceReturned: false,
                 }, { status: result.status === 'locked' ? 429 : 400 });
             }
+            verificationStage = 'finalize_follow_up_authorization';
             const verifiedFollowUp = await finalizeDaniAnamVerifiedFollowUpAuthorization({
                 browserSessionId: browser.id,
                 contactToken: result.contactToken,
@@ -118,9 +121,11 @@ export async function POST(request: Request) {
                 daniAnamContactCookieOptions(),
             );
             response.cookies.set(DANI_ANAM_GUEST_COOKIE, '', daniAnamSessionCookieOptions(0));
+            verificationStage = 'follow_up_complete';
             return response;
         }
 
+        verificationStage = 'read_memory_configuration';
         const memory = readDaniAnamMemoryConfig();
         if (!memory.gatesOpen) {
             return noStoreJson({ error: 'Dani returning memory is unavailable' }, { status: 503 });
@@ -187,7 +192,11 @@ export async function POST(request: Request) {
         if (error instanceof AmyAnamRequestError) {
             return noStoreJson({ error: error.message }, { status: error.status });
         }
-        console.error('[Dani Anam Memory Verification] Failed');
+        console.error('[Dani Anam Memory Verification] Failed', {
+            stage: verificationStage,
+            reason: error instanceof Error ? error.message : 'unknown_error',
+            sensitiveContentLogged: false,
+        });
         return noStoreJson({ error: 'Dani email verification failed' }, { status: 500 });
     }
 }
