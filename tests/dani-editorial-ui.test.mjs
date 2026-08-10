@@ -83,6 +83,9 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.doesNotMatch(landing, /6\.5rem|8\.5rem|max-w-\[50rem\]/);
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
     assert.match(css, /\.entryPortraitImage/);
+    assert.match(css, /@media \(min-width: 768px\) and \(max-height: 850px\)/);
+    assert.match(css, /\.entryHeading/);
+    assert.match(css, /\.entryAction/);
     assert.match(css, /\.landingPortraitImage/);
     assert.match(landing, /<DaniMemoryControls placement="inline" \/>/);
 });

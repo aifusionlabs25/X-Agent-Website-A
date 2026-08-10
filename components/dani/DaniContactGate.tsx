@@ -173,23 +173,23 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                     </div>
                 </div>
 
-                <div className={`${styles.paper} relative flex min-h-0 overflow-y-auto`}>
-                    <div className={`${styles.entrance} m-auto w-full max-w-[48rem] px-5 py-7 pb-[max(2.25rem,env(safe-area-inset-bottom))] sm:px-9 sm:py-12 md:px-[clamp(2rem,5vw,5.25rem)] md:py-[clamp(3.5rem,8vh,7rem)]`}>
-                        <div className="mb-5 h-px w-14 bg-[#d55538] sm:mb-7" aria-hidden="true" />
+                <div className={`${styles.paper} ${styles.entryPanel} relative flex min-h-0 overflow-y-auto`}>
+                    <div className={`${styles.entrance} ${styles.entryContent} m-auto w-full max-w-[52rem] px-5 py-7 pb-[max(2.25rem,env(safe-area-inset-bottom))] sm:px-9 sm:py-12 md:px-[clamp(2rem,4vw,4.5rem)]`}>
+                        <div className={`${styles.entryRule} mb-5 h-px w-14 bg-[#d55538] sm:mb-7`} aria-hidden="true" />
                         <p className={`${styles.mono} text-[10px] font-bold uppercase tracking-[0.17em] text-[#126e64]`}>
                             A focused working session
                         </p>
-                        <h2 className={`${styles.display} mt-3 max-w-[13ch] text-[clamp(2.15rem,5vw,4.75rem)] font-semibold leading-[.94] tracking-[-.05em] sm:text-[clamp(2.35rem,5vw,4.75rem)]`}>
+                        <h2 className={`${styles.display} ${styles.entryHeading} mt-3 max-w-[18ch] text-[clamp(2.15rem,5vw,4.75rem)] font-semibold leading-[.94] tracking-[-.05em]`}>
                             Bring the problem. I&apos;ll help frame the path.
                         </h2>
-                        <p className="mt-3 max-w-[40rem] text-sm leading-6 text-[#626861] sm:mt-5 sm:text-[15px] sm:leading-7">
+                        <p className={`${styles.entryIntro} mt-3 max-w-[40rem] text-sm leading-6 text-[#626861] sm:mt-5 sm:text-[15px] sm:leading-7`}>
                             {emailFollowUpAvailable || memoryAvailable
                                 ? 'Share a verified email for your recap, optional returning memory, or both. You can also continue as a guest.'
                                 : 'Dani is ready to talk without collecting your name or email. Continue as a guest to begin.'}
                         </p>
 
                         {(emailFollowUpAvailable || memoryAvailable || challengeId) && <form
-                            className="mt-5 grid gap-4 sm:mt-7"
+                            className={`${styles.entryForm} mt-5 grid gap-4 sm:mt-7`}
                             onSubmit={challengeId ? verifyEmail : submitEmail}
                             aria-busy={submitting !== null}
                             data-dani-access-form
@@ -204,7 +204,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                         autoComplete="name"
                                         value={displayName}
                                         onChange={event => setDisplayName(event.target.value)}
-                                        className="mt-2 h-14 w-full rounded-[3px] border border-[#bdb6a6] bg-white/35 px-4 text-[15px] text-[#151b19] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[#737970] hover:bg-white/50 focus-visible:border-[#126e64] focus-visible:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#126e64]/25"
+                                        className={`${styles.entryField} mt-2 h-14 w-full rounded-[3px] border border-[#bdb6a6] bg-white/35 px-4 text-[15px] text-[#151b19] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[#737970] hover:bg-white/50 focus-visible:border-[#126e64] focus-visible:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#126e64]/25`}
                                         placeholder="How should Dani address you?"
                                     />
                                 </label>
@@ -218,7 +218,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                         autoComplete="email"
                                         value={email}
                                         onChange={event => setEmail(event.target.value)}
-                                        className="mt-2 h-14 w-full rounded-[3px] border border-[#bdb6a6] bg-white/35 px-4 text-[15px] text-[#151b19] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[#737970] hover:bg-white/50 focus-visible:border-[#126e64] focus-visible:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#126e64]/25"
+                                        className={`${styles.entryField} mt-2 h-14 w-full rounded-[3px] border border-[#bdb6a6] bg-white/35 px-4 text-[15px] text-[#151b19] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[#737970] hover:bg-white/50 focus-visible:border-[#126e64] focus-visible:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#126e64]/25`}
                                         placeholder="you@example.com"
                                     />
                                 </label>
@@ -231,7 +231,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                     </legend>
                                     <div className={`mt-2 grid overflow-hidden rounded-[3px] border border-[#bdb6a6] bg-[#bdb6a6] ${emailFollowUpAvailable && memoryAvailable ? 'gap-px sm:grid-cols-2' : ''}`}>
                                         {emailFollowUpAvailable && (
-                                            <label className={`flex cursor-pointer items-start gap-3 p-3.5 transition-colors ${followUpConsent ? 'bg-[#e1ebe3]' : 'bg-[#f8f4e9] hover:bg-white/75'}`}>
+                                            <label className={`${styles.entryPurposeChoice} flex cursor-pointer items-start gap-3 p-3.5 transition-colors ${followUpConsent ? 'bg-[#e1ebe3]' : 'bg-[#f8f4e9] hover:bg-white/75'}`}>
                                                 <input
                                                     type="checkbox"
                                                     checked={followUpConsent}
@@ -251,7 +251,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                             </label>
                                         )}
                                         {memoryAvailable && (
-                                            <label className={`flex cursor-pointer items-start gap-3 p-3.5 transition-colors ${memoryConsent ? 'bg-[#e1ebe3]' : 'bg-[#f8f4e9] hover:bg-white/75'}`}>
+                                            <label className={`${styles.entryPurposeChoice} flex cursor-pointer items-start gap-3 p-3.5 transition-colors ${memoryConsent ? 'bg-[#e1ebe3]' : 'bg-[#f8f4e9] hover:bg-white/75'}`}>
                                                 <input
                                                     type="checkbox"
                                                     checked={memoryConsent}
@@ -271,7 +271,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                             </label>
                                         )}
                                     </div>
-                                    <p id="dani-email-purpose-help" className="mt-2 text-[11px] leading-5 text-[#70756e]">
+                                    <p id="dani-email-purpose-help" className={`${styles.entryPurposeHelp} mt-2 text-[11px] leading-5 text-[#70756e]`}>
                                         A one-time code verifies the address. These choices are separate and can be changed independently.
                                     </p>
                                 </fieldset>
@@ -310,7 +310,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                 type="submit"
                                 disabled={submitting !== null}
                                 aria-label={challengeId ? 'Verify email and start conversation' : 'Start conversation'}
-                                className="group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] bg-[#126e64] px-5 text-sm font-extrabold text-white shadow-[0_12px_30px_rgba(18,110,100,.15)] transition-[transform,background-color,box-shadow] hover:-translate-y-0.5 hover:bg-[#0d5d54] hover:shadow-[0_16px_38px_rgba(18,110,100,.22)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d55538] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none"
+                                className={`${styles.entryAction} group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] bg-[#126e64] px-5 text-sm font-extrabold text-white shadow-[0_12px_30px_rgba(18,110,100,.15)] transition-[transform,background-color,box-shadow] hover:-translate-y-0.5 hover:bg-[#0d5d54] hover:shadow-[0_16px_38px_rgba(18,110,100,.22)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d55538] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none`}
                             >
                                 {submitting === 'email'
                                     ? 'Sending secure code...'
@@ -337,7 +337,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                             )}
                         </form>}
 
-                        {!challengeId && (emailFollowUpAvailable || memoryAvailable) && <div className={`${styles.mono} my-3 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#7a7d74]`}>
+                        {!challengeId && (emailFollowUpAvailable || memoryAvailable) && <div className={`${styles.mono} ${styles.entryDivider} my-3 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#7a7d74]`}>
                             <span className="h-px flex-1 bg-[#c9c3b4]" /> Or <span className="h-px flex-1 bg-[#c9c3b4]" />
                         </div>}
                         {!challengeId && <button
@@ -345,12 +345,12 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                             disabled={submitting !== null}
                             onClick={() => void requestAccess('guest')}
                             aria-label="Continue without email"
-                            className="group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] border border-[#a9a292] bg-transparent px-5 text-sm font-extrabold text-[#151b19] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#126e64] hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none"
+                            className={`${styles.entryAction} group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] border border-[#a9a292] bg-transparent px-5 text-sm font-extrabold text-[#151b19] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#126e64] hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none`}
                         >
                             {submitting === 'guest' ? 'Opening Dani...' : 'Continue as a guest'}
                             {submitting !== 'guest' && <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />}
                         </button>}
-                        <p id="dani-session-privacy" className="mt-4 flex max-w-[42rem] gap-2.5 text-[11px] leading-5 text-[#626861]">
+                        <p id="dani-session-privacy" className={`${styles.entryPrivacy} mt-4 flex max-w-[42rem] gap-2.5 text-[11px] leading-5 text-[#626861]`}>
                             <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#126e64]" />
                             <span>Dani is an AI. Your typed address stays outside her spoken context. Returning memory is email-verified, optional, separately consented, and limited to reviewed notes. Sessions may be transcribed for requested follow-up. Do not share secrets or sensitive records.</span>
                         </p>
