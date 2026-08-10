@@ -680,7 +680,7 @@ export async function consumeDaniAnamOtpChallenge(input: {
         "redis.call('DEL', KEYS[4])",
         "redis.call('DEL', KEYS[1])",
         "return {'verified', cjson.encode(identity), challenge.encryptedFollowUpToken or ''}",
-    ].join(' ');
+    ].join('\n');
     const result = await redisCommand([
         'EVAL',
         script,
@@ -752,7 +752,7 @@ export async function readDaniAnamBrowserIdentity(
         'local consent = cjson.decode(consentRaw)',
         "if consent.status ~= 'active' or consent.agent ~= 'dani' or consent.personaId ~= ARGV[1] or consent.emailIdentityHash ~= ARGV[3] or consent.consentEpoch ~= ARGV[4] then return nil end",
         'return browserRaw',
-    ].join(' ');
+    ].join('\n');
     return normalizeBrowserIdentity(await redisCommand([
         'EVAL',
         script,
@@ -789,7 +789,7 @@ export async function deleteDaniAnamBrowserIdentity(
         "redis.call('SREM', KEYS[2], ARGV[2])",
         "if redis.call('SCARD', KEYS[2]) == 0 then redis.call('DEL', KEYS[2]) end",
         'return 1',
-    ].join(' ');
+    ].join('\n');
     return Number(await redisCommand([
         'EVAL',
         script,
@@ -834,7 +834,7 @@ export async function linkDaniAnamSessionMemoryIdentity(input: {
         "redis.call('SADD', KEYS[4], ARGV[3])",
         "redis.call('EXPIRE', KEYS[4], ARGV[6])",
         "return {'linked'}",
-    ].join(' ');
+    ].join('\n');
     // The consent key must be resolved before this atomic script. Reading the verified
     // browser record does not authorize linking; Lua re-checks that record and consent.
     const browser = await readDaniAnamBrowserIdentity(browserSessionId, options);
@@ -885,7 +885,7 @@ export async function readDaniAnamSessionMemoryIdentity(
         'local consent = cjson.decode(consentRaw)',
         "if consent.status ~= 'active' or consent.agent ~= 'dani' or consent.personaId ~= ARGV[1] or consent.emailIdentityHash ~= ARGV[4] or consent.consentEpoch ~= ARGV[5] then return nil end",
         'return sessionRaw',
-    ].join(' ');
+    ].join('\n');
     return normalizeSessionIdentity(await redisCommand([
         'EVAL',
         script,
@@ -1129,7 +1129,7 @@ export async function promoteDaniAnamMemoryCandidate(input: DaniAnamMemoryCandid
         'end',
         "redis.call('SET', KEYS[4], ARGV[10], 'EX', ARGV[8])",
         "return {'stored', tostring(redis.call('ZCARD', KEYS[6]))}",
-    ].join(' ');
+    ].join('\n');
     const result = await redisCommand([
         'EVAL',
         script,
@@ -1242,7 +1242,7 @@ export async function readDaniAnamApprovedMemoryHistory(
         '  if encrypted then table.insert(records, encrypted) else redis.call(\'ZREM\', KEYS[4], id) end',
         'end',
         'return records',
-    ].join(' ');
+    ].join('\n');
     const result = await redisCommand([
         'EVAL',
         script,
@@ -1321,7 +1321,7 @@ export async function revokeDaniAnamMemoryConsent(input: {
         "redis.call('SET', KEYS[4], ARGV[6], 'EX', ARGV[7])",
         'purgeIdentities()',
         "return {'revoked', tostring(#ids)}",
-    ].join(' ');
+    ].join('\n');
     const result = await redisCommand([
         'EVAL',
         script,

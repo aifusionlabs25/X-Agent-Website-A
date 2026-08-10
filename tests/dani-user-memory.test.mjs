@@ -105,6 +105,10 @@ function redisFixture(startAt = BASE_NOW) {
 
     function evalCommand(command) {
         const script = String(command[1]);
+        if (script.startsWith('-- ') && !script.includes('\n')) {
+            // Match Redis: a leading line comment consumes a one-line script and returns nil.
+            return null;
+        }
         const keyCount = Number(command[2]);
         const keys = command.slice(3, 3 + keyCount).map(String);
         const argv = command.slice(3 + keyCount).map(String);

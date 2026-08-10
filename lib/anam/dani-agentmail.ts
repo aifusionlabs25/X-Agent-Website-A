@@ -315,7 +315,7 @@ export async function consumeDaniAnamFollowUpOtpChallenge(input: {
             'end',
             "redis.call('DEL', KEYS[1])",
             "return {'verified', challenge.contactToken}",
-        ].join(' '),
+        ].join('\n'),
         1,
         followUpOtpKey(input.challengeId),
         input.challengeId,

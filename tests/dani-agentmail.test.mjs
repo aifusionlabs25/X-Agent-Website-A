@@ -120,6 +120,13 @@ function createMockTransport({
                 .sort((left, right) => left[1] - right[1] || String(left[0]).localeCompare(String(right[0])))
                 .slice(Number(offset), Number(offset) + Number(limit))
                 .map(([member]) => member);
+        } else if (
+            operation === 'EVAL'
+            && String(command[1]).startsWith('-- ')
+            && !String(command[1]).includes('\n')
+        ) {
+            // Redis line comments consume a single-line script and return nil.
+            result = null;
         } else if (operation === 'EVAL' && String(command[1]).includes('DANI_AGENTMAIL_OTP_CONSUME_V1')) {
             const key = command[3];
             const raw = redis.get(key);
