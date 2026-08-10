@@ -116,6 +116,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let completedUserTurns = 0;
         let workbenchRevision = 0;
         let confirmedMemoryName: string | null = null;
+        let requestedCloseFallbackTimer: number | null = null;
         const videoElement = videoRef.current;
 
         transcriptRef.current = [];
@@ -194,6 +195,40 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             }).catch(() => undefined);
         };
         window.addEventListener('pagehide', handlePageHide);
+
+        const handleDaniRequestedEnd = () => {
+            if (personaId !== DANI_PERSONA_ID || closeHandled) return;
+            requestedCloseReason = 'user_requested_end';
+            if (isMounted) setIsFinalizing(true);
+
+            if (!activeClient) {
+                closeHandled = true;
+                if (isMounted) {
+                    setIsFinalizing(false);
+                    onCloseRef.current?.();
+                }
+                return;
+            }
+
+            // Keep the page mounted while Anam closes its stream. Immediate route
+            // navigation can tear down the SDK before the provider finalizes its
+            // transcript. The normal connection-closed handler remains primary;
+            // this bounded fallback only prevents a stuck exit.
+            void activeClient.stopStreaming().catch(() => undefined).finally(() => {
+                requestedCloseFallbackTimer = window.setTimeout(() => {
+                    if (closeHandled || !isMounted) return;
+                    closeHandled = true;
+                    void completeOnce('user_requested_end')
+                        .catch(() => undefined)
+                        .finally(() => {
+                            if (!isMounted) return;
+                            setIsFinalizing(false);
+                            onCloseRef.current?.();
+                        });
+                }, 1_500);
+            });
+        };
+        window.addEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
 
         const initializeAnam = async () => {
             try {
@@ -803,6 +838,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         return () => {
             isMounted = false;
             window.removeEventListener('pagehide', handlePageHide);
+            window.removeEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
+            if (requestedCloseFallbackTimer !== null) {
+                window.clearTimeout(requestedCloseFallbackTimer);
+            }
             removeClientListeners?.();
             removeIdentityToolHandler?.();
             removeEmailToolHandler?.();

@@ -38,16 +38,9 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                 setFollowUpConsent(followUpAvailable);
                 setMemoryAvailable(payload.memoryAvailable === true);
             }
-            if (
-                response.ok
-                && payload.authenticated === true
-                && (
-                    payload.guest === true
-                    || payload.followUpAuthorized === true
-                    || payload.memoryVerified === true
-                )
-                && active
-            ) setReady(true);
+            // A prior guest or verified-contact cookie may remain valid for a few
+            // hours, but recap consent is per conversation. Never use prior access
+            // state to bypass the entry choice for a new Dani session.
         }).catch(() => undefined).finally(() => {
             if (active) setChecking(false);
         });

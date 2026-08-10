@@ -134,14 +134,26 @@ export default function DemoPage({ params, searchParams }: Props) {
 
             {/* Session-scoped exit control; global marketing navigation stays outside the room. */}
             <div className={`pointer-events-none absolute inset-x-0 z-20 flex items-center justify-center px-4 ${isDani ? 'bottom-[max(1rem,env(safe-area-inset-bottom))] sm:bottom-[max(1.5rem,env(safe-area-inset-bottom))]' : 'bottom-10'}`}>
-                <Link
-                    href={displayReturnHref}
-                    aria-label={isDani ? 'End session with Dani' : 'Exit session'}
-                    className={`pointer-events-auto flex min-h-12 items-center gap-2 px-6 py-3 text-sm font-bold backdrop-blur-md transition-[transform,background-color,border-color] focus-visible:outline-2 focus-visible:outline-offset-4 ${isEvan ? 'rounded-xl border border-[#ffc857]/35 bg-[#5d24d6]/80 uppercase tracking-widest text-white shadow-[0_12px_35px_rgba(0,0,0,.3)] hover:scale-105 hover:bg-[#6f34e8] focus-visible:outline-[#ffc857]' : isDani ? 'rounded-[3px] border border-white/20 bg-[#0b0e0d]/88 text-white shadow-[0_14px_40px_rgba(0,0,0,.34)] hover:-translate-y-0.5 hover:border-white/35 hover:bg-[#151a18] focus-visible:outline-[#d55538] motion-reduce:transform-none' : 'rounded-full border border-white/20 bg-black/60 uppercase tracking-widest text-white hover:scale-105 hover:bg-black/80 focus-visible:outline-white'}`}
-                >
-                    <LogOut size={18} />
-                    {isDani ? 'End session' : 'Exit'}
-                </Link>
+                {isDani ? (
+                    <button
+                        type="button"
+                        onClick={() => window.dispatchEvent(new Event('xagent:dani-request-end'))}
+                        aria-label="End session with Dani"
+                        className="pointer-events-auto flex min-h-12 items-center gap-2 rounded-[3px] border border-white/20 bg-[#0b0e0d]/88 px-6 py-3 text-sm font-bold text-white shadow-[0_14px_40px_rgba(0,0,0,.34)] backdrop-blur-md transition-[transform,background-color,border-color] hover:-translate-y-0.5 hover:border-white/35 hover:bg-[#151a18] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d55538] motion-reduce:transform-none"
+                    >
+                        <LogOut size={18} />
+                        End session
+                    </button>
+                ) : (
+                    <Link
+                        href={displayReturnHref}
+                        aria-label="Exit session"
+                        className={`pointer-events-auto flex min-h-12 items-center gap-2 px-6 py-3 text-sm font-bold backdrop-blur-md transition-[transform,background-color,border-color] focus-visible:outline-2 focus-visible:outline-offset-4 ${isEvan ? 'rounded-xl border border-[#ffc857]/35 bg-[#5d24d6]/80 uppercase tracking-widest text-white shadow-[0_12px_35px_rgba(0,0,0,.3)] hover:scale-105 hover:bg-[#6f34e8] focus-visible:outline-[#ffc857]' : 'rounded-full border border-white/20 bg-black/60 uppercase tracking-widest text-white hover:scale-105 hover:bg-black/80 focus-visible:outline-white'}`}
+                    >
+                        <LogOut size={18} />
+                        Exit
+                    </Link>
+                )}
             </div>
 
             {/* The Anam Player takes over the screen */}

@@ -58,6 +58,7 @@ const ALLOWED_CLOSE_REASONS = new Set([
     'CONNECTION_CLOSED_CODE_SERVER_CLOSED_CONNECTION',
     'pagehide',
     'unmount',
+    'user_requested_end',
     'unknown',
 ]);
 

@@ -18,6 +18,8 @@ test('Dani entry gate uses the editorial studio system without changing access c
     assert.match(gate, /checked=\{followUpConsent\}/);
     assert.match(gate, /checked=\{memoryConsent\}/);
     assert.match(gate, /setEmailFollowUpAvailable\(followUpAvailable\)/);
+    assert.match(gate, /recap consent is per conversation/i);
+    assert.doesNotMatch(gate, /payload\.guest === true[\s\S]*setReady\(true\)/);
     assert.match(gate, /fetch\('\/api\/anam\/dani\/access'/);
     assert.match(gate, /\{ guest: true \}/);
     assert.match(gate, /\{ displayName, email, followUpConsent, memoryConsent \}/);
@@ -29,9 +31,10 @@ test('Dani entry gate uses the editorial studio system without changing access c
 });
 
 test('Dani live session has route-scoped identity, safe controls, clean framing, and a true completion return', async () => {
-    const [demo, player, header, footer] = await Promise.all([
+    const [demo, player, completionRoute, header, footer] = await Promise.all([
         read('../app/demo/[slug]/page.tsx'),
         read('../components/AnamPlayer.tsx'),
+        read('../app/api/anam/session/complete/route.ts'),
         read('../components/layout/SiteHeader.tsx'),
         read('../components/layout/SiteFooter.tsx'),
     ]);
@@ -40,6 +43,11 @@ test('Dani live session has route-scoped identity, safe controls, clean framing,
     assert.match(demo, /AI Fusion Labs \/ Dani/);
     assert.match(demo, /Working session/);
     assert.match(demo, /End session/);
+    assert.match(demo, /xagent:dani-request-end/);
+    assert.match(player, /activeClient\.stopStreaming\(\)/);
+    assert.match(player, /completeOnce\('user_requested_end'\)/);
+    assert.match(player, /1_500/);
+    assert.match(completionRoute, /'user_requested_end'/);
     assert.doesNotMatch(demo, /AI Solutions Director/);
     assert.doesNotMatch(demo, /Clarity, in conversation\./);
     assert.doesNotMatch(demo, /One focused question at a time\./);
