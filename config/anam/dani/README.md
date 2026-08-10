@@ -28,7 +28,7 @@ Implementation status:
 - GPT OSS 120B LLM: `a7cf662c-2ace-4de1-a21e-ef0fbf144bb7`
 - Protected Cara 3 rollback persona: `61f0fd3e-7937-472a-958d-cdba76b33bf1`
 - Protected rollback KB group: `29af2c7e-4638-4a2f-a819-b4a9e48fec0a`
-- Live v3 KB group: `0add8be0-ba50-4174-93d1-19181acd4525`
+- Live v4 KB group: `d2817157-bae3-4029-a11b-12e7aa93fd4b`
 - Live v2 knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Live website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 
@@ -113,9 +113,9 @@ The Anam persona may be described as live because the guarded apply and delayed 
 ## Latest verified provider record
 
 - Live identity: `Dani AI Solutions Director`
-- Live prompt SHA-256: `bacf5a44b11f2dacfab2e3d91104f24c24ab7422e1e7883bb1ac381be15cd0c3`
-- Live knowledge bundle SHA-256: `821c2312a10a264418b206c98330196d7da971ba6db6c89370f6d1f9c454dd55`
-- Versioned knowledge group: `0add8be0-ba50-4174-93d1-19181acd4525`
+- Live prompt SHA-256: `a31c8c9497d99cd0c1de40ae6a6e3ff6f5c3ba639c3691404c7bcc99f81581ee`
+- Live knowledge bundle SHA-256: `e18fec6e08bdab23e3d130018d70550e5f29da5166dc170bd3de32ae7e3445ae`
+- Versioned knowledge group: `d2817157-bae3-4029-a11b-12e7aa93fd4b`
 - V2 knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
@@ -123,7 +123,7 @@ The Anam persona may be described as live because the guarded apply and delayed 
 - Thirteen of thirteen managed documents reported `READY` and matched their local byte hashes.
 - Immediate and delayed provider read-backs passed.
 - Protected Cara 3 rollback persona remained unchanged.
-- Published timestamp: `2026-08-10T20:45:59.096Z`
-- Latest pre-change provider snapshot: `C:\Users\AI Fusion Labs\.codex\visualizations\2026\08\09\019fe75a-07d8-7283-b0a9-b99c08774625\dani-anam-backups\dani-cara4-pre-sync-2026-08-10T20-15-27-897Z.json`
+- Published timestamp: `2026-08-10T23:27:47.382Z`
+- Latest pre-change provider snapshot: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-10T23-25-28-418Z.json`
 - Final v2 pre-change provider snapshot: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-35-36-201Z.json`
 - Initial v2 attempt snapshot retained at: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-29-47-684Z.json`

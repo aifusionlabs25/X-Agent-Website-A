@@ -46,8 +46,8 @@ export const DANI_EXPECTED_NAME = 'Dani AI Solutions Director';
 export const DANI_EXPECTED_AVATAR_ID = '58b045b9-ac1d-4ddf-af14-18972618c57b';
 export const DANI_EXPECTED_VOICE_ID = '90a1acd3-4fc0-11f1-84b0-52bacf74fa75';
 export const DANI_EXPECTED_LLM_ID = 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7';
-export const DANI_EXPECTED_PROMPT_SHA256 = 'bacf5a44b11f2dacfab2e3d91104f24c24ab7422e1e7883bb1ac381be15cd0c3';
-export const DANI_MINIMUM_PUBLISHED_AT = '2026-08-10T20:45:59.096Z';
+export const DANI_EXPECTED_PROMPT_SHA256 = 'a31c8c9497d99cd0c1de40ae6a6e3ff6f5c3ba639c3691404c7bcc99f81581ee';
+export const DANI_MINIMUM_PUBLISHED_AT = '2026-08-10T23:27:47.382Z';
 
 export const DANI_REQUIRED_TOOL_NAMES = [
     'Knowledge_Dani_AI_Solutions_Director',
@@ -70,6 +70,8 @@ export const DANI_REQUIRED_PROMPT_MARKERS = [
     '<!-- DANI_AI_SOLUTIONS_DIRECTOR_CORE_END -->',
     '<!-- DANI_LIVE_VOICE_CONTRACT_START -->',
     '<!-- DANI_LIVE_VOICE_CONTRACT_END -->',
+    '<!-- DANI_OBSERVED_BEHAVIOR_CORRECTIONS_START -->',
+    '<!-- DANI_OBSERVED_BEHAVIOR_CORRECTIONS_END -->',
     '<!-- DANI_CLAIM_GATE_START -->',
     '<!-- DANI_CLAIM_GATE_END -->',
     '<!-- DANI_RETURNING_MEMORY_START -->',

@@ -35,7 +35,7 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 ## Deployment boundaries
 
 - Do not overwrite the current v1 files or the protected Cara 3 rollback persona.
-- Use the pinned versioned knowledge group named `Dani AI Solutions Director Anam KB 2026-08-10 v3`.
+- Use the pinned versioned knowledge group named `Dani AI Solutions Director Anam KB 2026-08-10 v4`.
 - Attach a dedicated knowledge tool named `Knowledge_Dani_AI_Solutions_Director`.
 - Upload only the allowlisted `knowledge/` documents.
 - Do not upload client briefs, transcripts, internal approvals, email templates, private meeting notes, test fixtures, credentials, or implementation details.
@@ -51,15 +51,15 @@ Anam supplies meeting joining, the visible AI disclosure, and group-call name ga
 ## Live provider record
 
 - Persona: `120cf627-59a6-4a35-8e70-97959a89a4da`
-- Knowledge group: `0add8be0-ba50-4174-93d1-19181acd4525`
+- Knowledge group: `d2817157-bae3-4029-a11b-12e7aa93fd4b`
 - Knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
-- Prompt SHA-256: `bacf5a44b11f2dacfab2e3d91104f24c24ab7422e1e7883bb1ac381be15cd0c3`
-- KB bundle SHA-256: `821c2312a10a264418b206c98330196d7da971ba6db6c89370f6d1f9c454dd55`
+- Prompt SHA-256: `a31c8c9497d99cd0c1de40ae6a6e3ff6f5c3ba639c3691404c7bcc99f81581ee`
+- KB bundle SHA-256: `e18fec6e08bdab23e3d130018d70550e5f29da5166dc170bd3de32ae7e3445ae`
 - Immediate and delayed provider verification: passed
 - Protected Cara 3 rollback: unchanged
-- Published at: `2026-08-10T20:45:59.096Z`
+- Published at: `2026-08-10T23:27:47.382Z`
 
 ## Remaining website promotion checks
 

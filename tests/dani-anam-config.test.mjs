@@ -94,7 +94,7 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
     ];
     for (const persona of drifted) assert.equal(inspectDaniPersonaReadiness(persona).ready, false);
 
-    const republished = { ...healthyPersona(), publishedAt: '2026-08-10T21:00:00.000Z' };
+    const republished = { ...healthyPersona(), publishedAt: '2026-08-11T00:00:00.000Z' };
     assert.equal(inspectDaniPersonaReadiness(republished).ready, true);
 });
 
@@ -151,7 +151,13 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /X Agents are AI Fusion Labs' flagship product, but they are not the answer to every problem/i);
     assert.match(prompt, /Use this order of authority/i);
     assert.match(prompt, /Live voice contract - highest priority/i);
-    assert.match(prompt, /no more than 45 spoken words by default/i);
+    assert.match(prompt, /roughly 15 to 30 spoken words by default/i);
+    assert.match(prompt, /Forty words is a hard ceiling/i);
+    assert.match(prompt, /Never end two consecutive replies with questions/i);
+    assert.match(prompt, /Observed behavior corrections - mandatory/i);
+    assert.match(prompt, /If someone is skeptical of avatars, separate the workflow from the interface/i);
+    assert.match(prompt, /Treat an in-house build as a credible option/i);
+    assert.match(prompt, /Never say an introduction to Rob can move forward/i);
     assert.match(prompt, /honest range.*ballpark.*best guess/is);
     assert.match(prompt, /low five figures.*mid six figures.*a few weeks/is);
     assert.match(prompt, /An ambitious team can combine models, APIs, retrieval, workflow frameworks/i);
@@ -163,7 +169,7 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /Never guess a participant's name/i);
     assert.match(prompt, /Do not state that an avatar builds trust/i);
     assert.match(prompt, /Ask at most one meaningful question/i);
-    assert.match(prompt, /Do not end every turn with a question/i);
+    assert.match(prompt, /After a question is answered, prefer a useful statement and silence/i);
     assert.match(prompt, /periodically ask one brief discovery question/i);
     assert.match(prompt, /what kinds of companies the visitor typically connects with/i);
     assert.match(prompt, /I can't confirm the specifics, but I can outline what would need to be scoped/i);
@@ -250,7 +256,11 @@ test('managed Dani KB is an exact thirteen-file, hashed, public-safe AI solution
     assert.match(claimControl, /setup, integration, or deployment in a few hours/i);
     assert.match(claimControl, /Never guess a participant's name/i);
     assert.match(claimControl, /Reduced manual effort is a hypothesis/i);
-    assert.match(liveVoice, /no more than 45 spoken words/i);
+    assert.match(liveVoice, /roughly 15 to 30 spoken words/i);
+    assert.match(liveVoice, /Forty words is a hard ceiling/i);
+    assert.match(liveVoice, /must not end two consecutive replies with questions/i);
+    assert.match(liveVoice, /An internal build is a credible option/i);
+    assert.match(liveVoice, /cannot accept the introduction, confirm Rob's availability/i);
     assert.match(liveVoice, /low five figures.*mid six figures.*four to six weeks.*eight to ten weeks/is);
     assert.match(liveVoice, /They could build something similar/i);
     assert.match(liveVoice, /SaaS founder.*conference operator.*healthcare/is);
@@ -269,7 +279,12 @@ test('Dani red-team QA preserves the observed Boardy interview failure cases', a
     assert.match(qa, /Never guesses or invents a name/i);
     assert.match(qa, /honest.*price and delivery range/is);
     assert.match(qa, /ambitious team could reproduce X Agents/i);
-    assert.match(qa, /no more than 45 spoken words/i);
+    assert.match(qa, /roughly 15 to 30 spoken words/i);
+    assert.match(qa, /never exceed 40/i);
+    assert.match(qa, /Skeptical-avatar lead qualification/i);
+    assert.match(qa, /Credible three-week internal build/i);
+    assert.match(qa, /Founder introduction request/i);
+    assert.match(qa, /Human question cadence/i);
 });
 
 test('manifest and site use the exact published Dani identity and optimized Cara 4 image', async () => {

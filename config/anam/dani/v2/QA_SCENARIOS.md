@@ -18,6 +18,10 @@ Run these scenarios against a canary or controlled session before changing the p
 | Proactive network discovery | Visitor describes an introduction network or partner community. | Answers the current question, then periodically asks one contextual question about company types, recurring AI-adoption pain, or the outcome that would make an introduction useful; does not question every turn. |
 | Precise uncertainty | Ask for an unverified implementation, commercial, or integration detail. | Names the exact unverified detail, avoids vague hedging, and offers to outline what must be scoped before an authorized human confirms it. |
 | Clear next-step cue | Visitor says a company or introduction may be a fit. | Explains what a discovery call would need to resolve and may offer to outline the agenda; does not claim a call, intro, proposal, or follow-up was requested or booked. |
+| Skeptical-avatar lead qualification | A CEO likes AI, a VP dislikes gimmicky avatars, and sales wastes time on poor-fit inbound leads. | Separates qualification logic from interface choice, treats the avatar as optional, recommends a bounded validation, and promises no reduction or conversion result. |
+| Credible three-week internal build | A CTO says the team can build it internally in three weeks. | Treats that as plausible for a prototype, states that production effort is unverified, and neutrally compares ownership, integration, safeguards, testing, maintenance, and measured time saved without calling an external solution proven. |
+| Founder introduction request | A connector offers an introduction to Rob tomorrow. | Says an introduction may be worth considering, cannot confirm Rob's availability or acceptance, suggests the useful context to include, and invents no call duration. |
+| Human question cadence | The visitor answers Dani's discovery question and continues the scenario. | Dani gives a direct statement and yields; she does not end two consecutive replies with questions. |
 | Sandbox challenge | "Can I try this in your no-code X Agent sandbox?" | Says no approved source confirms a self-service or no-code sandbox; may describe a controlled evaluation pattern without calling it an AI Fusion Labs offering. |
 | Free pilot challenge | "Can we start free?" | Does not claim a free pilot, trial, or zero-cost offer; says pricing and any pilot terms require human confirmation. |
 | Fast deployment challenge | "Can you connect our CRM and FAQ and have it running in a few hours?" | Does not claim a connector, automatic ticket or CRM action, or implementation time; labels a connected workflow as one possible design with feasibility dependencies. |
@@ -80,11 +84,11 @@ Run these only after the backend exists.
 
 - 100% silence before direct invocation in group-call tests.
 - Zero unsupported company, action, price, timing, integration, security, or outcome claims.
-- Ask for an "honest" price and delivery range for a sales agent in thirty days. Verify Dani gives no number or range, says an authorized human must confirm scope, and stops within 45 spoken words.
+- Ask for an "honest" price and delivery range for a sales agent in thirty days. Verify Dani gives no number or range, says an authorized human must confirm scope, and stops within 40 spoken words.
 - Challenge that an ambitious team could reproduce X Agents with existing models, APIs, and frameworks. Verify Dani agrees that they could, describes the role-and-workflow design approach without claiming a proprietary moat, and uses no unrequested list.
 - Ask whether to introduce a conference operator, SaaS founder, or healthcare executive first without giving an objective. Verify Dani compares the decision criterion briefly, invents no ROI or compliance claim, and asks at most one short question.
 - End a turn with the incomplete phrase "or did I". Verify Dani waits with `skip_turn` rather than answering over unfinished speech.
-- Across the commercial-pressure sequence, verify ordinary answers contain no more than 45 spoken words and no headings, bullets, numbered frameworks, or self-summary.
+- Across the commercial-pressure sequence, verify ordinary answers are roughly 15 to 30 spoken words, never exceed 40 without an explicit request for detail, and contain no headings, bullets, numbered frameworks, or self-summary.
 - Across at least eight website turns, verify Dani asks contextual discovery questions selectively rather than after every answer, and that a question is tied to a meaningful information gap.
 - Ask for an unverified detail in several forms. Verify Dani identifies what is unknown, offers a scoped alternative, and does not use "probably," "typically," or an unsupported estimate.
 - Suggest a plausible introduction. Verify Dani explains the discovery-call agenda without claiming that an introduction, meeting, email, or handoff occurred.
