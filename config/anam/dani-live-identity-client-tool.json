@@ -1,0 +1,30 @@
+{
+  "name": "confirm_dani_live_identity",
+  "description": "Unlock only Dani's approved returning-user memory after Dani has completed a useful warm exchange, asked exactly 'What name would you like me to use?', received a real spoken name rather than User, Visitor, Guest, or Customer, and separately received explicit permission to check for notes from an earlier conversation. Never ask for or submit an email address for memory access; the application privately verifies the session-bound Dani website check-in identity. This tool does not send email, write memory, or access another X Agent's records. After success, follow the returned instruction and prefer newer approved notes over older superseded context.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preferredName": {
+          "type": "string",
+          "description": "The real name the visitor stated after Dani asked 'What name would you like me to use?'. Never submit User, Visitor, Guest, or Customer.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "memoryAccessConfirmed": {
+          "type": "boolean",
+          "description": "True only after the visitor explicitly agrees that Dani may check for approved notes from a previous conversation."
+        }
+      },
+      "required": [
+        "preferredName",
+        "memoryAccessConfirmed"
+      ]
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 10
+  }
+}

@@ -5,6 +5,10 @@ import {
     queueDaniAnamConversationFollowUp,
 } from '@/lib/anam/dani-agentmail';
 import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
+import {
+    readDaniAnamBrowserSession,
+    readDaniAnamSessionSecrets,
+} from '@/lib/anam/dani-session';
 import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
 import {
     readAmyAnamContactFromRequest,
@@ -17,6 +21,7 @@ import {
     readAmyAnamBrowserSession,
     readAmyAnamSpineConfig,
     readBoundedJsonObject,
+    requestFingerprint,
 } from '@/lib/anam/session-spine';
 import {
     consumeAmyAnamDistributedRateLimit,
@@ -41,24 +46,6 @@ export async function POST(request: Request) {
         if (!spine.gatesOpen) {
             return noStoreJson({ error: 'Amy session tracking is unavailable' }, { status: 503 });
         }
-        const browserSession = readAmyAnamBrowserSession(request, spine.signingSecret);
-        if (!browserSession) {
-            return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
-        }
-        const sharedContact = readAmyAnamContactFromRequest({
-            request,
-            browserSessionId: browserSession.id,
-            secret: spine.signingSecret,
-        });
-        const daniContact = readDaniAnamContactFromRequest({
-            request,
-            browserSessionId: browserSession.id,
-            secret: spine.signingSecret,
-        });
-        if (!sharedContact && !daniContact) {
-            return noStoreJson({ error: 'A private checked-in email is required' }, { status: 409 });
-        }
-
         const body = await readBoundedJsonObject(request, 8 * 1024);
         const allowedFields = new Set(['launchId', 'sessionId', 'userConfirmed']);
         if (Object.keys(body).some(key => !allowedFields.has(key))) {
@@ -73,29 +60,22 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'A valid email preference is required' }, { status: 400 });
         }
 
-        const rate = await consumeAmyAnamDistributedRateLimit({
-            fingerprint: `agentmail:${browserSession.id}`,
-            limit: 3,
+        const preAuthRate = await consumeAmyAnamDistributedRateLimit({
+            fingerprint: requestFingerprint(request, 'agentmail-preauth'),
+            limit: 30,
             windowSeconds: 60 * 60,
         });
-        if (!rate.allowed) {
+        if (!preAuthRate.allowed) {
             return noStoreJson(
                 { error: 'Too many email attempts' },
-                { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } },
+                { status: 429, headers: { 'Retry-After': String(preAuthRate.retryAfterSeconds) } },
             );
         }
 
-        const [launch, session, identity] = await Promise.all([
+        const [launch, session] = await Promise.all([
             readAmyAnamLaunch(launchId),
             readAmyAnamSession(sessionId),
-            readAmyAnamBrowserIdentity(browserSession.id),
         ]);
-        const ownershipMatches = launch?.browserSessionId === browserSession.id
-            && launch.launchId === launchId
-            && launch.boundSessionId === sessionId
-            && session?.browserSessionId === browserSession.id
-            && session.launchId === launchId
-            && session.externalSessionId === sessionId;
         const sessionAgentSlug = session
             ? resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug)
             : null;
@@ -110,6 +90,55 @@ export async function POST(request: Request) {
             && launch?.resolvedPersonaId === DANI_PERSONA_ID
             && sessionAgentSlug === 'dani'
             && launchAgentSlug === 'dani';
+        const isAmy = sessionAgentSlug === 'amy' && launchAgentSlug === 'amy';
+        if (!isAmy && !isDani && !isEvan) {
+            return noStoreJson({ error: 'Email is unavailable for this persona' }, { status: 409 });
+        }
+        const daniSessionSecrets = readDaniAnamSessionSecrets();
+        if (isDani && !daniSessionSecrets.configured) {
+            return noStoreJson({ error: 'Dani session access is temporarily unavailable' }, { status: 503 });
+        }
+        const browserSession = isDani
+            ? readDaniAnamBrowserSession(request, daniSessionSecrets.sessionSecret)
+            : readAmyAnamBrowserSession(request, spine.signingSecret);
+        if (!browserSession) {
+            return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
+        }
+        const sharedContact = isDani ? null : readAmyAnamContactFromRequest({
+            request,
+            browserSessionId: browserSession.id,
+            secret: spine.signingSecret,
+        });
+        const daniContact = isDani ? readDaniAnamContactFromRequest({
+            request,
+            browserSessionId: browserSession.id,
+            secret: daniSessionSecrets.contactSecret,
+        }) : null;
+        if (!sharedContact && !daniContact) {
+            return noStoreJson({ error: 'A private checked-in email is required' }, { status: 409 });
+        }
+
+        const rate = await consumeAmyAnamDistributedRateLimit({
+            fingerprint: `agentmail:${browserSession.id}`,
+            limit: 3,
+            windowSeconds: 60 * 60,
+        });
+        if (!rate.allowed) {
+            return noStoreJson(
+                { error: 'Too many email attempts' },
+                { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } },
+            );
+        }
+
+        const identity = isAmy
+            ? await readAmyAnamBrowserIdentity(browserSession.id)
+            : null;
+        const ownershipMatches = launch?.browserSessionId === browserSession.id
+            && launch.launchId === launchId
+            && launch.boundSessionId === sessionId
+            && session?.browserSessionId === browserSession.id
+            && session.launchId === launchId
+            && session.externalSessionId === sessionId;
         const contact = isDani ? daniContact : sharedContact;
         if (!contact) {
             return noStoreJson({ error: 'Follow-up consent was not confirmed for this persona' }, { status: 409 });
@@ -119,10 +148,6 @@ export async function POST(request: Request) {
         }
         if (isDani && contact.purpose !== 'dani_follow_up') {
             return noStoreJson({ error: 'Dani follow-up consent was not confirmed' }, { status: 409 });
-        }
-        const isAmy = sessionAgentSlug === 'amy' && launchAgentSlug === 'amy';
-        if (!isAmy && !isDani && !isEvan) {
-            return noStoreJson({ error: 'Email is unavailable for this persona' }, { status: 409 });
         }
         if (!ownershipMatches) {
             return noStoreJson({ error: 'Email session ownership could not be confirmed' }, { status: 409 });
@@ -156,7 +181,7 @@ export async function POST(request: Request) {
             browserSessionId: browserSession.id,
             displayName,
             email: contact.email,
-            contactSecret: spine.signingSecret,
+            contactSecret: isDani ? daniSessionSecrets.contactSecret : spine.signingSecret,
         });
         return noStoreJson({
             ...result,

@@ -6,9 +6,11 @@ import { ALL_AGENTS } from '@/lib/agents';
 import { Play } from 'lucide-react';
 import EvanLandingPage from '@/components/evan/EvanLandingPage';
 import AmyInsightLanding from '@/components/agents/AmyInsightLanding';
+import DaniEditorialLanding from '@/components/dani/DaniEditorialLanding';
 
 interface Props {
     params: Promise<{ slug: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export function generateStaticParams() {
@@ -26,16 +28,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         };
     }
 
+    if (slug === 'dani') {
+        return {
+            title: 'Dani · AI Solutions Director',
+            description: 'Meet Dani for a focused AI Fusion Labs working session that starts with the business problem and frames a practical next step.',
+        };
+    }
+
     return {};
 }
 
-export default async function AgentDetailPage({ params }: Props) {
+export default async function AgentDetailPage({ params, searchParams }: Props) {
     const { slug } = await params;
+    const resolvedSearchParams = await searchParams;
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) notFound();
 
     if (agent.slug === 'amy') {
         return <AmyInsightLanding />;
+    }
+
+    if (agent.slug === 'dani') {
+        const rawSessionState = Array.isArray(resolvedSearchParams.session)
+            ? resolvedSearchParams.session[0]
+            : resolvedSearchParams.session;
+        return <DaniEditorialLanding sessionComplete={rawSessionState === 'complete'} />;
     }
 
     if (agent.slug === 'evan') return <EvanLandingPage agent={agent} />;

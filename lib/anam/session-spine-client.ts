@@ -84,6 +84,40 @@ export async function confirmAmyAnamLiveIdentity({
     };
 }
 
+export async function confirmDaniAnamLiveIdentity({
+    launchId,
+    sessionId,
+    preferredName,
+    memoryAccessConfirmed,
+    fetchImpl = fetch,
+}: ConfirmIdentityInput): Promise<AmyAnamLiveIdentityResult> {
+    const response = await fetchImpl('/api/anam/dani/session/identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ launchId, sessionId, preferredName, memoryAccessConfirmed }),
+        cache: 'no-store',
+        credentials: 'same-origin',
+    });
+    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (
+        !response.ok
+        || payload.confirmed !== true
+        || payload.memoryUnlocked !== true
+        || typeof payload.preferredName !== 'string'
+        || typeof payload.memoryContext !== 'string'
+        || typeof payload.memoryCount !== 'number'
+    ) {
+        throw new Error(`Dani live identity confirmation failed (${response.status})`);
+    }
+    return {
+        confirmed: true,
+        memoryUnlocked: true,
+        preferredName: payload.preferredName,
+        memoryContext: payload.memoryContext,
+        memoryCount: payload.memoryCount,
+    };
+}
+
 export async function completeAmyAnamClientSession({
     launchId,
     sessionId,

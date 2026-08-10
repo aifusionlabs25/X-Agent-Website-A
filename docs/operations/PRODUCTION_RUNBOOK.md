@@ -1,5 +1,7 @@
 # Production runbook
 
+Dani's session-isolation and returning-memory rollout is deliberately staged. Follow [Dani returning-memory rollout](../anam/DANI_RETURNING_MEMORY.md); do not combine the backend deployment, Anam draft/prompt change, manual Anam publish, and memory enablement into one cutover.
+
 ## Current safety state
 
 Production remains pinned to the known-good rollback until this branch is reviewed and merged to main. The future-deployment memory configuration has been repaired and verified:
@@ -32,6 +34,18 @@ The identity salt remains part of the user lookup key. Replacing it creates a di
 9. Verify a Preview session before merging.
 10. Merge to main and let the production deployment contract run.
 
+For Dani deployments, also confirm `DANI_ANAM_SESSION_SECRET` and `DANI_ANAM_CONTACT_SECRET` are distinct, both Dani memory kill switches are active during the backend-first phase, and the dedicated Dani memory fingerprint matches before recall is enabled.
+
+Dani's verified three-email follow-up uses a separate, durable retry gate even while returning memory is disabled. Before promoting Dani AgentMail, confirm:
+
+- `DANI_ANAM_EMAIL_RECOVERY_ENABLED=true`
+- `DANI_ANAM_EMAIL_RECOVERY_KILL_SWITCH=false`
+- `DANI_ANAM_EMAIL_RECOVERY_PRODUCTION_APPROVED=true`
+- `CRON_SECRET` is a distinct random secret of at least 32 characters.
+- `vercel.json` contains the `slot=a` 10:00 UTC and `slot=b` 22:00 UTC recovery jobs. Each expression runs once daily, so the linked Hobby project invokes Dani recovery about every 12 hours without requiring a Pro-only sub-daily expression.
+
+Failed or partial Dani bundles enter a Dani-only sorted-set queue in the existing session-spine Redis. Recovery refetches and verifies the final Anam transcript against the immutable receipt, then retries only missing Visitor, Admin, or Call Summary lanes. Each lane reuses the same AgentMail idempotency key and byte-stable message body. Recovery fails closed and removes the queue item at 23 hours from the first attempt; never manually retry an expired item because AgentMail's idempotency key expires after 24 hours.
+
 Never paste secret values into Git, tickets, transcripts, screenshots, or chat.
 
 ## Required smoke test
@@ -45,6 +59,7 @@ Use a designated test identity with Remember me enabled.
 5. Open Notes, Brief, Roadmap, Visual, and Catalog and confirm the side panel updates.
 6. End the call and confirm session finalization.
 7. Verify the approved memory count and AgentMail delivery separately.
+8. For an injected or observed partial Dani delivery, confirm the retry-due member is removed after all three lane receipts exist. A pending member must be drained by the next 10:00/22:00 UTC slot; an item older than 23 hours must terminate without another provider send.
 
 ## Incident response
 

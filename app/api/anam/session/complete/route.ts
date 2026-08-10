@@ -1,6 +1,10 @@
 import { after, NextResponse } from 'next/server';
 import { finalizeAmyAnamSession } from '@/lib/anam/session-finalizer';
 import {
+    readDaniAnamBrowserSession,
+    readDaniAnamSessionSecrets,
+} from '@/lib/anam/dani-session';
+import {
     AmyAnamRequestError,
     boundedString,
     isTrustedBrowserOrigin,
@@ -9,6 +13,8 @@ import {
     readAmyAnamBrowserSession,
     readAmyAnamSpineConfig,
     readBoundedJsonObject,
+    requestFingerprint,
+    resolveAnamSessionAgentSlug,
 } from '@/lib/anam/session-spine';
 import {
     consumeAmyAnamDistributedRateLimit,
@@ -71,11 +77,6 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
         }
 
-        const browserSession = readAmyAnamBrowserSession(request, config.signingSecret);
-        if (!browserSession) {
-            return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
-        }
-
         const body = await readBoundedJsonObject(request, 2 * 1024);
         const allowedFields = new Set(['launchId', 'sessionId', 'closeReason']);
         if (Object.keys(body).some(key => !allowedFields.has(key))) {
@@ -92,7 +93,36 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'Valid launch and session IDs are required' }, { status: 400 });
         }
 
+        const preAuthRate = await consumeAmyAnamDistributedRateLimit({
+            fingerprint: requestFingerprint(request, 'complete-preauth'),
+            limit: 60,
+            windowSeconds: 10 * 60,
+        });
+        if (!preAuthRate.allowed) {
+            return noStoreJson(
+                { error: 'Too many completion attempts' },
+                { status: 429, headers: { 'Retry-After': String(preAuthRate.retryAfterSeconds) } },
+            );
+        }
+
         const launch = await readAmyAnamLaunch(launchId);
+        if (!launch) {
+            return noStoreJson({ error: 'Session ownership did not match' }, { status: 403 });
+        }
+        const launchAgentSlug = resolveAnamSessionAgentSlug(
+            launch.resolvedPersonaId,
+            launch.agentSlug,
+        );
+        const daniSessionSecrets = readDaniAnamSessionSecrets();
+        if (launchAgentSlug === 'dani' && !daniSessionSecrets.configured) {
+            return noStoreJson({ error: 'Dani session access is temporarily unavailable' }, { status: 503 });
+        }
+        const browserSession = launchAgentSlug === 'dani'
+            ? readDaniAnamBrowserSession(request, daniSessionSecrets.sessionSecret)
+            : readAmyAnamBrowserSession(request, config.signingSecret);
+        if (!browserSession) {
+            return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
+        }
         if (!launch || launch.browserSessionId !== browserSession.id) {
             return noStoreJson({ error: 'Session ownership did not match' }, { status: 403 });
         }

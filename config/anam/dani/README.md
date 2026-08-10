@@ -14,6 +14,7 @@ Implementation status:
 |---|---|---|
 | V2 prompt, identity, and eleven-file KB | Managed source of truth | Live in Anam; immediate and delayed read-backs passed |
 | Website contact gate and three-email pipeline | Implemented and covered by Dani tests | Requires site deployment, open production gates, and an end-to-end provider test |
+| Dedicated returning-memory boundary | Dani-specific session/contact secrets, verified identity, consent, encrypted records, and operator promotion are implemented | Keep closed until the staged backend, Anam tool/prompt, manual-publish, and verification runbook passes |
 | Anam group-call participation | V2 prompt and KB define silent, name-invoked advisory behavior | Anam supplies meeting transport and name gating |
 | Native Anam meeting follow-up email | Explicitly excluded from the website client tool | Not implemented; no verified recipient-and-consent bridge or native meeting handler |
 | Cara 3 rollback | Protected by the updater | Verified unchanged after v2 apply |
@@ -38,7 +39,7 @@ The updater verifies the target persona, avatar, voice, LLM, and protected rollb
 - `v2/DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md`: canonical website and meeting-safe spoken prompt.
 - `v2/knowledge/`: eleven public-safe AI Fusion Labs, founder-profile, solution-discovery, X Agent, meeting, and follow-up documents.
 - `v2/knowledge-manifest.json`: exact document allowlist, fingerprints, bundle hash, provenance, and exclusions.
-- `persona-manifest.json`: pinned identity, model assets, v2 prompt hash, voice behavior, and four required live tools.
+- `persona-manifest.json`: pinned identity, model assets, managed prompt hash, voice behavior, and target tool inventory.
 - `../dani-agentmail-client-tool.json`: website-only follow-up status and revocation tool.
 - `v2/CAPABILITY_CLAIMS_AND_APPROVALS.md`: owner approvals, evidence-backed claims, and unresolved policy decisions. It is not uploaded to Anam.
 - `v2/POST_CALL_EMAIL_SOP.md`: internal three-email design contract. It is not uploaded to Anam.
@@ -63,6 +64,10 @@ The repository implementation is limited to opted-in `x-agent-website-a` session
 `send_dani_follow_up_email` is a website-only client tool. Only `email_queued` or `email_already_queued` means the bundle is scheduled. Dani must never say it was sent before backend delivery evidence exists.
 
 The pipeline is implemented in source, but that does not make it production-live. Production still requires the site deployment, valid server configuration, all Dani and shared session-spine gates open, a live final-transcript test, three verified deliveries, and duplicate/revocation verification.
+
+## Returning-memory rollout
+
+Dani's memory is isolated from Amy's cookies, secrets, identity tool, consent state, records, and promotion gate. Deploy it in stages and keep both Dani memory kill switches active until the dedicated Anam identity tool and managed prompt have been manually published and audited. The operator checklist, environment contract, fingerprint formula, smoke tests, and emergency close are in [`docs/anam/DANI_RETURNING_MEMORY.md`](../../../docs/anam/DANI_RETURNING_MEMORY.md).
 
 ## Native Anam meeting boundary
 

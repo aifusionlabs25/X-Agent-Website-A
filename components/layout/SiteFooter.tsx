@@ -5,7 +5,12 @@ import { usePathname } from 'next/navigation';
 
 export default function SiteFooter() {
     const pathname = usePathname();
-    if (pathname === '/agents/evan' || pathname === '/demo/evan') return null;
+    if (
+        pathname === '/agents/evan'
+        || pathname === '/demo/evan'
+        || pathname === '/agents/dani'
+        || pathname === '/demo/dani'
+    ) return null;
 
     return (
         <footer className="bg-zinc-950 border-t border-zinc-800 py-12 px-8">

@@ -5,7 +5,12 @@ import { usePathname } from 'next/navigation';
 
 export default function SiteHeader() {
     const pathname = usePathname();
-    if (pathname === '/agents/evan' || pathname === '/demo/evan') return null;
+    if (
+        pathname === '/agents/evan'
+        || pathname === '/demo/evan'
+        || pathname === '/agents/dani'
+        || pathname === '/demo/dani'
+    ) return null;
 
     return (
         <header className="fixed top-0 left-0 right-0 z-50">

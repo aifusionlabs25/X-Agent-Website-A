@@ -42,6 +42,7 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 - Keep `skip_turn` available.
 - Keep `end_call` for website sessions, but the v2 prompt prohibits unauthenticated group-meeting close behavior.
 - Attach `send_dani_follow_up_email` only with the verified website handler, secure typed-recipient consent gate, authoritative Anam transcript finalizer, and exactly-once delivery receipts. Native Anam meetings have no matching handler and are explicitly excluded by the prompt.
+- Attach `confirm_dani_live_identity` only after the Dani-specific backend is deployed with memory fail-closed. It must never be replaced by Amy's identity tool. Manually publish and audit the Anam draft before enabling verified recall; follow [`docs/anam/DANI_RETURNING_MEMORY.md`](../../../../docs/anam/DANI_RETURNING_MEMORY.md).
 
 ## Meeting responsibility split
 

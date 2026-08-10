@@ -2,9 +2,11 @@
 
 import Image from 'next/image';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
-import { ArrowRight, BrainCircuit, LockKeyhole, Mail, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowRight, BrainCircuit, KeyRound, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import styles from './DaniEditorial.module.css';
+import DaniMemoryControls from './DaniMemoryControls';
 
-type SubmitMode = 'email' | 'guest' | null;
+type SubmitMode = 'email' | 'guest' | 'verify' | null;
 
 export default function DaniContactGate({ children }: { children: ReactNode }) {
     const [ready, setReady] = useState(false);
@@ -12,6 +14,12 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
     const [submitting, setSubmitting] = useState<SubmitMode>(null);
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
+    const [emailFollowUpAvailable, setEmailFollowUpAvailable] = useState(false);
+    const [followUpConsent, setFollowUpConsent] = useState(false);
+    const [memoryAvailable, setMemoryAvailable] = useState(false);
+    const [memoryConsent, setMemoryConsent] = useState(false);
+    const [challengeId, setChallengeId] = useState<string | null>(null);
+    const [verificationCode, setVerificationCode] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -24,10 +32,20 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
             signal: controller.signal,
         }).then(async response => {
             const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+            if (active) {
+                const followUpAvailable = payload.emailFollowUpAvailable === true;
+                setEmailFollowUpAvailable(followUpAvailable);
+                setFollowUpConsent(followUpAvailable);
+                setMemoryAvailable(payload.memoryAvailable === true);
+            }
             if (
                 response.ok
                 && payload.authenticated === true
-                && (payload.guest === true || payload.followUpAuthorized === true)
+                && (
+                    payload.guest === true
+                    || payload.followUpAuthorized === true
+                    || payload.memoryVerified === true
+                )
                 && active
             ) setReady(true);
         }).catch(() => undefined).finally(() => {
@@ -50,9 +68,18 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                 cache: 'no-store',
                 body: JSON.stringify(mode === 'guest'
                     ? { guest: true }
-                    : { displayName, email, followUpConsent: true }),
+                    : { displayName, email, followUpConsent, memoryConsent }),
             });
             const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+            if (
+                response.status === 202
+                && payload.verificationRequired === true
+                && typeof payload.challengeId === 'string'
+            ) {
+                setChallengeId(payload.challengeId);
+                setVerificationCode('');
+                return;
+            }
             if (!response.ok || payload.authenticated !== true) {
                 throw new Error(typeof payload.error === 'string' ? payload.error : 'Dani could not be started');
             }
@@ -67,108 +94,274 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
 
     const submitEmail = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (!followUpConsent && !memoryConsent) {
+            setError('Choose email recap, returning memory, or continue as a guest.');
+            return;
+        }
         await requestAccess('email');
     };
 
+    const verifyEmail = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!challengeId) return;
+        setSubmitting('verify');
+        setError(null);
+        try {
+            const response = await fetch('/api/anam/dani/access/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                cache: 'no-store',
+                body: JSON.stringify({ challengeId, verificationCode }),
+            });
+            const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+            if (
+                !response.ok
+                || payload.authenticated !== true
+                || (payload.memoryVerified !== true && payload.followUpAuthorized !== true)
+            ) {
+                throw new Error(typeof payload.error === 'string' ? payload.error : 'The verification code could not be confirmed');
+            }
+            setEmail('');
+            setVerificationCode('');
+            setReady(true);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'The verification code could not be confirmed');
+        } finally {
+            setSubmitting(null);
+        }
+    };
+
     if (checking) return (
-        <main className="flex min-h-[100svh] items-center justify-center bg-[#070914] text-white">
-            <div className="flex items-center gap-3 rounded-full border border-indigo-300/20 bg-indigo-400/10 px-5 py-3 text-sm text-indigo-100">
-                <BrainCircuit className="h-4 w-4 animate-pulse text-cyan-300" /> Preparing Dani
+        <main className={`${styles.root} ${styles.paper} flex min-h-[100svh] items-center justify-center px-5 text-[#151b19]`}>
+            <div
+                role="status"
+                className="flex items-center gap-3 border border-[#c9c3b4] bg-[#f8f4e9]/90 px-5 py-3 text-sm font-semibold shadow-[0_18px_55px_rgba(21,27,25,.1)]"
+            >
+                <BrainCircuit className="h-4 w-4 animate-pulse text-[#126e64] motion-reduce:animate-none" />
+                Preparing your session with Dani
             </div>
         </main>
     );
-    if (ready) return <>{children}</>;
+    if (ready) return <>{children}<DaniMemoryControls /></>;
 
     return (
-        <main className="relative flex min-h-[100svh] items-center justify-center overflow-x-hidden bg-[#070914] px-4 py-5 text-white sm:px-6 lg:h-[100svh] lg:overflow-hidden">
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -left-40 top-0 h-[34rem] w-[34rem] rounded-full bg-indigo-600/25 blur-[120px]" />
-                <div className="absolute -right-32 bottom-0 h-[30rem] w-[30rem] rounded-full bg-cyan-500/12 blur-[110px]" />
-                <div className="absolute inset-0 opacity-[0.045] [background-image:linear-gradient(rgba(255,255,255,.28)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.28)_1px,transparent_1px)] [background-size:56px_56px]" />
-            </div>
-
-            <section className="relative grid w-full max-w-6xl overflow-hidden rounded-[1.75rem] border border-white/12 bg-[#0c1020]/96 shadow-[0_32px_120px_rgba(0,0,0,.55)] lg:h-[min(88svh,720px)] lg:max-h-[calc(100svh-32px)] lg:grid-cols-[.9fr_1.1fr]">
-                <div className="relative hidden min-h-0 overflow-hidden border-r border-white/10 bg-[#0a0d18] lg:block">
+        <main
+            className={`${styles.root} min-h-[100svh] overflow-x-hidden bg-[#eee9dc] text-[#151b19] md:h-[100svh] md:overflow-hidden`}
+            data-dani-surface="entry"
+        >
+            <section className="grid min-h-[100svh] w-full md:h-[100svh] md:grid-cols-[minmax(18rem,.86fr)_minmax(27rem,1.14fr)]">
+                <div className="relative min-h-[13rem] overflow-hidden bg-[#17201d] md:min-h-0">
                     <Image
                         src="/agents/thumbnails/dani-x-agent-director-cara4-2026.jpg"
-                        alt="Dani, AI Solutions Director"
+                        alt="Dani, AI Solutions Director at AI Fusion Labs"
                         fill
                         priority
-                        sizes="45vw"
-                        className="object-cover object-center"
+                        sizes="(max-width: 767px) 100vw, 44vw"
+                        className={styles.entryPortraitImage}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#080b16] via-transparent to-black/15" />
-                    <div className="absolute inset-x-0 bottom-0 p-8">
-                        <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-cyan-300">AI Fusion Labs</p>
-                        <h1 className="mt-2 text-3xl font-bold leading-tight">Hi, I&apos;m Dani.</h1>
-                        <p className="mt-3 max-w-md text-sm leading-6 text-slate-300">
-                            I&apos;m with AI Fusion Labs.
+                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,12,10,.12)_18%,rgba(7,12,10,.04)_42%,rgba(7,12,10,.88)_100%)]" />
+
+                    <div className={`${styles.mono} absolute left-5 top-[max(1.25rem,env(safe-area-inset-top))] z-10 flex items-center text-[10px] font-bold uppercase tracking-[0.16em] text-white sm:left-8`}>
+                        <span aria-hidden="true" className="mr-2.5 h-2 w-2 rounded-full bg-[#d55538]" />
+                        AI Fusion Labs
+                    </div>
+
+                    <div className={`${styles.entrance} absolute inset-x-0 bottom-0 z-10 p-5 text-white sm:p-8 lg:p-10`}>
+                        <p className={`${styles.mono} text-[10px] font-semibold uppercase tracking-[0.17em] text-[#dbffef]`}>
+                            AI Solutions Director
                         </p>
-                        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/65">
-                            <p className="flex items-center gap-2"><ShieldCheck size={14} className="text-cyan-300" /> Transparent AI</p>
-                            <p className="flex items-center gap-2"><BrainCircuit size={14} className="text-indigo-300" /> Solution discovery</p>
-                        </div>
+                        <h1 className={`${styles.display} mt-2 text-[clamp(2.5rem,6vw,4.5rem)] font-semibold leading-[.92] tracking-[-.045em]`}>
+                            Hi, I&apos;m Dani.
+                        </h1>
+                        <p className="mt-3 max-w-md text-[13px] leading-5 text-white/82 sm:text-sm sm:leading-6">
+                            Let&apos;s make the business problem clearer before we choose the technology.
+                        </p>
                     </div>
                 </div>
 
-                <div className="flex min-h-0 flex-col justify-center overflow-y-auto p-5 sm:p-8 lg:p-9">
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-cyan-300">Before you meet Dani</p>
-                    <h2 className="mt-2 text-[clamp(1.8rem,2.5vw,2.5rem)] font-bold leading-tight tracking-tight">Choose how you want to begin.</h2>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                        Add your name and email, or continue as a guest.
-                    </p>
+                <div className={`${styles.paper} relative flex min-h-0 overflow-y-auto`}>
+                    <div className={`${styles.entrance} m-auto w-full max-w-[48rem] px-5 py-7 pb-[max(2.25rem,env(safe-area-inset-bottom))] sm:px-9 sm:py-12 md:px-[clamp(2rem,5vw,5.25rem)] md:py-[clamp(3.5rem,8vh,7rem)]`}>
+                        <div className="mb-5 h-px w-14 bg-[#d55538] sm:mb-7" aria-hidden="true" />
+                        <p className={`${styles.mono} text-[10px] font-bold uppercase tracking-[0.17em] text-[#126e64]`}>
+                            A focused working session
+                        </p>
+                        <h2 className={`${styles.display} mt-3 max-w-[13ch] text-[clamp(2.15rem,5vw,4.75rem)] font-semibold leading-[.94] tracking-[-.05em] sm:text-[clamp(2.35rem,5vw,4.75rem)]`}>
+                            Bring the problem. I&apos;ll help frame the path.
+                        </h2>
+                        <p className="mt-3 max-w-[40rem] text-sm leading-6 text-[#626861] sm:mt-5 sm:text-[15px] sm:leading-7">
+                            {emailFollowUpAvailable || memoryAvailable
+                                ? 'Share a verified email for your recap, optional returning memory, or both. You can also continue as a guest.'
+                                : 'Dani is ready to talk without collecting your name or email. Continue as a guest to begin.'}
+                        </p>
 
-                    <form className="mt-5 grid gap-3 sm:grid-cols-2" onSubmit={submitEmail}>
-                        <label className="block">
-                            <span className="flex items-center gap-2 text-sm font-bold text-white/85"><UserRound size={15} /> Name</span>
-                            <input
-                                required
-                                autoComplete="name"
-                                value={displayName}
-                                onChange={event => setDisplayName(event.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-2.5 text-white outline-none transition placeholder:text-white/30 focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/10"
-                                placeholder="Your name"
-                            />
-                        </label>
-                        <label className="block">
-                            <span className="flex items-center gap-2 text-sm font-bold text-white/85"><Mail size={15} /> Email</span>
-                            <input
-                                required
-                                type="email"
-                                autoComplete="email"
-                                value={email}
-                                onChange={event => setEmail(event.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/15 bg-black/25 px-4 py-2.5 text-white outline-none transition placeholder:text-white/30 focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/10"
-                                placeholder="you@example.com"
-                            />
-                        </label>
-                        {error && <p role="alert" className="rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-200 sm:col-span-2">{error}</p>}
-                        <button
-                            type="submit"
-                            disabled={submitting !== null}
-                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-5 font-extrabold text-white shadow-[0_12px_30px_rgba(79,70,229,.2)] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60 sm:col-span-2"
+                        {(emailFollowUpAvailable || memoryAvailable || challengeId) && <form
+                            className="mt-5 grid gap-4 sm:mt-7"
+                            onSubmit={challengeId ? verifyEmail : submitEmail}
+                            aria-busy={submitting !== null}
+                            data-dani-access-form
                         >
-                            {submitting === 'email' ? 'Starting Dani...' : 'Start conversation'}
-                            {submitting !== 'email' && <ArrowRight className="h-4 w-4" />}
-                        </button>
-                    </form>
+                            {!challengeId && <div className="grid gap-4 xl:grid-cols-2">
+                                <label className="block">
+                                    <span className={`${styles.mono} flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#313936]`}>
+                                        <UserRound aria-hidden="true" size={14} /> Name
+                                    </span>
+                                    <input
+                                        required
+                                        autoComplete="name"
+                                        value={displayName}
+                                        onChange={event => setDisplayName(event.target.value)}
+                                        className="mt-2 h-14 w-full rounded-[3px] border border-[#bdb6a6] bg-white/35 px-4 text-[15px] text-[#151b19] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[#737970] hover:bg-white/50 focus-visible:border-[#126e64] focus-visible:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#126e64]/25"
+                                        placeholder="How should Dani address you?"
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className={`${styles.mono} flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#313936]`}>
+                                        <Mail aria-hidden="true" size={14} /> Verified email
+                                    </span>
+                                    <input
+                                        required
+                                        type="email"
+                                        autoComplete="email"
+                                        value={email}
+                                        onChange={event => setEmail(event.target.value)}
+                                        className="mt-2 h-14 w-full rounded-[3px] border border-[#bdb6a6] bg-white/35 px-4 text-[15px] text-[#151b19] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[#737970] hover:bg-white/50 focus-visible:border-[#126e64] focus-visible:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#126e64]/25"
+                                        placeholder="you@example.com"
+                                    />
+                                </label>
+                            </div>}
 
-                    <div className="my-3 flex items-center gap-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/30">
-                        <span className="h-px flex-1 bg-white/10" /> Or <span className="h-px flex-1 bg-white/10" />
+                            {!challengeId && (
+                                <fieldset aria-describedby="dani-email-purpose-help">
+                                    <legend className={`${styles.mono} text-[10px] font-bold uppercase tracking-[0.12em] text-[#313936]`}>
+                                        Use this email for
+                                    </legend>
+                                    <div className={`mt-2 grid overflow-hidden rounded-[3px] border border-[#bdb6a6] bg-[#bdb6a6] ${emailFollowUpAvailable && memoryAvailable ? 'gap-px sm:grid-cols-2' : ''}`}>
+                                        {emailFollowUpAvailable && (
+                                            <label className={`flex cursor-pointer items-start gap-3 p-3.5 transition-colors ${followUpConsent ? 'bg-[#e1ebe3]' : 'bg-[#f8f4e9] hover:bg-white/75'}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={followUpConsent}
+                                                    onChange={event => {
+                                                        setFollowUpConsent(event.target.checked);
+                                                        setError(null);
+                                                    }}
+                                                    aria-describedby="dani-follow-up-description"
+                                                    className="mt-0.5 h-4 w-4 shrink-0 accent-[#126e64] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d55538]"
+                                                />
+                                                <span className="min-w-0">
+                                                    <strong className="block text-[13px] font-extrabold text-[#151b19]">Email my recap</strong>
+                                                    <span id="dani-follow-up-description" className="mt-0.5 block text-[11px] leading-[1.45] text-[#626861]">
+                                                        Thank-you and working recap after this session.
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        )}
+                                        {memoryAvailable && (
+                                            <label className={`flex cursor-pointer items-start gap-3 p-3.5 transition-colors ${memoryConsent ? 'bg-[#e1ebe3]' : 'bg-[#f8f4e9] hover:bg-white/75'}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={memoryConsent}
+                                                    onChange={event => {
+                                                        setMemoryConsent(event.target.checked);
+                                                        setError(null);
+                                                    }}
+                                                    aria-describedby="dani-memory-consent-description"
+                                                    className="mt-0.5 h-4 w-4 shrink-0 accent-[#126e64] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d55538]"
+                                                />
+                                                <span className="min-w-0">
+                                                    <strong className="block text-[13px] font-extrabold text-[#151b19]">Remember me across sessions</strong>
+                                                    <span id="dani-memory-consent-description" className="mt-0.5 block text-[11px] leading-[1.45] text-[#626861]">
+                                                        Reviewed highlights only&mdash;not your raw transcript.
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        )}
+                                    </div>
+                                    <p id="dani-email-purpose-help" className="mt-2 text-[11px] leading-5 text-[#70756e]">
+                                        A one-time code verifies the address. These choices are separate and can be changed independently.
+                                    </p>
+                                </fieldset>
+                            )}
+                            {challengeId && (
+                                <div className="grid gap-4">
+                                    <div className="border-l-4 border-[#126e64] bg-[#dfe9e1] px-4 py-3 text-sm leading-6 text-[#28433e]">
+                                        We sent a six-digit code to the address you entered. It expires in 10 minutes and does not reveal whether earlier notes exist.
+                                    </div>
+                                    <label className="block">
+                                        <span className={`${styles.mono} flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#313936]`}>
+                                            <KeyRound aria-hidden="true" size={14} /> Verification code
+                                        </span>
+                                        <input
+                                            required
+                                            inputMode="numeric"
+                                            autoComplete="one-time-code"
+                                            pattern="[0-9]{6}"
+                                            maxLength={6}
+                                            value={verificationCode}
+                                            onChange={event => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                                            className={`${styles.mono} mt-2 h-14 w-full rounded-[3px] border border-[#bdb6a6] bg-white/45 px-4 text-center text-xl font-bold tracking-[0.35em] text-[#151b19] outline-none focus-visible:border-[#126e64] focus-visible:ring-2 focus-visible:ring-[#126e64]/25`}
+                                            placeholder="000000"
+                                            aria-label="Six-digit email verification code"
+                                        />
+                                    </label>
+                                </div>
+                            )}
+                            {error && (
+                                <p role="alert" className="border-l-4 border-[#b63d2b] bg-[#f1ded5] px-4 py-3 text-sm leading-6 text-[#742a20]">
+                                    {error}
+                                </p>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={submitting !== null}
+                                aria-label={challengeId ? 'Verify email and start conversation' : 'Start conversation'}
+                                className="group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] bg-[#126e64] px-5 text-sm font-extrabold text-white shadow-[0_12px_30px_rgba(18,110,100,.15)] transition-[transform,background-color,box-shadow] hover:-translate-y-0.5 hover:bg-[#0d5d54] hover:shadow-[0_16px_38px_rgba(18,110,100,.22)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d55538] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none"
+                            >
+                                {submitting === 'email'
+                                    ? 'Sending secure code...'
+                                    : submitting === 'verify'
+                                        ? 'Verifying...'
+                                        : challengeId
+                                            ? 'Verify and begin'
+                                            : 'Send code and continue'}
+                                {submitting === null && <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />}
+                            </button>
+                            {challengeId && (
+                                <button
+                                    type="button"
+                                    disabled={submitting !== null}
+                                    onClick={() => {
+                                        setChallengeId(null);
+                                        setVerificationCode('');
+                                        setError(null);
+                                    }}
+                                    className="text-sm font-bold text-[#126e64] underline decoration-[#126e64]/35 underline-offset-4 hover:decoration-[#126e64] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64]"
+                                >
+                                    Change name or email
+                                </button>
+                            )}
+                        </form>}
+
+                        {!challengeId && (emailFollowUpAvailable || memoryAvailable) && <div className={`${styles.mono} my-3 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#7a7d74]`}>
+                            <span className="h-px flex-1 bg-[#c9c3b4]" /> Or <span className="h-px flex-1 bg-[#c9c3b4]" />
+                        </div>}
+                        {!challengeId && <button
+                            type="button"
+                            disabled={submitting !== null}
+                            onClick={() => void requestAccess('guest')}
+                            aria-label="Continue without email"
+                            className="group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] border border-[#a9a292] bg-transparent px-5 text-sm font-extrabold text-[#151b19] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#126e64] hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none"
+                        >
+                            {submitting === 'guest' ? 'Opening Dani...' : 'Continue as a guest'}
+                            {submitting !== 'guest' && <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />}
+                        </button>}
+                        <p id="dani-session-privacy" className="mt-4 flex max-w-[42rem] gap-2.5 text-[11px] leading-5 text-[#626861]">
+                            <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#126e64]" />
+                            <span>Dani is an AI. Your typed address stays outside her spoken context. Returning memory is email-verified, optional, separately consented, and limited to reviewed notes. Sessions may be transcribed for requested follow-up. Do not share secrets or sensitive records.</span>
+                        </p>
                     </div>
-                    <button
-                        type="button"
-                        disabled={submitting !== null}
-                        onClick={() => void requestAccess('guest')}
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-indigo-400/45 bg-indigo-500/10 px-5 font-bold text-white transition hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-500/20 disabled:translate-y-0 disabled:opacity-60"
-                    >
-                        {submitting === 'guest' ? 'Opening Dani...' : 'Continue without email'}
-                        {submitting !== 'guest' && <ArrowRight className="h-4 w-4" />}
-                    </button>
-                    <p className="mt-3 flex gap-2 text-[11px] leading-5 text-white/42">
-                        <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/80" />
-                        Your typed address stays outside Dani&apos;s spoken context. Sessions may be transcribed for post-session follow-up. Do not share secrets or sensitive records.
-                    </p>
                 </div>
             </section>
         </main>

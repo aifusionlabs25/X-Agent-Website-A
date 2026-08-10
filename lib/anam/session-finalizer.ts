@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { dispatchAmyAnamPostSessionFollowUp } from './agentmail.ts';
-import { dispatchDaniAnamPostSessionFollowUp } from './dani-agentmail.ts';
+import {
+    dispatchDaniAnamPostSessionFollowUp,
+    scheduleDaniAnamEmailRetryAfterDispatchFailure,
+} from './dani-agentmail.ts';
 import { dispatchEvanAnamPostSessionFollowUp } from './evan-agentmail.ts';
 import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from './persona-ids.ts';
+import { prepareDaniAnamMemoryReviewCandidate } from './dani-memory-candidate-finalizer.ts';
 import {
     AnamSessionApiError,
     fetchCompletedAnamTranscript,
@@ -25,6 +29,7 @@ import type { AmyAnamSessionReceipt, AmyAnamSessionRecord } from './session-spin
 import {
     acquireAmyAnamCompletionLock,
     bindAmyAnamLaunch,
+    hasDaniAnamEmailRetryDueEntry,
     markAmyAnamFinalizationFailed,
     markAmyAnamFinalizationPending,
     markAmyAnamVerificationPending,
@@ -141,6 +146,84 @@ export async function finalizeAmyAnamSession(
                     ),
                 };
                 await ensureAmyAnamHermesShadowQueued(normalizedSession, existingReceipt);
+                if (
+                    normalizedSession.resolvedPersonaId === DANI_PERSONA_ID
+                    && normalizedSession.agentSlug === 'dani'
+                    && existingReceipt.status === 'completed'
+                    && existingReceipt.transcript.source === 'anam_api'
+                ) {
+                    const launch = await readAmyAnamLaunch(normalizedSession.launchId);
+                    if (
+                        launch
+                        && launch.browserSessionId === normalizedSession.browserSessionId
+                        && launch.resolvedPersonaId === normalizedSession.resolvedPersonaId
+                        && launch.boundSessionId === externalSessionId
+                    ) {
+                        try {
+                            const transcript = await fetchCompletedAnamTranscript(externalSessionId, launch, {
+                                pollDelaysMs: [0, 500, 1_500],
+                                requestTimeoutMs: 2_000,
+                            });
+                            if (transcript.status === 'pending') return 'pending';
+                            if (transcript.status === 'ready') {
+                                const recoveredReceipt = buildAmyAnamReceipt({
+                                    externalSessionId,
+                                    closeReason: existingReceipt.closeReason,
+                                    source: 'anam_api',
+                                    turns: transcript.turns,
+                                    variant: normalizedSession.variant,
+                                });
+                                const transcriptMatchesReceipt =
+                                    recoveredReceipt.receiptId === existingReceipt.receiptId
+                                    && recoveredReceipt.variant === existingReceipt.variant
+                                    && recoveredReceipt.transcript.messageCount === existingReceipt.transcript.messageCount
+                                    && recoveredReceipt.transcript.contentSha256 === existingReceipt.transcript.contentSha256;
+                                if (!transcriptMatchesReceipt) {
+                                    console.error('[Dani Anam AgentMail] Recovery transcript did not match receipt', {
+                                        externalSessionRef: externalSessionId.slice(-8),
+                                        contentIncluded: false,
+                                        outboundActions: 0,
+                                    });
+                                    return 'completed';
+                                }
+                                const emailResult = await dispatchDaniAnamPostSessionFollowUp({
+                                    session: normalizedSession,
+                                    receipt: existingReceipt,
+                                    turns: transcript.turns,
+                                });
+                                console.info('[Dani Anam AgentMail] Post-receipt recovery finished', {
+                                    externalSessionRef: externalSessionId.slice(-8),
+                                    status: emailResult.status,
+                                    sent: emailResult.sent,
+                                    transcriptRevalidated: true,
+                                    contentIncluded: false,
+                                });
+                                if (
+                                    emailResult.status === 'email_partial'
+                                    || emailResult.status === 'email_failed'
+                                ) return 'pending';
+                                if (
+                                    emailResult.status === 'email_unavailable'
+                                    && await hasDaniAnamEmailRetryDueEntry(externalSessionId)
+                                ) return 'pending';
+                            }
+                        } catch {
+                            const retrySchedule = await scheduleDaniAnamEmailRetryAfterDispatchFailure({
+                                externalSessionId,
+                                retryStartedAt: existingReceipt.completedAt,
+                            }).catch(() => 'unavailable' as const);
+                            // The canonical receipt remains terminal, but returning pending lets
+                            // the bounded post-close loop and durable due set safely retry this
+                            // Dani-only recovery without reopening receipt or memory finalization.
+                            console.warn('[Dani Anam AgentMail] Post-receipt recovery deferred', {
+                                externalSessionRef: externalSessionId.slice(-8),
+                                retrySchedule,
+                                contentIncluded: false,
+                            });
+                            return retrySchedule === 'expired' ? 'completed' : 'pending';
+                        }
+                    }
+                }
             }
             return 'completed';
         }
@@ -276,7 +359,43 @@ export async function finalizeAmyAnamSession(
                 variant: session.variant,
             });
             const hermesShadowEnvelope = buildHermesShadowEnvelope(session, receipt);
-            await writeAmyAnamReceipt(session, finalization, receipt, { hermesShadowEnvelope });
+            const daniMemoryReview = await prepareDaniAnamMemoryReviewCandidate({
+                session,
+                receipt,
+                turns: transcript.status === 'ready' ? transcript.turns : [],
+            }).catch(() => {
+                console.warn('[Dani Anam Memory] Review candidate omitted', {
+                    reason: 'eligibility_or_provenance_unavailable',
+                    contentIncluded: false,
+                    automaticApproval: false,
+                });
+                return undefined;
+            });
+            const receiptWriteStatus = await writeAmyAnamReceipt(session, finalization, receipt, {
+                hermesShadowEnvelope,
+                daniMemoryReviewArtifact: daniMemoryReview?.artifact,
+                daniMemoryEligibility: daniMemoryReview?.eligibility,
+            });
+            if (
+                daniMemoryReview
+                && (receiptWriteStatus === 'candidate_stored' || receiptWriteStatus === 'candidate_duplicate')
+            ) {
+                console.info('[Dani Anam Memory] Review candidate committed with receipt', {
+                    externalSessionId: daniMemoryReview.artifact.externalSessionId,
+                    jobId: daniMemoryReview.artifact.jobId,
+                    candidateDigest: daniMemoryReview.artifact.candidateDigest,
+                    rawTranscriptIncluded: false,
+                    rawEmailIncluded: false,
+                    automaticApproval: false,
+                });
+            } else if (daniMemoryReview && receiptWriteStatus === 'candidate_conflict') {
+                console.error('[Dani Anam Memory] Review candidate conflict; candidate unavailable', {
+                    externalSessionId: daniMemoryReview.artifact.externalSessionId,
+                    jobId: daniMemoryReview.artifact.jobId,
+                    contentIncluded: false,
+                    automaticApproval: false,
+                });
+            }
             const dispatchFollowUp = session.resolvedPersonaId === DANI_PERSONA_ID
                 && session.agentSlug === 'dani'
                 ? dispatchDaniAnamPostSessionFollowUp
@@ -291,7 +410,21 @@ export async function finalizeAmyAnamSession(
                     session,
                     receipt,
                     turns: transcript.status === 'ready' ? transcript.turns : [],
-                }).catch(() => ({ status: 'email_unavailable' as const, sent: false as const }))
+                }).catch(async () => {
+                    if (
+                        session.resolvedPersonaId === DANI_PERSONA_ID
+                        && session.agentSlug === 'dani'
+                    ) {
+                        const retrySchedule = await scheduleDaniAnamEmailRetryAfterDispatchFailure({
+                            externalSessionId,
+                            retryStartedAt: receipt.completedAt,
+                        }).catch(() => 'unavailable' as const);
+                        return retrySchedule === 'expired'
+                            ? ({ status: 'email_retry_expired' as const, sent: false as const })
+                            : ({ status: 'email_failed' as const, sent: false as const });
+                    }
+                    return { status: 'email_unavailable' as const, sent: false as const };
+                })
                 : { status: 'email_unavailable' as const, sent: false as const };
             console.info('[Anam AgentMail] Post-session dispatch finished', {
                 status: emailResult.status,
@@ -300,6 +433,14 @@ export async function finalizeAmyAnamSession(
                 finalTranscriptAvailable: transcript.status === 'ready',
                 contentIncludedInLog: false,
             });
+            if (
+                session.resolvedPersonaId === DANI_PERSONA_ID
+                && session.agentSlug === 'dani'
+                && (
+                    emailResult.status === 'email_partial'
+                    || emailResult.status === 'email_failed'
+                )
+            ) return 'pending';
             return 'completed';
         } catch (error) {
             console.warn('[Amy Anam Finalization] Finalization step failed', {

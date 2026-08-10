@@ -47,6 +47,7 @@ export const DANI_EXPECTED_AVATAR_ID = '58b045b9-ac1d-4ddf-af14-18972618c57b';
 export const DANI_EXPECTED_VOICE_ID = '90a1acd3-4fc0-11f1-84b0-52bacf74fa75';
 export const DANI_EXPECTED_LLM_ID = 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7';
 export const DANI_EXPECTED_PROMPT_SHA256 = '9da10faa751087237dfb5eb76b25dc937efe78e84197ba874e7f0d96a8e375b3';
+export const DANI_NEXT_EXPECTED_PROMPT_SHA256 = '604254b51e4d6174294b354a59b5bb1d52a5c399ee7d3444b1dc877715164ebb';
 export const DANI_MINIMUM_PUBLISHED_AT = '2026-08-09T18:36:27.589Z';
 
 export const DANI_REQUIRED_TOOL_NAMES = [
@@ -63,11 +64,27 @@ export const DANI_REQUIRED_TOOL_IDS = {
     send_dani_follow_up_email: '1e44a342-ca25-4c78-bbef-51cded9c8d68',
 } as const;
 
+export const DANI_NEXT_REQUIRED_TOOL_NAMES = [
+    ...DANI_REQUIRED_TOOL_NAMES,
+    'confirm_dani_live_identity',
+] as const;
+
+export const DANI_NEXT_REQUIRED_TOOL_IDS = {
+    ...DANI_REQUIRED_TOOL_IDS,
+    confirm_dani_live_identity: '584b2e44-3827-4178-9233-a3bd69104e28',
+} as const;
+
 export const DANI_REQUIRED_PROMPT_MARKERS = [
     '<!-- DANI_AI_SOLUTIONS_DIRECTOR_CORE_START -->',
     '<!-- DANI_AI_SOLUTIONS_DIRECTOR_CORE_END -->',
     '<!-- DANI_POST_CALL_EMAIL_START -->',
     '<!-- DANI_POST_CALL_EMAIL_END -->',
+] as const;
+
+export const DANI_NEXT_REQUIRED_PROMPT_MARKERS = [
+    ...DANI_REQUIRED_PROMPT_MARKERS,
+    '<!-- DANI_RETURNING_MEMORY_START -->',
+    '<!-- DANI_RETURNING_MEMORY_END -->',
 ] as const;
 
 export const DANI_REQUIRED_VOICE_DETECTION = {
@@ -170,8 +187,11 @@ function toolNamesFromPersona(persona: PersonaPayload): Set<string> {
     );
 }
 
-function daniToolAttachmentMatches(persona: PersonaPayload): boolean {
-    if (!Array.isArray(persona.tools) || persona.tools.length !== DANI_REQUIRED_TOOL_NAMES.length) return false;
+function daniToolAttachmentMatches(
+    persona: PersonaPayload,
+    requiredToolIds: Readonly<Record<string, string>>,
+): boolean {
+    if (!Array.isArray(persona.tools) || persona.tools.length !== Object.keys(requiredToolIds).length) return false;
     const actual = new Map<string, string>();
     for (const tool of persona.tools as PersonaTool[]) {
         const name = typeof tool?.name === 'string' ? tool.name.trim() : '';
@@ -183,7 +203,7 @@ function daniToolAttachmentMatches(persona: PersonaPayload): boolean {
         if (!name || !id || actual.has(name)) return false;
         actual.set(name, id);
     }
-    return Object.entries(DANI_REQUIRED_TOOL_IDS)
+    return Object.entries(requiredToolIds)
         .every(([name, id]) => actual.get(name) === id);
 }
 
@@ -337,6 +357,23 @@ export function inspectDaniPersonaReadiness(
     const prompt = typeof persona.brain?.systemPrompt === 'string'
         ? persona.brain.systemPrompt
         : '';
+    const promptSha256 = managedPromptSha256(prompt);
+    const acceptedBaselines = [
+        {
+            promptSha256: DANI_EXPECTED_PROMPT_SHA256,
+            toolNames: DANI_REQUIRED_TOOL_NAMES,
+            toolIds: DANI_REQUIRED_TOOL_IDS,
+            promptMarkers: DANI_REQUIRED_PROMPT_MARKERS,
+        },
+        {
+            promptSha256: DANI_NEXT_EXPECTED_PROMPT_SHA256,
+            toolNames: DANI_NEXT_REQUIRED_TOOL_NAMES,
+            toolIds: DANI_NEXT_REQUIRED_TOOL_IDS,
+            promptMarkers: DANI_NEXT_REQUIRED_PROMPT_MARKERS,
+        },
+    ] as const;
+    const promptBaseline = acceptedBaselines.find(baseline => baseline.promptSha256 === promptSha256);
+    const diagnosticBaseline = promptBaseline ?? acceptedBaselines.at(-1)!;
     const personaIdMatches = persona.id === DANI_PERSONA_ID;
     const identityMatches = persona.name === DANI_EXPECTED_NAME;
     const publishedAtMs = typeof persona.publishedAt === 'string'
@@ -348,14 +385,16 @@ export function inspectDaniPersonaReadiness(
     const avatarIdMatches = avatarIdFromPersona(persona) === DANI_EXPECTED_AVATAR_ID;
     const voiceIdMatches = voiceIdFromPersona(persona) === DANI_EXPECTED_VOICE_ID;
     const llmIdMatches = llmIdFromPersona(persona) === DANI_EXPECTED_LLM_ID;
-    const promptHashMatches = managedPromptSha256(prompt) === DANI_EXPECTED_PROMPT_SHA256;
+    const promptHashMatches = Boolean(promptBaseline);
     const voiceDetectionConfigured = Object.entries(DANI_REQUIRED_VOICE_DETECTION)
         .every(([name, value]) => persona.voiceDetectionOptions?.[name] === value);
     const sessionDataRetentionConfigured = persona.zeroDataRetention === false;
     const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
-    const toolAttachmentMatches = daniToolAttachmentMatches(persona);
-    const missingToolNames = DANI_REQUIRED_TOOL_NAMES.filter(name => !toolNames.has(name));
-    const missingPromptMarkers = DANI_REQUIRED_PROMPT_MARKERS.filter(marker => !prompt.includes(marker));
+    const toolAttachmentMatches = promptBaseline
+        ? daniToolAttachmentMatches(persona, promptBaseline.toolIds)
+        : false;
+    const missingToolNames = diagnosticBaseline.toolNames.filter(name => !toolNames.has(name));
+    const missingPromptMarkers = diagnosticBaseline.promptMarkers.filter(marker => !prompt.includes(marker));
 
     return {
         ready: personaIdMatches

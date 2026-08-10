@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/AgentMail/
 
 # debug
 npm-debug.log*

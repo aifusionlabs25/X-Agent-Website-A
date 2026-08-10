@@ -4,9 +4,13 @@ import test from 'node:test';
 import {
     AMY_ANAM_RECOVERY_BATCH_SIZE,
     AMY_ANAM_RECOVERY_CONCURRENCY,
+    drainDueAmyAndDaniAnamRecoveries,
     drainDueAmyAnamFinalizations,
+    drainDueDaniAnamEmailRetries,
     isAmyAnamRecoveryRequestAuthorized,
+    isDaniAnamEmailRecoveryRequestAuthorized,
     readAmyAnamRecoveryConfig,
+    readDaniAnamEmailRecoveryConfig,
 } from '../lib/anam/session-recovery.ts';
 
 const SESSION_ONE = '11111111-1111-4111-8111-111111111111';
@@ -19,13 +23,21 @@ const OPEN_RECOVERY_ENV = {
     AMY_ANAM_RECOVERY_KILL_SWITCH: 'false',
     AMY_ANAM_RECOVERY_SECRET: 'r'.repeat(32),
 };
+const OPEN_DANI_EMAIL_RECOVERY_ENV = {
+    VERCEL_ENV: 'preview',
+    DANI_ANAM_EMAIL_RECOVERY_ENABLED: 'true',
+    DANI_ANAM_EMAIL_RECOVERY_KILL_SWITCH: 'false',
+    DANI_ANAM_EMAIL_RECOVERY_SECRET: 'd'.repeat(32),
+};
 
 function recoveryDependencies(overrides = {}) {
     return {
         acquireDrainLock: async () => true,
         releaseDrainLock: async () => undefined,
         listDue: async () => [],
+        listDaniEmailDue: async () => [],
         removeDue: async () => undefined,
+        removeDaniEmailDue: async () => undefined,
         finalize: async () => 'pending',
         now: () => 1_900_000_000_000,
         createLockToken: () => 'recovery-lock-token',
@@ -154,6 +166,108 @@ test('the drain processes a bounded batch and cleans only terminal due entries',
     ]);
 });
 
+test('Dani email recovery has independent fail-closed gates and accepts the Vercel cron secret', () => {
+    const cronSecret = 'c'.repeat(32);
+    const preview = {
+        ...OPEN_DANI_EMAIL_RECOVERY_ENV,
+        DANI_ANAM_EMAIL_RECOVERY_SECRET: '',
+        CRON_SECRET: cronSecret,
+    };
+    assert.equal(readDaniAnamEmailRecoveryConfig({}).gatesOpen, false);
+    assert.equal(readDaniAnamEmailRecoveryConfig({
+        ...preview,
+        DANI_ANAM_EMAIL_RECOVERY_KILL_SWITCH: 'true',
+    }).gatesOpen, false);
+    assert.equal(readDaniAnamEmailRecoveryConfig(preview).gatesOpen, true);
+    assert.equal(readDaniAnamEmailRecoveryConfig({
+        ...preview,
+        VERCEL_ENV: 'production',
+    }).gatesOpen, false);
+    assert.equal(readDaniAnamEmailRecoveryConfig({
+        ...preview,
+        VERCEL_ENV: 'production',
+        DANI_ANAM_EMAIL_RECOVERY_PRODUCTION_APPROVED: 'true',
+    }).gatesOpen, true);
+    assert.equal(isDaniAnamEmailRecoveryRequestAuthorized(
+        new Request('https://example.test/api/anam/session/recover?slot=b', {
+            headers: { Authorization: `Bearer ${cronSecret}` },
+        }),
+        preview,
+    ), true);
+});
+
+test('the durable drain interleaves Dani email retries with session finalizations and preserves pending work', async () => {
+    const removedFinalizations = [];
+    const removedEmailRetries = [];
+    const statuses = new Map([
+        [SESSION_ONE, 'completed'],
+        [SESSION_TWO, 'pending'],
+        [SESSION_THREE, 'completed'],
+        [SESSION_FOUR, 'pending'],
+    ]);
+    const summary = await drainDueAmyAndDaniAnamRecoveries({
+        concurrency: 1,
+        dependencies: recoveryDependencies({
+            listDue: async () => [SESSION_ONE, SESSION_TWO],
+            listDaniEmailDue: async () => [SESSION_THREE, SESSION_FOUR],
+            removeDue: async sessionId => { removedFinalizations.push(sessionId); },
+            removeDaniEmailDue: async sessionId => { removedEmailRetries.push(sessionId); },
+            finalize: async sessionId => statuses.get(sessionId),
+        }),
+    });
+    assert.equal(summary.selected, 4);
+    assert.equal(summary.attempted, 4);
+    assert.equal(summary.results.completed, 2);
+    assert.equal(summary.results.pending, 2);
+    assert.deepEqual(removedFinalizations, [SESSION_ONE]);
+    assert.deepEqual(removedEmailRetries, [SESSION_THREE]);
+});
+
+test('one session present in both durable due sets is finalized once and cleans both entries', async () => {
+    let finalizations = 0;
+    const removedFinalizations = [];
+    const removedEmailRetries = [];
+    const summary = await drainDueAmyAndDaniAnamRecoveries({
+        concurrency: 2,
+        dependencies: recoveryDependencies({
+            listDue: async () => [SESSION_ONE],
+            listDaniEmailDue: async () => [SESSION_ONE],
+            removeDue: async sessionId => { removedFinalizations.push(sessionId); },
+            removeDaniEmailDue: async sessionId => { removedEmailRetries.push(sessionId); },
+            finalize: async () => {
+                finalizations += 1;
+                return 'completed';
+            },
+        }),
+    });
+    assert.equal(summary.selected, 1);
+    assert.equal(summary.attempted, 1);
+    assert.equal(finalizations, 1);
+    assert.deepEqual(removedFinalizations, [SESSION_ONE]);
+    assert.deepEqual(removedEmailRetries, [SESSION_ONE]);
+});
+
+test('the Dani-only durable drain never selects ordinary Amy finalization work', async () => {
+    let amyDueListed = false;
+    const removedEmailRetries = [];
+    const summary = await drainDueDaniAnamEmailRetries({
+        concurrency: 1,
+        dependencies: recoveryDependencies({
+            listDue: async () => {
+                amyDueListed = true;
+                return [SESSION_ONE];
+            },
+            listDaniEmailDue: async () => [SESSION_TWO],
+            removeDaniEmailDue: async sessionId => { removedEmailRetries.push(sessionId); },
+            finalize: async () => 'completed',
+        }),
+    });
+    assert.equal(amyDueListed, false);
+    assert.equal(summary.selected, 1);
+    assert.equal(summary.attempted, 1);
+    assert.deepEqual(removedEmailRetries, [SESSION_TWO]);
+});
+
 test('the global drain lease makes overlapping scheduler invocations a no-op', async () => {
     let listed = false;
     let released = false;
@@ -235,7 +349,7 @@ test('invalid and missing queue members are pruned without provider calls', asyn
     assert.deepEqual(removed, ['not-a-session-id', SESSION_ONE]);
 });
 
-test('the recovery route is scheduler-compatible, bearer-authenticated, and has no outbound lane', async () => {
+test('the recovery route is scheduler-compatible, bearer-authenticated, and keeps slot B Dani-only', async () => {
     const route = await readFile(
         new URL('../app/api/anam/session/recover/route.ts', import.meta.url),
         'utf8',
@@ -248,7 +362,13 @@ test('the recovery route is scheduler-compatible, bearer-authenticated, and has 
     assert.match(route, /export async function GET\(request: Request\)/);
     assert.match(route, /export async function POST\(request: Request\)/);
     assert.match(route, /isAmyAnamRecoveryRequestAuthorized\(request\)/);
-    assert.match(route, /Targeted recovery requires POST/);
+    assert.match(route, /isDaniAnamEmailRecoveryRequestAuthorized\(request\)/);
+    assert.match(route, /readDaniAnamEmailRecoveryConfig\(\)/);
+    assert.match(route, /slot === 'b'/);
+    assert.match(route, /drainDueDaniAnamEmailRetries\(\)/);
+    assert.match(route, /if \(amyAuthorized\) summaries\.push\(await drainDueAmyAnamFinalizations\(\)\)/);
+    assert.match(route, /if \(daniAuthorized\) summaries\.push\(await drainDueDaniAnamEmailRetries\(\)\)/);
+    assert.match(route, /Targeted recovery requires a session id/);
     assert.match(route, /requeueAmyAnamProviderResponseFailure\(targetSessionId\)/);
     assert.match(route, /finalizeAmyAnamSession\(targetSessionId\)/);
     assert.match(
@@ -260,9 +380,12 @@ test('the recovery route is scheduler-compatible, bearer-authenticated, and has 
             < route.indexOf('if (!isAmyAnamRecoveryRequestAuthorized(request))'),
         'a closed recovery gate must return 503 before an unconditional cron is authenticated',
     );
-    assert.match(route, /outbound:\s*false/);
+    assert.match(route, /outbound:\s*daniAuthorized/);
     assert.match(route, /maxDuration = 60/);
     assert.match(store, /'ZRANGEBYSCORE'/);
+    assert.match(store, /dani:anam:agentmail:retry-due:v1/);
+    assert.match(store, /'ZADD', daniEmailRetryDueKey\(\)/);
+    assert.match(store, /'ZREM', daniEmailRetryDueKey\(\)/);
     assert.match(store, /recovery-drain-lock:v1/);
     assert.match(store, /'NX',[\s\S]*'EX',[\s\S]*55/);
     assert.match(

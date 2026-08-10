@@ -5,6 +5,10 @@ import { readDaniAnamAgentMailConfig } from '@/lib/anam/dani-agentmail';
 import { readEvanAnamAgentMailConfig } from '@/lib/anam/evan-agentmail';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
 import {
+    readDaniAnamBrowserSession,
+    readDaniAnamSessionSecrets,
+} from '@/lib/anam/dani-session';
+import {
     readAmyAnamContactFromRequest,
     readDaniAnamContactFromRequest,
 } from '@/lib/anam/contact-token';
@@ -38,6 +42,11 @@ import {
     readAmyAnamBrowserIdentity,
     readAmyAnamMemoryConfig,
 } from '@/lib/anam/user-memory';
+import {
+    buildDaniAnamMemoryAccessPolicy,
+    readDaniAnamBrowserIdentity,
+    readDaniAnamMemoryConfig,
+} from '@/lib/anam/dani-user-memory';
 
 const ALLOWED_PERSONA_IDS = new Set(
     ALL_AGENTS.map(agent => agent.personaId).filter((personaId): personaId is string => Boolean(personaId)),
@@ -67,7 +76,9 @@ export async function POST(req: Request) {
         }
 
         const spineConfig = readAmyAnamSpineConfig();
+        const daniSessionSecrets = readDaniAnamSessionSecrets();
         const memoryConfig = readAmyAnamMemoryConfig();
+        const daniMemoryConfig = readDaniAnamMemoryConfig();
         const agentMailConfig = readAmyAnamAgentMailConfig();
         const daniAgentMailConfig = readDaniAnamAgentMailConfig();
         const evanAgentMailConfig = readEvanAnamAgentMailConfig();
@@ -75,6 +86,13 @@ export async function POST(req: Request) {
         const isDani = resolution.personaId === DANI_PERSONA_ID;
         const isEvan = resolution.personaId === EVAN_PERSONA_ID;
         const evanLocalTestMode = isEvan && isEvanLocalTestMode();
+        if (isDani && !daniSessionSecrets.configured) {
+            console.error('[Dani Anam Session] Isolated session secrets are unavailable');
+            return noStoreJson(
+                { error: 'Dani session access is temporarily unavailable' },
+                { status: 503 },
+            );
+        }
         if ((isAmyCara4 || isDani || (isEvan && !evanLocalTestMode)) && spineConfig.enabled && !spineConfig.gatesOpen) {
             console.error('[Amy Anam Spine] Enabled but unavailable');
             return noStoreJson(
@@ -123,6 +141,13 @@ export async function POST(req: Request) {
                     { status: 503 },
                 );
             }
+        }
+        if (isDani && daniMemoryConfig.enabled && !daniMemoryConfig.gatesOpen) {
+            console.error('[Dani Anam Memory] Enabled but unavailable');
+            return noStoreJson(
+                { error: 'Dani returning memory is temporarily unavailable' },
+                { status: 503 },
+            );
         }
 
         if (isDani) {
@@ -213,7 +238,9 @@ export async function POST(req: Request) {
                 );
             }
 
-            let browserSession = readAmyAnamBrowserSession(req, spineConfig.signingSecret);
+            let browserSession = isDani
+                ? readDaniAnamBrowserSession(req, daniSessionSecrets.sessionSecret)
+                : readAmyAnamBrowserSession(req, spineConfig.signingSecret);
             if (!browserSession && isAmyCara4 && memoryConfig.gatesOpen) {
                 return noStoreJson(
                     { error: 'Amy memory check-in is required' },
@@ -267,10 +294,15 @@ export async function POST(req: Request) {
                     && contact?.purpose === 'evan_follow_up';
             }
             if (isDani) {
+                if (daniMemoryConfig.gatesOpen) {
+                    const identity = await readDaniAnamBrowserIdentity(browserSession.id);
+                    memoryUnlockAvailable = Boolean(identity?.memoryConsent);
+                    memoryPolicyContext = buildDaniAnamMemoryAccessPolicy(memoryUnlockAvailable);
+                }
                 const contact = readDaniAnamContactFromRequest({
                     request: req,
                     browserSessionId: browserSession.id,
-                    secret: spineConfig.signingSecret,
+                    secret: daniSessionSecrets.contactSecret,
                 });
                 agentMailAvailable = daniAgentMailConfig.effectiveGateOpen
                     && contact?.purpose === 'dani_follow_up';

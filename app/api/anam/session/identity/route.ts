@@ -7,7 +7,10 @@ import {
     readAmyAnamBrowserSession,
     readAmyAnamSpineConfig,
     readBoundedJsonObject,
+    resolveAnamSessionAgentSlug,
+    resolveAnamSessionVariant,
 } from '@/lib/anam/session-spine';
+import { AMY_CARA4_VARIANT } from '@/lib/anam/session-config';
 import {
     consumeAmyAnamDistributedRateLimit,
     readAmyAnamLaunch,
@@ -70,12 +73,33 @@ export async function POST(request: Request) {
         if (!launch || !session || !browserIdentity) {
             return noStoreJson({ error: 'Live identity could not be confirmed' }, { status: 409 });
         }
+        const launchAgentSlug = resolveAnamSessionAgentSlug(
+            launch.resolvedPersonaId,
+            launch.agentSlug,
+        );
+        const sessionAgentSlug = resolveAnamSessionAgentSlug(
+            session.resolvedPersonaId,
+            session.agentSlug,
+        );
+        const launchVariant = resolveAnamSessionVariant(
+            launch.resolvedPersonaId,
+            launch.variant,
+        );
+        const sessionVariant = resolveAnamSessionVariant(
+            session.resolvedPersonaId,
+            session.variant,
+        );
+        const amyPersonaMatches = launchAgentSlug === 'amy'
+            && sessionAgentSlug === 'amy'
+            && launchVariant === AMY_CARA4_VARIANT
+            && sessionVariant === AMY_CARA4_VARIANT
+            && launch.resolvedPersonaId === session.resolvedPersonaId;
         const ownershipMatches = launch.browserSessionId === browserSession.id
             && launch.boundSessionId === sessionId
             && session.browserSessionId === browserSession.id
             && session.launchId === launchId
             && session.externalSessionId === sessionId;
-        if (!ownershipMatches) {
+        if (!ownershipMatches || !amyPersonaMatches) {
             return noStoreJson({ error: 'Live identity could not be confirmed' }, { status: 409 });
         }
 

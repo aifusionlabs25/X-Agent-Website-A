@@ -113,6 +113,11 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     assert.match(identityRoute, /launch\.browserSessionId === browserSession\.id/);
     assert.match(identityRoute, /launch\.boundSessionId === sessionId/);
     assert.match(identityRoute, /session\.launchId === launchId/);
+    assert.match(identityRoute, /launchAgentSlug === 'amy'/);
+    assert.match(identityRoute, /sessionAgentSlug === 'amy'/);
+    assert.match(identityRoute, /launchVariant === AMY_CARA4_VARIANT/);
+    assert.match(identityRoute, /sessionVariant === AMY_CARA4_VARIANT/);
+    assert.match(identityRoute, /launch\.resolvedPersonaId === session\.resolvedPersonaId/);
     assert.match(identityRoute, /memoryAccessConfirmed = body\.memoryAccessConfirmed/);
     assert.doesNotMatch(identityRoute, /body\.email|normalizedEmail/);
     assert.doesNotMatch(verifier, /deriveAmyAnamEmailIdentityHash|normalizeAmyAnamMemoryEmail|normalizedEmail/);

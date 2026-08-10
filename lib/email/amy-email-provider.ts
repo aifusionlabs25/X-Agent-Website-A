@@ -27,6 +27,8 @@ export type AmyAgentMailSendResult = {
     threadId: string | null;
 };
 
+const AGENTMAIL_IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~-]{1,256}$/;
+
 function value(source: AgentMailEnvironment, name: string): string {
     return String(source[name] ?? process.env[name] ?? '').trim();
 }
@@ -90,6 +92,7 @@ export async function sendAmyEmailWithAgentMail(
     options: {
         env?: AgentMailEnvironment;
         fetchImpl?: typeof fetch;
+        idempotencyKey?: string;
     } = {},
 ): Promise<AmyAgentMailSendResult> {
     const config = readAmyAgentMailProviderConfig(options.env ?? process.env);
@@ -101,6 +104,10 @@ export async function sendAmyEmailWithAgentMail(
     const html = boundedText(message.html, MAX_EMAIL_BODY_CHARACTERS);
     const attachments = normalizeAttachments(message.attachments);
     if (!subject || (!text && !html)) throw new Error('AgentMail message was incomplete');
+    const idempotencyKey = options.idempotencyKey?.trim();
+    if (idempotencyKey !== undefined && !AGENTMAIL_IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+        throw new Error('AgentMail idempotency key was invalid');
+    }
 
     let response: Response;
     try {
@@ -111,6 +118,7 @@ export async function sendAmyEmailWithAgentMail(
                 headers: {
                     Authorization: `Bearer ${config.apiKey}`,
                     'Content-Type': 'application/json',
+                    ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
                 },
                 body: JSON.stringify({
                     to: [recipient],

@@ -18,15 +18,18 @@
     "speechEnhancementLevel": 0.7
   },
   "promptFile": "v2/DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md",
-  "promptSha256": "9da10faa751087237dfb5eb76b25dc937efe78e84197ba874e7f0d96a8e375b3",
+  "promptSha256": "604254b51e4d6174294b354a59b5bb1d52a5c399ee7d3444b1dc877715164ebb",
   "knowledgeManifestFile": "v2/knowledge-manifest.json",
   "emailToolDefinitionFile": "../dani-agentmail-client-tool.json",
+  "identityToolDefinitionFile": "../dani-live-identity-client-tool.json",
   "zeroDataRetention": false,
   "enableAudioPassthrough": false,
   "knowledgeToolName": "Knowledge_Dani_AI_Solutions_Director",
   "knowledgeToolId": "312d939d-8e3f-45f5-aab1-b2b63fb5022b",
   "emailToolName": "send_dani_follow_up_email",
   "emailToolId": "1e44a342-ca25-4c78-bbef-51cded9c8d68",
+  "identityToolName": "confirm_dani_live_identity",
+  "identityToolId": "584b2e44-3827-4178-9233-a3bd69104e28",
   "systemToolIds": {
     "skip_turn": "69a89bda-9e11-443f-84c0-1cbea75e4fcb",
     "end_call": "4d05849d-329f-4cd3-996f-f2a28d8135f0"
@@ -35,6 +38,7 @@
     "Knowledge_Dani_AI_Solutions_Director",
     "skip_turn",
     "end_call",
-    "send_dani_follow_up_email"
+    "send_dani_follow_up_email",
+    "confirm_dani_live_identity"
   ]
 }

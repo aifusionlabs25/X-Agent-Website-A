@@ -4,8 +4,10 @@ import type { AmyAnamFinalizationResult } from './session-finalizer.ts';
 import { isValidAnamSessionId } from './session-spine.ts';
 import {
     acquireAmyAnamRecoveryDrainLock,
+    listDueDaniAnamEmailRetryIds,
     listDueAmyAnamFinalizationIds,
     releaseAmyAnamRecoveryDrainLock,
+    removeDaniAnamEmailRetryDueEntry,
     removeAmyAnamFinalizationDueEntry,
 } from './session-spine-store.ts';
 
@@ -24,11 +26,15 @@ export type AmyAnamRecoveryConfig = {
     gatesOpen: boolean;
 };
 
+export type DaniAnamEmailRecoveryConfig = AmyAnamRecoveryConfig;
+
 type RecoveryDependencies = {
     acquireDrainLock: (lockToken: string) => Promise<boolean>;
     releaseDrainLock: (lockToken: string) => Promise<void>;
     listDue: (input: { dueAt: number; limit: number }) => Promise<string[]>;
+    listDaniEmailDue: (input: { dueAt: number; limit: number }) => Promise<string[]>;
     removeDue: (externalSessionId: string) => Promise<void>;
+    removeDaniEmailDue: (externalSessionId: string) => Promise<void>;
     finalize: (externalSessionId: string) => Promise<AmyAnamFinalizationResult>;
     now: () => number;
     createLockToken: () => string;
@@ -53,11 +59,18 @@ type DrainOptions = {
     dependencies?: Partial<RecoveryDependencies>;
 };
 
+type RecoverySources = {
+    finalizations: boolean;
+    daniEmailRetries: boolean;
+};
+
 const defaultDependencies: RecoveryDependencies = {
     acquireDrainLock: acquireAmyAnamRecoveryDrainLock,
     releaseDrainLock: releaseAmyAnamRecoveryDrainLock,
     listDue: listDueAmyAnamFinalizationIds,
+    listDaniEmailDue: listDueDaniAnamEmailRetryIds,
     removeDue: removeAmyAnamFinalizationDueEntry,
+    removeDaniEmailDue: removeDaniAnamEmailRetryDueEntry,
     finalize: finalizeAmyAnamSession,
     now: Date.now,
     createLockToken: randomUUID,
@@ -74,6 +87,16 @@ function cleanEnvValue(value: string | undefined): string {
 function recoverySecrets(source: NodeJS.ProcessEnv): string[] {
     return [
         cleanEnvValue(source.AMY_ANAM_RECOVERY_SECRET),
+        cleanEnvValue(source.CRON_SECRET),
+    ].filter((secret, index, values) => (
+        secret.length >= RECOVERY_SECRET_MIN_LENGTH
+        && values.indexOf(secret) === index
+    ));
+}
+
+function daniEmailRecoverySecrets(source: NodeJS.ProcessEnv): string[] {
+    return [
+        cleanEnvValue(source.DANI_ANAM_EMAIL_RECOVERY_SECRET),
         cleanEnvValue(source.CRON_SECRET),
     ].filter((secret, index, values) => (
         secret.length >= RECOVERY_SECRET_MIN_LENGTH
@@ -121,6 +144,39 @@ export function isAmyAnamRecoveryRequestAuthorized(
     return recoverySecrets(source).some(secret => safeEqual(presentedSecret, secret));
 }
 
+export function readDaniAnamEmailRecoveryConfig(
+    source: NodeJS.ProcessEnv = process.env,
+): DaniAnamEmailRecoveryConfig {
+    const enabled = cleanEnvValue(source.DANI_ANAM_EMAIL_RECOVERY_ENABLED) === 'true';
+    const killSwitchActive = cleanEnvValue(source.DANI_ANAM_EMAIL_RECOVERY_KILL_SWITCH) !== 'false';
+    const authenticationConfigured = daniEmailRecoverySecrets(source).length > 0;
+    const productionApprovalRequired = cleanEnvValue(source.VERCEL_ENV) === 'production';
+    const productionPromotionApproved = productionApprovalRequired
+        && cleanEnvValue(source.DANI_ANAM_EMAIL_RECOVERY_PRODUCTION_APPROVED) === 'true';
+    return {
+        enabled,
+        killSwitchActive,
+        authenticationConfigured,
+        productionApprovalRequired,
+        productionPromotionApproved,
+        gatesOpen: enabled
+            && !killSwitchActive
+            && authenticationConfigured
+            && (!productionApprovalRequired || productionPromotionApproved),
+    };
+}
+
+export function isDaniAnamEmailRecoveryRequestAuthorized(
+    request: Request,
+    source: NodeJS.ProcessEnv = process.env,
+): boolean {
+    const authorization = request.headers.get('authorization') ?? '';
+    if (!authorization.startsWith('Bearer ')) return false;
+    const presentedSecret = authorization.slice('Bearer '.length).trim();
+    if (!presentedSecret) return false;
+    return daniEmailRecoverySecrets(source).some(secret => safeEqual(presentedSecret, secret));
+}
+
 function boundedInteger(value: number | undefined, fallback: number, min: number, max: number): number {
     if (!Number.isFinite(value)) return fallback;
     return Math.max(min, Math.min(max, Math.trunc(value as number)));
@@ -137,8 +193,9 @@ function emptyResults(): Record<AmyAnamFinalizationResult, number> {
     };
 }
 
-export async function drainDueAmyAnamFinalizations(
+async function drainDueAnamRecoveryWork(
     options: DrainOptions = {},
+    sources: RecoverySources,
 ): Promise<AmyAnamRecoverySummary> {
     const dependencies: RecoveryDependencies = {
         ...defaultDependencies,
@@ -181,10 +238,27 @@ export async function drainDueAmyAnamFinalizations(
 
     let summary: AmyAnamRecoverySummary | undefined;
     try {
-        const dueIds = [...new Set(await dependencies.listDue({
-            dueAt: startedAt,
-            limit: batchSize,
-        }))];
+        const [finalizationDueIds, daniEmailDueIds] = await Promise.all([
+            sources.finalizations
+                ? dependencies.listDue({ dueAt: startedAt, limit: batchSize })
+                : Promise.resolve([]),
+            sources.daniEmailRetries
+                ? dependencies.listDaniEmailDue({ dueAt: startedAt, limit: batchSize })
+                : Promise.resolve([]),
+        ]);
+        const finalizationDueSet = new Set(finalizationDueIds);
+        const daniEmailDueSet = new Set(daniEmailDueIds);
+        const dueIds: string[] = [];
+        const seenDueIds = new Set<string>();
+        const maxSourceLength = Math.max(finalizationDueIds.length, daniEmailDueIds.length);
+        for (let index = 0; index < maxSourceLength && dueIds.length < batchSize; index += 1) {
+            for (const candidate of [finalizationDueIds[index], daniEmailDueIds[index]]) {
+                if (!candidate || seenDueIds.has(candidate)) continue;
+                seenDueIds.add(candidate);
+                dueIds.push(candidate);
+                if (dueIds.length >= batchSize) break;
+            }
+        }
         const queue = [...dueIds];
         const results = emptyResults();
         let attempted = 0;
@@ -201,7 +275,14 @@ export async function drainDueAmyAnamFinalizations(
                 if (!isValidAnamSessionId(externalSessionId)) {
                     invalid += 1;
                     try {
-                        await dependencies.removeDue(externalSessionId);
+                        await Promise.all([
+                            ...(finalizationDueSet.has(externalSessionId)
+                                ? [dependencies.removeDue(externalSessionId)]
+                                : []),
+                            ...(daniEmailDueSet.has(externalSessionId)
+                                ? [dependencies.removeDaniEmailDue(externalSessionId)]
+                                : []),
+                        ]);
                         cleaned += 1;
                     } catch {
                         errors += 1;
@@ -215,7 +296,14 @@ export async function drainDueAmyAnamFinalizations(
                     results[result] += 1;
                     if (result === 'completed' || result === 'failed' || result === 'missing') {
                         try {
-                            await dependencies.removeDue(externalSessionId);
+                            await Promise.all([
+                                ...(finalizationDueSet.has(externalSessionId)
+                                    ? [dependencies.removeDue(externalSessionId)]
+                                    : []),
+                                ...(daniEmailDueSet.has(externalSessionId)
+                                    ? [dependencies.removeDaniEmailDue(externalSessionId)]
+                                    : []),
+                            ]);
                             cleaned += 1;
                         } catch {
                             errors += 1;
@@ -254,4 +342,31 @@ export async function drainDueAmyAnamFinalizations(
             summary.durationMs = Math.max(0, dependencies.now() - startedAt);
         }
     }
+}
+
+export async function drainDueAmyAnamFinalizations(
+    options: DrainOptions = {},
+): Promise<AmyAnamRecoverySummary> {
+    return drainDueAnamRecoveryWork(options, {
+        finalizations: true,
+        daniEmailRetries: false,
+    });
+}
+
+export async function drainDueDaniAnamEmailRetries(
+    options: DrainOptions = {},
+): Promise<AmyAnamRecoverySummary> {
+    return drainDueAnamRecoveryWork(options, {
+        finalizations: false,
+        daniEmailRetries: true,
+    });
+}
+
+export async function drainDueAmyAndDaniAnamRecoveries(
+    options: DrainOptions = {},
+): Promise<AmyAnamRecoverySummary> {
+    return drainDueAnamRecoveryWork(options, {
+        finalizations: true,
+        daniEmailRetries: true,
+    });
 }

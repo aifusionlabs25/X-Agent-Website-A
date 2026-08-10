@@ -7,6 +7,7 @@ const sourceFiles = [
     '../app/api/anam/hermes/worker/route.ts',
     '../app/api/anam/session/bind/route.ts',
     '../app/api/anam/session/complete/route.ts',
+    '../app/api/anam/session/email/route.ts',
     '../app/api/anam/session/recover/route.ts',
     '../app/api/anam/session/status/route.ts',
     '../lib/anam/capability-readiness.ts',
@@ -29,6 +30,8 @@ const sources = new Map(await Promise.all(sourceFiles.map(async relativePath => 
 ])));
 const completionRoute = sources.get('../app/api/anam/session/complete/route.ts');
 const bindRoute = sources.get('../app/api/anam/session/bind/route.ts');
+const emailRoute = sources.get('../app/api/anam/session/email/route.ts');
+const statusRoute = sources.get('../app/api/anam/session/status/route.ts');
 const clientSpine = sources.get('../lib/anam/session-spine-client.ts');
 const finalizer = sources.get('../lib/anam/session-finalizer.ts');
 const sessionStore = sources.get('../lib/anam/session-spine-store.ts');
@@ -43,6 +46,7 @@ test('session-spine and Hermes shadow files keep outbound automation isolated to
         if (
             relativePath !== '../lib/anam/session-finalizer.ts'
             && relativePath !== '../app/api/anam/session/bind/route.ts'
+            && relativePath !== '../app/api/anam/session/email/route.ts'
         ) {
             assert.doesNotMatch(source, forbiddenImport, `${relativePath} imported an outbound service`);
         }
@@ -50,6 +54,22 @@ test('session-spine and Hermes shadow files keep outbound automation isolated to
     }
     assert.match(bindRoute, /queueEvanAnamConversationFollowUp/);
     assert.doesNotMatch(bindRoute, /sendEvanAnamConversationFollowUp|dispatchEvanAnamPostSessionFollowUp|sendAmyEmailWithAgentMail|messages\/send/);
+});
+
+test('shared session routes rate-limit an opaque request fingerprint before untrusted Redis lookups', () => {
+    const boundaries = [
+        [bindRoute, "requestFingerprint(request, 'bind-preauth')", 'const launch = await readAmyAnamLaunch'],
+        [completionRoute, "requestFingerprint(request, 'complete-preauth')", 'const launch = await readAmyAnamLaunch'],
+        [emailRoute, "requestFingerprint(request, 'agentmail-preauth')", 'const [launch, session] = await Promise.all'],
+        [statusRoute, "requestFingerprint(request, 'status-preauth')", 'const [session, finalization] = await Promise.all'],
+    ];
+
+    for (const [source, limiterMarker, firstUntrustedLookup] of boundaries) {
+        const limiterIndex = source.indexOf(limiterMarker);
+        const lookupIndex = source.indexOf(firstUntrustedLookup);
+        assert.ok(limiterIndex >= 0, `${limiterMarker} was missing`);
+        assert.ok(lookupIndex > limiterIndex, `${firstUntrustedLookup} occurred before pre-auth limiting`);
+    }
 });
 
 test('the completion route rejects client transcript fields and returns explicit canary no-outbound receipts', () => {

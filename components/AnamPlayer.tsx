@@ -19,6 +19,7 @@ import { isAmyCara4Variant } from '@/lib/anam/session-config';
 import {
     bindAmyAnamClientSession,
     confirmAmyAnamLiveIdentity,
+    confirmDaniAnamLiveIdentity,
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
 import { AmyWorkbenchTurn, AmyWorkbenchView, buildAmyWorkbenchModel } from '@/lib/anam/workbench-v2';
@@ -240,6 +241,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const isAmyCara4 = isAmyCara4Variant(sessionVariant);
                 const isDani = personaId === DANI_PERSONA_ID;
                 const isEvan = personaId === EVAN_PERSONA_ID;
+                const memoryAgentLabel = isDani ? 'Dani' : 'Amy';
                 const clientOptions = {
                     ...(audioDeviceId ? { audioDeviceId } : {}),
                     ...(isAmyCara4 || isDani ? { voiceDetection: { endOfSpeechSensitivity: 0.05 } } : {}),
@@ -409,13 +411,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     try {
                         anamClient.addContext(memoryPolicyContext);
                         memoryPolicyInjected = true;
-                        console.info('[Amy Anam Memory] Live identity policy applied', {
+                        console.info(`[${memoryAgentLabel} Anam Memory] Live identity policy applied`, {
                             memoryUnlockAvailable: tokenPayload.memoryUnlockAvailable === true,
                             contentLogged: false,
                         });
                     } catch {
                         if (isMounted) {
-                            setError('Amy could not safely initialize returning memory. Please restart the session.');
+                            setError(`${memoryAgentLabel} could not safely initialize returning memory. Please restart the session.`);
                             setIsConnecting(false);
                         }
                         void anamClient.stopStreaming().catch(() => undefined);
@@ -619,6 +621,58 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 }
 
                 if (isDani) {
+                    removeIdentityToolHandler = anamClient.registerToolCallHandler(
+                        'confirm_dani_live_identity',
+                        {
+                            onStart: async payload => {
+                                if (tokenPayload.memoryUnlockAvailable !== true) {
+                                    return JSON.stringify({
+                                        status: 'memory_unavailable',
+                                        instruction: 'Continue without returning memory. Do not request contact details solely for memory.',
+                                    });
+                                }
+                                if (completedUserTurns < 2) {
+                                    throw new Error('Continue the warm conversation before confirming identity.');
+                                }
+                                const preferredName = typeof payload.arguments.preferredName === 'string'
+                                    ? payload.arguments.preferredName.trim()
+                                    : '';
+                                const memoryAccessConfirmed = payload.arguments.memoryAccessConfirmed === true;
+                                if (!preferredName || /^(?:user|visitor|guest|customer)$/i.test(preferredName) || !memoryAccessConfirmed) {
+                                    throw new Error('Ask "What name would you like me to use?" and separately ask permission to check previous notes.');
+                                }
+                                if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
+                                    throw new Error('The private Dani session is not ready. Continue the conversation and try once more.');
+                                }
+                                if (confirmedMemoryName) {
+                                    return JSON.stringify({
+                                        status: 'memory_already_unlocked',
+                                        instruction: 'Use the Dani memory context already provided. Do not request contact details solely for memory.',
+                                    });
+                                }
+                                await bindingPromise;
+                                const result = await confirmDaniAnamLiveIdentity({
+                                    launchId,
+                                    sessionId: providerSessionId,
+                                    preferredName,
+                                    memoryAccessConfirmed: true,
+                                });
+                                confirmedMemoryName = result.preferredName;
+                                anamClient.addContext(result.memoryContext);
+                                console.info('[Dani Anam Memory] Returning context unlocked', {
+                                    approvedSessionCount: result.memoryCount,
+                                    identityContentLogged: false,
+                                });
+                                return JSON.stringify({
+                                    status: 'memory_unlocked',
+                                    memoryCount: result.memoryCount,
+                                    instruction: result.memoryCount > 0
+                                        ? 'In your next reply, say naturally that you found reviewed notes from an earlier conversation. Mention at most two or three distinctive earlier-session facts the visitor has not already supplied today, then ask whether they are still current. Use no more than two short sentences. Do not say memory unlocked or ask for contact details.'
+                                        : 'Say plainly that no reviewed earlier-session notes were found, then continue naturally. Do not fill the gap with current-call facts or ask for contact details.',
+                                });
+                            },
+                        },
+                    );
                     removeEmailToolHandler = anamClient.registerToolCallHandler(
                         'send_dani_follow_up_email',
                         {

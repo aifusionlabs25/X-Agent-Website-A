@@ -11,12 +11,17 @@ import {
 } from '@/lib/anam/dani-agentmail';
 import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
 import {
+    readDaniAnamBrowserSession,
+    readDaniAnamSessionSecrets,
+} from '@/lib/anam/dani-session';
+import {
     AmyAnamRequestError,
     isTrustedBrowserOrigin,
     isUuid,
     readAmyAnamBrowserSession,
     readAmyAnamSpineConfig,
     readBoundedJsonObject,
+    requestFingerprint,
     resolveAnamSessionAgentSlug,
 } from '@/lib/anam/session-spine';
 import {
@@ -28,6 +33,10 @@ import {
     linkAmyAnamSessionMemoryIdentity,
     readAmyAnamMemoryConfig,
 } from '@/lib/anam/user-memory';
+import {
+    linkDaniAnamSessionMemoryIdentity,
+    readDaniAnamMemoryConfig,
+} from '@/lib/anam/dani-user-memory';
 
 function noStoreJson(body: unknown, init?: ResponseInit) {
     const response = NextResponse.json(body, init);
@@ -45,16 +54,45 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
         }
 
-        const browserSession = readAmyAnamBrowserSession(request, config.signingSecret);
-        if (!browserSession) {
-            return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
-        }
-
         const body = await readBoundedJsonObject(request, 1024);
         const launchId = typeof body.launchId === 'string' ? body.launchId.trim() : '';
         const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
         if (!isUuid(launchId) || !isUuid(sessionId)) {
             return noStoreJson({ error: 'Valid launch and session IDs are required' }, { status: 400 });
+        }
+
+        const preAuthRate = await consumeAmyAnamDistributedRateLimit({
+            fingerprint: requestFingerprint(request, 'bind-preauth'),
+            limit: 60,
+            windowSeconds: 10 * 60,
+        });
+        if (!preAuthRate.allowed) {
+            return noStoreJson(
+                { error: 'Too many session binding attempts' },
+                { status: 429, headers: { 'Retry-After': String(preAuthRate.retryAfterSeconds) } },
+            );
+        }
+
+        const launch = await readAmyAnamLaunch(launchId);
+        if (!launch) {
+            return noStoreJson({ error: 'Session launch was not found' }, { status: 404 });
+        }
+        const launchAgentSlug = resolveAnamSessionAgentSlug(
+            launch.resolvedPersonaId,
+            launch.agentSlug,
+        );
+        const daniSessionSecrets = readDaniAnamSessionSecrets();
+        if (launchAgentSlug === 'dani' && !daniSessionSecrets.configured) {
+            return noStoreJson({ error: 'Dani session access is temporarily unavailable' }, { status: 503 });
+        }
+        const browserSession = launchAgentSlug === 'dani'
+            ? readDaniAnamBrowserSession(request, daniSessionSecrets.sessionSecret)
+            : readAmyAnamBrowserSession(request, config.signingSecret);
+        if (!browserSession) {
+            return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
+        }
+        if (launch.browserSessionId !== browserSession.id) {
+            return noStoreJson({ error: 'Session ownership did not match' }, { status: 403 });
         }
 
         const rate = await consumeAmyAnamDistributedRateLimit({
@@ -69,14 +107,6 @@ export async function POST(request: Request) {
             );
         }
 
-        const launch = await readAmyAnamLaunch(launchId);
-        if (!launch) {
-            return noStoreJson({ error: 'Session launch was not found' }, { status: 404 });
-        }
-        if (launch.browserSessionId !== browserSession.id) {
-            return noStoreJson({ error: 'Session ownership did not match' }, { status: 403 });
-        }
-
         await verifyAnamSessionForLaunch(sessionId, launch);
         const status = await bindAmyAnamLaunch({
             launch,
@@ -85,11 +115,8 @@ export async function POST(request: Request) {
         });
 
         if (status === 'bound' || status === 'duplicate') {
-            const launchAgentSlug = resolveAnamSessionAgentSlug(
-                launch.resolvedPersonaId,
-                launch.agentSlug,
-            );
             const memoryConfig = readAmyAnamMemoryConfig();
+            const daniMemoryConfig = readDaniAnamMemoryConfig();
             let memoryIdentityLinked = false;
             let daniFollowUpQueued = false;
             let daniFollowUpDuplicate = false;
@@ -106,15 +133,27 @@ export async function POST(request: Request) {
                 memoryIdentityLinked = memoryLinkStatus === 'linked'
                     || memoryLinkStatus === 'duplicate';
             }
+            if (daniMemoryConfig.gatesOpen && launchAgentSlug === 'dani') {
+                const memoryLinkStatus = await linkDaniAnamSessionMemoryIdentity({
+                    browserSessionId: browserSession.id,
+                    externalSessionId: sessionId,
+                    resolvedPersonaId: launch.resolvedPersonaId,
+                });
+                if (memoryLinkStatus === 'conflict') {
+                    return noStoreJson({ error: 'Dani memory session identity conflicted' }, { status: 409 });
+                }
+                memoryIdentityLinked = memoryLinkStatus === 'linked'
+                    || memoryLinkStatus === 'duplicate';
+            }
             if (launch.resolvedPersonaId === DANI_PERSONA_ID && launchAgentSlug === 'dani') {
                 const cookieContact = readDaniAnamContactFromRequest({
                     request,
                     browserSessionId: browserSession.id,
-                    secret: config.signingSecret,
+                    secret: daniSessionSecrets.contactSecret,
                 });
                 const storedContact = cookieContact ? null : await readDaniAnamFollowUpAuthorization({
                     browserSessionId: browserSession.id,
-                    contactSecret: config.signingSecret,
+                    contactSecret: daniSessionSecrets.contactSecret,
                 });
                 const contact = cookieContact ?? storedContact;
                 if (contact?.displayName && contact.purpose === 'dani_follow_up') {
@@ -123,7 +162,7 @@ export async function POST(request: Request) {
                         browserSessionId: browserSession.id,
                         displayName: contact.displayName,
                         email: contact.email,
-                        contactSecret: config.signingSecret,
+                        contactSecret: daniSessionSecrets.contactSecret,
                     });
                     daniFollowUpQueued = queued.queued;
                     daniFollowUpDuplicate = queued.duplicate;

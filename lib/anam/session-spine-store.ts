@@ -1,6 +1,7 @@
 import {
     AMY_ANAM_LAUNCH_TTL_SECONDS,
     AMY_ANAM_RECORD_TTL_SECONDS,
+    DANI_AI_SOLUTIONS_VARIANT,
     readAmyAnamSpineConfig,
     resolveAnamSessionAgentSlug,
     resolveAnamSessionVariant,
@@ -12,6 +13,12 @@ import type {
     AmyAnamSessionRecord,
 } from './session-spine.ts';
 import type { AmyAnamHermesShadowQueuedEnvelope } from './hermes-shadow-store.ts';
+import {
+    assertDaniAnamMemoryReviewArtifact,
+    type DaniAnamMemoryReviewArtifact,
+} from './dani-memory-candidate.ts';
+import type { DaniAnamMemoryCandidateEligibility } from './dani-user-memory.ts';
+import { DANI_PERSONA_ID } from './persona-ids.ts';
 
 type StoreOptions = {
     env?: NodeJS.ProcessEnv;
@@ -20,12 +27,25 @@ type StoreOptions = {
 
 type ReceiptWriteOptions = StoreOptions & {
     hermesShadowEnvelope?: AmyAnamHermesShadowQueuedEnvelope;
+    daniMemoryReviewArtifact?: DaniAnamMemoryReviewArtifact;
+    daniMemoryEligibility?: DaniAnamMemoryCandidateEligibility;
 };
+
+export type AmyAnamReceiptWriteStatus =
+    | 'stored'
+    | 'duplicate'
+    | 'stale'
+    | 'candidate_stored'
+    | 'candidate_duplicate'
+    | 'candidate_conflict';
 
 type RedisPipelineItem = {
     result?: unknown;
     error?: string;
 };
+
+const SAFE_SESSION_ID_PATTERN = /^[A-Za-z0-9._:-]{8,200}$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 function launchKey(launchId: string): string {
     return `xagent:amy:anam:launch:v1:${launchId}`;
@@ -39,12 +59,20 @@ function receiptKey(sessionId: string): string {
     return `xagent:amy:anam:receipt:v1:${sessionId}`;
 }
 
+function daniMemoryReviewCandidateKey(externalSessionId: string, jobId: string): string {
+    return `xagent:dani:anam:memory-review-candidate:v1:${externalSessionId}:${jobId}`;
+}
+
 function finalizationKey(sessionId: string): string {
     return `xagent:amy:anam:finalization:v1:${sessionId}`;
 }
 
 function finalizationDueKey(): string {
     return 'xagent:amy:anam:finalization-due:v1';
+}
+
+function daniEmailRetryDueKey(): string {
+    return 'xagent:dani:anam:agentmail:retry-due:v1';
 }
 
 function recoveryDrainLockKey(): string {
@@ -257,6 +285,53 @@ export async function readAmyAnamReceipt(
     );
 }
 
+function candidateMatchesReceipt(
+    artifact: DaniAnamMemoryReviewArtifact,
+    receipt: AmyAnamSessionReceipt,
+): boolean {
+    return artifact.externalSessionId === receipt.externalSessionId
+        && artifact.sourceReceiptId === receipt.receiptId
+        && artifact.sourceTranscriptSha256 === receipt.transcript.contentSha256
+        && artifact.sourceMessageCount === receipt.transcript.messageCount
+        && receipt.schemaVersion === 'amy_anam_session_receipt_v1'
+        && receipt.provider === 'anam'
+        && receipt.status === 'completed'
+        && receipt.transcript.source === 'anam_api'
+        && receipt.transcript.rawTranscriptPersisted === false
+        && Object.values(receipt.actions).every(value => value === false);
+}
+
+export async function readDaniAnamMemoryReviewCandidate(input: {
+    externalSessionId: string;
+    jobId: string;
+}, options: StoreOptions = {}): Promise<DaniAnamMemoryReviewArtifact | null> {
+    const externalSessionId = String(input.externalSessionId ?? '').trim();
+    const jobId = String(input.jobId ?? '').trim().toLowerCase();
+    if (!SAFE_SESSION_ID_PATTERN.test(externalSessionId) || !SHA256_PATTERN.test(jobId)) {
+        throw new Error('Dani memory review candidate identity was invalid');
+    }
+    const [candidateResult, receiptResult] = await redisPipeline([
+        ['GET', daniMemoryReviewCandidateKey(externalSessionId, jobId)],
+        ['GET', receiptKey(externalSessionId)],
+    ], options);
+    const rawCandidate = candidateResult?.result;
+    const rawReceipt = receiptResult?.result;
+    if (rawCandidate === null || rawCandidate === undefined || rawReceipt === null || rawReceipt === undefined) {
+        return null;
+    }
+    const artifact = assertDaniAnamMemoryReviewArtifact(parseRecord<unknown>(rawCandidate));
+    const receipt = parseRecord<AmyAnamSessionReceipt>(rawReceipt);
+    if (
+        !receipt
+        || artifact.externalSessionId !== externalSessionId
+        || artifact.jobId !== jobId
+        || !candidateMatchesReceipt(artifact, receipt)
+    ) {
+        throw new Error('Dani memory review candidate did not match its canonical receipt');
+    }
+    return artifact;
+}
+
 export async function readAmyAnamFinalization(
     externalSessionId: string,
     options: StoreOptions = {},
@@ -292,6 +367,58 @@ export async function removeAmyAnamFinalizationDueEntry(
     options: StoreOptions = {},
 ): Promise<void> {
     await redisCommand(['ZREM', finalizationDueKey(), externalSessionId], options);
+}
+
+export async function scheduleDaniAnamEmailRetryDueEntry(input: {
+    externalSessionId: string;
+    dueAt: number;
+}, options: StoreOptions = {}): Promise<void> {
+    const externalSessionId = String(input.externalSessionId ?? '').trim();
+    if (!SAFE_SESSION_ID_PATTERN.test(externalSessionId) || !Number.isFinite(input.dueAt)) {
+        throw new Error('Dani AgentMail retry schedule was invalid');
+    }
+    await redisPipeline([
+        ['ZADD', daniEmailRetryDueKey(), Math.trunc(input.dueAt), externalSessionId],
+        ['EXPIRE', daniEmailRetryDueKey(), AMY_ANAM_RECORD_TTL_SECONDS],
+    ], options);
+}
+
+export async function listDueDaniAnamEmailRetryIds(input: {
+    dueAt?: number;
+    limit: number;
+}, options: StoreOptions = {}): Promise<string[]> {
+    const dueAt = Number.isFinite(input.dueAt) ? Math.trunc(input.dueAt as number) : Date.now();
+    const limit = Math.max(1, Math.min(16, Math.trunc(input.limit) || 1));
+    const result = await redisCommand([
+        'ZRANGEBYSCORE',
+        daniEmailRetryDueKey(),
+        '-inf',
+        dueAt,
+        'LIMIT',
+        0,
+        limit,
+    ], options);
+    if (!Array.isArray(result)) {
+        throw new Error('Dani AgentMail retry queue returned an invalid response');
+    }
+    return result.map(value => String(value));
+}
+
+export async function hasDaniAnamEmailRetryDueEntry(
+    externalSessionId: string,
+    options: StoreOptions = {},
+): Promise<boolean> {
+    if (!SAFE_SESSION_ID_PATTERN.test(String(externalSessionId ?? '').trim())) return false;
+    return await redisCommand([
+        'ZSCORE', daniEmailRetryDueKey(), externalSessionId,
+    ], options) !== null;
+}
+
+export async function removeDaniAnamEmailRetryDueEntry(
+    externalSessionId: string,
+    options: StoreOptions = {},
+): Promise<void> {
+    await redisCommand(['ZREM', daniEmailRetryDueKey(), externalSessionId], options);
 }
 
 export async function acquireAmyAnamRecoveryDrainLock(
@@ -676,7 +803,35 @@ export async function writeAmyAnamReceipt(
     finalization: AmyAnamFinalizationRecord,
     receipt: AmyAnamSessionReceipt,
     options: ReceiptWriteOptions = {},
-): Promise<void> {
+): Promise<AmyAnamReceiptWriteStatus> {
+    const hasReviewArtifact = Boolean(options.daniMemoryReviewArtifact);
+    const hasMemoryEligibility = Boolean(options.daniMemoryEligibility);
+    if (hasReviewArtifact !== hasMemoryEligibility) {
+        throw new Error('Dani memory candidate requires an active session eligibility binding');
+    }
+    const reviewArtifact = options.daniMemoryReviewArtifact
+        ? assertDaniAnamMemoryReviewArtifact(options.daniMemoryReviewArtifact)
+        : undefined;
+    const eligibility = options.daniMemoryEligibility;
+    if (reviewArtifact && eligibility) {
+        if (
+            session.schemaVersion !== 'amy_anam_session_v1'
+            || session.provider !== 'anam'
+            || session.agentSlug !== 'dani'
+            || session.resolvedPersonaId !== DANI_PERSONA_ID
+            || session.variant !== DANI_AI_SOLUTIONS_VARIANT
+            || reviewArtifact.personaId !== DANI_PERSONA_ID
+            || reviewArtifact.externalSessionId !== session.externalSessionId
+            || eligibility.externalSessionId !== session.externalSessionId
+            || !SAFE_SESSION_ID_PATTERN.test(eligibility.browserSessionId)
+            || !SHA256_PATTERN.test(eligibility.emailIdentityHash)
+            || !SAFE_SESSION_ID_PATTERN.test(eligibility.consentEpoch)
+            || receipt.variant !== DANI_AI_SOLUTIONS_VARIANT
+            || !candidateMatchesReceipt(reviewArtifact, receipt)
+        ) {
+            throw new Error('Dani memory candidate did not match the canonical session receipt');
+        }
+    }
     const completedSession: AmyAnamSessionRecord = {
         ...session,
         state: 'completed',
@@ -705,6 +860,20 @@ export async function writeAmyAnamReceipt(
         throw new Error('Amy Anam Hermes shadow envelope did not match the canonical receipt');
     }
 
+    const keys: string[] = [
+        receiptKey(session.externalSessionId),
+        sessionKey(session.externalSessionId),
+        finalizationKey(session.externalSessionId),
+        finalizationDueKey(),
+    ];
+    const args: Array<string | number> = [
+        JSON.stringify(receipt),
+        JSON.stringify(completedSession),
+        JSON.stringify(completedFinalization),
+        AMY_ANAM_RECORD_TTL_SECONDS,
+        session.externalSessionId,
+        finalization.updatedAt,
+    ];
     const scriptParts = [
         "if redis.call('EXISTS', KEYS[1]) == 1 then redis.call('ZREM', KEYS[4], ARGV[5]); return 'duplicate' end",
         "local currentRaw = redis.call('GET', KEYS[3])",
@@ -717,65 +886,75 @@ export async function writeAmyAnamReceipt(
         "redis.call('ZREM', KEYS[4], ARGV[5])",
     ];
     if (envelope) {
-        scriptParts.push(
-            "if redis.call('SET', KEYS[5], '1', 'NX', 'EX', ARGV[11]) then",
-            "  redis.call('SET', KEYS[6], ARGV[7], 'EX', ARGV[11])",
-            "  redis.call('ZADD', KEYS[7], ARGV[8], ARGV[9])",
-            "  redis.call('EXPIRE', KEYS[7], ARGV[11])",
-            "  redis.call('SET', KEYS[8], ARGV[10], 'EX', ARGV[11])",
-            "  redis.call('SET', KEYS[9], ARGV[10], 'EX', ARGV[11])",
-            'end',
-        );
-    }
-    scriptParts.push("return 'OK'");
-
-    const command: Array<string | number> = [
-        'EVAL',
-        scriptParts.join(' '),
-        envelope ? 9 : 4,
-        receiptKey(session.externalSessionId),
-        sessionKey(session.externalSessionId),
-        finalizationKey(session.externalSessionId),
-        finalizationDueKey(),
-    ];
-    if (envelope) {
-        command.push(
+        const envelopeKeyStart = keys.length + 1;
+        const envelopeArgStart = args.length + 1;
+        keys.push(
             envelope.keys.dedupe,
             envelope.keys.job,
             envelope.keys.due,
             envelope.keys.jobReceipt,
             envelope.keys.sessionReceipt,
         );
-    }
-    command.push(
-        JSON.stringify(receipt),
-        JSON.stringify(completedSession),
-        JSON.stringify(completedFinalization),
-        AMY_ANAM_RECORD_TTL_SECONDS,
-        session.externalSessionId,
-        finalization.updatedAt,
-    );
-    if (envelope) {
-        command.push(
+        args.push(
             envelope.jobJson,
             envelope.dueAt,
             envelope.job.pointer.jobId,
             envelope.receiptJson,
             envelope.ttlSeconds,
         );
+        scriptParts.push(
+            `if redis.call('SET', KEYS[${envelopeKeyStart}], '1', 'NX', 'EX', ARGV[${envelopeArgStart + 4}]) then`,
+            `  redis.call('SET', KEYS[${envelopeKeyStart + 1}], ARGV[${envelopeArgStart}], 'EX', ARGV[${envelopeArgStart + 4}])`,
+            `  redis.call('ZADD', KEYS[${envelopeKeyStart + 2}], ARGV[${envelopeArgStart + 1}], ARGV[${envelopeArgStart + 2}])`,
+            `  redis.call('EXPIRE', KEYS[${envelopeKeyStart + 2}], ARGV[${envelopeArgStart + 4}])`,
+            `  redis.call('SET', KEYS[${envelopeKeyStart + 3}], ARGV[${envelopeArgStart + 3}], 'EX', ARGV[${envelopeArgStart + 4}])`,
+            `  redis.call('SET', KEYS[${envelopeKeyStart + 4}], ARGV[${envelopeArgStart + 3}], 'EX', ARGV[${envelopeArgStart + 4}])`,
+            'end',
+        );
     }
+    if (reviewArtifact && eligibility) {
+        const candidateKeyIndex = keys.length + 1;
+        const candidateArgStart = args.length + 1;
+        keys.push(daniMemoryReviewCandidateKey(reviewArtifact.externalSessionId, reviewArtifact.jobId));
+        args.push(
+            JSON.stringify(reviewArtifact),
+        );
+        scriptParts.push(
+            `local existingCandidate = redis.call('GET', KEYS[${candidateKeyIndex}])`,
+            `if not existingCandidate then redis.call('SET', KEYS[${candidateKeyIndex}], ARGV[${candidateArgStart}], 'EX', ARGV[4]); return 'candidate_stored' end`,
+            `if existingCandidate == ARGV[${candidateArgStart}] then return 'candidate_duplicate' end`,
+            "return 'candidate_conflict'",
+        );
+    } else {
+        scriptParts.push("return 'OK'");
+    }
+
+    const command: Array<string | number> = [
+        'EVAL',
+        scriptParts.join(' '),
+        keys.length,
+        ...keys,
+        ...args,
+    ];
     const result = await redisCommand(command, options);
     if (!options.env && !options.fetchImpl) {
         console.info('[Amy Anam Receipt] Store transition', {
             result: String(result),
             hermesEnvelopeRequested: Boolean(envelope),
+            daniMemoryCandidateRequested: Boolean(reviewArtifact),
             contentIncluded: false,
             outboundActions: 0,
         });
     }
-    if (result !== 'OK' && result !== 'duplicate' && result !== 'stale') {
-        throw new Error('Amy Anam receipt could not be stored');
-    }
+    if (result === 'OK') return 'stored';
+    if (
+        result === 'duplicate'
+        || result === 'stale'
+        || result === 'candidate_stored'
+        || result === 'candidate_duplicate'
+        || result === 'candidate_conflict'
+    ) return result;
+    throw new Error('Amy Anam receipt could not be stored');
 }
 
 export async function consumeAmyAnamDistributedRateLimit(input: {
