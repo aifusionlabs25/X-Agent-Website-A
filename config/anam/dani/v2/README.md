@@ -25,7 +25,7 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 ## Contents
 
 - `DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md`: unified website and meeting-safe voice prompt.
-- `knowledge/`: eleven public-safe retrieval documents, including a deliberately limited professional company/founder profile.
+- `knowledge/`: thirteen public-safe retrieval documents, including a deliberately limited professional company/founder profile and transcript-derived conversational guardrails.
 - `knowledge-manifest.json`: versioned knowledge-group definition with the pinned live v2 group ID and exact hashes.
 - `CAPABILITY_CLAIMS_AND_APPROVALS.md`: internal evidence register and unresolved business approvals. Do not upload it to Anam knowledge.
 - `POST_CALL_EMAIL_SOP.md`: backend-owned Admin, Call Summary, and prospect thank-you contract. Do not upload it to public knowledge.
@@ -35,7 +35,7 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 ## Deployment boundaries
 
 - Do not overwrite the current v1 files or the protected Cara 3 rollback persona.
-- Create or reuse a dedicated v2 knowledge group named `Dani AI Solutions Director Anam KB 2026-08-09 v2`.
+- Use the pinned versioned knowledge group named `Dani AI Solutions Director Anam KB 2026-08-10 v3`.
 - Attach a dedicated knowledge tool named `Knowledge_Dani_AI_Solutions_Director`.
 - Upload only the allowlisted `knowledge/` documents.
 - Do not upload client briefs, transcripts, internal approvals, email templates, private meeting notes, test fixtures, credentials, or implementation details.
@@ -51,15 +51,15 @@ Anam supplies meeting joining, the visible AI disclosure, and group-call name ga
 ## Live provider record
 
 - Persona: `120cf627-59a6-4a35-8e70-97959a89a4da`
-- Knowledge group: `0c5a31dd-44f7-4d79-95fc-b6df31bbff4f`
+- Knowledge group: `0add8be0-ba50-4174-93d1-19181acd4525`
 - Knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
-- Prompt SHA-256: `116eb6407a80388ac8eba088b65c5899af93527a0fa3dd00f8c1ce3305cd2eaa`
-- KB bundle SHA-256: `6a570016b8c6232a7d43f7aaa627ce12964ae0eaf5ec704566abc562a22b78af`
+- Prompt SHA-256: `bacf5a44b11f2dacfab2e3d91104f24c24ab7422e1e7883bb1ac381be15cd0c3`
+- KB bundle SHA-256: `821c2312a10a264418b206c98330196d7da971ba6db6c89370f6d1f9c454dd55`
 - Immediate and delayed provider verification: passed
 - Protected Cara 3 rollback: unchanged
-- Published at: `2026-08-10T20:19:52.763Z`
+- Published at: `2026-08-10T20:45:59.096Z`
 
 ## Remaining website promotion checks
 

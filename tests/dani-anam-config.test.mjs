@@ -164,6 +164,11 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /Do not state that an avatar builds trust/i);
     assert.match(prompt, /Ask at most one meaningful question/i);
     assert.match(prompt, /Do not end every turn with a question/i);
+    assert.match(prompt, /periodically ask one brief discovery question/i);
+    assert.match(prompt, /what kinds of companies the visitor typically connects with/i);
+    assert.match(prompt, /I can't confirm the specifics, but I can outline what would need to be scoped/i);
+    assert.match(prompt, /If you'd like to explore the fit, I can outline what a discovery call would need to cover/i);
+    assert.match(prompt, /let's wrap up.*Do not ask for confirmation/is);
     assert.match(prompt, /Knowledge_Dani_AI_Solutions_Director/);
     assert.match(prompt, /Retrieval does not take a business action/i);
     assert.match(prompt, /Anam group-call mode controls joining and name-gated participation/i);
@@ -249,6 +254,9 @@ test('managed Dani KB is an exact thirteen-file, hashed, public-safe AI solution
     assert.match(liveVoice, /low five figures.*mid six figures.*four to six weeks.*eight to ten weeks/is);
     assert.match(liveVoice, /They could build something similar/i);
     assert.match(liveVoice, /SaaS founder.*conference operator.*healthcare/is);
+    assert.match(liveVoice, /proactive does not mean asking a question after every answer/i);
+    assert.match(liveVoice, /Professional uncertainty names the boundary and the useful next step/i);
+    assert.match(liveVoice, /discovery call would need to cover/i);
     assert.match(liveVoice, /do not fill the answer with an industry estimate/i);
 });
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "verifiedPublishedAt": "2026-08-10T20:19:52.763Z",
+  "verifiedPublishedAt": "2026-08-10T20:45:59.096Z",
   "personaId": "120cf627-59a6-4a35-8e70-97959a89a4da",
   "rollbackPersonaId": "61f0fd3e-7937-472a-958d-cdba76b33bf1",
   "expectedName": "Dani AI Solutions Director",
@@ -18,7 +18,7 @@
     "speechEnhancementLevel": 0.7
   },
   "promptFile": "v2/DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md",
-  "promptSha256": "116eb6407a80388ac8eba088b65c5899af93527a0fa3dd00f8c1ce3305cd2eaa",
+  "promptSha256": "bacf5a44b11f2dacfab2e3d91104f24c24ab7422e1e7883bb1ac381be15cd0c3",
   "knowledgeManifestFile": "v2/knowledge-manifest.json",
   "emailToolDefinitionFile": "../dani-agentmail-client-tool.json",
   "identityToolDefinitionFile": "../dani-live-identity-client-tool.json",
