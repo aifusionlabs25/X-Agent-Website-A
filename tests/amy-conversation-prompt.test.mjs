@@ -60,6 +60,18 @@ test('Amy keeps claim, handoff, and artifact guardrails intact', () => {
     assert.match(prompt, /approved attached knowledge source/i);
 });
 
+test('Amy treats student-risk AI and compressed board timelines as high-impact discovery', () => {
+    assert.match(prompt, /student-retention or at-risk-student scenarios/i);
+    assert.match(prompt, /privacy and institutional policy/i);
+    assert.match(prompt, /fairness and explainability expectations/i);
+    assert.match(prompt, /required human review/i);
+    assert.match(prompt, /counseling, financial-aid, disability, health/i);
+    assert.match(prompt, /de-identified or synthetic data/i);
+    assert.match(prompt, /three-day deadline may support a board-ready concept, mockup, or tightly bounded feasibility demonstration/i);
+    assert.match(prompt, /never call a student-risk model validated, production-ready, or feasible/i);
+    assert.match(prompt, /Do not name products, prescribe data pipelines, or promise a pilot timeline/i);
+});
+
 test('Amy live updater is dry-run first, identity-pinned, backed up, and drift-checked', () => {
     assert.match(updater, /mode: 'dry-run'/);
     assert.match(updater, /CONFIRM_AMY_CONVERSATION_SYNC/);

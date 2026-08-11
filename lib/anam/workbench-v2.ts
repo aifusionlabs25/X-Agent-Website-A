@@ -133,7 +133,9 @@ function isWorkbenchRequest(value: string): boolean {
 }
 
 function isConversationControl(value: string): boolean {
-    return /^(?:thanks?|thank you|yes,? please|no|not right(?: now)?|maybe later|sure|partially|for now)\.?$/i.test(value.trim());
+    const normalized = value.trim();
+    return /^(?:thanks?(?:,?\s+Amy)?|thank you|yes,? please|no|not right(?: now)?|maybe later|sure|partially|for now)\.?$/i.test(normalized)
+        || /\b(?:this is exactly what I needed|I(?:'ve| have) got what I need|I(?:'ll| will) (?:run with|take it from here))\b/i.test(normalized);
 }
 
 function isWorkbenchEditInstruction(value: string): boolean {
@@ -197,6 +199,7 @@ function readCorrections(values: string[]): Array<{ from: string; to: string }> 
 }
 
 const TERM_RULES: Array<[RegExp, string]> = [
+    [/\bSIS\b|student information system/i, 'Student information system (SIS)'],
     [/\bMicrosoft 365 E5\b/i, 'Microsoft 365 E5'],
     [/\bWindows 11\b/i, 'Windows 11'],
     [/\bIntune\b/i, 'Intune'],
@@ -237,19 +240,21 @@ function lastSentence(values: string[], pattern: RegExp): string {
     return '';
 }
 
-type LaneId = 'endpoint' | 'cloud' | 'security' | 'mobility' | 'public-sector' | 'general';
+type LaneId = 'endpoint' | 'cloud' | 'security' | 'mobility' | 'education' | 'public-sector' | 'general';
 
 const LANE_LABELS: Record<LaneId, string> = {
     endpoint: 'Endpoint modernization',
     cloud: 'Hybrid infrastructure modernization',
     security: 'Security readiness',
     mobility: 'Warehouse mobility modernization',
+    education: 'Education AI discovery',
     'public-sector': 'Public-sector modernization',
     general: 'Enterprise discovery',
 };
 
 function detectLane(text: string): LaneId {
     const scores: Array<[LaneId, RegExp[]]> = [
+        ['education', [/student|university|college|school district|higher education|K-?12/i, /\bSIS\b|student information system|student retention|attendance|grades?|drop(?:ping)? out/i]],
         ['public-sector', [/county|municipal|city government|state agency|federal agency|public sector|higher education|K-?12/i, /procurement|contract vehicle|CJIS|FedRAMP|StateRAMP/i]],
         ['mobility', [/warehouse|distribution center|picking|outbound shipping/i, /WMS|rugged|scanner|forklift|Zebra|Honeywell|MDM/i]],
         ['endpoint', [/endpoint|Windows 11|Intune|SCCM|Copilot|device refresh|laptops?/i, /clinic|branch|workplace/i]],
@@ -298,6 +303,12 @@ function buildPhases(lane: LaneId, context: { scale: string; terms: string[]; co
         { number: '03', title: 'Technical path', detail: `Shape phased options and identify the evidence required for review${timing}.` },
         { number: '04', title: 'Decision path', detail: 'Clarify owners, approvals, purchasing route, specialist support, and the next bounded decision.' },
     ];
+    if (lane === 'education') return [
+        { number: '01', title: 'Board outcome and boundary', detail: 'Clarify the board decision, success measure, three-day deliverable, and the difference between a feasibility demonstration and a validated student-risk model.' },
+        { number: '02', title: 'Authorized data and governance', detail: 'Confirm the data owner, permitted SIS fields, privacy and institutional policy, de-identification or synthetic-data approach, fairness, explainability, and required human review.' },
+        { number: '03', title: 'Bounded human-reviewed demonstration', detail: 'Use the smallest approved dataset and keep every student-level interpretation with authorized humans; do not treat a demonstration as production validation.' },
+        { number: '04', title: 'Validation decision gate', detail: 'Have the appropriate education, data, privacy, AI, and Insight specialists validate feasibility, safeguards, scope, and any later pilot path.' },
+    ];
     if (lane === 'cloud') return [
         { number: '01', title: 'Discover and baseline', detail: `Inventory ${workloads}, dependencies, owners, recovery needs, and performance across ${stack}.` },
         { number: '02', title: 'Design the landing path', detail: `Group workloads by risk and define identity, network, data-protection, governance, and rollback requirements around ${guardrail}.` },
@@ -334,7 +345,7 @@ function buildCurrentTracks(input: {
     ].filter(Boolean);
 }
 
-function buildMultiTrackPhases(tracks: string[]): WorkbenchPhase[] {
+function buildMultiTrackPhases(tracks: string[], aiDiscovery: string): WorkbenchPhase[] {
     const phases: WorkbenchPhase[] = [{
         number: '01',
         title: 'Shared facts and boundaries',
@@ -358,7 +369,7 @@ function buildMultiTrackPhases(tracks: string[]): WorkbenchPhase[] {
     if (tracks.includes('AI discovery')) phases.push({
         number: String(phases.length + 1).padStart(2, '0'),
         title: 'AI discovery workstream',
-        detail: 'Prioritize runbooks, technical-document search, telemetry analysis, and an internal IT assistant; validate data access, agency AI policy, identity controls, human review, hosting, and measurable outcomes.',
+        detail: `Scope ${aiDiscovery || 'the confirmed AI use case'}; validate data access, applicable AI policy, identity controls, human review, hosting, and measurable outcomes.`,
     });
     phases.push({
         number: String(phases.length + 1).padStart(2, '0'),
@@ -392,6 +403,12 @@ const CATALOG: Record<LaneId, CatalogCategory[]> = {
         { title: 'Warehouse connectivity', description: 'Coverage, roaming, capacity, segmentation, and operational resilience.', examples: ['Cisco Wi-Fi', 'Wireless surveys', 'Network modernization'] },
         { title: 'Device management', description: 'Enrollment, policy, application delivery, security, and support.', examples: ['MDM', 'Kiosk management', 'Application distribution'] },
         { title: 'Workflow assurance', description: 'Pilot validation across WMS workflows, training, spares, and rollback.', examples: ['Manhattan WMS testing', 'Picking pilots', 'Support design'] },
+    ],
+    education: [
+        { title: 'Student-success discovery', description: 'Outcome framing, stakeholder alignment, and responsible use-case qualification.', examples: ['Retention discovery', 'Student-service workflows', 'Success measures'] },
+        { title: 'Data readiness and governance', description: 'Authorized data access, quality, minimization, privacy, fairness, explainability, and human review.', examples: ['SIS data readiness', 'De-identification', 'Governance review'] },
+        { title: 'Bounded demonstrations', description: 'Synthetic or de-identified demonstrations that test an idea without making consequential student decisions.', examples: ['Board mockup', 'Feasibility demonstration', 'Human-reviewed workflow'] },
+        { title: 'Specialist validation', description: 'Education, data, privacy, AI, and technical review before a real-data pilot or production decision.', examples: ['Risk review', 'Technical validation', 'Pilot scoping'] },
     ],
     'public-sector': [
         { title: 'Mission modernization', description: 'Technology planning around citizen, student, workforce, and agency outcomes.', examples: ['Digital services', 'Modern workplace', 'Infrastructure modernization'] },
@@ -427,7 +444,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const hasErpCutover = /\bERP\b/i.test(sourceText) && /cutover|overnight outage|maintenance window/i.test(sourceText);
     const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sourceText);
     const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
-    const hasAiDiscovery = /\bAI\b|artificial intelligence|runbook automation|migration runbooks?|technical document(?:ation)? search|analy[sz](?:e|ing) telemetry|internal (?:IT )?assistant/i.test(sourceText);
+    const hasAiDiscovery = /\bAI\b|artificial intelligence|runbook automation|migration runbooks?|technical document(?:ation)? search|analy[sz](?:e|ing) telemetry|internal (?:IT )?assistant|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out/i.test(sourceText);
+    const hasStudentRiskUseCase = /student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out/i.test(sourceText);
     const currentTracks = buildCurrentTracks({ hasErpCutover, hasMunicipalPrescoping, hasArizonaSvar, hasAiDiscovery });
     const multiTrack = currentTracks.length > 1;
     const dualTrack = hasErpCutover && hasMunicipalPrescoping;
@@ -449,7 +467,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : dualTrack ? 'Azure ERP and municipal compliance planning' : LANE_LABELS[laneId];
     const scale = extractScale(allText);
     const objective = hasErpCutover && hasArizonaSvar && hasAiDiscovery
-        ? 'Plan three distinct tracks: protect the ERP cutover within a tight overnight outage window; clarify the Arizona SVAR software purchasing path without treating it as compliance; and scope AI opportunities for runbooks, technical-document search, telemetry analysis, and an internal IT assistant.'
+        ? 'Plan three distinct tracks: protect the ERP cutover within a tight overnight outage window; clarify the Arizona SVAR software purchasing path without treating it as compliance; and scope the confirmed AI opportunities.'
         : dualTrack
         ? 'Plan two separate workstreams: protect the ERP cutover within a tight overnight outage window, and pre-scope municipal compliance while awaiting prime-contractor flow-down.'
         : lastSentence(substantiveStatements, /need|want|trying|looking|goal|objective|moderni[sz]|replace|migrate|improve|protect|reduce|support|roadmap|assessment/i)
@@ -458,10 +476,11 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const timing = explicitTiming
         || (dualTrack && /few weeks/i.test(allText)
         ? 'Detailed planning may begin in a few weeks, dependent on compliance clarification from the prime contractor.'
-        : lastSentence(substantiveStatements, /timeline|timing|\d+[ -]?(?:day|week|month)|next (?:year|quarter|month)|this (?:year|quarter|month)|within|before|early|late|maintenance window|peak season/i));
+        : lastSentence(substantiveStatements, /timeline|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[ -]?(?:day|week|month)|next (?:year|quarter|month)|this (?:year|quarter|month)|within|before|early|late|maintenance window|peak season/i));
+    const constraintStatements = substantiveStatements.filter((statement) => !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
     const constraint = dualTrack
         ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
-        : lastSentence(substantiveStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
+        : lastSentence(constraintStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
     const stakeholder = stakeholderWasCleared(userTurns)
         ? ''
         : lastSentence(substantiveStatements, /decision|stakeholder|CIO|CFO|CTO|director|vice president|VP|executive|procurement|leadership|owner/i);
@@ -486,6 +505,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const requestedOutputs = requestedOutputsFrom(userTurns, currentTracks.length);
     const requestedOutput = requestedOutputs.join(' / ');
     const decision = lastSentence(substantiveStatements, /we decided|we selected|we will proceed|the decision is/i);
+    const aiDiscovery = lastSentence(substantiveStatements, /\bAI\b|artificial intelligence|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out|runbooks?|technical document|telemetry|internal (?:IT )?assistant/i);
 
     const facts = [
         makeFact('Organization', 'Context', organization),
@@ -493,7 +513,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Environment', 'Technology context', terms.join(' / ')),
         makeFact('Environment', 'Critical workloads', workloads.join(' / ')),
         makeFact('Priorities', 'Current objective', objective.includes('still being clarified') || objective.startsWith('Waiting') ? '' : objective),
-        makeFact('Priorities', 'AI discovery', hasAiDiscovery ? 'Runbooks, technical-document search, telemetry analysis, and an internal IT assistant remain a separate discovery track.' : ''),
+        makeFact('Priorities', 'AI discovery', hasAiDiscovery ? aiDiscovery : ''),
         makeFact('Procurement', 'Arizona SVAR', hasArizonaSvar ? 'Software Value-Added Reseller purchasing contract; confirm software category, purchaser, and ordering path with an Insight Public Sector specialist.' : ''),
         makeFact('Constraints', 'Primary guardrail', constraint),
         makeFact('Constraints', 'Governance drivers', compliance.join(' / ')),
@@ -504,8 +524,18 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ].filter((fact): fact is AmyWorkbenchFact => Boolean(fact));
 
     const openQuestions = unique([
-        hasAiDiscovery ? 'What data would each AI use case access, and could agency or contract-controlled information enter prompts?' : '',
-        hasAiDiscovery ? 'What agency AI policy, human-review, hosting, identity, and measurable-outcome requirements apply?' : '',
+        hasStudentRiskUseCase ? 'Has the authorized data owner approved de-identified or synthetic data for this demonstration?' : '',
+        hasStudentRiskUseCase ? 'What privacy, institutional policy, fairness, explainability, and human-review requirements apply before any student-level use?' : '',
+        hasAiDiscovery && !hasStudentRiskUseCase
+            ? hasArizonaSvar
+                ? 'What data would each AI use case access, and could agency or contract-controlled information enter prompts?'
+                : 'What data would each AI use case access, and could organization- or contract-controlled information enter prompts?'
+            : '',
+        hasAiDiscovery && !hasStudentRiskUseCase
+            ? hasArizonaSvar
+                ? 'What agency AI policy, human-review, hosting, identity, and measurable-outcome requirements apply?'
+                : 'What AI policy, human-review, hosting, identity, and measurable-outcome requirements apply?'
+            : '',
         hasArizonaSvar ? 'Who will purchase through SVAR-the agency, the prime contractor, or another eligible entity?' : '',
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'What outcome would make this initiative successful?' : '',
         !terms.length ? 'Which environment, workload, or platform is in scope?' : '',
@@ -517,12 +547,16 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const priorities = unique([
         multiTrack ? `Keep ${currentTracks.join(', ')} as separate workstreams.` : '',
         hasArizonaSvar ? 'Treat Arizona SVAR as a software purchasing path, not a compliance approval process.' : '',
+        hasStudentRiskUseCase ? 'Frame the three-day deliverable as a board-ready feasibility demonstration, not a validated student-risk model.' : '',
+        hasStudentRiskUseCase ? 'Use only approved de-identified or synthetic data until privacy, fairness, explainability, and human review are validated.' : '',
         constraint,
         timing,
         compliance.length ? `Account for ${compliance.join(', ')}.` : '',
         terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : '',
     ], 5);
-    const nextStep = multiTrack
+    const nextStep = hasStudentRiskUseCase
+        ? 'Validate data authorization, de-identification or synthetic-data use, privacy, fairness, explainability, human review, and three-day feasibility with the appropriate institutional and Insight specialists before using student-level records.'
+        : multiTrack
         ? `Confirm separate owners and decision gates for ${currentTracks.join(', ')}, including Insight Public Sector review of the SVAR ordering path.`
         : openQuestions.length
         ? `Clarify ${openQuestions[0].replace(/^What |^Which |^Who |^Please clarify:\s*/i, '').replace(/\?$/, '').toLowerCase()}.`
@@ -531,7 +565,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
     const phases = currentTracks.length > 2
-        ? buildMultiTrackPhases(currentTracks)
+        ? buildMultiTrackPhases(currentTracks, aiDiscovery)
         : buildPhases(laneId, { scale, terms, constraint, timing, workloads, dualTrack });
     const roadmapOutcome = currentTracks.length > 2
         ? `Develop ${currentTracks.length} coordinated but independently gated tracks: ${currentTracks.join(', ')}.`
@@ -542,6 +576,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         cloud: 'Shape a phased modernization path that protects critical workloads and validates continuity requirements.',
         security: 'Turn the stated risks and control gaps into a validated and sequenced remediation plan.',
         mobility: 'Modernize warehouse mobility while protecting picking, shipping, and peak-season throughput.',
+        education: 'Create a board-ready, human-reviewed education AI feasibility path without treating a demonstration as a validated student-risk model.',
         'public-sector': 'Connect the mission outcome, technical sequence, governance, and an appropriate purchasing path.',
         general: 'Turn the confirmed objective and constraints into a practical next decision.',
     } satisfies Record<LaneId, string>)[laneId];

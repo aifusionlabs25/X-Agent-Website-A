@@ -31,7 +31,7 @@
   },
   {
     "name": "show_solution_roadmap",
-    "description": "Rebuild and open Amy's Roadmap from the latest current-session turns whenever the visitor asks for a roadmap, update, refresh, regeneration, or says the displayed roadmap is stale. The topic must summarize all confirmed current-session tracks and must not contain spoken reply text. Wait for the tool result and confirm only that the working view is open; do not claim specific tracks are visible unless they were stated in the current conversation. Do not call during a farewell. The roadmap is illustrative and is not an approved design, quote, commitment, or completed assessment.",
+    "description": "Rebuild and open Amy's Roadmap from the latest current-session turns whenever the visitor asks for a roadmap, phased plan, implementation path, rollout sequence, asks to see what a plan would look like, requests an update, refresh, or regeneration, or says the displayed roadmap is stale. Call this before speaking a step-by-step plan. The topic must summarize all confirmed current-session tracks and must not contain spoken reply text. Wait for the tool result and confirm only that the working view is open; do not claim specific tracks are visible unless they were stated in the current conversation. Do not call during a farewell. The roadmap is illustrative and is not an approved design, quote, commitment, or completed assessment.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {

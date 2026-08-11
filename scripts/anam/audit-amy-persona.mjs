@@ -35,6 +35,7 @@ if (!response.ok) {
 
 const persona = await response.json();
 const prompt = String(persona.brain?.systemPrompt ?? '');
+const knowledgeTool = (persona.tools ?? []).find(tool => tool.name === 'Knowledge_Amy');
 const markers = [...prompt.matchAll(/<!--\s*([^>]+?)\s*-->/g)].map(match => match[1]);
 const managedSections = [...prompt.matchAll(/<!--\s*([^>]+?)\s*-->/g)].map(match => ({
     marker: match[1],
@@ -57,6 +58,11 @@ console.log(JSON.stringify({
     legacyBehaviorHeaderOffset: prompt.indexOf('# Amy Cara 4 behavior upgrade'),
     legacyThreeFactRulePresent: /at least three confirmed facts/i.test(prompt),
     toolNames: (persona.tools ?? []).map(tool => tool.name).sort(),
+    knowledgeTool: knowledgeTool ? {
+        id: knowledgeTool._toolId ?? knowledgeTool.id ?? null,
+        type: knowledgeTool.type ?? null,
+        documentFolderIds: knowledgeTool.config?.documentFolderIds ?? [],
+    } : null,
     initialMessage: persona.initialMessage ?? null,
     voiceDetectionOptions: persona.voiceDetectionOptions ?? null,
     zeroDataRetention: persona.zeroDataRetention ?? null,

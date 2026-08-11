@@ -66,6 +66,7 @@ test('Anam client tool definitions use the current API shape and route named vie
         'show_session_brief',
         'show_solution_roadmap',
         'show_visual_brief',
+        'show_solution_catalog',
     ]);
     assert.ok(tools.every((tool) => tool.type === 'CLIENT'));
     assert.ok(tools.every((tool) => tool.config?.awaitResult === true));

@@ -36,6 +36,47 @@ test('Amy workbench v2 prioritizes public-sector context and removes contact det
     assert.doesNotMatch(JSON.stringify(model), /tester@example\.com|602-555-0199/);
 });
 
+test('student-retention pressure test stays grounded and produces a safe board-ready working path', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: 'Amy, I need answers fast. We have a board deadline in three days, an AI proposal that is still vague, and our budget just got slashed. Where do we even begin?' },
+        { role: 'user', content: 'Exactly. I need a clear plan on what is realistic in this timeframe or this is going to fall apart.' },
+        { role: 'user', content: 'They want a tangible pilot, something that shows AI improving student engagement or operations, but I have nothing scoped.' },
+        { role: 'user', content: 'We have a student information system and some operations data, but nothing deeply integrated yet. I need to know if we can do anything with that quickly.' },
+        { role: 'user', content: 'Let us say improving student retention. If we can show AI helping identify students at risk of dropping out, that would resonate. But how do I know if that is feasible in three days?' },
+        { role: 'user', content: 'We have basic extracts, attendance and grades, but no counseling data yet. Show me what that plan would look like.' },
+        { role: 'user', content: 'That gives me a starting point. I will run with that plan. Thanks, Amy. This is exactly what I needed.' },
+        { role: 'user', content: 'Can you show me a visual of that? I need something I can put in front of the board.' },
+        { role: 'user', content: 'I have got what I need now. Thanks, Amy. I will take it from here.' },
+    ], 'Board-ready student-retention AI feasibility demonstration in three days using available SIS attendance and grade extracts.');
+
+    const serialized = JSON.stringify(model);
+    const objective = model.facts.find((fact) => fact.label === 'Current objective')?.value ?? '';
+    const aiUseCase = model.facts.find((fact) => fact.label === 'AI discovery')?.value ?? '';
+    const guardrail = model.facts.find((fact) => fact.label === 'Primary guardrail')?.value ?? '';
+    const timing = model.facts.find((fact) => fact.label === 'Timing')?.value ?? '';
+
+    assert.equal(model.lane, 'Education AI discovery');
+    assert.match(objective, /board|student retention|tangible pilot/i);
+    assert.match(aiUseCase, /student retention|students at risk|dropping out/i);
+    assert.match(guardrail, /budget.*slashed/i);
+    assert.match(timing, /three days/i);
+    assert.ok(model.brief.environment.includes('Student information system (SIS)'));
+    assert.ok(model.brief.priorities.some((item) => /board-ready feasibility demonstration.*not a validated student-risk model/i.test(item)));
+    assert.ok(model.brief.priorities.some((item) => /de-identified or synthetic data/i.test(item)));
+    assert.ok(model.brief.openQuestions.some((item) => /authorized data owner.*de-identified or synthetic/i.test(item)));
+    assert.ok(model.brief.openQuestions.some((item) => /privacy.*fairness.*explainability.*human-review/i.test(item)));
+    assert.match(model.brief.nextStep, /institutional and Insight specialists/i);
+    assert.deepEqual(model.roadmap.phases.map((phase) => phase.title), [
+        'Board outcome and boundary',
+        'Authorized data and governance',
+        'Bounded human-reviewed demonstration',
+        'Validation decision gate',
+    ]);
+    assert.doesNotMatch(serialized, /runbooks|technical-document search|telemetry analysis|internal IT assistant/i);
+    assert.doesNotMatch(serialized, /This is exactly what I needed|I will run with that plan|I will take it from here/i);
+    assert.doesNotMatch(guardrail, /students at risk|dropping out/i);
+});
+
 test('Corrections replace rejected terms and uncertain speech remains separate', () => {
     const model = buildAmyWorkbenchModel([
         { role: 'user', content: 'We use SCCM for 850 endpoints.' },
@@ -166,6 +207,8 @@ test('Anam client tools use the current API shape and route five named views', a
     assert.ok(tools.every((tool) => tool.config?.awaitResult === true));
     assert.ok(tools.every((tool) => tool.config?.parameters?.type === 'object'));
     assert.match(tools[4].description, /does not return live inventory, pricing, availability/i);
+    assert.match(tools[2].description, /asks to see what a plan would look like/i);
+    assert.match(tools[2].description, /before speaking a step-by-step plan/i);
     assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist/i);
 });
 
@@ -180,6 +223,8 @@ test('Workbench prompt protects visitor review time from filler and premature cl
     assert.match(prompt, /before we wrap up/i);
     assert.match(prompt, /navigation, review, and editing language as control instructions/i);
     assert.match(prompt, /visibleFacts/i);
+    assert.match(prompt, /show me what that plan would look like/i);
+    assert.match(prompt, /calls show_solution_roadmap before Amy speaks a step-by-step plan/i);
 });
 
 test('Amy feature tabs and content use readable production typography', async () => {
