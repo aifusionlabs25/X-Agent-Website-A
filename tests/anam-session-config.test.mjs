@@ -89,7 +89,8 @@ test('Amy behavior upgrade is provider-neutral and contains the current guardrai
     );
 
     assert.match(prompt, /Discovery comes before prescription/i);
-    assert.match(prompt, /at least three confirmed facts/i);
+    assert.match(prompt, /desired outcome to relevant context, then to the constraint/i);
+    assert.doesNotMatch(prompt, /at least three confirmed facts/i);
     assert.match(prompt, /visitor-reported context, not application confirmation/i);
     assert.match(prompt, /no connected calendar availability/i);
     assert.match(prompt, /Use the visitor's name sparingly/i);
