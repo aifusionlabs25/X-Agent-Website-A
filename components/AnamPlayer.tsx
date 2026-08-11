@@ -30,6 +30,7 @@ import {
     routeToolStopsToMovePlanStops,
 } from '@/lib/anam/evan-address-route';
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
+import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -113,6 +114,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeCloseToolHandler: (() => void) | null = null;
         let requestedCloseReason: string | null = null;
         let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
+        let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let completedUserTurns = 0;
         let workbenchRevision = 0;
         let confirmedMemoryName: string | null = null;
@@ -288,6 +290,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     evanCloseCoordinator = createEvanFarewellCloseCoordinator({
                         stopStreaming: () => anamClient.stopStreaming(),
                         onStopError: () => console.error('[Evan Anam] Farewell close was not confirmed'),
+                    });
+                }
+                if (isDani) {
+                    daniCloseCoordinator = createDaniFarewellCloseCoordinator({
+                        stopStreaming: handleDaniRequestedEnd,
+                        onStopError: () => console.error('[Dani Anam] Farewell close was not confirmed'),
                     });
                 }
                 const cancelWorkbenchHandlers: Array<() => void> = [];
@@ -510,6 +518,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         }
                         if (transcriptRole(messageEvent.role) === 'agent') {
                             evanCloseCoordinator?.completeFarewell();
+                            daniCloseCoordinator?.completeFarewell();
                         }
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
@@ -520,6 +529,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     if (closeHandled) return;
                     closeHandled = true;
                     evanCloseCoordinator?.dispose();
+                    daniCloseCoordinator?.dispose();
                     console.log('Anam connection closed');
 
                     if (sessionSpineActive) {
@@ -656,6 +666,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 }
 
                 if (isDani) {
+                    removeCloseToolHandler = anamClient.registerToolCallHandler(
+                        'end_dani_session',
+                        {
+                            onStart: async () => {
+                                requestedCloseReason = 'user_requested_end';
+                                const armed = daniCloseCoordinator?.arm() === true;
+                                console.info('[Dani Anam] Farewell close armed', { armed });
+                                return JSON.stringify({
+                                    status: armed ? 'farewell_required' : 'farewell_already_armed',
+                                    instruction: armed
+                                        ? 'Say exactly one brief warm farewell now: "Thanks for talking this through with me. Take care." Do not ask a question, recap, mention ending the call, or add another topic. The browser will close after the farewell finishes.'
+                                        : 'Do not speak again. The farewell close is already armed and the browser will close the session.',
+                                });
+                            },
+                        },
+                    );
                     removeIdentityToolHandler = anamClient.registerToolCallHandler(
                         'confirm_dani_live_identity',
                         {
@@ -847,6 +873,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             removeEmailToolHandler?.();
             removeCloseToolHandler?.();
             evanCloseCoordinator?.dispose();
+            daniCloseCoordinator?.dispose();
             // Cleanup on unmount
             if (activeClient) {
                 void completeOnce('unmount').catch(() => undefined);

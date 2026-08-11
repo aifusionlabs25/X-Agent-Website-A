@@ -19,7 +19,7 @@ const PROTECTED_ROLLBACK_IDENTITY = Object.freeze({
     voiceId: 'b4f21cc7-97c3-4758-b5c1-19d04259a0a6',
     llmId: '89649f1a-feb2-4fea-be43-56baec997a93',
 });
-const KNOWLEDGE_TOOL_DESCRIPTION = 'Search only the curated public-safe AI Fusion Labs, AI solution-design, X Agents, meeting, and follow-up knowledge approved for Dani. This tool retrieves information only; it does not send, submit, book, save, or complete a handoff.';
+const KNOWLEDGE_TOOL_DESCRIPTION = 'Mandatory grounding before Dani answers any substantive question about AI Fusion Labs, X Agents, capabilities, proof, metrics, security, privacy, hosting, retention, pricing, timing, integrations, architecture, or delivery. Search only the curated public-safe knowledge approved for Dani. If the result does not support the exact detail, Dani must say she cannot confirm it. This tool retrieves information only; it does not send, submit, book, save, or complete a handoff.';
 const normalizeLineEndings = value => String(value).replace(/\r\n?/g, '\n');
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const normalizedSha256 = value => sha256(Buffer.from(normalizeLineEndings(value), 'utf8'));
@@ -62,6 +62,7 @@ const clientToolManagedView = tool => ({
 });
 const emailToolManagedView = clientToolManagedView;
 const identityToolManagedView = clientToolManagedView;
+const endSessionToolManagedView = clientToolManagedView;
 const providerIdentityView = persona => ({
     id: persona?.id ?? null,
     name: persona?.name ?? null,
@@ -120,6 +121,10 @@ const identityToolDefinition = JSON.parse(await fs.readFile(
     new URL(personaManifest.identityToolDefinitionFile, configRootUrl),
     'utf8',
 ));
+const endSessionToolDefinition = JSON.parse(await fs.readFile(
+    new URL(personaManifest.endSessionToolDefinitionFile, configRootUrl),
+    'utf8',
+));
 const prompt = `${normalizeLineEndings(await fs.readFile(
     new URL(personaManifest.promptFile, configRootUrl),
     'utf8',
@@ -145,7 +150,7 @@ for (const [label, value] of Object.entries({
     'target voice ID': personaManifest.expectedVoiceId,
     'target LLM ID': personaManifest.expectedLlmId,
     'skip_turn tool ID': personaManifest.systemToolIds?.skip_turn,
-    'end_call tool ID': personaManifest.systemToolIds?.end_call,
+    'end-session tool ID': personaManifest.endSessionToolId,
 })) {
     if (!validUuid(value)) localFailures.push(label);
 }
@@ -174,10 +179,15 @@ if (
     || identityToolDefinition.name !== 'confirm_dani_live_identity'
     || personaManifest.identityToolName !== identityToolDefinition.name
 ) localFailures.push('dedicated identity tool manifest name');
+if (
+    personaManifest.endSessionToolName !== 'end_dani_session'
+    || endSessionToolDefinition.name !== 'end_dani_session'
+    || personaManifest.endSessionToolName !== endSessionToolDefinition.name
+) localFailures.push('dedicated end-session tool manifest name');
 const expectedRequiredToolNames = [
     personaManifest.knowledgeToolName,
     'skip_turn',
-    'end_call',
+    endSessionToolDefinition.name,
     emailToolDefinition.name,
     identityToolDefinition.name,
 ].sort();
@@ -232,6 +242,20 @@ if (
     )
     || identityParameters.additionalProperties !== false
 ) localFailures.push('exact managed identity client-tool two-field definition');
+const endSessionParameters = endSessionToolDefinition.config?.parameters;
+if (
+    endSessionToolDefinition.type !== 'CLIENT'
+    || endSessionToolDefinition.disableInterruptions !== true
+    || typeof endSessionToolDefinition.description !== 'string'
+    || !endSessionToolDefinition.description.trim()
+    || endSessionToolDefinition.config?.awaitResult !== true
+    || !Number.isFinite(endSessionToolDefinition.config?.toolTimeoutSeconds)
+    || endSessionToolDefinition.config.toolTimeoutSeconds <= 0
+    || endSessionParameters?.type !== 'object'
+    || !sameJson(Object.keys(endSessionParameters.properties ?? {}), [])
+    || !sameJson(endSessionParameters.required, [])
+    || endSessionParameters.additionalProperties !== false
+) localFailures.push('exact managed end-session client-tool parameterless definition');
 const promptMarkerPositions = [
     prompt.indexOf(DANI_MEMORY_START_MARKER),
     prompt.indexOf(DANI_MEMORY_END_MARKER),
@@ -316,19 +340,20 @@ const groups = listData(groupPayload);
 const matchingTools = tools.filter(tool => tool.name === personaManifest.knowledgeToolName);
 const matchingEmailTools = tools.filter(tool => tool.name === emailToolDefinition.name);
 const matchingIdentityTools = tools.filter(tool => tool.name === identityToolDefinition.name);
+const matchingEndSessionTools = tools.filter(tool => tool.name === endSessionToolDefinition.name);
 const matchingGroups = groups.filter(group => group.name === knowledgeManifest.folderName);
 const matchingSkipTurnTools = tools.filter(tool => tool.name === 'skip_turn');
-const matchingEndCallTools = tools.filter(tool => tool.name === 'end_call');
 const listedTool = matchingTools[0];
 const listedEmailTool = matchingEmailTools[0];
 const listedIdentityTool = matchingIdentityTools[0];
+const listedEndSessionTool = matchingEndSessionTools[0];
 const skipTurn = matchingSkipTurnTools[0];
-const endCall = matchingEndCallTools[0];
 const group = matchingGroups[0];
-const [tool, emailTool, identityTool, verifiedGroup, remoteDocuments] = await Promise.all([
+const [tool, emailTool, identityTool, endSessionTool, verifiedGroup, remoteDocuments] = await Promise.all([
     idOf(listedTool) ? anam(`/tools/${encodeURIComponent(idOf(listedTool))}`) : Promise.resolve(null),
     idOf(listedEmailTool) ? anam(`/tools/${encodeURIComponent(idOf(listedEmailTool))}`) : Promise.resolve(null),
     idOf(listedIdentityTool) ? anam(`/tools/${encodeURIComponent(idOf(listedIdentityTool))}`) : Promise.resolve(null),
+    idOf(listedEndSessionTool) ? anam(`/tools/${encodeURIComponent(idOf(listedEndSessionTool))}`) : Promise.resolve(null),
     group?.id ? anam(`/knowledge/groups/${encodeURIComponent(group.id)}`) : Promise.resolve(null),
     group?.id
         ? anam(`/knowledge/groups/${encodeURIComponent(group.id)}/documents`).then(listData)
@@ -350,10 +375,17 @@ const livePublishedAtMs = typeof persona.publishedAt === 'string'
     ? Date.parse(persona.publishedAt)
     : Number.NaN;
 const minimumPublishedAtMs = Date.parse(personaManifest.verifiedPublishedAt);
+const transitionPreviousPublishedAtMs = personaManifest.transitionPreviousPublishedAt
+    ? Date.parse(personaManifest.transitionPreviousPublishedAt)
+    : Number.NaN;
 if (
     !Number.isFinite(livePublishedAtMs)
     || !Number.isFinite(minimumPublishedAtMs)
     || livePublishedAtMs < minimumPublishedAtMs
+    || (
+        Number.isFinite(transitionPreviousPublishedAtMs)
+        && livePublishedAtMs <= transitionPreviousPublishedAtMs
+    )
 ) failures.push('verified published revision');
 if (persona.description !== managedPersonaDescription) failures.push('persona description');
 if (avatarIdOf(persona) !== personaManifest.expectedAvatarId) failures.push('avatar ID');
@@ -378,13 +410,14 @@ if (!sameJson(providerIdentityView(rollbackPersona), PROTECTED_ROLLBACK_IDENTITY
 if (matchingTools.length !== 1 || !idOf(tool)) failures.push('unique managed knowledge tool');
 if (matchingEmailTools.length !== 1 || !idOf(emailTool)) failures.push('unique managed email tool');
 if (matchingIdentityTools.length !== 1 || !idOf(identityTool)) failures.push('unique managed identity tool');
+if (matchingEndSessionTools.length !== 1 || !idOf(endSessionTool)) failures.push('unique managed end-session tool');
 if (matchingGroups.length !== 1 || !group?.id) failures.push('unique managed knowledge group');
 if (matchingSkipTurnTools.length !== 1 || idOf(skipTurn) !== personaManifest.systemToolIds.skip_turn || String(skipTurn?.type ?? '').toLowerCase() !== 'system') failures.push('pinned skip_turn system tool');
-if (matchingEndCallTools.length !== 1 || idOf(endCall) !== personaManifest.systemToolIds.end_call || String(endCall?.type ?? '').toLowerCase() !== 'system') failures.push('pinned end_call system tool');
 if (knowledgeManifest.liveGroupId && group?.id !== knowledgeManifest.liveGroupId) failures.push('pinned knowledge group ID');
 if (personaManifest.knowledgeToolId && idOf(tool) !== personaManifest.knowledgeToolId) failures.push('pinned knowledge tool ID');
 if (personaManifest.emailToolId && idOf(emailTool) !== personaManifest.emailToolId) failures.push('pinned email tool ID');
 if (idOf(identityTool) !== personaManifest.identityToolId) failures.push('pinned identity tool ID');
+if (idOf(endSessionTool) !== personaManifest.endSessionToolId) failures.push('pinned end-session tool ID');
 if (idOf(tool) !== idOf(listedTool)) failures.push('knowledge tool detail ID');
 if (tool?.name !== personaManifest.knowledgeToolName) failures.push('knowledge tool name');
 if (tool?.description !== KNOWLEDGE_TOOL_DESCRIPTION) failures.push('knowledge tool description');
@@ -398,6 +431,11 @@ if (!sameJson(
     identityToolManagedView(identityTool),
     identityToolManagedView(identityToolDefinition),
 )) failures.push('exact identity client-tool definition');
+if (idOf(endSessionTool) !== idOf(listedEndSessionTool)) failures.push('end-session tool detail ID');
+if (!sameJson(
+    endSessionToolManagedView(endSessionTool),
+    endSessionToolManagedView(endSessionToolDefinition),
+)) failures.push('exact end-session client-tool definition');
 if (verifiedGroup?.id !== group?.id) failures.push('knowledge group detail ID');
 if (verifiedGroup?.name !== knowledgeManifest.folderName) failures.push('knowledge group name');
 if (verifiedGroup?.description !== `Reviewed public-safe Dani KB. Bundle SHA-256: ${knowledgeManifest.bundleSha256}`) failures.push('knowledge group description');
@@ -407,13 +445,16 @@ const attachedNames = attachedTools.map(item => item?.name).filter(Boolean).sort
 const expectedToolPairs = [
     { name: personaManifest.knowledgeToolName, id: idOf(tool) },
     { name: 'skip_turn', id: personaManifest.systemToolIds.skip_turn },
-    { name: 'end_call', id: personaManifest.systemToolIds.end_call },
+    { name: endSessionToolDefinition.name, id: idOf(endSessionTool) },
     { name: emailToolDefinition.name, id: idOf(emailTool) },
     { name: identityToolDefinition.name, id: idOf(identityTool) },
 ];
 if (!exactToolAttachments(persona, expectedToolPairs)) failures.push('exact attached tool name/ID replacement set');
 if (attachedTools.some(item => item?.name === 'confirm_live_identity')) {
     failures.push('forbidden Amy identity tool attachment');
+}
+if (attachedTools.some(item => item?.name === 'end_call')) {
+    failures.push('forbidden built-in end_call attachment');
 }
 
 const expectedDocumentNames = new Set(knowledgeManifest.documents);
@@ -448,10 +489,14 @@ console.log(JSON.stringify({
     knowledgeToolId: idOf(tool),
     emailToolId: idOf(emailTool),
     identityToolId: idOf(identityTool),
+    endSessionToolId: idOf(endSessionTool),
     exactToolReplacementVerified: true,
     emailToolDefinitionVerified: true,
     identityToolDefinitionVerified: true,
     identityToolStrictTwoFieldSchemaVerified: true,
+    endSessionToolDefinitionVerified: true,
+    endSessionToolParameterlessSchemaVerified: true,
+    forbiddenBuiltInEndCallRejected: true,
     forbiddenAmyIdentityToolRejected: true,
     knowledgeDocuments: relevantDocuments.map(document => ({
         filename: document.filename,

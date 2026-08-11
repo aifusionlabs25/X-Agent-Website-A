@@ -36,12 +36,16 @@ const identityToolDefinition = JSON.parse(await readFile(
     new URL(manifest.identityToolDefinitionFile, configUrl),
     'utf8',
 ));
+const endSessionToolDefinition = JSON.parse(await readFile(
+    new URL(manifest.endSessionToolDefinitionFile, configUrl),
+    'utf8',
+));
 
 function healthyPersona() {
     return {
         id: DANI_PERSONA_ID,
         name: DANI_EXPECTED_NAME,
-        publishedAt: DANI_MINIMUM_PUBLISHED_AT,
+        publishedAt: '2026-08-11T01:00:00.000Z',
         avatarModel: 'cara-4',
         avatar: { id: DANI_EXPECTED_AVATAR_ID },
         voice: { id: DANI_EXPECTED_VOICE_ID },
@@ -80,6 +84,7 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
         { ...healthyPersona(), id: 'wrong-persona' },
         { ...healthyPersona(), name: 'Dani NEW' },
         { ...healthyPersona(), publishedAt: '2026-08-10T01:40:14.102Z' },
+        { ...healthyPersona(), publishedAt: DANI_MINIMUM_PUBLISHED_AT },
         { ...healthyPersona(), avatarModel: 'cara-3' },
         { ...healthyPersona(), avatar: { id: 'wrong-avatar' } },
         { ...healthyPersona(), voice: { id: 'wrong-voice' } },
@@ -94,7 +99,7 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
     ];
     for (const persona of drifted) assert.equal(inspectDaniPersonaReadiness(persona).ready, false);
 
-    const republished = { ...healthyPersona(), publishedAt: '2026-08-11T01:00:00.000Z' };
+    const republished = { ...healthyPersona(), publishedAt: '2026-08-11T02:00:00.000Z' };
     assert.equal(inspectDaniPersonaReadiness(republished).ready, true);
 });
 
@@ -176,11 +181,11 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /what kinds of companies the visitor typically connects with/i);
     assert.match(prompt, /I can't confirm the specifics, but I can outline what would need to be scoped/i);
     assert.match(prompt, /If you'd like to explore the fit, I can outline what a discovery call would need to cover/i);
-    assert.match(prompt, /let's wrap up.*Do not ask for confirmation/is);
+    assert.match(prompt, /let's wrap up.*Call `end_dani_session` without confirmation/is);
     assert.match(prompt, /Knowledge_Dani_AI_Solutions_Director/);
     assert.match(prompt, /Retrieval does not take a business action/i);
     assert.match(prompt, /Anam group-call mode controls joining and name-gated participation/i);
-    assert.match(prompt, /do not call `end_call` based on a participant's farewell/i);
+    assert.match(prompt, /do not call `end_dani_session` based on a participant's farewell/i);
     assert.match(prompt, /send_dani_follow_up_email/);
     assert.match(prompt, /confirm_dani_live_identity/);
     assert.match(prompt, /Never call this tool in an Anam group meeting/i);
@@ -214,6 +219,26 @@ test('Dani identity tool is dedicated and uses the exact two-field client schema
     assert.equal(identityToolDefinition.config.parameters.properties.preferredName.maxLength, 80);
     assert.equal(identityToolDefinition.config.parameters.properties.memoryAccessConfirmed.type, 'boolean');
     assert.notEqual(identityToolDefinition.name, 'confirm_live_identity');
+});
+
+test('Dani end-session tool is dedicated, parameterless, and replaces built-in end_call', () => {
+    assert.equal(manifest.endSessionToolDefinitionFile, '../dani-end-session-client-tool.json');
+    assert.equal(manifest.endSessionToolName, 'end_dani_session');
+    assert.equal(endSessionToolDefinition.name, manifest.endSessionToolName);
+    assert.equal(endSessionToolDefinition.type, 'CLIENT');
+    assert.equal(endSessionToolDefinition.disableInterruptions, true);
+    assert.equal(endSessionToolDefinition.config.awaitResult, true);
+    assert.equal(endSessionToolDefinition.config.toolTimeoutSeconds, 15);
+    assert.deepEqual(endSessionToolDefinition.config.parameters, {
+        type: 'object',
+        properties: {},
+        required: [],
+        additionalProperties: false,
+    });
+    assert.match(endSessionToolDefinition.description, /already confirmation/i);
+    assert.match(endSessionToolDefinition.description, /never ask whether to end/i);
+    assert.doesNotMatch(manifest.requiredToolNames.join(' '), /\bend_call\b/);
+    assert.equal(Object.hasOwn(manifest.systemToolIds, 'end_call'), false);
 });
 
 test('managed Dani KB is an exact thirteen-file, hashed, public-safe AI solutions allowlist', async () => {
@@ -294,6 +319,7 @@ test('manifest and site use the exact published Dani identity and optimized Cara
     assert.equal(manifest.rollbackPersonaId, '61f0fd3e-7937-472a-958d-cdba76b33bf1');
     assert.equal(manifest.expectedName, 'Dani AI Solutions Director');
     assert.equal(manifest.verifiedPublishedAt, DANI_MINIMUM_PUBLISHED_AT);
+    assert.equal(manifest.transitionPreviousPublishedAt, DANI_MINIMUM_PUBLISHED_AT);
     assert.equal(manifest.expectedAvatarId, DANI_EXPECTED_AVATAR_ID);
     assert.equal(manifest.expectedVoiceId, DANI_EXPECTED_VOICE_ID);
     assert.equal(manifest.expectedLlmId, DANI_EXPECTED_LLM_ID);
@@ -302,6 +328,8 @@ test('manifest and site use the exact published Dani identity and optimized Cara
     assert.equal(manifest.emailToolName, 'send_dani_follow_up_email');
     assert.equal(manifest.identityToolName, 'confirm_dani_live_identity');
     assert.ok(manifest.identityToolId === null || /^[0-9a-f-]{36}$/i.test(manifest.identityToolId));
+    assert.equal(manifest.endSessionToolName, 'end_dani_session');
+    assert.match(manifest.endSessionToolId, /^[0-9a-f-]{36}$/i);
 
     const agents = await readFile(new URL('../lib/agents.ts', import.meta.url), 'utf8');
     const hero = await readFile(new URL('../components/home/HeroBillboard.tsx', import.meta.url), 'utf8');
@@ -330,7 +358,9 @@ test('Dani updater is guarded, reversible, idempotent, and manages the dedicated
     assert.match(updater, /verifyDocumentBytes/);
     assert.match(updater, /emailToolDefinition/);
     assert.match(updater, /identityToolDefinitionFile/);
+    assert.match(updater, /endSessionToolDefinitionFile/);
     assert.match(updater, /confirm_dani_live_identity/);
+    assert.match(updater, /end_dani_session/);
     assert.match(updater, /--prepare-identity-tool/);
     assert.match(updater, /identity_tool_prepared_manifest_pin_required/);
     assert.match(updater, /existingManagedIdentityTool/);
@@ -356,6 +386,8 @@ test('Dani updater is guarded, reversible, idempotent, and manages the dedicated
     assert.match(audit, /unique managed identity tool/);
     assert.match(audit, /forbidden Amy identity tool attachment/);
     assert.match(audit, /identityToolStrictTwoFieldSchemaVerified/);
+    assert.match(audit, /endSessionToolParameterlessSchemaVerified/);
+    assert.match(audit, /forbidden built-in end_call attachment/);
     assert.match(audit, /expectedToolPairs\s*=\s*\[[\s\S]{0,500}identityToolDefinition\.name/);
 });
 
@@ -388,10 +420,8 @@ async function runIdentityToolPreparationMock({ existing }) {
         name: manifest.emailToolName,
         type: 'CLIENT',
     };
-    const systemTools = [
-        { id: manifest.systemToolIds.skip_turn, name: 'skip_turn', type: 'system' },
-        { id: manifest.systemToolIds.end_call, name: 'end_call', type: 'system' },
-    ];
+    const skipTurnTool = { id: manifest.systemToolIds.skip_turn, name: 'skip_turn', type: 'system' };
+    const endSessionTool = { id: manifest.endSessionToolId, ...endSessionToolDefinition };
     let identityTool = existing ? { id: identityToolId, ...identityToolDefinition } : null;
     const targetPersona = {
         id: manifest.personaId,
@@ -400,7 +430,7 @@ async function runIdentityToolPreparationMock({ existing }) {
         avatar: { id: manifest.expectedAvatarId },
         voice: { id: manifest.expectedVoiceId },
         brain: { llm: { id: manifest.expectedLlmId }, systemPrompt: prompt },
-        tools: [knowledgeTool, ...systemTools, emailTool],
+        tools: [knowledgeTool, skipTurnTool, endSessionTool, emailTool],
     };
     const rollbackPersona = {
         id: manifest.rollbackPersonaId,
@@ -416,7 +446,8 @@ async function runIdentityToolPreparationMock({ existing }) {
         zeroDataRetention: true,
         enableAudioPassthrough: false,
     };
-    const group = { id: knowledgeManifest.liveGroupId, name: knowledgeManifest.folderName };
+    const groupId = knowledgeManifest.liveGroupId ?? '33333333-3333-4333-8333-333333333333';
+    const group = { id: groupId, name: knowledgeManifest.folderName };
     const json = value => new Response(JSON.stringify(value), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -434,11 +465,11 @@ async function runIdentityToolPreparationMock({ existing }) {
         }
         if (parsed.pathname === '/v1/knowledge/groups' && method === 'GET') return json({ data: [group] });
         if (
-            parsed.pathname === `/v1/knowledge/groups/${knowledgeManifest.liveGroupId}/documents`
+            parsed.pathname === `/v1/knowledge/groups/${groupId}/documents`
             && method === 'GET'
         ) return json({ data: [] });
         if (parsed.pathname === '/v1/tools' && parsed.search === '?perPage=100' && method === 'GET') {
-            return json({ data: [knowledgeTool, emailTool, ...systemTools, ...(identityTool ? [identityTool] : [])] });
+            return json({ data: [knowledgeTool, emailTool, skipTurnTool, endSessionTool, ...(identityTool ? [identityTool] : [])] });
         }
         if (parsed.pathname === '/v1/tools' && method === 'POST') {
             identityTool = { id: identityToolId, ...JSON.parse(init.body) };

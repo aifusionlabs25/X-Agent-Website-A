@@ -1,0 +1,16 @@
+{
+  "name": "end_dani_session",
+  "description": "Arm Dani's one-farewell close handshake after unmistakable one-to-one closing intent. The visitor's goodbye, bye, take care, I'm done, let's wrap up, I'm all set, or explicit request to finish is already confirmation. That's all or nothing else counts only when clearly used to end the current one-to-one session. Call silently and never ask whether to end. Do not call for a bare thanks, okay, pause, or a hypothetical discussion of ending. The client returns farewell_required, keeps the stream open for exactly one brief warm farewell, and closes only after that farewell finishes.",
+  "type": "CLIENT",
+  "disableInterruptions": true,
+  "config": {
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "awaitResult": true,
+    "toolTimeoutSeconds": 15
+  }
+}

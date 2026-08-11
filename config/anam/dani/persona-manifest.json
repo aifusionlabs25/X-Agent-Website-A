@@ -1,6 +1,7 @@
 {
   "schemaVersion": 2,
   "verifiedPublishedAt": "2026-08-11T00:53:07.119Z",
+  "transitionPreviousPublishedAt": "2026-08-11T00:53:07.119Z",
   "personaId": "120cf627-59a6-4a35-8e70-97959a89a4da",
   "rollbackPersonaId": "61f0fd3e-7937-472a-958d-cdba76b33bf1",
   "expectedName": "Dani AI Solutions Director",
@@ -18,10 +19,11 @@
     "speechEnhancementLevel": 0.7
   },
   "promptFile": "v2/DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md",
-  "promptSha256": "e11a672091f72f45a3ca3426558f4d225df8cb2cec6b07fb8b96dea9cacbab9e",
+  "promptSha256": "b5ca465f7e186e1e6531df31a7e07675133bdb120c46be6c7e11eaf05edf5da2",
   "knowledgeManifestFile": "v2/knowledge-manifest.json",
   "emailToolDefinitionFile": "../dani-agentmail-client-tool.json",
   "identityToolDefinitionFile": "../dani-live-identity-client-tool.json",
+  "endSessionToolDefinitionFile": "../dani-end-session-client-tool.json",
   "zeroDataRetention": false,
   "enableAudioPassthrough": false,
   "knowledgeToolName": "Knowledge_Dani_AI_Solutions_Director",
@@ -30,14 +32,15 @@
   "emailToolId": "1e44a342-ca25-4c78-bbef-51cded9c8d68",
   "identityToolName": "confirm_dani_live_identity",
   "identityToolId": "584b2e44-3827-4178-9233-a3bd69104e28",
+  "endSessionToolName": "end_dani_session",
+  "endSessionToolId": "97aa437c-d220-41f3-9b0e-fcd4db6ce4e8",
   "systemToolIds": {
-    "skip_turn": "69a89bda-9e11-443f-84c0-1cbea75e4fcb",
-    "end_call": "4d05849d-329f-4cd3-996f-f2a28d8135f0"
+    "skip_turn": "69a89bda-9e11-443f-84c0-1cbea75e4fcb"
   },
   "requiredToolNames": [
     "Knowledge_Dani_AI_Solutions_Director",
     "skip_turn",
-    "end_call",
+    "end_dani_session",
     "send_dani_follow_up_email",
     "confirm_dani_live_identity"
   ]

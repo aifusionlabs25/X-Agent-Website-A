@@ -1,15 +1,15 @@
 {
   "schemaVersion": 2,
-  "deploymentStatus": "live_verified",
+  "deploymentStatus": "draft_reviewed",
   "agent": "Dani",
   "company": "AI Fusion Labs",
   "verifiedAt": "2026-08-10",
   "sourcePersonaId": "120cf627-59a6-4a35-8e70-97959a89a4da",
-  "sourceKnowledgeGroupId": "0add8be0-ba50-4174-93d1-19181acd4525",
-  "folderName": "Dani AI Solutions Director Anam KB 2026-08-10 v4",
-  "liveGroupId": "d2817157-bae3-4029-a11b-12e7aa93fd4b",
+  "sourceKnowledgeGroupId": "d2817157-bae3-4029-a11b-12e7aa93fd4b",
+  "folderName": "Dani AI Solutions Director Anam KB 2026-08-10 v5",
+  "liveGroupId": null,
   "toolName": "Knowledge_Dani_AI_Solutions_Director",
-  "bundleSha256": "e18fec6e08bdab23e3d130018d70550e5f29da5166dc170bd3de32ae7e3445ae",
+  "bundleSha256": "757307a9d29217ee979c983569f5d8853dfd4002e098c1663ea4c9b799724a31",
   "documents": [
     "00_role_scope_authority.md",
     "01_ai_fusion_labs_approved_capabilities.md",
@@ -71,12 +71,12 @@
       "sha256": "934e4c0236f9f88ac6f320bcc4b920907db5727fe4d54e547cedd6f0e599e511"
     },
     "11_claim_control_and_safe_hypotheticals.md": {
-      "bytes": 2872,
-      "sha256": "5f2dc8be52f77d141bae8698f3184f0e89165396383109fab40aa025b1b56a46"
+      "bytes": 4036,
+      "sha256": "0afdbc3c97fcca63e4ebe709567562c04917b229e95324f181ce5f79de884cef"
     },
     "12_live_voice_and_commercial_pressure.md": {
-      "bytes": 7457,
-      "sha256": "22fb585521d9cfa4c29df15463ac6da89d1f3856a3e875f4d2ca1812f26fcc6f"
+      "bytes": 6999,
+      "sha256": "833fac53fb16ffe790c0815c7c4099d56cb6b828b2acb0e42426fa8075358bad"
     }
   },
   "excludedClasses": [
@@ -87,5 +87,5 @@
     "internal approval registers, email templates, strategy, founder coaching, and opportunity scoring",
     "backups, drafts outside this allowlist, test fixtures, and runtime logs"
   ],
-  "sourcePolicy": "The v1 Dani public-safe bundle remains the grounding baseline. V2 adds evidence-backed AI solution pattern language, selective proactive discovery, precise uncertainty, explicit next-step cues, meeting behavior, post-call boundaries, limited approved company and founder context, an explicit claim-control ledger, and transcript-derived live-voice and commercial-pressure guardrails. The v4 behavioral revision adds a 15-to-30-word spoken default, a 40-word ceiling, no back-to-back questions, solution-neutral treatment of avatar skepticism and internal builds, outcome-hypothesis language, and founder-introduction authority boundaries. Broader categories are framed as areas to evaluate rather than universally available commercial services. The founder profile is professional and public-safe; private biography and speculation are explicitly excluded. No client-specific context or unsupported outcome claim is included."
+  "sourcePolicy": "The v1 Dani public-safe bundle remains the grounding baseline. V2 adds evidence-backed AI solution pattern language, selective proactive discovery, precise uncertainty, explicit next-step cues, meeting behavior, post-call boundaries, limited approved company and founder context, an explicit claim-control ledger, and transcript-derived live-voice and commercial-pressure guardrails. The v5 behavioral revision replays session dba6e94f and draws hard distinctions between measures and invented targets, conceptual patterns and delivery commitments, and unknown security design versus verified hosting or retention facts. Broader categories are framed as areas to evaluate rather than universally available commercial services. The founder profile is professional and public-safe; private biography and speculation are explicitly excluded. No client-specific context or unsupported outcome claim is included."
 }
