@@ -72,6 +72,16 @@ test('Amy treats student-risk AI and compressed board timelines as high-impact d
     assert.match(prompt, /Do not name products, prescribe data pipelines, or promise a pilot timeline/i);
 });
 
+test('Amy separates active incidents from compressed executive AI deliverables', () => {
+    assert.match(prompt, /outage, security incident, or material service disruption/i);
+    assert.match(prompt, /separate operational stabilization from the requested strategy/i);
+    assert.match(prompt, /bounded offline concept, approved historical-data analysis, or synthetic demonstration/i);
+    assert.match(prompt, /contact-center recordings, transcripts, or ticket logs/i);
+    assert.match(prompt, /PII or payment-data exposure/i);
+    assert.match(prompt, /stabilize the incident, rebaseline delayed work/i);
+    assert.match(prompt, /Do not let the deadline convert a presentation request into an implementation promise/i);
+});
+
 test('Amy live updater is dry-run first, identity-pinned, backed up, and drift-checked', () => {
     assert.match(updater, /mode: 'dry-run'/);
     assert.match(updater, /CONFIRM_AMY_CONVERSATION_SYNC/);

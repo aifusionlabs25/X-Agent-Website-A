@@ -44,6 +44,15 @@ const TABS: Array<{ id: AmyWorkbenchView; label: string; icon: typeof FileText }
 
 const NOTE_SECTIONS = ['Organization', 'Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Identity', 'Requested outputs', 'Decisions'] as const;
 
+const VISUAL_SLIDE_LABELS: Record<string, string> = {
+    executive_snapshot: 'Executive snapshot',
+    decision_context: 'Decision context',
+    evidence_and_constraints: 'Evidence + constraints',
+    recommended_path: 'Recommended path',
+    validation_path: 'Validation path',
+    decisions_and_next_steps: 'Next decision',
+};
+
 function EmptySignal() {
     return (
         <div className="flex min-h-72 flex-col items-center justify-center border border-dashed border-white/15 bg-white/[0.025] px-8 text-center">
@@ -76,13 +85,15 @@ export default function AmyAnamWorkbenchV2({
     const activeSlide = model.visualBrief.slides[slideIndex] ?? model.visualBrief.slides[0];
 
     useEffect(() => {
-        if (!isExpanded) return;
+        if (!isOpen) return;
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setIsExpanded(false);
+            if (event.key === 'Escape' && isExpanded) setIsExpanded(false);
+            if (view === 'visual' && event.key === 'ArrowLeft') setSlideIndex((current) => Math.max(0, current - 1));
+            if (view === 'visual' && event.key === 'ArrowRight') setSlideIndex((current) => Math.min(model.visualBrief.slides.length - 1, current + 1));
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isExpanded]);
+    }, [isExpanded, isOpen, model.visualBrief.slides.length, view]);
 
     const closeWorkbench = () => {
         setIsExpanded(false);
@@ -161,9 +172,12 @@ export default function AmyAnamWorkbenchV2({
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Active lane</p>
                         <p className="mt-1 text-sm font-semibold text-zinc-100">{model.lane}</p>
                     </div>
-                    <div className="inline-flex items-center gap-2 border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-emerald-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]" />
-                        {model.status === 'live' ? `${model.signalCount} session signals` : 'Listening'}
+                    <div
+                        className={`inline-flex items-center gap-2 border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] ${model.status === 'live' && model.quality.level === 'grounded' ? 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300' : 'border-amber-300/20 bg-amber-300/[0.06] text-amber-200'}`}
+                        aria-live="polite"
+                    >
+                        <span className={`h-1.5 w-1.5 rounded-full ${model.status === 'live' && model.quality.level === 'grounded' ? 'bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]' : 'bg-amber-300'}`} />
+                        {model.status === 'live' ? `${model.quality.label} · ${model.signalCount} signals` : 'Listening'}
                     </div>
                 </div>
 
@@ -259,20 +273,64 @@ export default function AmyAnamWorkbenchV2({
                 ) : view === 'visual' ? (
                     <section aria-labelledby="amy-visual-heading">
                         <div className="flex items-end justify-between gap-4">
-                            <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Live microdeck</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
+                            <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Conversation-grounded decision brief</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
                             <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{slideIndex + 1} / {model.visualBrief.slides.length}</p>
                         </div>
-                        <div className="mt-6 overflow-hidden border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.025] to-[#ff2f8a]/[0.055] p-6 sm:min-h-[390px] sm:p-8">
-                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{activeSlide.eyebrow}</p>
-                            <h4 className="mt-5 max-w-lg text-3xl font-semibold tracking-[-0.04em] text-white">{activeSlide.title}</h4>
-                            <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-300">{activeSlide.summary}</p>
-                            <div className="mt-8 grid gap-3 sm:grid-cols-2">{activeSlide.bullets.map((bullet) => <div key={bullet} className="border-l border-[#ff2f8a]/70 bg-black/20 px-4 py-3 text-sm leading-6 text-zinc-300">{bullet}</div>)}</div>
-                            <p className="mt-8 border-t border-white/10 pt-4 text-xs leading-5 text-zinc-400">{activeSlide.boundary}</p>
+                        {model.quality.level === 'developing' && model.quality.missing.length > 0 && (
+                            <div className="mt-5 flex items-start gap-3 border border-amber-300/20 bg-amber-300/[0.05] px-4 py-3 text-sm leading-6 text-amber-100/80">
+                                <AlertTriangle size={16} className="mt-0.5 flex-none text-amber-300" />
+                                <span>This brief is still forming. Clarify {model.quality.missing.join(', ')} before treating it as leadership-ready.</span>
+                            </div>
+                        )}
+                        <div className="mt-6 grid gap-4 xl:grid-cols-[176px_minmax(0,1fr)]">
+                            <nav className="hidden border-y border-white/10 py-2 xl:block" aria-label="Visual Brief slides">
+                                {model.visualBrief.slides.map((slide, index) => (
+                                    <button
+                                        key={slide.id}
+                                        type="button"
+                                        onClick={() => setSlideIndex(index)}
+                                        aria-current={index === slideIndex ? 'step' : undefined}
+                                        className={`group flex w-full items-start gap-3 border-l px-3 py-3 text-left transition ${index === slideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-white' : 'border-white/10 text-zinc-500 hover:border-white/25 hover:text-zinc-200'}`}
+                                    >
+                                        <span className={`mt-0.5 text-xs font-bold ${index === slideIndex ? 'text-[#ff68a9]' : 'text-zinc-600'}`}>{String(index + 1).padStart(2, '0')}</span>
+                                        <span className="text-xs font-semibold leading-5">{VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}</span>
+                                    </button>
+                                ))}
+                            </nav>
+                            <div
+                                className="relative min-h-[440px] overflow-hidden rounded-[2px] border border-[#f4c6d9] bg-[#fffaf7] px-6 py-7 text-[#302529] shadow-[0_26px_80px_rgba(0,0,0,0.35)] sm:px-9 sm:py-9"
+                                aria-live="polite"
+                            >
+                                <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full border border-[#e80064]/10" />
+                                <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-[#ef0065]/[0.055] blur-2xl" />
+                                <div className="relative flex items-center justify-between gap-4 border-b border-[#3a292f]/10 pb-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#c50055]">{activeSlide.eyebrow}</p>
+                                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e7b82]">Insight · Working view</span>
+                                </div>
+                                <div className="relative mt-8 max-w-3xl">
+                                    <h4 className="max-w-2xl [font-family:Georgia,'Times_New_Roman',serif] text-[clamp(2rem,4vw,3.7rem)] font-normal leading-[0.98] tracking-[-0.045em] text-[#2d2326]">{activeSlide.title}</h4>
+                                    <p className="mt-5 max-w-2xl text-[15px] leading-7 text-[#6f5f64]">{activeSlide.summary}</p>
+                                </div>
+                                <div className="relative mt-8 grid gap-3 sm:grid-cols-2">
+                                    {activeSlide.bullets.map((bullet, index) => (
+                                        <div key={bullet} className={`${index === 0 ? 'border-[#d6005b] bg-[#d6005b] text-white' : 'border-[#eadde2] bg-white/80 text-[#56474c]'} min-h-24 border px-4 py-4 text-sm leading-6 shadow-[0_10px_28px_rgba(74,38,52,0.05)]`}>
+                                            <span className={`mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] ${index === 0 ? 'text-pink-100' : 'text-[#c50055]'}`}>Signal {String(index + 1).padStart(2, '0')}</span>
+                                            {bullet}
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="relative mt-8 border-t border-[#3a292f]/10 pt-4 text-xs leading-5 text-[#86747a]">{activeSlide.boundary}</p>
+                            </div>
+                        </div>
+                        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 xl:hidden" aria-label="Visual Brief slide picker">
+                            {model.visualBrief.slides.map((slide, index) => (
+                                <button key={slide.id} type="button" onClick={() => setSlideIndex(index)} aria-current={index === slideIndex ? 'step' : undefined} className={`flex-none border px-3 py-2 text-xs font-semibold ${index === slideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-[#ff8bbc]' : 'border-white/10 text-zinc-400'}`}>{String(index + 1).padStart(2, '0')} {VISUAL_SLIDE_LABELS[slide.id] ?? 'Slide'}</button>
+                            ))}
                         </div>
                         <div className="mt-4 flex items-center justify-between gap-4">
-                            <button type="button" onClick={() => setSlideIndex((current) => Math.max(0, current - 1))} disabled={slideIndex === 0} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30"><ChevronLeft size={15} /> Previous</button>
-                            <div className="flex gap-1.5">{model.visualBrief.slides.map((slide, index) => <button key={slide.id} type="button" onClick={() => setSlideIndex(index)} aria-label={`Open slide ${index + 1}`} className={`h-1.5 transition-all ${index === slideIndex ? 'w-7 bg-[#ff2f8a]' : 'w-2 bg-white/20'}`} />)}</div>
-                            <button type="button" onClick={() => setSlideIndex((current) => Math.min(model.visualBrief.slides.length - 1, current + 1))} disabled={slideIndex === model.visualBrief.slides.length - 1} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30">Next <ChevronRight size={15} /></button>
+                            <button type="button" onClick={() => setSlideIndex((current) => Math.max(0, current - 1))} disabled={slideIndex === 0} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30"><ChevronLeft size={15} /> Previous</button>
+                            <div className="hidden gap-1.5 sm:flex">{model.visualBrief.slides.map((slide, index) => <button key={slide.id} type="button" onClick={() => setSlideIndex(index)} aria-label={`Open slide ${index + 1}: ${VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}`} aria-current={index === slideIndex ? 'step' : undefined} className={`h-1.5 transition-all ${index === slideIndex ? 'w-7 bg-[#ff2f8a]' : 'w-2 bg-white/20'}`} />)}</div>
+                            <button type="button" onClick={() => setSlideIndex((current) => Math.min(model.visualBrief.slides.length - 1, current + 1))} disabled={slideIndex === model.visualBrief.slides.length - 1} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30">Next <ChevronRight size={15} /></button>
                         </div>
                     </section>
                 ) : (

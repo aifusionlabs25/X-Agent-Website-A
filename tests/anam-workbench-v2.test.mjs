@@ -77,6 +77,53 @@ test('student-retention pressure test stays grounded and produces a safe board-r
     assert.doesNotMatch(guardrail, /students at risk|dropping out/i);
 });
 
+test('contact-center outage transcript produces a grounded AI-CX leadership brief', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: "Amy, we're under pressure. I'm juggling a sudden network outage, a delayed cloud migration, and now the CEO wants a roadmap for AI and customer experience by next week. I don't even know where to start. What can you do with that?" },
+        { role: 'user', content: 'He wants to see AI cutting call wait times and improving customer satisfaction. But honestly, with the network down, AI feels secondary.' },
+        { role: 'user', content: "We don't have a firm date yet. It could be a day or more." },
+        { role: 'user', content: "But the board meeting is next week. So I need something AI related that doesn't depend on the network being fully stable. Any ideas there?" },
+        { role: 'user', content: 'We have cool recordings and ticket logs on-prem, so that could work. But I need something tangible to present. Can you outline what this might look like?' },
+        { role: 'user', content: 'Yes, that would help. Show me the brief so I can get a quick picture to bring to leadership.' },
+        { role: 'user', content: "This gives me something concrete to work with. I'll take this forward internally. Thanks, Amy." },
+        { role: 'user', content: "Let's wrap up here." },
+    ]);
+
+    const serialized = JSON.stringify(model);
+    assert.equal(model.lane, 'AI-enabled customer experience');
+    assert.equal(model.quality.level, 'grounded');
+    assert.match(model.brief.objective, /leadership.*AI-enabled customer-experience brief/i);
+    assert.match(model.brief.objective, /reducing call wait times.*improving customer satisfaction/i);
+    assert.ok(model.brief.environment.includes('On-premises call recordings'));
+    assert.ok(model.brief.environment.includes('On-premises ticket logs'));
+    assert.ok(model.brief.environment.includes('Customer service and contact-center operations'));
+    assert.match(model.facts.find((fact) => fact.label === 'Primary guardrail')?.value ?? '', /active network outage.*cloud migration is delayed/i);
+    assert.equal(model.facts.find((fact) => fact.label === 'Timing')?.value, 'Board meeting next week');
+    assert.equal(model.facts.find((fact) => fact.label === 'Stakeholder context')?.value, 'CEO and board leadership');
+    assert.equal(model.facts.find((fact) => fact.label === 'Requested output')?.value, 'Visual brief');
+    assert.ok(model.brief.priorities.some((item) => /outage stabilization separate/i.test(item)));
+    assert.ok(model.brief.priorities.some((item) => /bounded offline leadership concept.*not a live AI deployment/i.test(item)));
+    assert.ok(model.brief.openQuestions.some((item) => /authorized for AI analysis.*PII.*payment-data/i.test(item)));
+    assert.match(model.brief.nextStep, /bounded offline AI-CX concept/i);
+    assert.deepEqual(model.roadmap.phases.map((phase) => phase.title), [
+        'Stabilize and separate',
+        'Authorize the evidence',
+        'Build a bounded offline concept',
+        'Set the validation gate',
+    ]);
+    assert.deepEqual(model.visualBrief.slides.map((slide) => slide.id), [
+        'executive_snapshot',
+        'decision_context',
+        'evidence_and_constraints',
+        'recommended_path',
+        'validation_path',
+        'decisions_and_next_steps',
+    ]);
+    assert.doesNotMatch(serialized, /Discover and baseline|Design the landing path|representative workload|Hybrid infrastructure modernization/i);
+    assert.doesNotMatch(serialized, /Current objective: But I need something tangible|Timing: So I need something AI related/i);
+    assert.equal(model.facts.some((fact) => fact.label === 'Context' && /firm date/i.test(fact.value)), false);
+});
+
 test('Corrections replace rejected terms and uncertain speech remains separate', () => {
     const model = buildAmyWorkbenchModel([
         { role: 'user', content: 'We use SCCM for 850 endpoints.' },
@@ -116,7 +163,7 @@ test('Supplied ERP and municipal session produces accurate working views', () =>
     assert.match(guardrail, /do not assume a compliance framework/i);
     assert.match(timing, /few weeks/i);
     assert.match(timing, /prime contractor/i);
-    assert.equal(outputs, 'Live notes / Live brief / Two-track roadmap / Visual brief');
+    assert.equal(outputs, 'Visual brief');
     assert.ok(model.uncertainItems.some((item) => /framework.*not yet known/i.test(item)));
     assert.doesNotMatch(JSON.stringify(model.brief), /Maybe later|please show me|please build and show/i);
 
@@ -190,7 +237,7 @@ test('Visual brief is a six-slide deterministic microdeck', () => {
     const repeated = buildAmyWorkbenchModel(turns);
     assert.equal(model.visualBrief.slides.length, 6);
     assert.deepEqual(model.visualBrief, repeated.visualBrief);
-    assert.deepEqual(model.visualBrief.slides.map((slide) => slide.id), ['executive_snapshot', 'what_we_heard', 'environment_and_constraints', 'recommended_path', 'phased_roadmap', 'decisions_and_next_steps']);
+    assert.deepEqual(model.visualBrief.slides.map((slide) => slide.id), ['executive_snapshot', 'decision_context', 'evidence_and_constraints', 'recommended_path', 'validation_path', 'decisions_and_next_steps']);
     assert.ok(model.visualBrief.slides.every((slide) => /conversation so far/i.test(slide.boundary)));
 });
 
@@ -209,6 +256,8 @@ test('Anam client tools use the current API shape and route five named views', a
     assert.match(tools[4].description, /does not return live inventory, pricing, availability/i);
     assert.match(tools[2].description, /asks to see what a plan would look like/i);
     assert.match(tools[2].description, /before speaking a step-by-step plan/i);
+    assert.match(tools[3].description, /meaningful business objective plus at least two/i);
+    assert.match(tools[3].description, /not an approved design.*production plan/i);
     assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist/i);
 });
 
@@ -225,6 +274,8 @@ test('Workbench prompt protects visitor review time from filler and premature cl
     assert.match(prompt, /visibleFacts/i);
     assert.match(prompt, /show me what that plan would look like/i);
     assert.match(prompt, /calls show_solution_roadmap before Amy speaks a step-by-step plan/i);
+    assert.match(prompt, /newest explicit artifact request controls/i);
+    assert.match(prompt, /active outage or incident/i);
 });
 
 test('Amy feature tabs and content use readable production typography', async () => {
@@ -237,6 +288,12 @@ test('Amy feature tabs and content use readable production typography', async ()
     assert.match(workbench, /data-expanded=\{isExpanded\}/);
     assert.match(workbench, /lg:w-\[min\(56vw,820px\)\]/);
     assert.match(workbench, /event\.key === 'Escape'/);
+    assert.match(workbench, /event\.key === 'ArrowLeft'/);
+    assert.match(workbench, /event\.key === 'ArrowRight'/);
+    assert.match(workbench, /Conversation-grounded decision brief/);
+    assert.match(workbench, /VISUAL_SLIDE_LABELS/);
+    assert.match(workbench, /bg-\[#fffaf7\]/);
+    assert.match(workbench, /model\.quality\.label/);
 
     assert.match(workbench, /text-\[11px\][^`]+sm:text-sm/);
     assert.match(workbench, /text-sm leading-6 text-zinc-400/);

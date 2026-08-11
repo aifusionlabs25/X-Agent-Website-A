@@ -7,7 +7,7 @@ This is the production boundary for Amy's live Anam feature layer. The browser r
 1. **Live Notes** groups current-session signals by organization, scale, environment, priorities, constraints, timing, stakeholders, requested outputs, and decisions.
 2. **Live Brief** summarizes the objective, environment, priorities, discussion points, open questions, and next step.
 3. **Roadmap** creates a four-stage working path aligned to the detected solution lane and confirmed session facts.
-4. **Visual Brief** presents a deterministic six-slide microdeck: executive snapshot, what we heard, environment and constraints, recommended path, phased roadmap, and decisions.
+4. **Visual Brief** presents a deterministic six-slide decision brief: executive snapshot, decision context, evidence and constraints, recommended path, validation path, and next decision.
 5. **Solution Catalog** shows directional solution categories aligned to the conversation.
 
 ## Reliability rules
@@ -16,6 +16,9 @@ This is the production boundary for Amy's live Anam feature layer. The browser r
 - Uncertain speech is isolated as a clarification item and is not promoted to a confirmed fact.
 - Explicit corrections replace rejected terminology throughout the views.
 - Known platform terms are normalized, including Intune, SCCM, Microsoft 365 E5, Manhattan WMS, CrowdStrike, and Honeywell.
+- The newest explicit artifact request controls the requested-output label; an earlier roadmap mention cannot overwrite a later visual-brief request.
+- A visible grounding state distinguishes a leadership-ready brief from one that still needs objective, timing, evidence, or artifact clarification.
+- Active incidents remain separate from strategy artifacts. Contact-center scenarios use a bounded offline concept and authorized historical or synthetic evidence before any production-pilot claim.
 - Every visual is a working view based on the conversation so far, not a completed assessment or specialist approval.
 - The catalog never claims live inventory, pricing, availability, lead time, or contract eligibility.
 
@@ -74,3 +77,4 @@ Then test one request for each named view. Include these reliability checks:
 - Say an uncertain phrase and confirm it appears only under clarification.
 - Ask for catalog categories and confirm Amy states the commerce-data boundary.
 - End the call and confirm no display tool fires during the farewell.
+- Combine an active outage, delayed initiative, executive deadline, and AI request; confirm the brief separates the tracks and never converts the artifact into a live deployment plan.
