@@ -53,7 +53,7 @@
   },
   {
     "name": "show_visual_brief",
-    "description": "Open Amy's Visual Brief when the visitor explicitly asks for a visual summary, workflow, diagram, architecture view, presentation, or executive visual. Before calling, confirm the conversation supports a meaningful business objective plus at least two of: decision timing, owner or audience, environment or evidence source, and a material constraint; otherwise ask one brief clarification. Call silently with exactly an empty object. Do not call during a farewell. The display uses current-session signals and is not an approved design, quote, live inventory view, production plan, or commitment.",
+    "description": "Open Amy's Visual Brief when the visitor explicitly asks for a visual summary, workflow, diagram, architecture view, presentation, or executive visual. Before calling, confirm the conversation supports a meaningful business objective plus at least two of: decision timing, owner or audience, environment or evidence source, and a material constraint; otherwise ask one brief clarification. In healthcare or EHR conversations, never infer a root cause, internal workflow stage, system event or field, export capability, analytic method, chart design, permission, or compliance status; keep confirmed facts, hypotheses, missing evidence, and specialist-validation boundaries separate. Call silently with exactly an empty object. Do not call during a farewell. The display uses current-session signals and is not an approved design, quote, live inventory view, production plan, or commitment.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {

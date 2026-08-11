@@ -51,6 +51,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [workbenchTurns, setWorkbenchTurns] = useState<AmyWorkbenchTurn[]>([]);
     const [roadmapTopic, setRoadmapTopic] = useState('');
     const [catalogQuery, setCatalogQuery] = useState('');
+    const [workbenchRequestedView, setWorkbenchRequestedView] = useState<AmyWorkbenchView | undefined>(undefined);
     const [evanPlannerOpen, setEvanPlannerOpen] = useState(false);
     const [evanPlannerView, setEvanPlannerView] = useState<EvanMovePlannerView>('brief');
     const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[]>([]);
@@ -132,6 +133,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setWorkbenchTurns([]);
         setRoadmapTopic('');
         setCatalogQuery('');
+        setWorkbenchRequestedView(undefined);
         setEvanPlannerOpen(false);
         setEvanPlannerView('brief');
         evanAddressStopsRef.current = [];
@@ -325,10 +327,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 const query = view === 'catalog' && typeof payload.arguments?.query === 'string'
                                     ? payload.arguments.query.trim().slice(0, 500)
                                     : '';
-                                const receiptModel = buildAmyWorkbenchModel(synchronizedTurns, topic, query);
+                                const receiptModel = buildAmyWorkbenchModel(synchronizedTurns, topic, query, view);
                                 if (isMounted) {
                                     workbenchRevision += 1;
                                     setWorkbenchTurns([...synchronizedTurns]);
+                                    setWorkbenchRequestedView(view);
                                     if (view === 'roadmap') {
                                         setRoadmapTopic(topic);
                                     } else if (view === 'catalog') {
@@ -346,8 +349,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 revision: workbenchRevision,
                                 currentSessionUserTurns: synchronizedTurns.filter((turn) => turn.role === 'user').length,
                                 lane: receiptModel.lane,
+                                quality: receiptModel.quality.label,
+                                missingGrounding: receiptModel.quality.missing,
                                 visibleFacts: receiptModel.facts.map((fact) => `${fact.label}: ${fact.value}`),
-                                instruction: `${confirmation} The client has committed this revision to the screen. Confirm only that the working view is open. Claim a named fact or track is visible only when it appears in visibleFacts.`,
+                                instruction: `${confirmation} The client has committed this revision to the screen. Confirm only that the working view is open. Claim a named fact or track is visible only when it appears in visibleFacts. If quality is Needs clarification, do not call the artifact leadership-ready and do not fill missingGrounding from assumptions.`,
                             });
                             },
                         }));
@@ -948,6 +953,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     turns={workbenchTurns}
                     roadmapTopic={roadmapTopic}
                     catalogQuery={catalogQuery}
+                    requestedView={workbenchRequestedView}
                     onViewChange={setWorkbenchView}
                     onClose={() => setWorkbenchOpen(false)}
                 />

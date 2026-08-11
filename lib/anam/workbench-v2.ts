@@ -88,6 +88,8 @@ function clean(value: unknown): string {
 function canonical(value: string): string {
     return clean(value)
         .replace(/\bcool recordings?\b/gi, 'call recordings')
+        .replace(/\bE\s*[- ]\s*H\s*[- ]\s*R\b/gi, 'EHR')
+        .replace(/\bE\s*[- ]\s*M\s*[- ]\s*R\b/gi, 'EMR')
         .replace(/\bS\s*[- ]\s*V\s*[- ]\s*A\s*[- ]\s*R\b/gi, 'SVAR')
         .replace(/\bArizona\s+SFAR\b/gi, 'Arizona SVAR')
         .replace(/\b(?:sccf|s c c m|system center configuration manager)\b/gi, 'SCCM')
@@ -123,7 +125,7 @@ function unique(values: string[], limit = Infinity): string[] {
 }
 
 function isUncertain(value: string): boolean {
-    return /\b(?:not sure|might be|could be|possibly|perhaps|I think|I may have|did you say|I heard)\b/i.test(value);
+    return /\b(?:not sure|don't(?: even)? know|do not(?: even)? know|might be|might not|could be|possibly|perhaps|unclear|not confirmed|need to (?:check|confirm)|I think|I may have|did you say|I heard)\b/i.test(value);
 }
 
 function statementsFrom(values: string[]): string[] {
@@ -135,7 +137,8 @@ function statementsFrom(values: string[]): string[] {
 
 function isWorkbenchRequest(value: string): boolean {
     return /\b(?:please\s+)?(?:show|open|display|leave|keep|pull up|build and show|capture)\b.*\b(?:notes?|brief|roadmap|visual|catalog|status)\b/i.test(value)
-        || /\bdo you have a visual\b/i.test(value);
+        || /\bdo you have a visual\b/i.test(value)
+        || /\bvisuali[sz]e\b/i.test(value);
 }
 
 function isConversationControl(value: string): boolean {
@@ -171,10 +174,19 @@ function stakeholderWasCleared(values: string[]): boolean {
     return [...values].reverse().some((value) => /\bstakeholder(?: context| section)?\b.*\b(?:leave (?:it )?blank|not confirmed|remove|delete|clear)\b/i.test(value));
 }
 
-function requestedOutputFrom(values: string[], trackCount: number): string {
+function requestedOutputFrom(values: string[], trackCount: number, requestedView?: AmyWorkbenchView): string {
+    if (requestedView) {
+        return ({
+            notes: 'Live notes',
+            brief: 'Live brief',
+            roadmap: trackCount === 2 ? 'Two-track roadmap' : trackCount > 2 ? `${trackCount}-track roadmap` : 'Roadmap',
+            visual: 'Visual brief',
+            catalog: 'Solution catalog',
+        } satisfies Record<AmyWorkbenchView, string>)[requestedView];
+    }
     for (const value of [...values].reverse()) {
         if (!isWorkbenchRequest(value) && !/\b(?:outline|sketch|picture|presentation|deck)\b/i.test(value) && !/\bshow me\b.*\bplan\b/i.test(value)) continue;
-        if (/\b(?:visual|diagram|workflow|presentation|executive visual|quick picture|picture|deck|slides?)\b/i.test(value)) return 'Visual brief';
+        if (/\b(?:visual(?:i[sz]e|i[sz]ation)?|diagram|workflow|presentation|executive visual|quick picture|picture|deck|slides?)\b/i.test(value)) return 'Visual brief';
         if (/\b(?:catalog|product categories|device categories|solution categories)\b/i.test(value)) return 'Solution catalog';
         if (/\b(?:roadmap|phased plan|implementation path|rollout sequence|plan would look like)\b/i.test(value)) {
             return trackCount === 2 ? 'Two-track roadmap' : trackCount > 2 ? `${trackCount}-track roadmap` : 'Roadmap';
@@ -239,6 +251,8 @@ function readCorrections(values: string[]): Array<{ from: string; to: string }> 
 }
 
 const TERM_RULES: Array<[RegExp, string]> = [
+    [/\bEHR\b|electronic health records?/i, 'EHR'],
+    [/\bEMR\b|electronic medical records?/i, 'EMR'],
     [/\bSIS\b|student information system/i, 'Student information system (SIS)'],
     [/\bMicrosoft 365 E5\b/i, 'Microsoft 365 E5'],
     [/\bWindows 11\b/i, 'Windows 11'],
@@ -280,7 +294,7 @@ function lastSentence(values: string[], pattern: RegExp): string {
     return '';
 }
 
-type LaneId = 'endpoint' | 'cloud' | 'security' | 'mobility' | 'education' | 'customer-experience' | 'public-sector' | 'general';
+type LaneId = 'endpoint' | 'cloud' | 'security' | 'mobility' | 'education' | 'healthcare-operations' | 'customer-experience' | 'public-sector' | 'general';
 
 const LANE_LABELS: Record<LaneId, string> = {
     endpoint: 'Endpoint modernization',
@@ -288,18 +302,22 @@ const LANE_LABELS: Record<LaneId, string> = {
     security: 'Security readiness',
     mobility: 'Warehouse mobility modernization',
     education: 'Education AI discovery',
+    'healthcare-operations': 'Healthcare operations discovery',
     'customer-experience': 'AI-enabled customer experience',
     'public-sector': 'Public-sector modernization',
     general: 'Enterprise discovery',
 };
 
 function detectLane(text: string): LaneId {
+    if (/patient intake|patient flow|clinical workflow|pre[- ]screening|\bEHR\b|\bEMR\b|electronic (?:health|medical) record/i.test(text)) {
+        return 'healthcare-operations';
+    }
     const scores: Array<[LaneId, RegExp[]]> = [
         ['customer-experience', [/customer experience|contact cent(?:er|re)|call cent(?:er|re)|call wait|wait times?|customer satisfaction|\bCSAT\b/i, /call recordings?|ticket logs?|speech[- ]to[- ]text|sentiment|predictive routing|service interactions?/i]],
         ['education', [/student|university|college|school district|higher education|K-?12/i, /\bSIS\b|student information system|student retention|attendance|grades?|drop(?:ping)? out/i]],
         ['public-sector', [/county|municipal|city government|state agency|federal agency|public sector|higher education|K-?12/i, /procurement|contract vehicle|CJIS|FedRAMP|StateRAMP/i]],
         ['mobility', [/warehouse|distribution center|picking|outbound shipping/i, /WMS|rugged|scanner|forklift|Zebra|Honeywell|MDM/i]],
-        ['endpoint', [/endpoint|Windows 11|Intune|SCCM|Copilot|device refresh|laptops?/i, /clinic|branch|workplace/i]],
+        ['endpoint', [/endpoint|Windows 11|Intune|SCCM|Copilot|device refresh|laptops?/i, /branch|workplace/i]],
         ['security', [/security|cyber|ransomware|MFA|zero trust|CrowdStrike|privileged access/i, /recovery|backup|audit|insurance/i]],
         ['cloud', [/Azure|AWS|VMware|hybrid[ -]cloud|data cent(?:er|re)|ERP|SAP|cloud migration/i, /customer portal|maintenance window|on-prem/i]],
     ];
@@ -350,6 +368,12 @@ function buildPhases(lane: LaneId, context: { scale: string; terms: string[]; co
         { number: '02', title: 'Authorized data and governance', detail: 'Confirm the data owner, permitted SIS fields, privacy and institutional policy, de-identification or synthetic-data approach, fairness, explainability, and required human review.' },
         { number: '03', title: 'Bounded human-reviewed demonstration', detail: 'Use the smallest approved dataset and keep every student-level interpretation with authorized humans; do not treat a demonstration as production validation.' },
         { number: '04', title: 'Validation decision gate', detail: 'Have the appropriate education, data, privacy, AI, and Insight specialists validate feasibility, safeguards, scope, and any later pilot path.' },
+    ];
+    if (lane === 'healthcare-operations') return [
+        { number: '01', title: 'Frame the leadership question', detail: 'Confirm the operational outcome, executive audience, affected locations, and the decision the working brief needs to support.' },
+        { number: '02', title: 'Separate facts from hypotheses', detail: 'Keep the reported intake delays and workflow change distinct from any unverified explanation; do not treat correlation as root cause.' },
+        { number: '03', title: 'Validate permissible evidence', detail: 'Have the authorized data owner and appropriate Insight specialists confirm which aggregated or de-identified operational data is available and appropriate to use.' },
+        { number: '04', title: 'Set the next decision gate', detail: 'After evidence and privacy boundaries are validated, decide whether a comparison, deeper analysis, or dashboard should be scoped.' },
     ];
     if (lane === 'customer-experience') return [
         {
@@ -476,6 +500,12 @@ const CATALOG: Record<LaneId, CatalogCategory[]> = {
         { title: 'Bounded demonstrations', description: 'Synthetic or de-identified demonstrations that test an idea without making consequential student decisions.', examples: ['Board mockup', 'Feasibility demonstration', 'Human-reviewed workflow'] },
         { title: 'Specialist validation', description: 'Education, data, privacy, AI, and technical review before a real-data pilot or production decision.', examples: ['Risk review', 'Technical validation', 'Pilot scoping'] },
     ],
+    'healthcare-operations': [
+        { title: 'Healthcare operations discovery', description: 'Executive outcome framing, workflow context, affected locations, and decision support without diagnosing a root cause.', examples: ['Patient-intake discovery', 'Workflow comparison', 'Leadership brief'] },
+        { title: 'Operational data readiness', description: 'Authorized access, aggregation, de-identification, quality, lineage, and data-owner validation.', examples: ['EHR data readiness', 'Operational metric definitions', 'Data-governance review'] },
+        { title: 'Bounded analysis', description: 'A specialist-defined comparison using only validated operational evidence and explicit hypotheses.', examples: ['Clinic comparison', 'Process-variance review', 'Working executive view'] },
+        { title: 'Specialist validation', description: 'Healthcare, data, privacy, security, and analytics review before analysis or dashboard scope is approved.', examples: ['Data-owner review', 'Privacy validation', 'Analytics scoping'] },
+    ],
     'customer-experience': [
         { title: 'Customer-experience discovery', description: 'Outcome framing, baseline measures, service journeys, and leadership decision support.', examples: ['Wait-time drivers', 'Customer satisfaction', 'Contact-center workflow'] },
         { title: 'Interaction-data readiness', description: 'Authorized use, minimization, privacy, quality, retention, and on-premises handling for recordings and service records.', examples: ['Call-recording readiness', 'Ticket-log quality', 'De-identification'] },
@@ -500,7 +530,7 @@ function makeFact(section: AmyWorkbenchFact['section'], label: string, value: st
     return value ? { section, label, value, status: 'mentioned' } : null;
 }
 
-export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic = '', catalogQuery = ''): AmyWorkbenchModel {
+export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic = '', catalogQuery = '', requestedView?: AmyWorkbenchView): AmyWorkbenchModel {
     const userTurns = turns
         .filter((turn) => turn.role === 'user')
         .map((turn) => canonical(turn.content))
@@ -513,6 +543,16 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         && !isConversationControl(value)
         && !isWorkbenchEditInstruction(value));
     const sourceText = canonical(`${substantiveStatements.join(' ')} ${roadmapTopic}`);
+    const sessionText = canonical(userTurns.join(' '));
+    const hasHealthcareOperations = /patient intake|patient flow|clinical workflow|pre[- ]screening|\bEHR\b|\bEMR\b|electronic (?:health|medical) record/i.test(sessionText)
+        && /clinics?|hospital|health system|patient|intake/i.test(sessionText);
+    const hasRisingPatientIntake = /patient intake times?.{0,55}(?:through the roof|ris(?:e|ing)|increas|longer|delay)|intake delays?/i.test(sessionText);
+    const hasEhr = /\bEHR\b|electronic health record/i.test(sessionText);
+    const hasNorthside = /\bNorthside\b/i.test(sessionText);
+    const hasPreScreening = /pre[- ]screening/i.test(sessionText);
+    const hasWorkflowChange = /(?:switched|changed?) (?:its |the )?workflows?|workflow change|added a new pre[- ]screening step/i.test(sessionText);
+    const needsItValidation = /(?:check|confirm) with IT.{0,55}(?:EHR )?export|IT.{0,55}(?:check|confirm).{0,55}(?:EHR )?export/i.test(sessionText);
+    const hasAuthorizedHealthcareEvidence = /(?:authorized|approved|permitted).{0,60}(?:aggregated|de-identified|operational (?:data|metrics)|EHR export)/i.test(sessionText);
     const hasErpCutover = /\bERP\b/i.test(sourceText) && /cutover|overnight outage|maintenance window/i.test(sourceText);
     const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sourceText);
     const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
@@ -526,7 +566,11 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const multiTrack = currentTracks.length > 1;
     const dualTrack = hasErpCutover && hasMunicipalPrescoping;
     const uncertainItems = unique(statements.filter(isUncertain).map((value) => {
-        if (/not sure/i.test(value) && /compliance|framework|prime|flow/i.test(sourceText)) return 'Applicable compliance framework is not yet known; prime-contractor flow-down is pending.';
+        if (hasHealthcareOperations && /data.{0,35}(?:problem|issue)|(?:problem|issue).{0,35}data/i.test(value)) return 'Whether data is part of the underlying problem is not yet known.';
+        if (hasHealthcareOperations && /might not.{0,45}(?:same|issue|cause)|same (?:issue|cause)/i.test(value)) return 'The two clinics may not share the same root cause.';
+        if (hasHealthcareOperations && /not sure.{0,45}(?:changed|workflow)|what changed/i.test(value)) return "The effect of Northside's workflow change is not yet known.";
+        if (hasHealthcareOperations && /(?:check|confirm) with IT.{0,55}(?:EHR )?export/i.test(value)) return 'IT still needs to confirm EHR export access and available operational evidence.';
+        if (/not sure/i.test(value) && /\b(?:compliance|framework|prime(?:-contractor)?|flow-down)\b/i.test(sourceText)) return 'Applicable compliance framework is not yet known; prime-contractor flow-down is pending.';
         if (/^not sure\.?$/i.test(value)) return '';
         return compact(value, 150);
     }), 4);
@@ -546,6 +590,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Plan three distinct tracks: protect the ERP cutover within a tight overnight outage window; clarify the Arizona SVAR software purchasing path without treating it as compliance; and scope the confirmed AI opportunities.'
         : dualTrack
         ? 'Plan two separate workstreams: protect the ERP cutover within a tight overnight outage window, and pre-scope municipal compliance while awaiting prime-contractor flow-down.'
+        : hasHealthcareOperations && hasRisingPatientIntake
+        ? 'Give the CEO a credible view of rising patient-intake times across two clinics without assuming the clinics share one cause or that the Northside workflow change is responsible.'
         : hasAiCustomerExperience
         ? `Give leadership a tangible AI-enabled customer-experience brief focused on ${/wait times?|call wait/i.test(sourceText) ? 'reducing call wait times' : 'improving service performance'}${/customer satisfaction|\bCSAT\b/i.test(sourceText) ? ' and improving customer satisfaction' : ''}.`
         : bestObjectiveFrom(substantiveStatements)
@@ -558,11 +604,15 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const constraintStatements = substantiveStatements.filter((statement) => !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
     const constraint = dualTrack
         ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
+        : hasHealthcareOperations
+        ? `${needsItValidation ? 'IT must confirm EHR export access and available operational evidence' : 'Available EHR operational evidence is not yet confirmed'}; root cause, permissible data use, and any analysis or dashboard design require specialist validation.`
         : hasActiveIncident
         ? `Active network outage with no confirmed restoration time${hasDelayedMigration ? '; cloud migration is delayed' : ''}.`
         : lastSentence(constraintStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
     const stakeholder = stakeholderWasCleared(userTurns)
         ? ''
+        : hasHealthcareOperations && /\bCEO\b/i.test(sessionText)
+        ? 'CEO / executive leadership'
         : hasAiCustomerExperience && /\bCEO\b/i.test(allText) && /\bboard\b/i.test(allText)
         ? 'CEO and board leadership'
         : lastSentence(substantiveStatements, /decision|stakeholder|\bCEO\b|\bboard\b|CIO|CFO|CTO|director|vice president|\bVP\b|executive|procurement|leadership|owner/i);
@@ -570,6 +620,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'State of Arizona agency; Arizona SVAR purchasing path raised for specialist validation.'
         : lastSentence(substantiveStatements, /county|city|agency|company|our firm|the firm|hospital|health system|manufactur|distribution|university|school district/i);
     const workloads = unique([
+        hasHealthcareOperations ? 'Patient intake operations' : '',
         /contact cent(?:er|re)|call cent(?:er|re)|call wait|customer experience/i.test(allText) ? 'Customer service and contact-center operations' : '',
         /customer portal/i.test(allText) ? 'Customer portal' : '',
         /\bERP\b/i.test(allText) ? 'ERP' : '',
@@ -579,6 +630,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /citizen services?|public portal/i.test(allText) ? 'Citizen services' : '',
     ], 5);
     const dataSources = unique([
+        hasHealthcareOperations && hasEhr ? `EHR operational data - ${needsItValidation ? 'export and usable event availability pending IT confirmation' : 'availability and permissible use not yet confirmed'}` : '',
         /(?:call|cool) recordings?/i.test(allText) ? `${/on[- ]?prem/i.test(allText) ? 'On-premises ' : ''}call recordings` : '',
         /ticket logs?/i.test(allText) ? `${/on[- ]?prem/i.test(allText) ? 'On-premises ' : ''}ticket logs` : '',
         /\bSIS\b|student information system/i.test(allText) ? 'Student information system data' : '',
@@ -590,18 +642,30 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /FedRAMP/i.test(allText) ? 'FedRAMP' : '',
         /StateRAMP/i.test(allText) ? 'StateRAMP' : '',
     ], 5);
-    const requestedOutput = requestedOutputFrom(userTurns, currentTracks.length);
+    const requestedOutput = requestedOutputFrom(userTurns, currentTracks.length, requestedView);
     const decision = lastSentence(substantiveStatements, /we decided|we selected|we will proceed|the decision is/i);
     const aiDiscovery = hasAiCustomerExperience
         ? 'Explore approved historical contact-center data to understand wait-time drivers and customer-experience improvement opportunities.'
         : lastSentence(substantiveStatements, /\bAI\b|artificial intelligence|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out|runbooks?|technical document|telemetry|internal (?:IT )?assistant/i);
+    const healthcareOperationalChange = hasHealthcareOperations && hasNorthside && hasPreScreening
+        ? `Northside clinic added a pre-screening step${/last month/i.test(sessionText) ? ' last month' : ''}.`
+        : hasHealthcareOperations && hasWorkflowChange
+        ? 'One clinic reported a recent workflow change.'
+        : '';
+    const healthcareEvidenceStatus = hasHealthcareOperations
+        ? needsItValidation
+            ? 'IT confirmation is pending for EHR export access and usable operational evidence.'
+            : 'EHR operational evidence and permissible use are not yet confirmed.'
+        : '';
 
     const facts = [
         makeFact('Organization', 'Context', organization),
         makeFact('Scale', 'Environment scale', scale),
         makeFact('Environment', 'Technology context', terms.join(' / ')),
         makeFact('Environment', 'Critical workloads', workloads.join(' / ')),
-        makeFact('Environment', 'Available data', dataSources.join(' / ')),
+        makeFact('Environment', hasHealthcareOperations ? 'Evidence source' : 'Available data', dataSources.join(' / ')),
+        makeFact('Environment', 'Reported workflow change', healthcareOperationalChange),
+        makeFact('Constraints', 'Evidence status', healthcareEvidenceStatus),
         makeFact('Priorities', 'Current objective', objective.includes('still being clarified') || objective.startsWith('Waiting') ? '' : objective),
         makeFact('Priorities', 'AI discovery', hasAiDiscovery ? aiDiscovery : ''),
         makeFact('Procurement', 'Arizona SVAR', hasArizonaSvar ? 'Software Value-Added Reseller purchasing contract; confirm software category, purchaser, and ordering path with an Insight Public Sector specialist.' : ''),
@@ -614,6 +678,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ].filter((fact): fact is AmyWorkbenchFact => Boolean(fact));
 
     const openQuestions = unique([
+        hasHealthcareOperations ? 'Which operational measures, if any, are available through an authorized aggregated or de-identified source?' : '',
+        hasHealthcareOperations ? 'What decision does the CEO need to make from this working brief?' : '',
+        hasHealthcareOperations ? 'Do the clinics use comparable intake definitions and measurement windows?' : '',
+        hasHealthcareOperations && !timing ? 'What timing does leadership actually need for the next decision?' : '',
         hasStudentRiskUseCase ? 'Has the authorized data owner approved de-identified or synthetic data for this demonstration?' : '',
         hasStudentRiskUseCase ? 'What privacy, institutional policy, fairness, explainability, and human-review requirements apply before any student-level use?' : '',
         hasAiCustomerExperience ? 'Are the call recordings and ticket logs authorized for AI analysis, and what PII, payment-data, retention, and on-premises requirements apply?' : '',
@@ -638,6 +706,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ...uncertainItems.map((item) => `Please clarify: ${item}`),
     ], 4);
     const priorities = unique([
+        hasHealthcareOperations ? 'Keep confirmed operational facts, hypotheses, and unknowns visibly separate.' : '',
+        hasHealthcareOperations ? 'Use only authorized aggregated, de-identified, or synthetic operational data during early discovery.' : '',
+        hasHealthcareOperations ? 'Do not treat the Northside workflow change or pre-screening step as a confirmed cause.' : '',
         multiTrack ? `Keep ${currentTracks.join(', ')} as separate workstreams.` : '',
         hasArizonaSvar ? 'Treat Arizona SVAR as a software purchasing path, not a compliance approval process.' : '',
         hasStudentRiskUseCase ? 'Frame the three-day deliverable as a board-ready feasibility demonstration, not a validated student-risk model.' : '',
@@ -650,7 +721,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         compliance.length ? `Account for ${compliance.join(', ')}.` : '',
         terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : '',
     ], 5);
-    const nextStep = hasStudentRiskUseCase
+    const nextStep = hasHealthcareOperations
+        ? 'Have the authorized data owner and the appropriate Insight healthcare and data specialists validate available operational evidence and privacy boundaries before scoping an analysis or dashboard.'
+        : hasStudentRiskUseCase
         ? 'Validate data authorization, de-identification or synthetic-data use, privacy, fairness, explainability, human review, and three-day feasibility with the appropriate institutional and Insight specialists before using student-level records.'
         : hasAiCustomerExperience
         ? 'Confirm the board decision, data authorization, privacy and on-premises boundaries, then select one bounded offline AI-CX concept for customer-experience, data, security, infrastructure, AI, and Insight specialist validation.'
@@ -669,12 +742,15 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Develop ${currentTracks.length} coordinated but independently gated tracks: ${currentTracks.join(', ')}.`
         : dualTrack
         ? 'Develop two coordinated but independently gated paths: ERP cutover readiness and municipal compliance pre-scoping.'
+        : laneId === 'healthcare-operations'
+        ? 'Frame a credible executive comparison while keeping root cause, EHR evidence, privacy boundaries, and any dashboard design explicitly unconfirmed.'
         : compact(roadmapTopic) || ({
         endpoint: 'Create a measured endpoint modernization path with representative pilots and controlled deployment waves.',
         cloud: 'Shape a phased modernization path that protects critical workloads and validates continuity requirements.',
         security: 'Turn the stated risks and control gaps into a validated and sequenced remediation plan.',
         mobility: 'Modernize warehouse mobility while protecting picking, shipping, and peak-season throughput.',
         education: 'Create a board-ready, human-reviewed education AI feasibility path without treating a demonstration as a validated student-risk model.',
+        'healthcare-operations': 'Frame a healthcare-operations decision using confirmed facts, explicit unknowns, and specialist-validated evidence.',
         'customer-experience': 'Give leadership a credible AI-CX decision brief now, while keeping incident response and any later production pilot independently gated.',
         'public-sector': 'Connect the mission outcome, technical sequence, governance, and an appropriate purchasing path.',
         general: 'Turn the confirmed objective and constraints into a practical next decision.',
@@ -686,6 +762,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'business objective' : '',
         !timing ? 'decision timing' : '',
         !environmentItems.length ? 'environment or evidence source' : '',
+        hasHealthcareOperations && !hasAuthorizedHealthcareEvidence ? 'authorized operational evidence' : '',
         !requestedOutput ? 'requested artifact' : '',
     ], 4);
     const quality = {
@@ -693,27 +770,60 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         label: qualityMissing.length <= 1 ? 'Conversation grounded' : 'Needs clarification',
         missing: qualityMissing,
     };
-    const slideBoundary = 'Working view based on the conversation so far; specialist validation is still required.';
-    const businessOutcome = hasAiCustomerExperience
+    const slideBoundary = hasHealthcareOperations
+        ? 'Working healthcare-operations view only. Root cause, EHR data availability, privacy boundaries, and any analysis or dashboard design require authorized data-owner and Insight specialist validation.'
+        : 'Working view based on the conversation so far; specialist validation is still required.';
+    const businessOutcome = hasHealthcareOperations
+        ? 'Give leadership a credible view of rising patient-intake times without inventing a root cause'
+        : hasAiCustomerExperience
         ? 'Reduce call wait times and improve customer satisfaction'
         : roadmapOutcome;
-    const decisionFrame = decision || (hasAiCustomerExperience
+    const decisionFrame = decision || (hasHealthcareOperations
+        ? 'Decide whether the confirmed operational evidence is sufficient to authorize a specialist-defined clinic comparison.'
+        : hasAiCustomerExperience
         ? 'Decide whether to authorize a bounded offline AI-CX concept for leadership review before considering a production pilot.'
         : nextStep);
-    const visualTitle = hasAiCustomerExperience
+    const visualTitle = hasHealthcareOperations
+        ? 'Separate what is known from what still needs validation'
+        : hasAiCustomerExperience
         ? 'A credible AI-CX story—without adding outage risk'
         : lane;
-    const evidenceAndConstraints = unique([
-        ...dataSources,
-        ...terms,
-        ...workloads,
-        constraint,
-        ...compliance,
-    ], 6);
+    const evidenceAndConstraints = hasHealthcareOperations
+        ? unique([
+            hasEhr ? 'Confirmed: An EHR exists.' : '',
+            healthcareOperationalChange ? `Confirmed: ${healthcareOperationalChange}` : '',
+            healthcareEvidenceStatus ? `Pending validation: ${healthcareEvidenceStatus}` : '',
+            hasPreScreening ? 'Unconfirmed hypothesis: The pre-screening step has not been established as the bottleneck.' : '',
+            'Unknown: The two clinics may not share the same root cause.',
+        ], 6)
+        : unique([
+            ...dataSources,
+            ...terms,
+            ...workloads,
+            constraint,
+            ...compliance,
+        ], 6);
+    const executiveBullets = hasHealthcareOperations
+        ? unique([
+            hasRisingPatientIntake ? 'Confirmed: Patient-intake times are rising across two clinics.' : '',
+            healthcareOperationalChange ? `Confirmed: ${healthcareOperationalChange}` : '',
+            'Unknown: The clinics may not share the same root cause.',
+        ], 3)
+        : unique([businessOutcome, timing, constraint], 3);
+    const decisionBullets = hasHealthcareOperations
+        ? unique([
+            stakeholder ? `Audience: ${stakeholder}` : '',
+            requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
+            timing ? `Decision timing: ${timing}` : 'Decision timing: Not confirmed',
+        ], 4)
+        : unique([stakeholder, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', timing], 4);
+    const evidenceSummary = hasHealthcareOperations
+        ? 'Keep confirmed operational facts, pending evidence, and unconfirmed hypotheses visibly separate.'
+        : 'Confirmed current-session evidence and operating boundaries—without filling gaps with assumptions.';
     const visualSlides: VisualSlide[] = [
-        { id: 'executive_snapshot', eyebrow: '01 / Executive snapshot', title: visualTitle, summary: objective, bullets: unique([businessOutcome, timing, constraint], 3).length ? unique([businessOutcome, timing, constraint], 3) : ['Discovery is in progress.'], boundary: slideBoundary },
-        { id: 'decision_context', eyebrow: '02 / Decision context', title: 'What leadership needs to decide', summary: decisionFrame, bullets: unique([stakeholder, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', timing], 4).length ? unique([stakeholder, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', timing], 4) : ['Decision ownership is still being clarified.'], boundary: slideBoundary },
-        { id: 'evidence_and_constraints', eyebrow: '03 / Evidence and constraints', title: 'What the conversation supports', summary: 'Confirmed current-session evidence and operating boundaries—without filling gaps with assumptions.', bullets: evidenceAndConstraints.length ? evidenceAndConstraints : ['Environment and evidence sources are still being clarified.'], boundary: slideBoundary },
+        { id: 'executive_snapshot', eyebrow: '01 / Executive snapshot', title: visualTitle, summary: objective, bullets: executiveBullets.length ? executiveBullets : ['Discovery is in progress.'], boundary: slideBoundary },
+        { id: 'decision_context', eyebrow: '02 / Decision context', title: 'What leadership needs to decide', summary: decisionFrame, bullets: decisionBullets.length ? decisionBullets : ['Decision ownership is still being clarified.'], boundary: slideBoundary },
+        { id: 'evidence_and_constraints', eyebrow: '03 / Evidence and constraints', title: 'What the conversation supports', summary: evidenceSummary, bullets: evidenceAndConstraints.length ? evidenceAndConstraints : ['Environment and evidence sources are still being clarified.'], boundary: slideBoundary },
         { id: 'recommended_path', eyebrow: '04 / Recommended path', title: phases[0]?.title ?? 'Frame the next move', summary: roadmapOutcome, bullets: phases.slice(0, 3).map((phase) => `${phase.title}: ${phase.detail}`), boundary: slideBoundary },
         { id: 'validation_path', eyebrow: '05 / Validation path', title: 'A four-gate working path', summary: 'Move from evidence to a bounded decision without implying approval, production readiness, or completed validation.', bullets: phases.map((phase) => `${phase.number} ${phase.title}`), boundary: slideBoundary },
         { id: 'decisions_and_next_steps', eyebrow: '06 / Next decision', title: 'Leave with one credible next move', summary: nextStep, bullets: unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5).length ? unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5) : ['Confirm owners and the next decision gate.'], boundary: slideBoundary },

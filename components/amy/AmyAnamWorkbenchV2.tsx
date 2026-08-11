@@ -30,6 +30,7 @@ interface AmyAnamWorkbenchProps {
     turns: AmyWorkbenchTurn[];
     roadmapTopic?: string;
     catalogQuery?: string;
+    requestedView?: AmyWorkbenchView;
     onViewChange: (view: AmyWorkbenchView) => void;
     onClose: () => void;
 }
@@ -73,12 +74,13 @@ export default function AmyAnamWorkbenchV2({
     turns,
     roadmapTopic = '',
     catalogQuery = '',
+    requestedView,
     onViewChange,
     onClose,
 }: AmyAnamWorkbenchProps) {
     const model = useMemo(
-        () => buildAmyWorkbenchModel(turns, roadmapTopic, catalogQuery),
-        [catalogQuery, roadmapTopic, turns],
+        () => buildAmyWorkbenchModel(turns, roadmapTopic, catalogQuery, requestedView),
+        [catalogQuery, requestedView, roadmapTopic, turns],
     );
     const [slideIndex, setSlideIndex] = useState(0);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -273,7 +275,7 @@ export default function AmyAnamWorkbenchV2({
                 ) : view === 'visual' ? (
                     <section aria-labelledby="amy-visual-heading">
                         <div className="flex items-end justify-between gap-4">
-                            <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">Conversation-grounded decision brief</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
+                            <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{model.quality.level === 'grounded' ? 'Conversation-grounded decision brief' : 'Developing conversation working brief'}</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
                             <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{slideIndex + 1} / {model.visualBrief.slides.length}</p>
                         </div>
                         {model.quality.level === 'developing' && model.quality.missing.length > 0 && (

@@ -31,7 +31,7 @@ const websocketSmoke = await readFile(
 test('Amy uses human conversational rhythm without exposing qualification mechanics', () => {
     assert.match(prompt, /connect, listen, acknowledge/i);
     assert.match(prompt, /small useful observation/i);
-    assert.match(prompt, /Answer a direct question meaningfully before asking/i);
+    assert.match(prompt, /Answer a direct question meaningfully.*before asking/i);
     assert.match(prompt, /Do not end every response with a question/i);
     assert.match(prompt, /end two consecutive substantive responses with questions/i);
     assert.match(prompt, /situational rapport/i);
@@ -48,6 +48,32 @@ test('Amy recognizes executive altitude and preserves her SDR mental model', () 
     assert.match(prompt, /First establish the outcome/i);
     assert.match(prompt, /Then learn the relevant context/i);
     assert.match(prompt, /Then clarify the constraint/i);
+});
+
+test('Amy enforces an SDR depth ceiling even when a visitor requests technical detail', () => {
+    assert.match(prompt, /request for detail does not expand Amy's authority/i);
+    assert.match(prompt, /architect, data engineer, analyst, clinician, security, privacy, or compliance specialist/i);
+    assert.match(prompt, /Never infer causation, internal workflow stages, system fields or events, data availability, export capability/s);
+    assert.match(prompt, /one high-level hypothesis.*label it unconfirmed/is);
+    assert.match(prompt, /Each spoken turn does one useful job/i);
+    assert.match(prompt, /request for detail never permits a long spoken list, numbered plan, chart menu/i);
+    assert.match(prompt, /roughly fifteen seconds/i);
+});
+
+test('Amy treats healthcare operations and EHR data as specialist-governed discovery', () => {
+    assert.match(prompt, /patient intake, clinical workflow, EHR or EMR/i);
+    assert.match(prompt, /patient-level health information or PHI/i);
+    assert.match(prompt, /authorized aggregated, de-identified, or synthetic operational data/i);
+    assert.match(prompt, /Never assume an EHR records particular events or timestamps, permits export, exposes a usable schema/i);
+    assert.match(prompt, /Do not prescribe an EHR extraction, query, data model, dashboard, statistical method, or chart design/i);
+    assert.match(prompt, /healthcare and data specialist confirms what operational data is available/i);
+    assert.match(prompt, /must not present an unverified root cause, metric, workflow stage, or chart as established/i);
+});
+
+test('Amy never exposes provider-thinking or internal-status failures', () => {
+    assert.match(prompt, /Never say "I'm having trouble thinking right now," "I can't think,"/i);
+    assert.match(prompt, /If evidence is missing, name the exact missing fact/i);
+    assert.match(prompt, /clarify briefly or use skip_turn/i);
 });
 
 test('Amy keeps claim, handoff, and artifact guardrails intact', () => {

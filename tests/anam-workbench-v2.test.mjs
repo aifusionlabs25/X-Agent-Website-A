@@ -36,6 +36,73 @@ test('Amy workbench v2 prioritizes public-sector context and removes contact det
     assert.doesNotMatch(JSON.stringify(model), /tester@example\.com|602-555-0199/);
 });
 
+test('Northside patient-intake visual stays healthcare-grounded and preserves unknowns', () => {
+    const turns = [
+        { role: 'agent', content: "Hi, I'm Amy with Insight. What would be most useful for us to work through today?" },
+        { role: 'user', content: "Amy, I'm juggling a mess." },
+        { role: 'agent', content: "Sounds hectic. What's the biggest challenge you're dealing with right now?" },
+        { role: 'user', content: "We've got patient intake times going through the roof at two clinics and now my CEO wants a dashboard of all our bottlenecks. I don't even know if data is our problem." },
+        { role: 'agent', content: 'Do you know if your EHR or scheduling system logs timestamps at each intake step?' },
+        { role: 'user', content: "We do have an EHR, but wait, I'm remembering something. One clinic switched workflows last month. This might not even be the same issue." },
+        { role: 'agent', content: "Which clinic changed its workflow? Sorry, I'm having trouble thinking right now." },
+        { role: 'user', content: "It was the Northside clinic. They added a new pre-screening step. Honestly, I'm not sure what changed. But the CEO doesn't care. He just wants answers. So how do we figure out what's real here?" },
+        { role: 'agent', content: 'Pull timestamp data for check-in, pre-screening, registration, and clinician hand-off, then compare average and variance.' },
+        { role: 'user', content: "I'll need to check with IT on the EHR export." },
+        { role: 'user', content: 'sport. But before we do anything, what exactly would you hand me to show the CEO quickly?' },
+        { role: 'agent', content: 'I would provide a stacked bar, heat map, and sparkline.' },
+        { role: 'user', content: 'Yes, show me that brief. I need to visualize this before I get pulled into my Lexfire.' },
+    ];
+    const model = buildAmyWorkbenchModel(turns, '', '', 'visual');
+    const serialized = JSON.stringify(model);
+
+    assert.equal(model.lane, 'Healthcare operations discovery');
+    assert.equal(model.facts.find((fact) => fact.label === 'Requested output')?.value, 'Visual brief');
+    assert.equal(model.facts.find((fact) => fact.label === 'Stakeholder context')?.value, 'CEO / executive leadership');
+    assert.match(model.brief.objective, /patient-intake times across two clinics/i);
+    assert.match(model.facts.find((fact) => fact.label === 'Technology context')?.value ?? '', /EHR/);
+    assert.match(model.facts.find((fact) => fact.label === 'Reported workflow change')?.value ?? '', /Northside.*pre-screening.*last month/i);
+    assert.match(model.facts.find((fact) => fact.label === 'Evidence status')?.value ?? '', /IT confirmation.*EHR export/i);
+    assert.ok(model.uncertainItems.some((item) => /whether data is part of the underlying problem/i.test(item)));
+    assert.ok(model.uncertainItems.some((item) => /two clinics may not share the same root cause/i.test(item)));
+    assert.ok(model.uncertainItems.some((item) => /effect of Northside's workflow change is not yet known/i.test(item)));
+    assert.equal(model.quality.level, 'developing');
+    assert.ok(model.quality.missing.includes('decision timing'));
+    assert.ok(model.quality.missing.includes('authorized operational evidence'));
+    assert.deepEqual(model.roadmap.phases.map((phase) => phase.title), [
+        'Frame the leadership question',
+        'Separate facts from hypotheses',
+        'Validate permissible evidence',
+        'Set the next decision gate',
+    ]);
+    assert.match(model.visualBrief.slides[0].title, /known.*validation/i);
+    assert.match(model.visualBrief.slides[2].bullets.join(' '), /Confirmed: An EHR exists/i);
+    assert.match(model.visualBrief.slides[2].bullets.join(' '), /Unconfirmed hypothesis.*pre-screening/i);
+    assert.match(model.visualBrief.slides[2].boundary, /authorized data-owner.*Insight specialist validation/i);
+    assert.doesNotMatch(serialized, /Endpoint modernization|migration wave|Copilot readiness/i);
+    assert.doesNotMatch(serialized, /prime-contractor|compliance framework/i);
+    assert.doesNotMatch(serialized, /check-in|registration|clinician hand-off|stacked bar|heat map|sparkline|average and variance/i);
+    assert.doesNotMatch(serialized, /\bsport\b|Lexfire|having trouble thinking/i);
+});
+
+test('Clinic language does not override explicit endpoint evidence', () => {
+    const endpoint = buildAmyWorkbenchModel([
+        { role: 'user', content: 'Two clinics need Windows 11 laptops managed through Intune.' },
+    ]);
+    const healthcare = buildAmyWorkbenchModel([
+        { role: 'user', content: 'Two clinics have patient-intake delays in an EHR workflow.' },
+    ]);
+
+    assert.equal(endpoint.lane, 'Endpoint modernization');
+    assert.equal(healthcare.lane, 'Healthcare operations discovery');
+    assert.doesNotMatch(JSON.stringify(healthcare.uncertainItems), /prime-contractor|compliance framework/i);
+});
+
+test('Invoked Workbench view controls ambiguous requested-output wording', () => {
+    const turns = [{ role: 'user', content: 'Yes, show me that brief.' }];
+    assert.equal(buildAmyWorkbenchModel(turns, '', '', 'visual').facts.find((fact) => fact.label === 'Requested output')?.value, 'Visual brief');
+    assert.equal(buildAmyWorkbenchModel(turns, '', '', 'brief').facts.find((fact) => fact.label === 'Requested output')?.value, 'Live brief');
+});
+
 test('student-retention pressure test stays grounded and produces a safe board-ready working path', () => {
     const model = buildAmyWorkbenchModel([
         { role: 'user', content: 'Amy, I need answers fast. We have a board deadline in three days, an AI proposal that is still vague, and our budget just got slashed. Where do we even begin?' },
@@ -258,6 +325,7 @@ test('Anam client tools use the current API shape and route five named views', a
     assert.match(tools[2].description, /before speaking a step-by-step plan/i);
     assert.match(tools[3].description, /meaningful business objective plus at least two/i);
     assert.match(tools[3].description, /not an approved design.*production plan/i);
+    assert.match(tools[3].description, /healthcare or EHR conversations.*never infer a root cause.*internal workflow stage.*chart design/is);
     assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist/i);
 });
 
@@ -276,6 +344,10 @@ test('Workbench prompt protects visitor review time from filler and premature cl
     assert.match(prompt, /calls show_solution_roadmap before Amy speaks a step-by-step plan/i);
     assert.match(prompt, /newest explicit artifact request controls/i);
     assert.match(prompt, /active outage or incident/i);
+    assert.match(prompt, /quality and missingGrounding/i);
+    assert.match(prompt, /never call it leadership-ready/i);
+    assert.match(prompt, /healthcare operations, patient intake, clinical workflow, EHR, or EMR/i);
+    assert.match(prompt, /Never infer a root cause, internal workflow stage, EHR field or event, export capability/i);
 });
 
 test('Amy feature tabs and content use readable production typography', async () => {
@@ -291,6 +363,7 @@ test('Amy feature tabs and content use readable production typography', async ()
     assert.match(workbench, /event\.key === 'ArrowLeft'/);
     assert.match(workbench, /event\.key === 'ArrowRight'/);
     assert.match(workbench, /Conversation-grounded decision brief/);
+    assert.match(workbench, /Developing conversation working brief/);
     assert.match(workbench, /VISUAL_SLIDE_LABELS/);
     assert.match(workbench, /bg-\[#fffaf7\]/);
     assert.match(workbench, /model\.quality\.label/);
@@ -313,6 +386,9 @@ test('Amy player registers all five visual handlers and keeps workbench local to
     assert.match(player, /currentSessionUserTurns/);
     assert.match(player, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
     assert.match(player, /visibleFacts: receiptModel\.facts/);
+    assert.match(player, /missingGrounding: receiptModel\.quality\.missing/);
+    assert.match(player, /buildAmyWorkbenchModel\(synchronizedTurns, topic, query, view\)/);
+    assert.match(player, /setWorkbenchRequestedView\(view\)/);
 });
 
 test('Catalog is directional and never claims live commerce data', () => {
