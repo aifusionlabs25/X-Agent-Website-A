@@ -375,17 +375,10 @@ const livePublishedAtMs = typeof persona.publishedAt === 'string'
     ? Date.parse(persona.publishedAt)
     : Number.NaN;
 const minimumPublishedAtMs = Date.parse(personaManifest.verifiedPublishedAt);
-const transitionPreviousPublishedAtMs = personaManifest.transitionPreviousPublishedAt
-    ? Date.parse(personaManifest.transitionPreviousPublishedAt)
-    : Number.NaN;
 if (
     !Number.isFinite(livePublishedAtMs)
     || !Number.isFinite(minimumPublishedAtMs)
     || livePublishedAtMs < minimumPublishedAtMs
-    || (
-        Number.isFinite(transitionPreviousPublishedAtMs)
-        && livePublishedAtMs <= transitionPreviousPublishedAtMs
-    )
 ) failures.push('verified published revision');
 if (persona.description !== managedPersonaDescription) failures.push('persona description');
 if (avatarIdOf(persona) !== personaManifest.expectedAvatarId) failures.push('avatar ID');

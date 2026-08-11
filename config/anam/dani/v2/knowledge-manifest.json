@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
-  "deploymentStatus": "draft_reviewed",
+  "deploymentStatus": "live_verified",
   "agent": "Dani",
   "company": "AI Fusion Labs",
   "verifiedAt": "2026-08-10",
   "sourcePersonaId": "120cf627-59a6-4a35-8e70-97959a89a4da",
   "sourceKnowledgeGroupId": "d2817157-bae3-4029-a11b-12e7aa93fd4b",
   "folderName": "Dani AI Solutions Director Anam KB 2026-08-10 v5",
-  "liveGroupId": null,
+  "liveGroupId": "6f0a467e-1ecd-45ce-8821-c1ac71088f12",
   "toolName": "Knowledge_Dani_AI_Solutions_Director",
   "bundleSha256": "757307a9d29217ee979c983569f5d8853dfd4002e098c1663ea4c9b799724a31",
   "documents": [

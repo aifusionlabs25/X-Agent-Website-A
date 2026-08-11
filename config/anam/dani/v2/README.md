@@ -26,7 +26,7 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 
 - `DANI_AI_SOLUTIONS_DIRECTOR_SYSTEM_PROMPT_2026-08-09.md`: unified website and meeting-safe voice prompt.
 - `knowledge/`: thirteen public-safe retrieval documents, including a deliberately limited professional company/founder profile and transcript-derived conversational guardrails.
-- `knowledge-manifest.json`: versioned knowledge-group definition with the pinned live v2 group ID and exact hashes.
+- `knowledge-manifest.json`: versioned knowledge-group definition with the pinned live v5 group ID and exact hashes.
 - `CAPABILITY_CLAIMS_AND_APPROVALS.md`: internal evidence register and unresolved business approvals. Do not upload it to Anam knowledge.
 - `POST_CALL_EMAIL_SOP.md`: backend-owned Admin, Call Summary, and prospect thank-you contract. Do not upload it to public knowledge.
 - `DANI_POST_CALL_EMAIL_PROMPT_BLOCK.md`: website-only tool policy, incorporated into the canonical prompt after the verified backend was implemented.
@@ -35,12 +35,12 @@ Post-call work is not a third speaking mode. It is a backend workflow that waits
 ## Deployment boundaries
 
 - Do not overwrite the current v1 files or the protected Cara 3 rollback persona.
-- Use the pinned versioned knowledge group named `Dani AI Solutions Director Anam KB 2026-08-10 v4`.
+- Use the pinned versioned knowledge group named `Dani AI Solutions Director Anam KB 2026-08-10 v5`.
 - Attach a dedicated knowledge tool named `Knowledge_Dani_AI_Solutions_Director`.
 - Upload only the allowlisted `knowledge/` documents.
 - Do not upload client briefs, transcripts, internal approvals, email templates, private meeting notes, test fixtures, credentials, or implementation details.
 - Keep `skip_turn` available.
-- Keep `end_call` for website sessions, but the v2 prompt prohibits unauthenticated group-meeting close behavior.
+- Attach the dedicated parameterless website tool `end_dani_session`; never attach Anam's built-in `end_call` to Dani. The website handler owns the one-farewell close handshake, while the meeting organizer controls group-call removal.
 - Attach `send_dani_follow_up_email` only with the verified website handler, secure typed-recipient consent gate, authoritative Anam transcript finalizer, and exactly-once delivery receipts. Native Anam meetings have no matching handler and are explicitly excluded by the prompt.
 - Keep the published and audited `confirm_dani_live_identity` attachment pinned to Dani's dedicated tool ID. It must never be replaced by Amy's identity tool. Keep verified recall disabled until Dani's isolated memory storage and production gates are approved; follow [`docs/anam/DANI_RETURNING_MEMORY.md`](../../../../docs/anam/DANI_RETURNING_MEMORY.md).
 
@@ -51,15 +51,16 @@ Anam supplies meeting joining, the visible AI disclosure, and group-call name ga
 ## Live provider record
 
 - Persona: `120cf627-59a6-4a35-8e70-97959a89a4da`
-- Knowledge group: `d2817157-bae3-4029-a11b-12e7aa93fd4b`
+- Knowledge group: `6f0a467e-1ecd-45ce-8821-c1ac71088f12`
 - Knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
-- Prompt SHA-256: `a31c8c9497d99cd0c1de40ae6a6e3ff6f5c3ba639c3691404c7bcc99f81581ee`
-- KB bundle SHA-256: `e18fec6e08bdab23e3d130018d70550e5f29da5166dc170bd3de32ae7e3445ae`
+- Website close tool: `97aa437c-d220-41f3-9b0e-fcd4db6ce4e8`
+- Prompt SHA-256: `b5ca465f7e186e1e6531df31a7e07675133bdb120c46be6c7e11eaf05edf5da2`
+- KB bundle SHA-256: `757307a9d29217ee979c983569f5d8853dfd4002e098c1663ea4c9b799724a31`
 - Immediate and delayed provider verification: passed
 - Protected Cara 3 rollback: unchanged
-- Published at: `2026-08-10T23:27:47.382Z`
+- Published at: `2026-08-11T01:53:25.024Z`
 
 ## Remaining website promotion checks
 

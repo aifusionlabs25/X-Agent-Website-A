@@ -113,17 +113,18 @@ The Anam persona may be described as live because the guarded apply and delayed 
 ## Latest verified provider record
 
 - Live identity: `Dani AI Solutions Director`
-- Live prompt SHA-256: `a31c8c9497d99cd0c1de40ae6a6e3ff6f5c3ba639c3691404c7bcc99f81581ee`
-- Live knowledge bundle SHA-256: `e18fec6e08bdab23e3d130018d70550e5f29da5166dc170bd3de32ae7e3445ae`
-- Versioned knowledge group: `d2817157-bae3-4029-a11b-12e7aa93fd4b`
+- Live prompt SHA-256: `b5ca465f7e186e1e6531df31a7e07675133bdb120c46be6c7e11eaf05edf5da2`
+- Live knowledge bundle SHA-256: `757307a9d29217ee979c983569f5d8853dfd4002e098c1663ea4c9b799724a31`
+- Versioned knowledge group: `6f0a467e-1ecd-45ce-8821-c1ac71088f12`
 - V2 knowledge tool: `312d939d-8e3f-45f5-aab1-b2b63fb5022b`
 - Website email tool: `1e44a342-ca25-4c78-bbef-51cded9c8d68`
 - Website identity tool: `584b2e44-3827-4178-9233-a3bd69104e28`
-- Exact live tools: `Knowledge_Dani_AI_Solutions_Director`, `skip_turn`, `end_call`, `send_dani_follow_up_email`, `confirm_dani_live_identity`
+- Website close tool: `97aa437c-d220-41f3-9b0e-fcd4db6ce4e8`
+- Exact live tools: `Knowledge_Dani_AI_Solutions_Director`, `skip_turn`, `end_dani_session`, `send_dani_follow_up_email`, `confirm_dani_live_identity`
 - Thirteen of thirteen managed documents reported `READY` and matched their local byte hashes.
 - Immediate and delayed provider read-backs passed.
 - Protected Cara 3 rollback persona remained unchanged.
-- Published timestamp: `2026-08-10T23:27:47.382Z`
-- Latest pre-change provider snapshot: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-10T23-25-28-418Z.json`
+- Published timestamp: `2026-08-11T01:53:25.024Z`
+- Latest pre-change provider snapshot: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-11T01-50-17-369Z.json`
 - Final v2 pre-change provider snapshot: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-35-36-201Z.json`
 - Initial v2 attempt snapshot retained at: `C:\AI Fusion Labs\X AGENTS\BACKUPS\Dani Anam\dani-cara4-pre-sync-2026-08-09T18-29-47-684Z.json`

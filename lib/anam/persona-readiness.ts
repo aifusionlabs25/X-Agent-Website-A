@@ -47,18 +47,7 @@ export const DANI_EXPECTED_AVATAR_ID = '58b045b9-ac1d-4ddf-af14-18972618c57b';
 export const DANI_EXPECTED_VOICE_ID = '90a1acd3-4fc0-11f1-84b0-52bacf74fa75';
 export const DANI_EXPECTED_LLM_ID = 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7';
 export const DANI_EXPECTED_PROMPT_SHA256 = 'b5ca465f7e186e1e6531df31a7e07675133bdb120c46be6c7e11eaf05edf5da2';
-export const DANI_MINIMUM_PUBLISHED_AT = '2026-08-11T00:53:07.119Z';
-
-// Exact previous live baseline accepted only during the two-phase tool migration.
-// Remove this compatibility lane immediately after the new Anam revision is published.
-const DANI_TRANSITION_PREVIOUS_PROMPT_SHA256 = 'e11a672091f72f45a3ca3426558f4d225df8cb2cec6b07fb8b96dea9cacbab9e';
-const DANI_TRANSITION_PREVIOUS_TOOL_IDS = {
-    Knowledge_Dani_AI_Solutions_Director: '312d939d-8e3f-45f5-aab1-b2b63fb5022b',
-    skip_turn: '69a89bda-9e11-443f-84c0-1cbea75e4fcb',
-    end_call: '4d05849d-329f-4cd3-996f-f2a28d8135f0',
-    send_dani_follow_up_email: '1e44a342-ca25-4c78-bbef-51cded9c8d68',
-    confirm_dani_live_identity: '584b2e44-3827-4178-9233-a3bd69104e28',
-} as const;
+export const DANI_MINIMUM_PUBLISHED_AT = '2026-08-11T01:53:25.024Z';
 
 export const DANI_REQUIRED_TOOL_NAMES = [
     'Knowledge_Dani_AI_Solutions_Director',
@@ -371,30 +360,15 @@ export function inspectDaniPersonaReadiness(
     const avatarIdMatches = avatarIdFromPersona(persona) === DANI_EXPECTED_AVATAR_ID;
     const voiceIdMatches = voiceIdFromPersona(persona) === DANI_EXPECTED_VOICE_ID;
     const llmIdMatches = llmIdFromPersona(persona) === DANI_EXPECTED_LLM_ID;
-    const nextBaselineMatches = promptSha256 === DANI_EXPECTED_PROMPT_SHA256
-        && daniToolAttachmentMatches(persona, DANI_REQUIRED_TOOL_IDS);
-    const previousBaselineMatches = promptSha256 === DANI_TRANSITION_PREVIOUS_PROMPT_SHA256
-        && daniToolAttachmentMatches(persona, DANI_TRANSITION_PREVIOUS_TOOL_IDS);
-    const previousPublishedRevisionMatches = Number.isFinite(publishedAtMs)
+    const publishedRevisionMatches = Number.isFinite(publishedAtMs)
         && publishedAtMs >= Date.parse(DANI_MINIMUM_PUBLISHED_AT);
-    // A PUT can expose the new draft through GET while publishedAt still points to
-    // the prior live revision. Do not bless the new prompt/tool pair until Publish
-    // advances the provider timestamp.
-    const nextPublishedRevisionMatches = Number.isFinite(publishedAtMs)
-        && publishedAtMs > Date.parse(DANI_MINIMUM_PUBLISHED_AT);
-    const publishedRevisionMatches = previousBaselineMatches
-        ? previousPublishedRevisionMatches
-        : nextBaselineMatches && nextPublishedRevisionMatches;
-    const promptHashMatches = nextBaselineMatches || previousBaselineMatches;
+    const promptHashMatches = promptSha256 === DANI_EXPECTED_PROMPT_SHA256;
     const voiceDetectionConfigured = Object.entries(DANI_REQUIRED_VOICE_DETECTION)
         .every(([name, value]) => persona.voiceDetectionOptions?.[name] === value);
     const sessionDataRetentionConfigured = persona.zeroDataRetention === false;
     const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
-    const toolAttachmentMatches = nextBaselineMatches || previousBaselineMatches;
-    const baselineToolNames = previousBaselineMatches
-        ? Object.keys(DANI_TRANSITION_PREVIOUS_TOOL_IDS)
-        : [...DANI_REQUIRED_TOOL_NAMES];
-    const missingToolNames = baselineToolNames.filter(name => !toolNames.has(name));
+    const toolAttachmentMatches = daniToolAttachmentMatches(persona, DANI_REQUIRED_TOOL_IDS);
+    const missingToolNames = DANI_REQUIRED_TOOL_NAMES.filter(name => !toolNames.has(name));
     const missingPromptMarkers = DANI_REQUIRED_PROMPT_MARKERS.filter(marker => !prompt.includes(marker));
 
     return {

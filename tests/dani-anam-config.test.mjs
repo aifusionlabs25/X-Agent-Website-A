@@ -45,7 +45,7 @@ function healthyPersona() {
     return {
         id: DANI_PERSONA_ID,
         name: DANI_EXPECTED_NAME,
-        publishedAt: '2026-08-11T01:00:00.000Z',
+        publishedAt: DANI_MINIMUM_PUBLISHED_AT,
         avatarModel: 'cara-4',
         avatar: { id: DANI_EXPECTED_AVATAR_ID },
         voice: { id: DANI_EXPECTED_VOICE_ID },
@@ -84,7 +84,7 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
         { ...healthyPersona(), id: 'wrong-persona' },
         { ...healthyPersona(), name: 'Dani NEW' },
         { ...healthyPersona(), publishedAt: '2026-08-10T01:40:14.102Z' },
-        { ...healthyPersona(), publishedAt: DANI_MINIMUM_PUBLISHED_AT },
+        { ...healthyPersona(), publishedAt: '2026-08-11T00:53:07.119Z' },
         { ...healthyPersona(), avatarModel: 'cara-3' },
         { ...healthyPersona(), avatar: { id: 'wrong-avatar' } },
         { ...healthyPersona(), voice: { id: 'wrong-voice' } },
@@ -126,9 +126,16 @@ test('Dani readiness accepts only the exact published five-tool baseline', () =>
         ...currentPromptWithPreviousTools,
         brain: { ...healthyPersona().brain, systemPrompt: previousPrompt },
     };
+    const builtInCloseBaseline = {
+        ...healthyPersona(),
+        tools: healthyPersona().tools.map(tool => tool.name === 'end_dani_session'
+            ? { name: 'end_call', id: '4d05849d-329f-4cd3-996f-f2a28d8135f0' }
+            : tool),
+    };
     assert.equal(inspectDaniPersonaReadiness(previousPromptWithCurrentTools).ready, false);
     assert.equal(inspectDaniPersonaReadiness(currentPromptWithPreviousTools).ready, false);
     assert.equal(inspectDaniPersonaReadiness(previousBaseline).ready, false);
+    assert.equal(inspectDaniPersonaReadiness(builtInCloseBaseline).ready, false);
 });
 
 test('Dani live readiness is bounded, no-store, and does not expose the API key', async () => {
@@ -319,7 +326,6 @@ test('manifest and site use the exact published Dani identity and optimized Cara
     assert.equal(manifest.rollbackPersonaId, '61f0fd3e-7937-472a-958d-cdba76b33bf1');
     assert.equal(manifest.expectedName, 'Dani AI Solutions Director');
     assert.equal(manifest.verifiedPublishedAt, DANI_MINIMUM_PUBLISHED_AT);
-    assert.equal(manifest.transitionPreviousPublishedAt, DANI_MINIMUM_PUBLISHED_AT);
     assert.equal(manifest.expectedAvatarId, DANI_EXPECTED_AVATAR_ID);
     assert.equal(manifest.expectedVoiceId, DANI_EXPECTED_VOICE_ID);
     assert.equal(manifest.expectedLlmId, DANI_EXPECTED_LLM_ID);
@@ -400,6 +406,16 @@ test('token route fails closed on Dani drift before session token minting', asyn
     assert.match(route, /promptHashMatches/);
     assert.match(route, /voiceDetectionConfigured/);
     assert.match(route, /status: 503/);
+});
+
+test('steady-state Dani readiness has no legacy end_call compatibility lane', async () => {
+    const readiness = await readFile(new URL('../lib/anam/persona-readiness.ts', import.meta.url), 'utf8');
+    assert.doesNotMatch(readiness, /DANI_TRANSITION_PREVIOUS|previousBaselineMatches/);
+    const daniSection = readiness.slice(
+        readiness.indexOf('export const DANI_EXPECTED_NAME'),
+        readiness.indexOf('export const DANI_REQUIRED_PROMPT_MARKERS'),
+    );
+    assert.doesNotMatch(daniSection, /\bend_call\b/);
 });
 
 async function runIdentityToolPreparationMock({ existing }) {
