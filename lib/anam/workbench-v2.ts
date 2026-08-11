@@ -12,6 +12,14 @@ export interface AmyWorkbenchFact {
     status: 'mentioned' | 'confirmed';
 }
 
+export interface AmyWorkbenchFactChange {
+    kind: 'added' | 'updated' | 'removed';
+    section: AmyWorkbenchFact['section'];
+    label: string;
+    value: string;
+    previousValue?: string;
+}
+
 interface WorkbenchPhase {
     number: string;
     title: string;
@@ -70,6 +78,36 @@ export interface AmyWorkbenchModel {
         categories: CatalogCategory[];
         boundary: string;
     };
+}
+
+export function diffAmyWorkbenchFacts(previous: AmyWorkbenchModel | null, next: AmyWorkbenchModel): AmyWorkbenchFactChange[] {
+    const keyFor = (fact: AmyWorkbenchFact) => `${fact.section}\u0000${fact.label}`;
+    const previousByKey = new Map((previous?.facts ?? []).map((fact) => [keyFor(fact), fact]));
+    const nextByKey = new Map(next.facts.map((fact) => [keyFor(fact), fact]));
+    const changes: AmyWorkbenchFactChange[] = [];
+
+    for (const fact of next.facts) {
+        const prior = previousByKey.get(keyFor(fact));
+        if (!prior) {
+            changes.push({ kind: 'added', section: fact.section, label: fact.label, value: fact.value });
+        } else if (prior.value !== fact.value) {
+            changes.push({
+                kind: 'updated',
+                section: fact.section,
+                label: fact.label,
+                value: fact.value,
+                previousValue: prior.value,
+            });
+        }
+    }
+
+    for (const fact of previous?.facts ?? []) {
+        if (!nextByKey.has(keyFor(fact))) {
+            changes.push({ kind: 'removed', section: fact.section, label: fact.label, value: fact.value });
+        }
+    }
+
+    return changes;
 }
 
 export const AMY_WORKBENCH_BOUNDARY = 'Conversation working view only. Final scope, pricing, availability, timing, contract eligibility, and commitments require confirmation by the appropriate Insight specialists.';
@@ -553,6 +591,44 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const hasWorkflowChange = /(?:switched|changed?) (?:its |the )?workflows?|workflow change|added a new pre[- ]screening step/i.test(sessionText);
     const needsItValidation = /(?:check|confirm) with IT.{0,55}(?:EHR )?export|IT.{0,55}(?:check|confirm).{0,55}(?:EHR )?export/i.test(sessionText);
     const hasAuthorizedHealthcareEvidence = /(?:authorized|approved|permitted).{0,60}(?:aggregated|de-identified|operational (?:data|metrics)|EHR export)/i.test(sessionText);
+    const hasInfrastructureRefreshDecision = /\binfrastructure refresh\b/i.test(sessionText)
+        && /\bservers?\b/i.test(sessionText)
+        && /\bnetwork equipment\b/i.test(sessionText);
+    const hasOutdatedFirmwareAudit = /\baudit\b.{0,80}\boutdated firmware\b|\boutdated firmware\b.{0,80}\baudit\b/i.test(sessionText);
+    const hasSixMonthAuditTiming = /\baudit\b.{0,80}\bsix months? ago\b|\bsix months? ago\b.{0,80}\baudit\b/i.test(sessionText);
+    const hasNoMajorBreach = /\bno major breaches?\b/i.test(sessionText);
+    const hasBudgetReviewNextQuarter = /\bbudget review\b.{0,35}\bnext quarter\b|\bnext quarter\b.{0,35}\bbudget review\b/i.test(sessionText);
+    const prefersDeferralToNextYear = /\b(?:push|defer|delay)\b.{0,45}\bnext year\b|\bprefer\b.{0,45}\bnext year\b/i.test(sessionText);
+    const smallerOfficeMergerIndex = userTurns.findIndex((value) => /\bmerg(?:e|er|ing)\b.{0,45}\bsmaller office\b|\bsmaller office\b.{0,45}\bmerg(?:e|er|ing)\b/i.test(value));
+    const hasAssumedSmallerOfficeMerger = smallerOfficeMergerIndex >= 0
+        && userTurns.slice(smallerOfficeMergerIndex).some((value) => /\b(?:let(?:'s| us)|we(?:'ll| will)) assume\b.{0,40}\b(?:happening|happen|merg(?:e|er|ing))\b|\bassume\b.{0,35}\b(?:office )?merg(?:e|er|ing)\b/i.test(value));
+    const includesSmallerOfficeSystems = hasAssumedSmallerOfficeMerger
+        && userTurns.slice(smallerOfficeMergerIndex).some((value) => /\binclude\b.{0,35}\b(?:their|the smaller office(?:'s)?) systems\b/i.test(value));
+    const expandsScopeAndBudget = hasAssumedSmallerOfficeMerger
+        && userTurns.slice(smallerOfficeMergerIndex).some((value) => /\bscope\b.{0,35}\bbudget\b|\bbudget\b.{0,35}\bscope\b/i.test(value));
+    const mergerPlanningNextQuarter = hasAssumedSmallerOfficeMerger
+        && userTurns.slice(smallerOfficeMergerIndex).some((value) => /\bnext quarter\b/i.test(value));
+    const hasSpecificInfrastructureScope = hasInfrastructureRefreshDecision
+        && !/\bnot sure which parts\b/i.test(sessionText)
+        && /\b(?:inventory|asset list|model numbers?|specific (?:servers?|network (?:devices?|equipment))|\d+\s+(?:servers?|switches?|routers?|firewalls?))\b/i.test(sessionText);
+    const hasValidatedSecuritySeverity = hasInfrastructureRefreshDecision
+        && /\b(?:critical|high|medium|low)[ -](?:risk|severity)\b|\bCVSS\b|\bactive exploit\b|\bend[- ]of[- ]support\b|\bunsupported\b/i.test(sessionText);
+    const hasCostBreakdown = hasInfrastructureRefreshDecision
+        && /\b(?:cost breakdown|line[- ]item (?:cost|estimate)|vendor quote|budget estimate|capital estimate|\$\s*\d)\b/i.test(sessionText);
+    const hasInfrastructureCostConcern = hasInfrastructureRefreshDecision
+        && /\b(?:expensive|costs?|budget|pricing|price)\b/i.test(sessionText);
+    const hasInfrastructureSecurityConcern = hasInfrastructureRefreshDecision
+        && /\b(?:cyber(?:security)?|security|audit|firmware|vulnerabilit|risk|breach)\b/i.test(sessionText);
+    const hasAgingInfrastructureClaim = hasInfrastructureRefreshDecision && /\baging infrastructure\b/i.test(sessionText);
+    const hasBoardAudience = hasInfrastructureRefreshDecision && /\bboard\b/i.test(sessionText);
+    const infrastructureDecisionAudience = hasBoardAudience ? 'the board' : 'leadership';
+    const infrastructureDecisionGate = hasBudgetReviewNextQuarter ? 'the next-quarter budget review' : 'the next decision gate';
+    const infrastructureTimingFrame = prefersDeferralToNextYear
+        ? 'including whether validated security and lifecycle evidence support deferring implementation to next year'
+        : 'with action timing based on validated security and lifecycle evidence';
+    const infrastructureCostFrame = hasInfrastructureCostConcern ? ' and what drives the cost' : '';
+    const infrastructureEvidenceBasis = hasAgingInfrastructureClaim ? '"aging infrastructure"' : 'the refresh request';
+    const infrastructureExposureLabel = hasInfrastructureSecurityConcern ? 'security severity' : 'risk and lifecycle exposure';
     const hasErpCutover = /\bERP\b/i.test(sourceText) && /cutover|overnight outage|maintenance window/i.test(sourceText);
     const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sourceText);
     const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
@@ -565,7 +641,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const currentTracks = buildCurrentTracks({ hasErpCutover, hasMunicipalPrescoping, hasArizonaSvar, hasAiDiscovery });
     const multiTrack = currentTracks.length > 1;
     const dualTrack = hasErpCutover && hasMunicipalPrescoping;
-    const uncertainItems = unique(statements.filter(isUncertain).map((value) => {
+    const uncertainItems = unique(statements.filter((value) => isUncertain(value)
+        && !(hasAssumedSmallerOfficeMerger && /\bmerg(?:e|er|ing)\b.{0,45}\bsmaller office\b|\bsmaller office\b.{0,45}\bmerg(?:e|er|ing)\b/i.test(value))).map((value) => {
         if (hasHealthcareOperations && /data.{0,35}(?:problem|issue)|(?:problem|issue).{0,35}data/i.test(value)) return 'Whether data is part of the underlying problem is not yet known.';
         if (hasHealthcareOperations && /might not.{0,45}(?:same|issue|cause)|same (?:issue|cause)/i.test(value)) return 'The two clinics may not share the same root cause.';
         if (hasHealthcareOperations && /not sure.{0,45}(?:changed|workflow)|what changed/i.test(value)) return "The effect of Northside's workflow change is not yet known.";
@@ -576,6 +653,11 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     }), 4);
     const allText = sourceText;
     const terms = termsFrom(substantiveStatements, rejected);
+    const infrastructureComponents = unique([
+        hasInfrastructureRefreshDecision && /\bservers?\b/i.test(sessionText) ? 'Servers' : '',
+        hasInfrastructureRefreshDecision && /\bnetwork equipment\b/i.test(sessionText) ? 'Network equipment' : '',
+        includesSmallerOfficeSystems ? 'Smaller-office systems (inventory pending)' : '',
+    ], 5);
     for (const correction of corrections) {
         for (const [, label] of TERM_RULES) {
             if (canonical(correction.to).toLowerCase().includes(label.toLowerCase()) && !terms.includes(label)) terms.push(label);
@@ -590,6 +672,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Plan three distinct tracks: protect the ERP cutover within a tight overnight outage window; clarify the Arizona SVAR software purchasing path without treating it as compliance; and scope the confirmed AI opportunities.'
         : dualTrack
         ? 'Plan two separate workstreams: protect the ERP cutover within a tight overnight outage window, and pre-scope municipal compliance while awaiting prime-contractor flow-down.'
+        : hasInfrastructureRefreshDecision
+        ? `Give ${infrastructureDecisionAudience} a supported decision on which server and network components require refresh${infrastructureCostFrame} at ${infrastructureDecisionGate}, ${infrastructureTimingFrame}.`
         : hasHealthcareOperations && hasRisingPatientIntake
         ? 'Give the CEO a credible view of rising patient-intake times across two clinics without assuming the clinics share one cause or that the Northside workflow change is responsible.'
         : hasAiCustomerExperience
@@ -600,10 +684,14 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const timing = explicitTiming
         || (dualTrack && /few weeks/i.test(allText)
         ? 'Detailed planning may begin in a few weeks, dependent on compliance clarification from the prime contractor.'
+        : hasInfrastructureRefreshDecision && hasBudgetReviewNextQuarter
+        ? 'Budget review next quarter'
         : timingFrom(substantiveStatements));
     const constraintStatements = substantiveStatements.filter((statement) => !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
     const constraint = dualTrack
         ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
+        : hasInfrastructureRefreshDecision
+        ? `Do not treat ${infrastructureEvidenceBasis} as sufficient evidence; validate component scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', cost drivers' : ''}, and delay exposure before recommending timing${hasAssumedSmallerOfficeMerger ? ', and keep the smaller-office expansion as a planning assumption until its inventory is validated' : ''}.`
         : hasHealthcareOperations
         ? `${needsItValidation ? 'IT must confirm EHR export access and available operational evidence' : 'Available EHR operational evidence is not yet confirmed'}; root cause, permissible data use, and any analysis or dashboard design require specialist validation.`
         : hasActiveIncident
@@ -611,6 +699,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : lastSentence(constraintStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
     const stakeholder = stakeholderWasCleared(userTurns)
         ? ''
+        : hasInfrastructureRefreshDecision && /\bboard\b/i.test(sessionText) && /\bIT team\b|\bIT says\b/i.test(sessionText)
+        ? 'Board decision audience; IT team supplying infrastructure and risk evidence'
         : hasHealthcareOperations && /\bCEO\b/i.test(sessionText)
         ? 'CEO / executive leadership'
         : hasAiCustomerExperience && /\bCEO\b/i.test(allText) && /\bboard\b/i.test(allText)
@@ -657,27 +747,48 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             ? 'IT confirmation is pending for EHR export access and usable operational evidence.'
             : 'EHR operational evidence and permissible use are not yet confirmed.'
         : '';
+    const infrastructureAuditEvidence = hasInfrastructureRefreshDecision && hasOutdatedFirmwareAudit
+        ? `An audit${hasSixMonthAuditTiming ? ' six months ago' : ''} flagged outdated firmware${hasNoMajorBreach ? '; no major breaches were reported' : ''}.`
+        : '';
+    const deferralPreference = hasInfrastructureRefreshDecision && prefersDeferralToNextYear
+        ? 'Prefer to defer the refresh until next year if validated risk and lifecycle evidence support waiting.'
+        : '';
+    const smallerOfficePlanningAssumption = hasAssumedSmallerOfficeMerger
+        ? `Assume the smaller-office merger occurs${mergerPlanningNextQuarter ? ' next quarter' : ''}${includesSmallerOfficeSystems ? " and include that office's systems in planning" : ''}; exact inventory remains unvalidated.`
+        : '';
+    const expansionImpact = hasAssumedSmallerOfficeMerger && expandsScopeAndBudget
+        ? 'Planning scope and budget expand to account for the smaller-office systems; quantify the impact after inventory validation.'
+        : '';
 
     const facts = [
         makeFact('Organization', 'Context', organization),
         makeFact('Scale', 'Environment scale', scale),
-        makeFact('Environment', 'Technology context', terms.join(' / ')),
+        makeFact('Environment', 'Technology context', unique([...terms, ...infrastructureComponents], 10).join(' / ')),
         makeFact('Environment', 'Critical workloads', workloads.join(' / ')),
         makeFact('Environment', hasHealthcareOperations ? 'Evidence source' : 'Available data', dataSources.join(' / ')),
         makeFact('Environment', 'Reported workflow change', healthcareOperationalChange),
+        makeFact('Environment', 'Audit evidence', infrastructureAuditEvidence),
         makeFact('Constraints', 'Evidence status', healthcareEvidenceStatus),
+        makeFact('Constraints', 'Planning assumption', smallerOfficePlanningAssumption),
+        makeFact('Constraints', 'Scope and budget impact', expansionImpact),
         makeFact('Priorities', 'Current objective', objective.includes('still being clarified') || objective.startsWith('Waiting') ? '' : objective),
         makeFact('Priorities', 'AI discovery', hasAiDiscovery ? aiDiscovery : ''),
         makeFact('Procurement', 'Arizona SVAR', hasArizonaSvar ? 'Software Value-Added Reseller purchasing contract; confirm software category, purchaser, and ordering path with an Insight Public Sector specialist.' : ''),
         makeFact('Constraints', 'Primary guardrail', constraint),
         makeFact('Constraints', 'Governance drivers', compliance.join(' / ')),
         makeFact('Timing', 'Timing', timing),
+        makeFact('Timing', 'Deferral preference', deferralPreference),
         makeFact('Identity', 'Stakeholder context', stakeholder),
         makeFact('Requested outputs', 'Requested output', requestedOutput),
         makeFact('Decisions', 'Decision', decision),
     ].filter((fact): fact is AmyWorkbenchFact => Boolean(fact));
 
     const openQuestions = unique([
+        hasInfrastructureRefreshDecision ? 'Which specific servers and network components are in scope, and what are their support and lifecycle statuses?' : '',
+        hasInfrastructureRefreshDecision && hasOutdatedFirmwareAudit ? 'What severity, exploitability, and business exposure are tied to the outdated-firmware findings?' : '',
+        hasInfrastructureRefreshDecision && !hasOutdatedFirmwareAudit ? 'What validated lifecycle, support, reliability, or security evidence is driving the refresh request?' : '',
+        hasInfrastructureRefreshDecision && hasInfrastructureCostConcern ? 'What costs belong to firmware remediation, targeted replacement, phased refresh, and full refresh?' : '',
+        hasInfrastructureRefreshDecision && hasAssumedSmallerOfficeMerger ? "Which of the smaller office's systems, dependencies, and support obligations enter the planning scope?" : '',
         hasHealthcareOperations ? 'Which operational measures, if any, are available through an authorized aggregated or de-identified source?' : '',
         hasHealthcareOperations ? 'What decision does the CEO need to make from this working brief?' : '',
         hasHealthcareOperations ? 'Do the clinics use comparable intake definitions and measurement windows?' : '',
@@ -706,6 +817,11 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ...uncertainItems.map((item) => `Please clarify: ${item}`),
     ], 4);
     const priorities = unique([
+        hasInfrastructureRefreshDecision && hasOutdatedFirmwareAudit ? 'Separate the confirmed outdated-firmware audit finding from unvalidated claims about overall security severity.' : '',
+        hasInfrastructureRefreshDecision ? `Compare targeted remediation, phased refresh, full refresh, and deferral only after component-level ${hasInfrastructureCostConcern ? 'cost and ' : ''}risk evidence is available.` : '',
+        hasInfrastructureRefreshDecision && hasBudgetReviewNextQuarter && prefersDeferralToNextYear ? 'Keep the next-quarter budget decision separate from the preference to defer implementation until next year.' : '',
+        hasInfrastructureRefreshDecision && hasAssumedSmallerOfficeMerger ? smallerOfficePlanningAssumption : '',
+        hasInfrastructureRefreshDecision && hasAssumedSmallerOfficeMerger ? expansionImpact : '',
         hasHealthcareOperations ? 'Keep confirmed operational facts, hypotheses, and unknowns visibly separate.' : '',
         hasHealthcareOperations ? 'Use only authorized aggregated, de-identified, or synthetic operational data during early discovery.' : '',
         hasHealthcareOperations ? 'Do not treat the Northside workflow change or pre-screening step as a confirmed cause.' : '',
@@ -723,6 +839,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ], 5);
     const nextStep = hasHealthcareOperations
         ? 'Have the authorized data owner and the appropriate Insight healthcare and data specialists validate available operational evidence and privacy boundaries before scoping an analysis or dashboard.'
+        : hasInfrastructureRefreshDecision
+        ? `Have the IT owner and appropriate Insight infrastructure and security specialists validate the component inventory, ${hasOutdatedFirmwareAudit ? 'firmware exposure, ' : ''}lifecycle status${hasInfrastructureCostConcern ? ', and option-level costs' : ''} before ${infrastructureDecisionGate}${hasAssumedSmallerOfficeMerger ? ', including the assumed smaller-office scope as a separately validated input' : ''}.`
         : hasStudentRiskUseCase
         ? 'Validate data authorization, de-identification or synthetic-data use, privacy, fairness, explainability, human review, and three-day feasibility with the appropriate institutional and Insight specialists before using student-level records.'
         : hasAiCustomerExperience
@@ -735,13 +853,40 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const roadmapFacts = facts
         .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
-    const phases = currentTracks.length > 2
+    const phases = hasInfrastructureRefreshDecision
+        ? [
+            {
+                number: '01',
+                title: 'Confirm the component boundary',
+                detail: `Inventory the specific servers and network equipment in scope, ownership, lifecycle status, dependencies, and support exposure${hasAssumedSmallerOfficeMerger ? ", with the smaller office's systems tracked as an explicit planning assumption" : ''}.`,
+            },
+            {
+                number: '02',
+                title: hasOutdatedFirmwareAudit ? 'Validate security severity' : 'Validate risk and lifecycle exposure',
+                detail: hasOutdatedFirmwareAudit
+                    ? 'Have infrastructure and security specialists verify the outdated-firmware findings, exploitability, business impact, and compensating controls; an audit finding alone does not establish that a full refresh is required.'
+                    : 'Have infrastructure and security specialists verify lifecycle, support, reliability, security, and business-impact evidence; a refresh request alone does not establish that a full replacement is required.',
+            },
+            {
+                number: '03',
+                title: 'Compare bounded options',
+                detail: `Build evidence-backed ${hasInfrastructureCostConcern ? 'cost and ' : ''}risk comparisons for ${hasOutdatedFirmwareAudit ? 'firmware remediation, ' : ''}targeted replacement, phased refresh, full refresh, and deferral without inventing ${hasInfrastructureCostConcern ? 'prices or ' : ''}risk scores.`,
+            },
+            {
+                number: '04',
+                title: hasBoardAudience ? 'Set the board decision gate' : 'Set the decision gate',
+                detail: `Bring validated scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', cost' : ''}, and deferral exposure to ${infrastructureDecisionGate} while keeping any implementation timing or approval uncommitted.`,
+            },
+        ]
+        : currentTracks.length > 2
         ? buildMultiTrackPhases(currentTracks, aiDiscovery)
         : buildPhases(laneId, { scale, terms, constraint, timing, workloads, dataSources, dualTrack, activeIncident: hasActiveIncident });
     const roadmapOutcome = currentTracks.length > 2
         ? `Develop ${currentTracks.length} coordinated but independently gated tracks: ${currentTracks.join(', ')}.`
         : dualTrack
         ? 'Develop two coordinated but independently gated paths: ERP cutover readiness and municipal compliance pre-scoping.'
+        : hasInfrastructureRefreshDecision
+        ? `Frame a ${hasBoardAudience ? 'board' : 'leadership'} decision among targeted remediation, phased refresh, full refresh, or deferral using validated component, risk${hasInfrastructureCostConcern ? ', and cost' : ''} evidence${hasAssumedSmallerOfficeMerger ? ', with the smaller-office expansion kept as a separately validated planning assumption' : ''}.`
         : laneId === 'healthcare-operations'
         ? 'Frame a credible executive comparison while keeping root cause, EHR evidence, privacy boundaries, and any dashboard design explicitly unconfirmed.'
         : compact(roadmapTopic) || ({
@@ -756,12 +901,15 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         general: 'Turn the confirmed objective and constraints into a practical next decision.',
     } satisfies Record<LaneId, string>)[laneId];
 
-    const environmentItems = unique([...terms, ...dataSources, ...workloads], 10);
+    const environmentItems = unique([...terms, ...infrastructureComponents, ...dataSources, ...workloads], 10);
     const discussionPoints = unique(facts.map((fact) => `${fact.label}: ${fact.value}`), 12);
     const qualityMissing = unique([
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'business objective' : '',
         !timing ? 'decision timing' : '',
         !environmentItems.length ? 'environment or evidence source' : '',
+        hasInfrastructureRefreshDecision && !hasSpecificInfrastructureScope ? 'specific server and network scope' : '',
+        hasInfrastructureRefreshDecision && !hasValidatedSecuritySeverity ? `validated ${infrastructureExposureLabel}` : '',
+        hasInfrastructureRefreshDecision && hasInfrastructureCostConcern && !hasCostBreakdown ? 'option-level cost evidence' : '',
         hasHealthcareOperations && !hasAuthorizedHealthcareEvidence ? 'authorized operational evidence' : '',
         !requestedOutput ? 'requested artifact' : '',
     ], 4);
@@ -772,23 +920,39 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     };
     const slideBoundary = hasHealthcareOperations
         ? 'Working healthcare-operations view only. Root cause, EHR data availability, privacy boundaries, and any analysis or dashboard design require authorized data-owner and Insight specialist validation.'
+        : hasInfrastructureRefreshDecision
+        ? `Working infrastructure decision view only. Component scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', option costs' : ''}, delay exposure${hasAssumedSmallerOfficeMerger ? ', merger inventory' : ''}, and any recommendation require IT-owner and Insight specialist validation.`
         : 'Working view based on the conversation so far; specialist validation is still required.';
-    const businessOutcome = hasHealthcareOperations
+    const businessOutcome = hasInfrastructureRefreshDecision
+        ? `Give ${infrastructureDecisionAudience} a supported refresh-versus-deferral decision without treating ${infrastructureEvidenceBasis} as proof that a full replacement is required`
+        : hasHealthcareOperations
         ? 'Give leadership a credible view of rising patient-intake times without inventing a root cause'
         : hasAiCustomerExperience
         ? 'Reduce call wait times and improve customer satisfaction'
         : roadmapOutcome;
-    const decisionFrame = decision || (hasHealthcareOperations
+    const decisionFrame = decision || (hasInfrastructureRefreshDecision
+        ? `Decide at ${infrastructureDecisionGate} whether validated evidence supports targeted remediation, a phased or full refresh${prefersDeferralToNextYear ? ', or deferral to next year' : ', and what timing is justified'}.`
+        : hasHealthcareOperations
         ? 'Decide whether the confirmed operational evidence is sufficient to authorize a specialist-defined clinic comparison.'
         : hasAiCustomerExperience
         ? 'Decide whether to authorize a bounded offline AI-CX concept for leadership review before considering a production pilot.'
         : nextStep);
-    const visualTitle = hasHealthcareOperations
+    const visualTitle = hasInfrastructureRefreshDecision
+        ? `What ${hasBoardAudience ? 'the board' : 'leadership'} knows—and what IT still must validate`
+        : hasHealthcareOperations
         ? 'Separate what is known from what still needs validation'
         : hasAiCustomerExperience
         ? 'A credible AI-CX story—without adding outage risk'
         : lane;
-    const evidenceAndConstraints = hasHealthcareOperations
+    const evidenceAndConstraints = hasInfrastructureRefreshDecision
+        ? unique([
+            'Confirmed: The refresh request covers servers and network equipment.',
+            infrastructureAuditEvidence ? `Confirmed: ${infrastructureAuditEvidence}` : '',
+            `Unvalidated: The exact affected components, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', and cost drivers' : ''}.`,
+            smallerOfficePlanningAssumption ? `Planning assumption: ${smallerOfficePlanningAssumption}` : '',
+            expansionImpact ? `Pending validation: ${expansionImpact}` : '',
+        ], 6)
+        : hasHealthcareOperations
         ? unique([
             hasEhr ? 'Confirmed: An EHR exists.' : '',
             healthcareOperationalChange ? `Confirmed: ${healthcareOperationalChange}` : '',
@@ -803,21 +967,43 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             constraint,
             ...compliance,
         ], 6);
-    const executiveBullets = hasHealthcareOperations
+    const executiveBullets = hasInfrastructureRefreshDecision
+        ? unique([
+            smallerOfficePlanningAssumption ? `Planning assumption: ${smallerOfficePlanningAssumption}${expansionImpact ? ` ${expansionImpact}` : ''}` : '',
+            hasBudgetReviewNextQuarter && prefersDeferralToNextYear
+                ? 'Decision timing: Budget review next quarter; implementation preference is next year if validated risk supports deferral.'
+                : hasBudgetReviewNextQuarter
+                ? 'Decision timing: Budget review next quarter.'
+                : prefersDeferralToNextYear
+                ? 'Implementation preference: Defer to next year if validated risk supports waiting.'
+                : '',
+            'Environment: Servers and network equipment; exact components remain unconfirmed.',
+            infrastructureAuditEvidence ? `Evidence: ${infrastructureAuditEvidence}` : '',
+        ], 4)
+        : hasHealthcareOperations
         ? unique([
             hasRisingPatientIntake ? 'Confirmed: Patient-intake times are rising across two clinics.' : '',
             healthcareOperationalChange ? `Confirmed: ${healthcareOperationalChange}` : '',
             'Unknown: The clinics may not share the same root cause.',
         ], 3)
         : unique([businessOutcome, timing, constraint], 3);
-    const decisionBullets = hasHealthcareOperations
+    const decisionBullets = hasInfrastructureRefreshDecision
+        ? unique([
+            stakeholder ? `Participants: ${stakeholder}` : '',
+            requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
+            hasBudgetReviewNextQuarter ? 'Budget decision: Next quarter' : '',
+            prefersDeferralToNextYear ? 'Implementation preference: Defer to next year if evidence supports waiting' : '',
+        ], 4)
+        : hasHealthcareOperations
         ? unique([
             stakeholder ? `Audience: ${stakeholder}` : '',
             requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
             timing ? `Decision timing: ${timing}` : 'Decision timing: Not confirmed',
         ], 4)
         : unique([stakeholder, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', timing], 4);
-    const evidenceSummary = hasHealthcareOperations
+    const evidenceSummary = hasInfrastructureRefreshDecision
+        ? `Separate the confirmed refresh request${hasOutdatedFirmwareAudit ? ' and audit finding' : ''} from unvalidated ${infrastructureExposureLabel}, replacement scope${hasInfrastructureCostConcern ? ', cost' : ''}, and delay-risk claims.`
+        : hasHealthcareOperations
         ? 'Keep confirmed operational facts, pending evidence, and unconfirmed hypotheses visibly separate.'
         : 'Confirmed current-session evidence and operating boundaries—without filling gaps with assumptions.';
     const visualSlides: VisualSlide[] = [

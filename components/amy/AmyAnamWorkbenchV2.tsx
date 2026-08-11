@@ -19,9 +19,12 @@ import {
 } from 'lucide-react';
 import {
     AMY_WORKBENCH_BOUNDARY,
+    buildAmyWorkbenchModel,
+} from '@/lib/anam/workbench-v2';
+import type {
+    AmyWorkbenchFactChange,
     AmyWorkbenchTurn,
     AmyWorkbenchView,
-    buildAmyWorkbenchModel,
 } from '@/lib/anam/workbench-v2';
 
 interface AmyAnamWorkbenchProps {
@@ -31,6 +34,10 @@ interface AmyAnamWorkbenchProps {
     roadmapTopic?: string;
     catalogQuery?: string;
     requestedView?: AmyWorkbenchView;
+    revision?: number;
+    appliedChanges?: AmyWorkbenchFactChange[];
+    visualSlideIndex: number;
+    onVisualSlideIndexChange: (index: number) => void;
     onViewChange: (view: AmyWorkbenchView) => void;
     onClose: () => void;
 }
@@ -54,6 +61,18 @@ const VISUAL_SLIDE_LABELS: Record<string, string> = {
     decisions_and_next_steps: 'Next decision',
 };
 
+const FACT_CHANGE_LABELS: Record<AmyWorkbenchFactChange['kind'], string> = {
+    added: 'Added',
+    updated: 'Updated',
+    removed: 'Removed',
+};
+const EMPTY_FACT_CHANGES: AmyWorkbenchFactChange[] = [];
+
+function factChangeValue(change: AmyWorkbenchFactChange): string {
+    if (change.kind === 'removed') return change.previousValue ?? change.value;
+    return change.value;
+}
+
 function EmptySignal() {
     return (
         <div className="flex min-h-72 flex-col items-center justify-center border border-dashed border-white/15 bg-white/[0.025] px-8 text-center">
@@ -75,6 +94,10 @@ export default function AmyAnamWorkbenchV2({
     roadmapTopic = '',
     catalogQuery = '',
     requestedView,
+    revision = 0,
+    appliedChanges = EMPTY_FACT_CHANGES,
+    visualSlideIndex,
+    onVisualSlideIndexChange,
     onViewChange,
     onClose,
 }: AmyAnamWorkbenchProps) {
@@ -82,20 +105,20 @@ export default function AmyAnamWorkbenchV2({
         () => buildAmyWorkbenchModel(turns, roadmapTopic, catalogQuery, requestedView),
         [catalogQuery, requestedView, roadmapTopic, turns],
     );
-    const [slideIndex, setSlideIndex] = useState(0);
     const [isExpanded, setIsExpanded] = useState(false);
-    const activeSlide = model.visualBrief.slides[slideIndex] ?? model.visualBrief.slides[0];
+    const activeSlide = model.visualBrief.slides[visualSlideIndex] ?? model.visualBrief.slides[0];
+    const displayedAppliedChanges = revision > 1 ? appliedChanges.slice(0, 3) : [];
 
     useEffect(() => {
         if (!isOpen) return;
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape' && isExpanded) setIsExpanded(false);
-            if (view === 'visual' && event.key === 'ArrowLeft') setSlideIndex((current) => Math.max(0, current - 1));
-            if (view === 'visual' && event.key === 'ArrowRight') setSlideIndex((current) => Math.min(model.visualBrief.slides.length - 1, current + 1));
+            if (view === 'visual' && event.key === 'ArrowLeft') onVisualSlideIndexChange(Math.max(0, visualSlideIndex - 1));
+            if (view === 'visual' && event.key === 'ArrowRight') onVisualSlideIndexChange(Math.min(model.visualBrief.slides.length - 1, visualSlideIndex + 1));
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isExpanded, isOpen, model.visualBrief.slides.length, view]);
+    }, [isExpanded, isOpen, model.visualBrief.slides.length, onVisualSlideIndexChange, view, visualSlideIndex]);
 
     const closeWorkbench = () => {
         setIsExpanded(false);
@@ -108,7 +131,7 @@ export default function AmyAnamWorkbenchV2({
             inert={!isOpen}
             aria-label="Amy Intelligence feature panel"
             data-expanded={isExpanded}
-            className={`absolute z-40 flex w-full flex-col overflow-hidden bg-[#0b0b0d]/[0.985] text-white shadow-[-32px_0_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition-[transform,opacity,width] duration-500 ease-out ${
+            className={`absolute z-[70] flex w-full flex-col overflow-hidden bg-[#0b0b0d]/[0.985] text-white shadow-[-32px_0_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition-[transform,opacity,width] duration-500 ease-out ${
                 isExpanded
                     ? 'inset-0 max-w-none border-l-0'
                     : 'inset-y-0 right-0 border-l border-white/10 lg:w-[min(56vw,820px)]'
@@ -169,6 +192,37 @@ export default function AmyAnamWorkbenchV2({
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-7">
+                {revision > 0 && (
+                    <section
+                        className={`mb-5 border px-4 py-3 ${appliedChanges.length > 0 ? 'border-emerald-300/20 bg-emerald-300/[0.055]' : 'border-amber-300/20 bg-amber-300/[0.055]'}`}
+                    >
+                        <div className="flex flex-wrap items-center justify-between gap-2" role="status" aria-live="polite" aria-atomic="true">
+                            <p className={`text-xs font-bold uppercase tracking-[0.14em] ${appliedChanges.length > 0 ? 'text-emerald-300' : 'text-amber-200'}`}>
+                                Revision {revision} {revision === 1 ? 'built' : appliedChanges.length > 0 ? 'updated' : 'checked'}
+                            </p>
+                            <p className="text-xs text-zinc-400">
+                                {revision === 1
+                                    ? `${appliedChanges.length} supported ${appliedChanges.length === 1 ? 'fact' : 'facts'} captured`
+                                    : appliedChanges.length > 0
+                                    ? `${appliedChanges.length} supported ${appliedChanges.length === 1 ? 'fact' : 'facts'} changed`
+                                    : 'No supported facts changed'}
+                            </p>
+                        </div>
+                        {displayedAppliedChanges.length > 0 && (
+                            <ul className="mt-3 space-y-2 text-xs leading-5 text-zinc-300" aria-label={`Supported fact changes in revision ${revision}`}>
+                                {displayedAppliedChanges.map((change) => (
+                                    <li key={`${change.kind}:${change.section}:${change.label}:${change.value}`} className="grid gap-1 sm:grid-cols-[72px_minmax(0,1fr)] sm:gap-3">
+                                        <span className="font-bold uppercase tracking-[0.1em] text-zinc-500">{FACT_CHANGE_LABELS[change.kind]}</span>
+                                        <span className="line-clamp-2 sm:line-clamp-none"><strong className="text-zinc-200">{change.label}:</strong> {factChangeValue(change)}</span>
+                                    </li>
+                                ))}
+                                {appliedChanges.length > displayedAppliedChanges.length && (
+                                    <li className="text-zinc-500">+ {appliedChanges.length - displayedAppliedChanges.length} more supported changes in this revision</li>
+                                )}
+                            </ul>
+                        )}
+                    </section>
+                )}
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Active lane</p>
@@ -276,7 +330,7 @@ export default function AmyAnamWorkbenchV2({
                     <section aria-labelledby="amy-visual-heading">
                         <div className="flex items-end justify-between gap-4">
                             <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{model.quality.level === 'grounded' ? 'Conversation-grounded decision brief' : 'Developing conversation working brief'}</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
-                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{slideIndex + 1} / {model.visualBrief.slides.length}</p>
+                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{visualSlideIndex + 1} / {model.visualBrief.slides.length}</p>
                         </div>
                         {model.quality.level === 'developing' && model.quality.missing.length > 0 && (
                             <div className="mt-5 flex items-start gap-3 border border-amber-300/20 bg-amber-300/[0.05] px-4 py-3 text-sm leading-6 text-amber-100/80">
@@ -290,11 +344,11 @@ export default function AmyAnamWorkbenchV2({
                                     <button
                                         key={slide.id}
                                         type="button"
-                                        onClick={() => setSlideIndex(index)}
-                                        aria-current={index === slideIndex ? 'step' : undefined}
-                                        className={`group flex w-full items-start gap-3 border-l px-3 py-3 text-left transition ${index === slideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-white' : 'border-white/10 text-zinc-500 hover:border-white/25 hover:text-zinc-200'}`}
+                                        onClick={() => onVisualSlideIndexChange(index)}
+                                        aria-current={index === visualSlideIndex ? 'step' : undefined}
+                                        className={`group flex w-full items-start gap-3 border-l px-3 py-3 text-left transition ${index === visualSlideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-white' : 'border-white/10 text-zinc-500 hover:border-white/25 hover:text-zinc-200'}`}
                                     >
-                                        <span className={`mt-0.5 text-xs font-bold ${index === slideIndex ? 'text-[#ff68a9]' : 'text-zinc-600'}`}>{String(index + 1).padStart(2, '0')}</span>
+                                        <span className={`mt-0.5 text-xs font-bold ${index === visualSlideIndex ? 'text-[#ff68a9]' : 'text-zinc-600'}`}>{String(index + 1).padStart(2, '0')}</span>
                                         <span className="text-xs font-semibold leading-5">{VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}</span>
                                     </button>
                                 ))}
@@ -326,13 +380,13 @@ export default function AmyAnamWorkbenchV2({
                         </div>
                         <div className="mt-4 flex gap-2 overflow-x-auto pb-1 xl:hidden" aria-label="Visual Brief slide picker">
                             {model.visualBrief.slides.map((slide, index) => (
-                                <button key={slide.id} type="button" onClick={() => setSlideIndex(index)} aria-current={index === slideIndex ? 'step' : undefined} className={`flex-none border px-3 py-2 text-xs font-semibold ${index === slideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-[#ff8bbc]' : 'border-white/10 text-zinc-400'}`}>{String(index + 1).padStart(2, '0')} {VISUAL_SLIDE_LABELS[slide.id] ?? 'Slide'}</button>
+                                <button key={slide.id} type="button" onClick={() => onVisualSlideIndexChange(index)} aria-current={index === visualSlideIndex ? 'step' : undefined} className={`flex-none border px-3 py-2 text-xs font-semibold ${index === visualSlideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-[#ff8bbc]' : 'border-white/10 text-zinc-400'}`}>{String(index + 1).padStart(2, '0')} {VISUAL_SLIDE_LABELS[slide.id] ?? 'Slide'}</button>
                             ))}
                         </div>
                         <div className="mt-4 flex items-center justify-between gap-4">
-                            <button type="button" onClick={() => setSlideIndex((current) => Math.max(0, current - 1))} disabled={slideIndex === 0} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30"><ChevronLeft size={15} /> Previous</button>
-                            <div className="hidden gap-1.5 sm:flex">{model.visualBrief.slides.map((slide, index) => <button key={slide.id} type="button" onClick={() => setSlideIndex(index)} aria-label={`Open slide ${index + 1}: ${VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}`} aria-current={index === slideIndex ? 'step' : undefined} className={`h-1.5 transition-all ${index === slideIndex ? 'w-7 bg-[#ff2f8a]' : 'w-2 bg-white/20'}`} />)}</div>
-                            <button type="button" onClick={() => setSlideIndex((current) => Math.min(model.visualBrief.slides.length - 1, current + 1))} disabled={slideIndex === model.visualBrief.slides.length - 1} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30">Next <ChevronRight size={15} /></button>
+                            <button type="button" onClick={() => onVisualSlideIndexChange(Math.max(0, visualSlideIndex - 1))} disabled={visualSlideIndex === 0} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30"><ChevronLeft size={15} /> Previous</button>
+                            <div className="hidden gap-1.5 sm:flex">{model.visualBrief.slides.map((slide, index) => <button key={slide.id} type="button" onClick={() => onVisualSlideIndexChange(index)} aria-label={`Open slide ${index + 1}: ${VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}`} aria-current={index === visualSlideIndex ? 'step' : undefined} className={`h-1.5 transition-all ${index === visualSlideIndex ? 'w-7 bg-[#ff2f8a]' : 'w-2 bg-white/20'}`} />)}</div>
+                            <button type="button" onClick={() => onVisualSlideIndexChange(Math.min(model.visualBrief.slides.length - 1, visualSlideIndex + 1))} disabled={visualSlideIndex === model.visualBrief.slides.length - 1} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30">Next <ChevronRight size={15} /></button>
                         </div>
                     </section>
                 ) : (

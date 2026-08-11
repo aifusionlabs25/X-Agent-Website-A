@@ -11,12 +11,25 @@ const prompt = await readFile(
     new URL('../config/anam/amy-conversation-naturalness-upgrade.md', import.meta.url),
     'utf8',
 );
+const workbenchPrompt = await readFile(
+    new URL('../config/anam/amy-workbench-prompt-upgrade.md', import.meta.url),
+    'utf8',
+);
+const clientTools = JSON.parse(await readFile(
+    new URL('../config/anam/amy-workbench-client-tools.json', import.meta.url),
+    'utf8',
+));
+const visualBriefTool = clientTools.find((tool) => tool.name === 'show_visual_brief');
 const baseBehavior = await readFile(
     new URL('../config/anam/amy-cara4-behavior-upgrade.md', import.meta.url),
     'utf8',
 );
 const updater = await readFile(
     new URL('../scripts/anam/update-amy-conversation.mjs', import.meta.url),
+    'utf8',
+);
+const workbenchUpdater = await readFile(
+    new URL('../scripts/anam/update-amy-workbench.mjs', import.meta.url),
     'utf8',
 );
 const readiness = await readFile(
@@ -86,6 +99,29 @@ test('Amy keeps claim, handoff, and artifact guardrails intact', () => {
     assert.match(prompt, /approved attached knowledge source/i);
 });
 
+test('Amy truthfully rebuilds visual updates and confirms only the committed delta', () => {
+    assert.ok(visualBriefTool, 'show_visual_brief tool must exist');
+
+    for (const source of [prompt, workbenchPrompt, visualBriefTool.description]) {
+        assert.match(source, /update, refresh, rebuild, or regenerate/i);
+        assert.match(source, /call (?:the matching visual tool|show_visual_brief|this tool) again/i);
+        assert.match(source, /contentChanged, appliedChanges, and visibleFacts/i);
+        assert.match(source, /only source of truth/i);
+        assert.match(source, /requested delta is absent from both appliedChanges and visibleFacts/i);
+        assert.match(source, /requested change did not land/i);
+        assert.match(source, /one precise clarification/i);
+        assert.match(source, /one short sentence/i);
+        assert.match(source, /planning assumptions? explicitly/i);
+        assert.match(source, /concurrent timelines separate and named/i);
+        assert.match(source, /scope expansion|scope-expansion/i);
+        assert.match(source, /generic guardrail/i);
+    }
+
+    assert.match(workbenchPrompt, /budget review next quarter.*preferred deferral until next year/i);
+    assert.match(workbenchPrompt, /never infer an applied change.*revision number increased/i);
+    assert.match(prompt, /Never claim the view was updated, refreshed, expanded, or now includes the detail/i);
+});
+
 test('Amy treats student-risk AI and compressed board timelines as high-impact discovery', () => {
     assert.match(prompt, /student-retention or at-risk-student scenarios/i);
     assert.match(prompt, /privacy and institutional policy/i);
@@ -118,6 +154,47 @@ test('Amy live updater is dry-run first, identity-pinned, backed up, and drift-c
     assert.match(updater, /0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08/);
     assert.match(readiness, /AMY_CONVERSATION_NATURALNESS_START/);
     assert.match(readiness, /AMY_CONVERSATION_NATURALNESS_END/);
+});
+
+test('Amy Workbench updater is dry-run first, identity-pinned, backed up, and fully verified', () => {
+    assert.match(workbenchUpdater, /mode: 'dry-run'/);
+    assert.match(workbenchUpdater, /if \(!applying\)/);
+    assert.match(workbenchUpdater, /CONFIRM_AMY_WORKBENCH_SYNC/);
+    assert.match(workbenchUpdater, /expected-current-sha256/);
+    assert.match(workbenchUpdater, /freshly fetched Amy prompt/i);
+    assert.match(workbenchUpdater, /path\.isAbsolute\(rawBackupDir\)/);
+    assert.match(workbenchUpdater, /backup-dir must be outside the repository/i);
+    assert.match(workbenchUpdater, /persona: before/);
+    assert.match(workbenchUpdater, /matchingWorkbenchTools/);
+    assert.match(workbenchUpdater, /flag: 'wx'/);
+
+    assert.match(workbenchUpdater, /0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08/);
+    assert.match(workbenchUpdater, /Amy Insight SDR - Cara 4 Canary/);
+    assert.match(workbenchUpdater, /36e17abf-ef6c-4bef-99bd-3f925da155eb/);
+    assert.match(workbenchUpdater, /avatarModel: 'cara-4'/);
+    assert.match(workbenchUpdater, /b138c2a2-ba66-4887-95d5-1a57093fc92d/);
+    assert.match(workbenchUpdater, /a7cf662c-2ace-4de1-a21e-ef0fbf144bb7/);
+    assert.match(workbenchUpdater, /AMY_CONVERSATION_NATURALNESS_START/);
+    assert.match(workbenchUpdater, /AMY_CARA4_RELIABILITY_START/);
+    assert.match(workbenchUpdater, /AMY_PUBLIC_SECTOR_START/);
+    assert.match(workbenchUpdater, /AMY_WORKBENCH_START/);
+    assert.match(workbenchUpdater, /AMY_AGENTMAIL_START/);
+    assert.match(workbenchUpdater, /required managed prompt markers are malformed or missing/i);
+
+    assert.match(workbenchUpdater, /function normalizedToolDefinition[\s\S]*description:[\s\S]*type:[\s\S]*config:/);
+    assert.match(workbenchUpdater, /JSON\.stringify\(verifiedToolIds\) !== JSON\.stringify\(nextToolIds\)/);
+    assert.match(workbenchUpdater, /verifiedToolNames\.includes\('capture_sales_handoff'\)/);
+    assert.match(workbenchUpdater, /descriptionTypeConfig/);
+    assert.match(workbenchUpdater, /protectedPersonaProviderStateUnchanged: true/);
+    assert.match(workbenchUpdater, /workbenchToolDefinitionsVerified: true/);
+
+    const backupIndex = workbenchUpdater.indexOf('await fs.writeFile(backupPath');
+    const firstPutIndex = workbenchUpdater.indexOf("method: 'PUT'", backupIndex);
+    const firstPostIndex = workbenchUpdater.indexOf("method: 'POST'", backupIndex);
+    assert.ok(backupIndex >= 0, 'Workbench backup must be written');
+    assert.ok(firstPutIndex > backupIndex, 'Workbench backup must precede the first PUT');
+    assert.ok(firstPostIndex > backupIndex, 'Workbench backup must precede the first POST');
+    assert.doesNotMatch(workbenchUpdater, /console\.log\([^)]*(apiKey|ANAM_API_KEY|Authorization)/s);
 });
 
 test('Amy conversation block installation is front-loaded, replaceable, and idempotent', () => {

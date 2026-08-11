@@ -22,7 +22,16 @@ import {
     confirmDaniAnamLiveIdentity,
     completeAmyAnamClientSession,
 } from '@/lib/anam/session-spine-client';
-import { AmyWorkbenchTurn, AmyWorkbenchView, buildAmyWorkbenchModel } from '@/lib/anam/workbench-v2';
+import {
+    buildAmyWorkbenchModel,
+    diffAmyWorkbenchFacts,
+} from '@/lib/anam/workbench-v2';
+import type {
+    AmyWorkbenchFactChange,
+    AmyWorkbenchModel,
+    AmyWorkbenchTurn,
+    AmyWorkbenchView,
+} from '@/lib/anam/workbench-v2';
 import { buildEvanMovePlan, EvanMovePlannerView, MovePlanStop } from '@/lib/anam/evan-move-planner';
 import {
     parseEvanRouteToolStops,
@@ -40,6 +49,9 @@ interface AnamPlayerProps {
 }
 
 const transcriptRole = (role: string) => /^(?:user|human|customer)$/i.test(role.trim()) ? 'user' : 'agent';
+const WORKBENCH_TRANSCRIPT_SETTLE_STEP_MS = 50;
+const WORKBENCH_TRANSCRIPT_SETTLE_STABLE_PASSES = 3;
+const WORKBENCH_TRANSCRIPT_SETTLE_MAX_PASSES = 10;
 
 export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onClose }: AnamPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -52,6 +64,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [roadmapTopic, setRoadmapTopic] = useState('');
     const [catalogQuery, setCatalogQuery] = useState('');
     const [workbenchRequestedView, setWorkbenchRequestedView] = useState<AmyWorkbenchView | undefined>(undefined);
+    const [workbenchRevision, setWorkbenchRevision] = useState(0);
+    const [workbenchAppliedChanges, setWorkbenchAppliedChanges] = useState<AmyWorkbenchFactChange[]>([]);
+    const [workbenchVisualSlideIndex, setWorkbenchVisualSlideIndex] = useState(0);
     const [evanPlannerOpen, setEvanPlannerOpen] = useState(false);
     const [evanPlannerView, setEvanPlannerView] = useState<EvanMovePlannerView>('brief');
     const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[]>([]);
@@ -68,6 +83,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const transcriptRef = useRef<{ role: string; content: string }[]>([]);
     const currentMessageRef = useRef<string>('');
     const currentRoleRef = useRef<string>('');
+    const workbenchRevisionRef = useRef(0);
+    const lastWorkbenchModelRef = useRef<AmyWorkbenchModel | null>(null);
     const evanAddressStopsRef = useRef<MovePlanStop[]>([]);
 
     useEffect(() => {
@@ -117,7 +134,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let completedUserTurns = 0;
-        let workbenchRevision = 0;
         let confirmedMemoryName: string | null = null;
         let requestedCloseFallbackTimer: number | null = null;
         const videoElement = videoRef.current;
@@ -134,6 +150,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setRoadmapTopic('');
         setCatalogQuery('');
         setWorkbenchRequestedView(undefined);
+        workbenchRevisionRef.current = 0;
+        lastWorkbenchModelRef.current = null;
+        setWorkbenchRevision(0);
+        setWorkbenchAppliedChanges([]);
+        setWorkbenchVisualSlideIndex(0);
         setEvanPlannerOpen(false);
         setEvanPlannerView('brief');
         evanAddressStopsRef.current = [];
@@ -232,6 +253,38 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 }, 1_500);
             });
         };
+
+        const currentWorkbenchTranscriptSignature = () => {
+            const latestTurn = transcriptRef.current.at(-1);
+            return [
+                transcriptRef.current.length,
+                latestTurn?.role ?? '',
+                latestTurn?.content ?? '',
+                currentRoleRef.current,
+                currentMessageRef.current,
+            ].join('\u001f');
+        };
+
+        const waitForWorkbenchTranscriptToSettle = async () => {
+            let previousSignature = currentWorkbenchTranscriptSignature();
+            let stablePasses = 0;
+
+            for (let pass = 0; pass < WORKBENCH_TRANSCRIPT_SETTLE_MAX_PASSES; pass += 1) {
+                await new Promise<void>((resolve) => {
+                    window.setTimeout(resolve, WORKBENCH_TRANSCRIPT_SETTLE_STEP_MS);
+                });
+                if (!isMounted) return;
+
+                const nextSignature = currentWorkbenchTranscriptSignature();
+                if (nextSignature === previousSignature) {
+                    stablePasses += 1;
+                    if (stablePasses >= WORKBENCH_TRANSCRIPT_SETTLE_STABLE_PASSES) return;
+                } else {
+                    stablePasses = 0;
+                    previousSignature = nextSignature;
+                }
+            }
+        };
         window.addEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
 
         const initializeAnam = async () => {
@@ -309,6 +362,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     ) => {
                         cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler(toolName, {
                             onStart: async (payload) => {
+                                await waitForWorkbenchTranscriptToSettle();
                                 const synchronizedTurns = transcriptRef.current.slice(-120) as AmyWorkbenchTurn[];
                                 const pendingContent = currentMessageRef.current.trim();
                                 const pendingTurn = pendingContent
@@ -317,7 +371,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 if (
                                     pendingTurn
                                     && pendingTurn.role === 'user'
-                                    && synchronizedTurns.at(-1)?.content !== pendingTurn.content
+                                    && (
+                                        synchronizedTurns.at(-1)?.role !== pendingTurn.role
+                                        || synchronizedTurns.at(-1)?.content !== pendingTurn.content
+                                    )
                                 ) {
                                     synchronizedTurns.push(pendingTurn);
                                 }
@@ -328,10 +385,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     ? payload.arguments.query.trim().slice(0, 500)
                                     : '';
                                 const receiptModel = buildAmyWorkbenchModel(synchronizedTurns, topic, query, view);
+                                const appliedChanges = diffAmyWorkbenchFacts(lastWorkbenchModelRef.current, receiptModel);
+                                const contentChanged = appliedChanges.length > 0;
+                                const nextRevision = workbenchRevisionRef.current + 1;
+                                workbenchRevisionRef.current = nextRevision;
+                                lastWorkbenchModelRef.current = receiptModel;
                                 if (isMounted) {
-                                    workbenchRevision += 1;
                                     setWorkbenchTurns([...synchronizedTurns]);
                                     setWorkbenchRequestedView(view);
+                                    setWorkbenchRevision(nextRevision);
+                                    setWorkbenchAppliedChanges(appliedChanges);
+                                    setWorkbenchVisualSlideIndex(0);
                                     if (view === 'roadmap') {
                                         setRoadmapTopic(topic);
                                     } else if (view === 'catalog') {
@@ -346,13 +410,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 return JSON.stringify({
                                 status: 'view_rebuilt',
                                 view,
-                                revision: workbenchRevision,
+                                revision: nextRevision,
+                                contentChanged,
+                                appliedChanges,
                                 currentSessionUserTurns: synchronizedTurns.filter((turn) => turn.role === 'user').length,
                                 lane: receiptModel.lane,
                                 quality: receiptModel.quality.label,
                                 missingGrounding: receiptModel.quality.missing,
                                 visibleFacts: receiptModel.facts.map((fact) => `${fact.label}: ${fact.value}`),
-                                instruction: `${confirmation} The client has committed this revision to the screen. Confirm only that the working view is open. Claim a named fact or track is visible only when it appears in visibleFacts. If quality is Needs clarification, do not call the artifact leadership-ready and do not fill missingGrounding from assumptions.`,
+                                instruction: `${confirmation} The client has committed this revision to the screen. Confirm only that the working view is open. Never claim that a requested addition or update was applied unless the named detail appears in both appliedChanges and visibleFacts. Claim a removal only when appliedChanges marks it removed and it is absent from visibleFacts. If contentChanged is false, say the view was checked but no supported fact changed; do not claim a refresh added anything. If quality is Needs clarification, do not call the artifact leadership-ready and do not fill missingGrounding from assumptions.`,
                             });
                             },
                         }));
@@ -954,6 +1020,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     roadmapTopic={roadmapTopic}
                     catalogQuery={catalogQuery}
                     requestedView={workbenchRequestedView}
+                    revision={workbenchRevision}
+                    appliedChanges={workbenchAppliedChanges}
+                    visualSlideIndex={workbenchVisualSlideIndex}
+                    onVisualSlideIndexChange={setWorkbenchVisualSlideIndex}
                     onViewChange={setWorkbenchView}
                     onClose={() => setWorkbenchOpen(false)}
                 />

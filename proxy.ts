@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
-export function middleware(_request: NextRequest) {
+export function proxy() {
     if (process.env.MAINTENANCE_MODE === 'true') {
         // Return a sleek, branded HTML response
         return new NextResponse(
@@ -70,5 +69,5 @@ export function middleware(_request: NextRequest) {
 
 export const config = {
     // Apply to all routes except API, static files, and Next.js internals
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };

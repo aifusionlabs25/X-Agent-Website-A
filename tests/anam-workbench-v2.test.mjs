@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
     AMY_WORKBENCH_BOUNDARY,
     buildAmyWorkbenchModel,
+    diffAmyWorkbenchFacts,
 } from '../lib/anam/workbench-v2.ts';
 
 test('Amy workbench v2 starts without inventing session facts', () => {
@@ -101,6 +102,111 @@ test('Invoked Workbench view controls ambiguous requested-output wording', () =>
     const turns = [{ role: 'user', content: 'Yes, show me that brief.' }];
     assert.equal(buildAmyWorkbenchModel(turns, '', '', 'visual').facts.find((fact) => fact.label === 'Requested output')?.value, 'Visual brief');
     assert.equal(buildAmyWorkbenchModel(turns, '', '', 'brief').facts.find((fact) => fact.label === 'Requested output')?.value, 'Live brief');
+});
+
+test('infrastructure-refresh visual grounds the board decision before and after the smaller-office assumption', () => {
+    const userTurns = [
+        "Amy, our IT team is asking for a major infrastructure refresh. And I don't really understand why it's so expensive or what happens if I delay it.",
+        'Where do I even start?',
+        "They're talking about servers and some network equipment, but I'm not sure which parts. Timeline-wise, we have a budget review next quarter. Honestly, if I can push this into next year, I'd prefer that. But IT says there's risk.",
+        "They've mentioned cyber security risk, but I haven't gotten specifics. They just say aging infrastructure. I need to know if this is real or if they're just trying to get a new toy.",
+        "We had an audit six months ago that flagged some outdated firmware, but no major breaches. It's more that they're saying if we don't upgrade, we'll fall behind.",
+        'So what would you recommend?',
+        "Before I decide on a specialist, I'd need something clear to take to the board. Could you show me a brief outline of what we've discussed so far?",
+        "something they'd understand.",
+        "This is helpful. I'll review it before the meeting. Actually, wait, I just remembered. We might be merging a smaller office next quarter. How would that change the spager?",
+        "Right, it would likely change scope and budget. We'd need to include their systems. Let's assume that's happening. Can we update the brief to reflect that potential expansion?",
+    ];
+    const buildRevision = (count) => buildAmyWorkbenchModel(
+        userTurns.slice(0, count).map((content) => ({ role: 'user', content })),
+        '',
+        '',
+        'visual',
+    );
+    const revisionOne = buildRevision(7);
+    const revisionTwo = buildRevision(10);
+
+    assert.equal(revisionOne.lane, 'Security readiness');
+    assert.match(revisionOne.brief.objective, /board.*server and network components.*cost/i);
+    assert.match(revisionOne.brief.objective, /security and lifecycle evidence/i);
+    assert.match(revisionOne.brief.objective, /budget review.*deferring.*next year/i);
+    assert.doesNotMatch(revisionOne.brief.objective, /Before I decide on a specialist|show me a brief outline/i);
+    assert.deepEqual(revisionOne.brief.environment, ['Servers', 'Network equipment']);
+    assert.equal(revisionOne.facts.find((fact) => fact.label === 'Technology context')?.value, 'Servers / Network equipment');
+    assert.match(revisionOne.facts.find((fact) => fact.label === 'Audit evidence')?.value ?? '', /audit six months ago.*outdated firmware.*no major breaches/i);
+    assert.match(revisionOne.facts.find((fact) => fact.label === 'Stakeholder context')?.value ?? '', /board decision audience.*IT team/i);
+    assert.equal(revisionOne.facts.find((fact) => fact.label === 'Timing')?.value, 'Budget review next quarter');
+    assert.match(revisionOne.facts.find((fact) => fact.label === 'Deferral preference')?.value ?? '', /defer.*next year/i);
+    assert.equal(revisionOne.quality.level, 'developing');
+    assert.deepEqual(revisionOne.quality.missing, [
+        'specific server and network scope',
+        'validated security severity',
+        'option-level cost evidence',
+    ]);
+    assert.deepEqual(revisionOne.roadmap.phases.map((phase) => phase.title), [
+        'Confirm the component boundary',
+        'Validate security severity',
+        'Compare bounded options',
+        'Set the board decision gate',
+    ]);
+    assert.match(revisionOne.visualBrief.slides[0].bullets.join(' '), /budget review next quarter.*next year/i);
+    assert.match(revisionOne.visualBrief.slides[0].bullets.join(' '), /servers and network equipment.*exact components remain unconfirmed/i);
+    assert.match(revisionOne.visualBrief.slides[0].bullets.join(' '), /outdated firmware.*no major breaches/i);
+    assert.doesNotMatch(revisionOne.facts.find((fact) => fact.label === 'Stakeholder context')?.value ?? '', /Before I decide|something clear/i);
+
+    const planningAssumption = revisionTwo.facts.find((fact) => fact.label === 'Planning assumption')?.value ?? '';
+    const expansionImpact = revisionTwo.facts.find((fact) => fact.label === 'Scope and budget impact')?.value ?? '';
+    const visibleFacts = revisionTwo.facts.map((fact) => `${fact.label}: ${fact.value}`);
+    assert.match(planningAssumption, /smaller-office merger.*next quarter.*include that office's systems.*inventory remains unvalidated/i);
+    assert.match(expansionImpact, /scope and budget expand.*smaller-office systems.*inventory validation/i);
+    assert.match(revisionTwo.facts.find((fact) => fact.label === 'Technology context')?.value ?? '', /Servers.*Network equipment.*Smaller-office systems \(inventory pending\)/i);
+    assert.equal(revisionTwo.uncertainItems.some((item) => /merging a smaller office/i.test(item)), false);
+    assert.ok(visibleFacts.some((fact) => /Planning assumption:.*smaller-office merger.*next quarter.*office's systems/i.test(fact)));
+    assert.ok(visibleFacts.some((fact) => /Scope and budget impact:.*scope and budget expand/i.test(fact)));
+    assert.match(revisionTwo.visualBrief.slides[0].bullets[0], /Planning assumption:.*smaller-office merger.*next quarter.*office's systems.*scope and budget expand/i);
+    assert.equal(revisionTwo.facts.find((fact) => fact.label === 'Timing')?.value, 'Budget review next quarter');
+    assert.match(revisionTwo.facts.find((fact) => fact.label === 'Deferral preference')?.value ?? '', /next year/i);
+    assert.equal(revisionTwo.quality.level, 'developing');
+    assert.deepEqual(revisionTwo.quality.missing, revisionOne.quality.missing);
+    assert.doesNotMatch(JSON.stringify(revisionTwo.uncertainItems), /smaller office/i);
+
+    const delta = diffAmyWorkbenchFacts(revisionOne, revisionTwo);
+    assert.ok(delta.some((change) => change.kind === 'added' && change.label === 'Planning assumption' && /smaller-office merger/i.test(change.value)));
+    assert.ok(delta.some((change) => change.kind === 'added' && change.label === 'Scope and budget impact' && /scope and budget expand/i.test(change.value)));
+    assert.ok(delta.some((change) => change.kind === 'updated' && change.label === 'Technology context' && change.previousValue === 'Servers / Network equipment' && /Smaller-office systems/i.test(change.value)));
+    assert.equal(delta.some((change) => change.kind === 'removed'), false);
+});
+
+test('fact delta reports deterministic added, updated, and removed receipt facts', () => {
+    const previous = buildAmyWorkbenchModel([
+        { role: 'user', content: 'We run Azure and must protect business continuity before next quarter. Show me the brief.' },
+    ], '', '', 'brief');
+    const next = {
+        ...previous,
+        facts: [
+            ...previous.facts
+                .filter((fact) => fact.label !== 'Primary guardrail')
+                .map((fact) => fact.label === 'Technology context' ? { ...fact, value: 'Azure / VMware' } : fact),
+            { section: 'Constraints', label: 'Planning assumption', value: 'Include a second site.', status: 'mentioned' },
+        ],
+    };
+    const delta = diffAmyWorkbenchFacts(previous, next);
+
+    assert.ok(delta.some((change) => change.kind === 'added' && change.label === 'Planning assumption' && change.value === 'Include a second site.'));
+    assert.ok(delta.some((change) => change.kind === 'updated' && change.label === 'Technology context' && change.previousValue === 'Azure' && change.value === 'Azure / VMware'));
+    assert.ok(delta.some((change) => change.kind === 'removed' && change.label === 'Primary guardrail' && /continuity/i.test(change.value)));
+    assert.ok(diffAmyWorkbenchFacts(null, next).every((change) => change.kind === 'added'));
+});
+
+test('infrastructure refresh does not invent board, budget-review, or deferral timing', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: 'We are considering an infrastructure refresh for servers and network equipment.' },
+        { role: 'user', content: 'Show me a visual brief of what still needs validation.' },
+    ], '', '', 'visual');
+    const serialized = JSON.stringify(model);
+
+    assert.match(model.brief.objective, /leadership.*server and network components.*next decision gate/i);
+    assert.doesNotMatch(serialized, /next quarter|next year|\bboard\b|\bcost evidence\b|\bcost drivers\b/i);
 });
 
 test('student-retention pressure test stays grounded and produces a safe board-ready working path', () => {
@@ -367,6 +473,13 @@ test('Amy feature tabs and content use readable production typography', async ()
     assert.match(workbench, /VISUAL_SLIDE_LABELS/);
     assert.match(workbench, /bg-\[#fffaf7\]/);
     assert.match(workbench, /model\.quality\.label/);
+    assert.match(workbench, /Revision \{revision\}/);
+    assert.match(workbench, /role="status"/);
+    assert.match(workbench, /aria-live="polite"/);
+    assert.match(workbench, /displayedAppliedChanges/);
+    assert.match(workbench, /visualSlideIndex/);
+    assert.match(workbench, /onVisualSlideIndexChange/);
+    assert.doesNotMatch(workbench, /setSlideIndex/);
 
     assert.match(workbench, /text-\[11px\][^`]+sm:text-sm/);
     assert.match(workbench, /text-sm leading-6 text-zinc-400/);
@@ -389,6 +502,14 @@ test('Amy player registers all five visual handlers and keeps workbench local to
     assert.match(player, /missingGrounding: receiptModel\.quality\.missing/);
     assert.match(player, /buildAmyWorkbenchModel\(synchronizedTurns, topic, query, view\)/);
     assert.match(player, /setWorkbenchRequestedView\(view\)/);
+    assert.match(player, /await waitForWorkbenchTranscriptToSettle\(\)/);
+    assert.match(player, /WORKBENCH_TRANSCRIPT_SETTLE_MAX_PASSES = 10/);
+    assert.match(player, /diffAmyWorkbenchFacts\(lastWorkbenchModelRef\.current, receiptModel\)/);
+    assert.match(player, /contentChanged/);
+    assert.match(player, /appliedChanges/);
+    assert.match(player, /Never claim that a requested addition or update was applied unless the named detail appears in both appliedChanges and visibleFacts/i);
+    assert.match(player, /setWorkbenchVisualSlideIndex\(0\)/);
+    assert.match(player, /revision=\{workbenchRevision\}/);
 });
 
 test('Catalog is directional and never claims live commerce data', () => {
