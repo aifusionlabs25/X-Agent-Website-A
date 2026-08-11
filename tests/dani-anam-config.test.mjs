@@ -94,7 +94,7 @@ test('Dani readiness pins identity, Cara 4 avatar, Rachel voice, GPT OSS 120B, v
     ];
     for (const persona of drifted) assert.equal(inspectDaniPersonaReadiness(persona).ready, false);
 
-    const republished = { ...healthyPersona(), publishedAt: '2026-08-11T00:00:00.000Z' };
+    const republished = { ...healthyPersona(), publishedAt: '2026-08-11T01:00:00.000Z' };
     assert.equal(inspectDaniPersonaReadiness(republished).ready, true);
 });
 
@@ -151,6 +151,8 @@ test('managed Dani prompt covers AI solution discovery, native meeting behavior,
     assert.match(prompt, /X Agents are AI Fusion Labs' flagship product, but they are not the answer to every problem/i);
     assert.match(prompt, /Use this order of authority/i);
     assert.match(prompt, /Live voice contract - highest priority/i);
+    assert.match(prompt, /render your own name as "Dannie"[\s\S]*pronounced "DAN-ee," rhyming with "Annie," never "Donnie\."/i);
+    assert.match(prompt, /Avoid the ambiguous noun "lead"[\s\S]*sales prospect[\s\S]*past tense "led\."/i);
     assert.match(prompt, /roughly 15 to 30 spoken words by default/i);
     assert.match(prompt, /Forty words is a hard ceiling/i);
     assert.match(prompt, /Never end two consecutive replies with questions/i);
