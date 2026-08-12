@@ -95,8 +95,12 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(scheduler, /Join now/);
     assert.match(scheduler, /Schedule for later/);
     assert.match(scheduler, /Dani joins independently/);
-    assert.match(scheduler, /Open Teams/);
-    assert.doesNotMatch(scheduler, /Open Teams as host/);
+    assert.match(scheduler, /Schedule another meeting/);
+    assert.match(scheduler, /Return to Dani/);
+    assert.doesNotMatch(scheduler, /Open Teams/);
+    assert.doesNotMatch(scheduler, /Open Google Meet/);
+    assert.doesNotMatch(scheduler, /Open Zoom/);
+    assert.doesNotMatch(scheduler, /target="_blank"/);
     assert.match(scheduler, /invite\.joinState/);
     assert.match(scheduler, /fetch\('\/api\/anam\/dani\/meetings'/);
     assert.match(scheduler, /fetch\('\/api\/anam\/dani\/access'/);

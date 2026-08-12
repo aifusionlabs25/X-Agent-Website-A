@@ -8,7 +8,6 @@ import {
     CalendarDays,
     Check,
     Clock3,
-    ExternalLink,
     LoaderCircle,
     Mail,
     ShieldCheck,
@@ -181,7 +180,6 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
 
     if (invite) {
         const joinState = invite.joinState?.replaceAll('_', ' ') ?? null;
-        const openMeetingLabel = provider === 'teams' ? 'Open Teams' : provider === 'google' ? 'Open Google Meet' : 'Open Zoom';
         const statusCopy = invite.status === 'active'
             ? joinState === 'media active'
                 ? 'Dani is connected with active audio and video.'
@@ -213,8 +211,12 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
                 </dl>
                 {invite.statusReason ? <p className={styles.error}>{invite.statusReason}</p> : null}
                 <div className={styles.actions}>
-                    <Link href="/agents/dani" className={styles.secondaryButton}>Back to Dani</Link>
-                    <a href={meetingUrl} target="_blank" rel="noreferrer" className={styles.primaryButton}>{openMeetingLabel} <ExternalLink size={15} /></a>
+                    <button type="button" className={styles.secondaryButton} onClick={() => {
+                        setInvite(null);
+                        setMeetingUrl('');
+                        setStep(1);
+                    }}>Schedule another meeting</button>
+                    <Link href="/agents/dani" className={styles.primaryButton}>Return to Dani <ArrowRight size={15} /></Link>
                 </div>
             </div>
         );
