@@ -181,7 +181,7 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
 
     if (invite) {
         const joinState = invite.joinState?.replaceAll('_', ' ') ?? null;
-        const hostAction = provider === 'teams' ? 'Open Teams as host' : provider === 'google' ? 'Open Google Meet as host' : 'Open Zoom as host';
+        const openMeetingLabel = provider === 'teams' ? 'Open Teams' : provider === 'google' ? 'Open Google Meet' : 'Open Zoom';
         const statusCopy = invite.status === 'active'
             ? joinState === 'media active'
                 ? 'Dani is connected with active audio and video.'
@@ -214,7 +214,7 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
                 {invite.statusReason ? <p className={styles.error}>{invite.statusReason}</p> : null}
                 <div className={styles.actions}>
                     <Link href="/agents/dani" className={styles.secondaryButton}>Back to Dani</Link>
-                    <a href={meetingUrl} target="_blank" rel="noreferrer" className={styles.primaryButton}>{hostAction} <ExternalLink size={15} /></a>
+                    <a href={meetingUrl} target="_blank" rel="noreferrer" className={styles.primaryButton}>{openMeetingLabel} <ExternalLink size={15} /></a>
                 </div>
             </div>
         );
