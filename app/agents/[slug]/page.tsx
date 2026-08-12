@@ -52,7 +52,20 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
         const rawSessionState = Array.isArray(resolvedSearchParams.session)
             ? resolvedSearchParams.session[0]
             : resolvedSearchParams.session;
-        return <DaniEditorialLanding sessionComplete={rawSessionState === 'complete'} />;
+        const rawMeetingProvider = Array.isArray(resolvedSearchParams.meeting)
+            ? resolvedSearchParams.meeting[0]
+            : resolvedSearchParams.meeting;
+        const meetingProvider = rawMeetingProvider === 'google'
+            || rawMeetingProvider === 'zoom'
+            || rawMeetingProvider === 'teams'
+            ? rawMeetingProvider
+            : null;
+        return (
+            <DaniEditorialLanding
+                sessionComplete={rawSessionState === 'complete'}
+                meetingProvider={meetingProvider}
+            />
+        );
     }
 
     if (agent.slug === 'evan') return <EvanLandingPage agent={agent} />;

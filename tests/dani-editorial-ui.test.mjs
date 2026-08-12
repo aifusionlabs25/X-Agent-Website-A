@@ -63,24 +63,40 @@ test('Dani live session has route-scoped identity, safe controls, clean framing,
 });
 
 test('Dani agent route renders direct and post-session editorial states', async () => {
-    const [route, landing, css] = await Promise.all([
+    const [route, landing, scheduler, css, meetingCss] = await Promise.all([
         read('../app/agents/[slug]/page.tsx'),
         read('../components/dani/DaniEditorialLanding.tsx'),
+        read('../components/dani/DaniMeetingScheduler.tsx'),
         read('../components/dani/DaniEditorial.module.css'),
+        read('../components/dani/DaniMeetingScheduler.module.css'),
     ]);
 
-    assert.match(route, /DaniEditorialLanding sessionComplete=\{rawSessionState === 'complete'\}/);
+    assert.match(route, /meetingProvider=\{meetingProvider\}/);
     assert.match(landing, /Good work\. You moved the idea forward\./);
-    assert.match(landing, /Bring the problem\. Leave with a clearer path\./);
+    assert.match(landing, /How would you like to meet\?/);
+    assert.match(landing, /Talk with Dani right now/);
+    assert.match(landing, /Google Meet/);
+    assert.match(landing, /Microsoft Teams/);
+    assert.match(landing, /\/demo\/dani/);
+    assert.match(landing, /meeting=\$\{provider\.id\}/);
     assert.match(landing, /Sent only when requested/);
     assert.match(landing, /No CRM update or commercial commitment was made/);
-    assert.match(landing, /data-dani-surface=\{sessionComplete \? 'post-session' : 'landing'\}/);
-    assert.doesNotMatch(landing, /Dani \/ AI Fusion Labs/);
+    assert.match(landing, /data-dani-surface="meeting-scheduler"/);
+    assert.match(landing, /data-dani-surface="landing"/);
     assert.doesNotMatch(landing, /Clarity before complexity\./);
-    assert.match(landing, /lg:grid-cols-\[minmax\(29rem,1\.02fr\)_minmax\(28rem,\.98fr\)\]/);
-    assert.match(landing, /max-w-\[42rem\]/);
-    assert.match(landing, /text-\[clamp\(3rem,4\.6vw,5\.25rem\)\]/);
-    assert.doesNotMatch(landing, /6\.5rem|8\.5rem|max-w-\[50rem\]/);
+    assert.match(css, /grid-template-columns: minmax\(21rem, 35%\) minmax\(0, 65%\)/);
+    assert.match(css, /object-position: 58% 38%/);
+    assert.match(css, /\.meetingChoiceGrid/);
+    assert.match(css, /backdrop-filter: blur\(15px\)/);
+    assert.match(scheduler, /data-dani-meeting-step=\{step\}/);
+    assert.match(scheduler, /Set the room\./);
+    assert.match(scheduler, /Set her role\./);
+    assert.match(scheduler, /Confirm the invitation\./);
+    assert.match(scheduler, /fetch\('\/api\/anam\/dani\/meetings'/);
+    assert.match(scheduler, /fetch\('\/api\/anam\/dani\/access'/);
+    assert.match(scheduler, /fetch\('\/api\/anam\/dani\/access\/verify'/);
+    assert.match(meetingCss, /\.providerGrid/);
+    assert.match(meetingCss, /\.roleGrid/);
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
     assert.match(css, /\.entryPortraitImage/);
     assert.match(css, /@media \(min-width: 768px\) and \(max-height: 850px\)/);
@@ -88,6 +104,26 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(css, /\.entryAction/);
     assert.match(css, /\.landingPortraitImage/);
     assert.match(landing, /<DaniMemoryControls placement="inline" \/>/);
+});
+
+test('Dani meeting creation is verified, rate-limited, server-side, and status-aware', async () => {
+    const route = await read('../app/api/anam/dani/meetings/route.ts');
+
+    assert.match(route, /isTrustedBrowserOrigin\(request\)/);
+    assert.match(route, /readDaniAnamBrowserSession/);
+    assert.match(route, /readDaniAnamContactFromRequest/);
+    assert.match(route, /emailOwnershipVerified !== true/);
+    assert.match(route, /requestFingerprint\(request, 'dani-meeting-create-preauth'\)/);
+    assert.match(route, /limit: 4,[\s\S]*windowSeconds: 24 \* 60 \* 60/);
+    assert.match(route, /https:\/\/api\.anam\.ai\/v1\/meetings\/invites/);
+    assert.match(route, /personaId: DANI_PERSONA_ID/);
+    assert.match(route, /groupCall: body\.groupCall/);
+    assert.match(route, /xagent-dani-\$\{randomUUID\(\)\}/);
+    assert.match(route, /meet\.google\.com/);
+    assert.match(route, /\.zoom\.us/);
+    assert.match(route, /teams\.microsoft\.com/);
+    assert.match(route, /MAX_SCHEDULE_AHEAD_MS/);
+    assert.doesNotMatch(route, /meetingUrl: contact\./);
 });
 
 test('Dani recall controls are verified-only, content-free, and require explicit destructive confirmation', async () => {
