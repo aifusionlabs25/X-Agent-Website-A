@@ -262,6 +262,25 @@ test('Amy separates AI interest from a pilot and preserves the CJIS boundary', (
     assert.match(reliabilityPrompt, /That's what I needed.*not explicit closing intent/s);
 });
 
+test('Amy closes with an outcome motion, private check-in email offer, and optional confirmed callback', async () => {
+    const emailPrompt = await readFile(new URL('../config/anam/amy-agentmail-prompt-upgrade.md', import.meta.url), 'utf8');
+    const emailTool = JSON.parse(await readFile(new URL('../config/anam/amy-agentmail-client-tool.json', import.meta.url), 'utf8'));
+    assert.match(reliabilityPrompt, /soft close.*wrap it here.*closing motion/is);
+    assert.match(reliabilityPrompt, /soft close.*Call `end_amy_session` silently.*closing_motion_required/is);
+    assert.match(reliabilityPrompt, /priority, the confirmed guardrail, and the useful next decision/i);
+    assert.match(reliabilityPrompt, /final recap and Visual Brief emailed to the private check-in address/i);
+    assert.match(reliabilityPrompt, /phone follow-up would be useful/i);
+    assert.match(reliabilityPrompt, /hard close.*goodbye.*skips the closing motion/is);
+    assert.match(emailPrompt, /Never ask for it, spell it, repeat it.*email address/is);
+    assert.match(emailPrompt, /callback number.*explicit yes/is);
+    assert.match(emailPrompt, /second tool call is allowed only to append a callback number/i);
+    assert.match(workbenchUpdater, /amy-agentmail-client-tool\.json/);
+    assert.match(workbenchUpdater, /amy-agentmail-prompt-upgrade\.md/);
+    assert.match(workbenchUpdater, /AMY_AGENTMAIL_START/);
+    assert.ok(emailTool.config.parameters.properties.callbackPhone);
+    assert.ok(emailTool.config.parameters.properties.callbackPhoneConfirmed);
+});
+
 test('Amy WebSocket smoke test is identity-pinned and exposes no credentials', () => {
     assert.match(websocketSmoke, /0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08/);
     assert.match(websocketSmoke, /\/auth\/session-token/);

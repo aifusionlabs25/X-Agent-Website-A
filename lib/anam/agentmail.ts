@@ -263,10 +263,13 @@ function parseIntent(valueToParse: unknown): AmyAnamEmailIntentRecord | null {
     return record as AmyAnamEmailIntentRecord;
 }
 
-function redactContactData(turns: AmyTranscriptTurn[]): AmyTranscriptTurn[] {
+function redactContactData(turns: AmyTranscriptTurn[], callbackPhone?: string): AmyTranscriptTurn[] {
+    const confirmedCallback = callbackPhone?.trim();
     return turns.map(turn => ({
         ...turn,
-        content: String(turn.content ?? '')
+        content: (confirmedCallback
+            ? String(turn.content ?? '').split(confirmedCallback).join('[private contact]')
+            : String(turn.content ?? ''))
             .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[private contact]')
             .replace(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/g, '[private contact]'),
     }));
@@ -296,6 +299,7 @@ export async function queueAmyAnamConversationFollowUp(input: {
     displayName: string;
     email: string;
     contactSecret: string;
+    callbackPhone?: string;
 }, options: AgentMailStoreOptions = {}): Promise<AmyAnamFollowUpQueueResult> {
     const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) throw new Error('Amy AgentMail is unavailable');
@@ -314,6 +318,7 @@ export async function queueAmyAnamConversationFollowUp(input: {
         contactToken: createAmyAnamContactToken({
             browserSessionId: input.browserSessionId,
             email: input.email,
+            ...(input.callbackPhone ? { callbackPhone: input.callbackPhone } : {}),
             secret: input.contactSecret,
         }),
         requestedAt,
@@ -335,6 +340,25 @@ export async function queueAmyAnamConversationFollowUp(input: {
             intentKey(input.externalSessionId),
         ], options));
         if (!existing) throw new Error('Amy AgentMail intent reservation conflicted');
+        if (input.callbackPhone) {
+            const revisedIntent: AmyAnamEmailIntentRecord = {
+                ...existing,
+                contactToken: createAmyAnamContactToken({
+                    browserSessionId: input.browserSessionId,
+                    email: input.email,
+                    callbackPhone: input.callbackPhone,
+                    secret: input.contactSecret,
+                }),
+            };
+            await redisCommand([
+                'SET',
+                intentKey(input.externalSessionId),
+                JSON.stringify(revisedIntent),
+                'XX',
+                'EX',
+                EMAIL_RECEIPT_TTL_SECONDS,
+            ], options);
+        }
         return {
             status: 'email_already_queued',
             queued: true,
@@ -358,6 +382,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
     externalSessionId: string;
     displayName: string;
     email: string;
+    callbackPhone?: string;
     sessionStartedAt: string;
     sessionEndedAt: string;
     turns: AmyTranscriptTurn[] | unknown;
@@ -420,10 +445,11 @@ export async function sendAmyAnamConversationFollowUp(input: {
     }
 
     try {
-        const safeTurns = redactContactData(turns);
+        const safeTurns = redactContactData(turns, input.callbackPhone);
         const bundle = buildAmyEmailBundle({
             displayName: input.displayName,
             verifiedEmail: input.email,
+            callbackPhone: input.callbackPhone,
             externalSessionId: input.externalSessionId,
             sessionStartedAt: input.sessionStartedAt,
             sessionEndedAt: input.sessionEndedAt,
@@ -519,6 +545,7 @@ export async function dispatchAmyAnamPostSessionFollowUp(input: {
         externalSessionId: input.session.externalSessionId,
         displayName: intent.displayName,
         email: contact.email,
+        callbackPhone: contact.callbackPhone,
         sessionStartedAt: input.session.boundAt,
         sessionEndedAt: input.session.closeReceivedAt || input.receipt.completedAt,
         turns: input.turns,

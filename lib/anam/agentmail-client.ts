@@ -4,6 +4,8 @@ type SendEmailInput = {
     launchId: string;
     sessionId: string;
     userConfirmed: true;
+    callbackPhone?: string;
+    callbackPhoneConfirmed?: true;
     fetchImpl?: ClientFetch;
 };
 
@@ -67,12 +69,21 @@ export async function setDaniAnamFollowUpPreference({
     launchId,
     sessionId,
     userConfirmed,
+    callbackPhone,
+    callbackPhoneConfirmed,
     fetchImpl = fetch,
 }: Omit<SendEmailInput, 'userConfirmed'> & { userConfirmed: boolean }): Promise<DaniAnamEmailPreferenceResult> {
     const response = await fetchImpl('/api/anam/session/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ launchId, sessionId, userConfirmed }),
+        body: JSON.stringify({
+            launchId,
+            sessionId,
+            userConfirmed,
+            ...(callbackPhone && callbackPhoneConfirmed === true
+                ? { callbackPhone, callbackPhoneConfirmed: true }
+                : {}),
+        }),
         cache: 'no-store',
         credentials: 'same-origin',
     });

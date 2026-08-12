@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { inspectAmyLiveOutput } from '../lib/anam/amy-live-output-guard.ts';
-import { hasExplicitAmyCloseIntent } from '../lib/anam/amy-session-close.ts';
+import { hasAmySoftCloseIntent, hasExplicitAmyCloseIntent } from '../lib/anam/amy-session-close.ts';
 import { createAmyFarewellCloseCoordinator } from '../lib/anam/amy-session-close.ts';
 
 function scheduler() {
@@ -82,12 +82,15 @@ test('Amy output guard suppresses provider fallbacks and exposed close markup', 
     assert.equal(inspectAmyLiveOutput("I'm sorry that procurement is complicated."), null);
 });
 
-test('Amy close intent rejects soft completion and accepts explicit closing language', () => {
+test('Amy separates a useful soft closing motion from an immediate hard close', () => {
     assert.equal(hasExplicitAmyCloseIntent("That's what I needed. I'll take this forward."), false);
     assert.equal(hasExplicitAmyCloseIntent('Before we wrap, can you show me a summary?'), false);
-    assert.equal(hasExplicitAmyCloseIntent("Thanks, Amy. Let's call it a day."), true);
+    assert.equal(hasAmySoftCloseIntent("Thanks, Amy. Let's call it a day."), true);
+    assert.equal(hasAmySoftCloseIntent("This was helpful. Let's wrap it here."), true);
+    assert.equal(hasAmySoftCloseIntent("We're all set for now."), true);
+    assert.equal(hasExplicitAmyCloseIntent("This was helpful. Let's wrap it here."), false);
     assert.equal(hasExplicitAmyCloseIntent("I'm done. End the session."), true);
-    assert.equal(hasExplicitAmyCloseIntent("I think we're good now. Let's wrap this up."), true);
+    assert.equal(hasExplicitAmyCloseIntent('Goodbye. Take care.'), true);
 });
 
 test('Amy player registers deterministic close and interrupts unsafe provider output before streaming', async () => {
@@ -100,6 +103,8 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.match(player, /const latestUserTurn = await latestSynchronizedUserTurn\(\)/);
     assert.match(player, /await waitForWorkbenchTranscriptToSettle\(\)/);
     assert.match(player, /status: 'close_not_requested'/);
+    assert.match(player, /status: 'closing_motion_required'/);
+    assert.match(player, /pendingAmyHardCloseIntent/);
     assert.match(player, /anamClient\.interruptPersona\(\)/);
     assert.match(player, /contentLogged: false/);
     assert.match(player, /status: armed \? 'farewell_required' : 'farewell_already_armed'/);

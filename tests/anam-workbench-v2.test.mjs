@@ -583,6 +583,24 @@ test('Amy feature tabs and content use readable production typography', async ()
     assert.doesNotMatch(workbench, /text-\[(?:9|10)px\]/);
 });
 
+test('Amy visual brief preserves StateRAMP, privacy, cloud scope, and year-end timing', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: "I'm David, IT Director for a state agency. Leadership wants modernization, procurement is warning about budgets, and security is on edge." },
+        { role: 'user', content: "They're pushing for cloud migration and moving legacy apps off-prem, but AI is a wild card." },
+        { role: 'user', content: 'They want the core workloads in the cloud by year-end.' },
+        { role: 'user', content: "We're under StateRAMP due to state-level data, and we have internal privacy boundaries." },
+        { role: 'user', content: 'Show me the Visual Brief.' },
+    ], '', '', 'visual');
+    const value = (label) => model.facts.find((fact) => fact.label === label)?.value ?? '';
+    assert.equal(model.lane, 'StateRAMP cloud modernization');
+    assert.match(value('Technology context'), /Cloud migration.*Legacy applications/i);
+    assert.match(value('Cloud migration status'), /core workloads.*legacy applications/i);
+    assert.equal(value('Governance drivers'), 'StateRAMP');
+    assert.match(value('Privacy boundary'), /internal privacy.*data-classification/i);
+    assert.equal(value('Timing'), 'Core cloud workloads by year-end');
+    assert.match(value('Current objective'), /core workloads.*cloud by year-end.*AI.*separate/i);
+});
+
 test('Amy player registers all five visual handlers and keeps workbench local to Cara 4', async () => {
     const player = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'));
     for (const name of ['show_live_notes', 'show_session_brief', 'show_solution_roadmap', 'show_visual_brief', 'show_solution_catalog']) {

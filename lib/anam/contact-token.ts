@@ -19,6 +19,7 @@ type ContactPayload = {
     v: 1;
     sid: string;
     email: string;
+    callbackPhone?: string;
     displayName?: string;
     purpose?: 'dani_follow_up' | 'evan_follow_up';
     emailOwnershipVerified?: true;
@@ -27,10 +28,24 @@ type ContactPayload = {
 
 export type AmyAnamContact = {
     email: string;
+    callbackPhone?: string;
     displayName?: string;
     purpose?: 'dani_follow_up' | 'evan_follow_up';
     emailOwnershipVerified?: true;
 };
+
+export function normalizeAmyCallbackPhone(input: unknown): string {
+    if (typeof input !== 'string') throw new Error('A valid callback number is required');
+    const normalized = input.normalize('NFKC').trim();
+    if (!/^[+()\d\s.-]{7,32}$/.test(normalized)) {
+        throw new Error('A valid callback number is required');
+    }
+    const digits = normalized.replace(/\D/g, '');
+    if (digits.length < 7 || digits.length > 15) {
+        throw new Error('A valid callback number is required');
+    }
+    return normalized.replace(/\s+/g, ' ').slice(0, 32);
+}
 
 function encryptionKey(secret: string): Buffer {
     if (secret.trim().length < 32) throw new Error('Amy contact encryption is unavailable');
@@ -72,6 +87,7 @@ export function daniAnamContactCookieOptions(maxAge = AMY_ANAM_CONTACT_TTL_SECON
 export function createAmyAnamContactToken(input: {
     browserSessionId: string;
     email: string;
+    callbackPhone?: string;
     displayName?: string;
     purpose?: 'dani_follow_up' | 'evan_follow_up';
     secret: string;
@@ -87,6 +103,7 @@ export function createAmyAnamContactToken(input: {
         v: 1,
         sid: input.browserSessionId,
         email: normalizeAmyAnamMemoryEmail(input.email),
+        ...(input.callbackPhone ? { callbackPhone: normalizeAmyCallbackPhone(input.callbackPhone) } : {}),
         exp: now + ttlSeconds * 1_000,
         ...(input.displayName?.trim() ? { displayName: input.displayName.normalize('NFKC').trim().slice(0, 120) } : {}),
         ...(input.purpose === 'dani_follow_up' || input.purpose === 'evan_follow_up'
@@ -184,6 +201,9 @@ export function readAmyAnamContactToken(input: {
         ) return null;
         return {
             email: normalizeAmyAnamMemoryEmail(payload.email),
+            ...(typeof payload.callbackPhone === 'string'
+                ? { callbackPhone: normalizeAmyCallbackPhone(payload.callbackPhone) }
+                : {}),
             ...(typeof payload.displayName === 'string' && payload.displayName.trim()
                 ? { displayName: payload.displayName.normalize('NFKC').trim().slice(0, 120) }
                 : {}),

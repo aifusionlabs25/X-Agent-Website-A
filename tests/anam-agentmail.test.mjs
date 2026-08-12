@@ -11,6 +11,8 @@ import {
     readAmyAnamContactToken,
 } from '../lib/anam/contact-token.ts';
 import { sendAmyEmailWithAgentMail } from '../lib/email/amy-email-provider.ts';
+import { buildAmyEmailBundle } from '../lib/anam/agentmail-templates.ts';
+import { buildAmyWorkbenchModel } from '../lib/anam/workbench-v2.ts';
 
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
 const BROWSER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -274,4 +276,24 @@ test('visitor follow-up embeds and attaches the final conversation-grounded Visu
     assert.match(message.attachments?.[0]?.content ?? '', /01 \/ Executive snapshot/i);
     assert.match(message.attachments?.[0]?.content ?? '', /06 \/ Next decision/i);
     assert.doesNotMatch(message.attachments?.[0]?.content ?? '', /device refresh|funded device|call recordings|ticket logs|Insight Public Sector/i);
+});
+
+test('Amy intake email includes the same Visual Brief and confirmed callback', () => {
+    const turns = [
+        { role: 'user', content: 'We need a StateRAMP cloud modernization brief by year-end.' },
+        { role: 'user', content: 'Show me the Visual Brief and email it after the session.' },
+    ];
+    const bundle = buildAmyEmailBundle({
+        displayName: 'David',
+        verifiedEmail: 'david@example.com',
+        callbackPhone: '(480) 555-0107',
+        externalSessionId: SESSION_ID,
+        sessionStartedAt: '2026-08-12T04:00:00.000Z',
+        sessionEndedAt: '2026-08-12T04:05:00.000Z',
+        turns,
+        model: buildAmyWorkbenchModel(turns, '', '', 'visual'),
+    });
+    assert.match(bundle.intake.html, /Final Visual Brief/i);
+    assert.match(bundle.intake.html, /\(480\) 555-0107/);
+    assert.equal(bundle.intake.attachments?.[0]?.filename, 'amy-visual-brief.html');
 });

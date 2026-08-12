@@ -21,6 +21,7 @@ export type AmyEmailBundle = {
 type TemplateInput = {
     displayName: string;
     verifiedEmail: string;
+    callbackPhone?: string;
     externalSessionId: string;
     sessionStartedAt: string;
     sessionEndedAt: string;
@@ -171,6 +172,14 @@ function transcriptSnapshot(turns: AmyTranscriptTurn[]): string[] {
         .slice(-16);
 }
 
+function safeCallbackPhone(value: unknown): string {
+    const normalized = String(value ?? '').normalize('NFKC').trim().replace(/\s+/g, ' ');
+    const digits = normalized.replace(/\D/g, '');
+    return /^[+()\d\s.-]{7,32}$/.test(normalized) && digits.length >= 7 && digits.length <= 15
+        ? normalized
+        : '';
+}
+
 function visualBriefCards(model: AmyWorkbenchModel): string {
     return model.visualBrief.slides.map((slide, index) => `
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:${index ? '16px' : '10px'};background:#fffaf7;border:1px solid #f0cfdd;">
@@ -200,6 +209,7 @@ function visualBriefText(model: AmyWorkbenchModel): string[] {
 export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const generatedAt = input.generatedAt ?? new Date().toISOString();
     const name = safeName(input.displayName);
+    const callbackPhone = safeCallbackPhone(input.callbackPhone);
     const firstName = safeFirstName(input.displayName);
     const facts = input.model.facts.filter(validFact);
     const objectiveCandidate = clean(input.model.brief.objective, 700);
@@ -289,6 +299,7 @@ ${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:2
         detailRow('Session state', 'Finalized before email delivery'),
         detailRow('Visitor', name),
         detailRow('Verified contact', input.verifiedEmail),
+        detailRow('Confirmed callback', callbackPhone || 'Email follow-up only'),
         detailRow('Transcript turns captured', String(input.turns.length)),
     ].join('');
     const adminBody = `
@@ -308,6 +319,7 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
         `Email generated: ${generated}`,
         `Visitor: ${name}`,
         `Verified contact: ${input.verifiedEmail}`,
+        `Confirmed callback: ${callbackPhone || 'Email follow-up only'}`,
         `Transcript turns captured: ${input.turns.length}`, '',
         `Conversation summary: ${objective}`, '',
         ...textSection('Key captured facts', highlights),
@@ -323,7 +335,7 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
     const intakeBody = `
 <p style="margin:0 0 22px;color:#435166;font-size:14px;line-height:22px;">I completed a conversation with ${escapeHtml(name)} and organized the verified context below for Sales and Operations. Use it to prepare a focused follow-up without introducing unsupported assumptions.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e1e6ec;border-collapse:collapse;">
-${detailRow('Contact', name)}${detailRow('Verified email', input.verifiedEmail)}${detailRow('Opportunity lane', clean(input.model.lane, 150))}${detailRow('Session ID', input.externalSessionId)}
+${detailRow('Contact', name)}${detailRow('Verified email', input.verifiedEmail)}${detailRow('Confirmed callback', callbackPhone || 'Email follow-up only')}${detailRow('Opportunity lane', clean(input.model.lane, 150))}${detailRow('Session ID', input.externalSessionId)}
 </table>
 <div style="margin-top:26px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Opportunity snapshot</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:10px;background:#f7f8fa;border-left:4px solid ${INSIGHT_MAGENTA};"><tr><td style="padding:18px 20px;color:#263548;font-size:14px;line-height:22px;">${escapeHtml(objective)}</td></tr></table>
@@ -334,11 +346,13 @@ ${customerValue.length ? `<div style="margin-top:25px;font-size:18px;line-height
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:10px;background:#fff7fa;border:1px solid #f2cedc;"><tr><td style="padding:17px 19px;color:#5f2340;font-size:14px;line-height:22px;font-weight:600;">${escapeHtml(nextStep)}</td></tr></table>
 ${pursuitPlan.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Recommended pursuit plan</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(pursuitPlan)}</table>` : ''}
 ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Qualification gaps for the team</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(openQuestions)}</table>` : ''}
+${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Final Visual Brief</div><p style="margin:7px 0 0;color:#657184;font-size:13px;line-height:20px;">The same finalized, conversation-grounded view sent to the visitor is included here for sales preparation.</p>${visualBriefCards(input.model)}` : ''}
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:27px;background:#fff8e7;border:1px solid #efd79b;"><tr><td style="padding:16px 18px;color:#6b4b09;font-size:13px;line-height:21px;">Internal planning input only. Validate scope, ownership, contract eligibility, compliance, pricing, availability, and timing before making a customer commitment.</td></tr></table>`;
     const intakeText = [
         'INSIGHT SALES & OPERATIONS INTAKE', '',
         `Contact: ${name}`,
         `Verified email: ${input.verifiedEmail}`,
+        `Confirmed callback: ${callbackPhone || 'Email follow-up only'}`,
         `Opportunity lane: ${clean(input.model.lane, 150)}`,
         `Session ID: ${input.externalSessionId}`, '',
         `I completed a conversation with ${name} and organized the verified context below for Sales and Operations.`, '',
@@ -349,6 +363,7 @@ ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height
         `Recommended next-meeting objective: ${nextStep}`, '',
         ...textSection('Recommended pursuit plan', pursuitPlan),
         ...textSection('Qualification gaps for the team', openQuestions),
+        ...(includeVisualBrief ? visualBriefText(input.model) : []),
         'Internal planning input only. Validate scope, ownership, contract eligibility, compliance, pricing, availability, and timing before making a customer commitment.',
     ].join('\n');
 
@@ -402,6 +417,7 @@ ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height
                 body: intakeBody,
                 footer: 'Internal Insight planning brief. Validate all commercial, technical, compliance, availability, and scheduling details before external use.',
             }),
+            ...(visualAttachment ? { attachments: [visualAttachment] } : {}),
         },
     };
 }

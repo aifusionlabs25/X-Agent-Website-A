@@ -40,7 +40,11 @@ import {
 } from '@/lib/anam/evan-address-route';
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
-import { createAmyFarewellCloseCoordinator, hasExplicitAmyCloseIntent } from '@/lib/anam/amy-session-close';
+import {
+    createAmyFarewellCloseCoordinator,
+    hasAmySoftCloseIntent,
+    hasExplicitAmyCloseIntent,
+} from '@/lib/anam/amy-session-close';
 import { inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
 
 interface AnamPlayerProps {
@@ -137,6 +141,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let amyCloseCoordinator: ReturnType<typeof createAmyFarewellCloseCoordinator> | null = null;
         let suppressingAmyUnsafeOutput = false;
+        let pendingAmyHardCloseIntent = false;
+        let amyClosingMotionActive = false;
         let completedUserTurns = 0;
         let confirmedMemoryName: string | null = null;
         let requestedCloseFallbackTimer: number | null = null;
@@ -624,6 +630,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
                     const normalizedRole = transcriptRole(messageEvent.role);
                     if (isAmyCara4 && normalizedRole === 'agent') {
+                        if (pendingAmyHardCloseIntent) {
+                            pendingAmyHardCloseIntent = false;
+                            requestedCloseReason = 'user_requested_end';
+                            amyCloseCoordinator?.arm();
+                        }
                         if (suppressingAmyUnsafeOutput) {
                             if (messageEvent.endOfSpeech) {
                                 if (currentMessageRef.current) {
@@ -692,6 +703,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             recordTurn(messageEvent.role, currentMessageRef.current);
                             if (messageEvent.role === 'user') {
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
+                                const completedUserTurn = currentMessageRef.current.trim();
+                                if (hasExplicitAmyCloseIntent(completedUserTurn)) {
+                                    pendingAmyHardCloseIntent = true;
+                                    requestedCloseReason = 'user_requested_end';
+                                }
                             }
                         }
                         if (transcriptRole(messageEvent.role) === 'agent') {
@@ -750,7 +766,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         {
                             onStart: async () => {
                                 const latestUserTurn = await latestSynchronizedUserTurn();
-                                if (!hasExplicitAmyCloseIntent(latestUserTurn)) {
+                                const hardCloseRequested = hasExplicitAmyCloseIntent(latestUserTurn);
+                                if (!hardCloseRequested && hasAmySoftCloseIntent(latestUserTurn)) {
+                                    amyClosingMotionActive = true;
+                                    return JSON.stringify({
+                                        status: 'closing_motion_required',
+                                        instruction: 'Do not say goodbye yet. Give one concise outcome recap: the visitor\'s priority, the confirmed guardrail, and the useful next decision. Then ask permission to email the final recap and Visual Brief to the private check-in address. Never say or repeat the address. Offer an optional callback number only after email permission is resolved.',
+                                    });
+                                }
+                                if (!hardCloseRequested && !amyClosingMotionActive) {
                                     console.warn('[Amy Anam] Premature close tool call refused', {
                                         contentLogged: false,
                                     });
@@ -759,6 +783,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         instruction: 'The visitor has not explicitly asked to end the session. Do not say goodbye, do not expose tool syntax, and do not claim the session is closing. Wait silently for the visitor to continue.',
                                     });
                                 }
+                                pendingAmyHardCloseIntent = false;
+                                amyClosingMotionActive = false;
                                 requestedCloseReason = 'user_requested_end';
                                 const armed = amyCloseCoordinator?.arm() === true;
                                 console.info('[Amy Anam] Farewell close armed', { armed });
@@ -845,10 +871,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 }
 
                                 await bindingPromise;
+                                const callbackPhone = typeof payload.arguments.callbackPhone === 'string'
+                                    ? payload.arguments.callbackPhone.trim()
+                                    : '';
+                                const callbackPhoneConfirmed = payload.arguments.callbackPhoneConfirmed === true;
                                 const result = await sendAmyAnamFollowUpEmail({
                                     launchId,
                                     sessionId: providerSessionId,
                                     userConfirmed: true,
+                                    ...(callbackPhone && callbackPhoneConfirmed
+                                        ? { callbackPhone, callbackPhoneConfirmed: true }
+                                        : {}),
                                 });
                                 console.info('[Amy Anam AgentMail] Post-session intent recorded', {
                                     status: result.status,
@@ -862,9 +895,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     sent: false,
                                     duplicate: result.duplicate,
                                     receiptId: result.receiptId,
-                                    instruction: result.duplicate
-                                        ? 'Confirm briefly that the post-session email is already scheduled. Do not say it was sent yet, and do not end the call automatically.'
-                                        : 'Confirm briefly that the follow-up will be emailed after this session ends. Do not say it was sent yet. Then continue naturally and end only when the visitor clearly says they are finished.',
+                                    instruction: amyClosingMotionActive && callbackPhoneConfirmed
+                                        ? 'Confirm briefly that the callback preference is included without repeating the number. Then silently call end_amy_session and give the required farewell.'
+                                        : amyClosingMotionActive
+                                            ? 'Confirm briefly that the final recap and Visual Brief will be emailed to the private check-in address after this session ends. Never say or repeat the address. Ask once whether a phone follow-up would be useful; if the visitor declines, silently call end_amy_session. If the visitor provides a callback number, confirm it once, then call send_follow_up_email again with callbackPhoneConfirmed true.'
+                                            : result.duplicate
+                                                ? 'Confirm briefly that the post-session email is already scheduled. Do not say it was sent yet, and do not end the call automatically.'
+                                                : 'Confirm briefly that the follow-up will be emailed after this session ends. Do not say it was sent yet. Then continue naturally and end only when the visitor clearly says they are finished.',
                                 });
                             },
                         },

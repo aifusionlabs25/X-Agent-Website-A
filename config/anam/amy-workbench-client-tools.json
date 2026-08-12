@@ -90,7 +90,7 @@
   },
   {
     "name": "end_amy_session",
-    "description": "End Amy's one-to-one website session only after unmistakable visitor closing intent such as 'let's wrap up,' 'I think we can wrap now,' 'I'm done,' 'end the call,' 'goodbye,' or 'take care.' A bare thanks is not enough. Call silently with exactly {} and at most once; never ask for confirmation. After farewell_required, say exactly: 'Thanks for talking this through with me. Take care.' After farewell_already_armed, say nothing. Never emit tool syntax as dialogue.",
+    "description": "Handle unmistakable visitor closing intent in Amy's one-to-one website session. Soft close language such as 'let's wrap up,' 'wrap it here,' 'we're all set,' or 'that's all' returns closing_motion_required so Amy can give one concise outcome recap, ask permission for the private check-in email follow-up, and ask once about an optional callback number. Hard close language such as 'goodbye,' 'take care,' 'end the call,' or 'I have to go' ends immediately; never ask for confirmation. After the closing motion resolves email and optional phone preference, call again without requiring another wrap-up. Call silently with exactly {} and at most once for the terminal close. After farewell_required, say exactly: 'Thanks for talking this through with me. Take care.' Never emit tool syntax as dialogue.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {

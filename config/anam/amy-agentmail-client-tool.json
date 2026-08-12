@@ -1,6 +1,6 @@
 {
   "name": "send_follow_up_email",
-  "description": "Schedule the approved visitor, admin, and Insight intake email bundle for backend delivery only after the session closes and the final transcript is available. A direct request to email or send a follow-up is explicit permission; otherwise obtain one short yes. Never ask for, spell, repeat, confirm aloud, infer, or submit an email address through this tool. Call silently with userConfirmed true and, only when it returns email_queued, say the follow-up will be emailed after the session ends. Never claim it was already sent. Do not use for memory access, cold outreach, third-party recipients, or automatic call closing.",
+  "description": "Schedule the approved visitor, admin, and Insight intake email bundle for backend delivery only after the session closes and the final transcript is available. During a natural closing motion, ask once for permission to email the final recap and Visual Brief to the private website check-in address; never ask for, spell, repeat, or submit that email address. After email permission is resolved, ask once whether a phone follow-up would be useful. A visitor may optionally provide and explicitly confirm one callback number; otherwise omit it without pressure. Call silently with userConfirmed true, and include callbackPhone plus callbackPhoneConfirmed true only after the visitor confirms the number. Never claim email was already sent, a callback was scheduled, or a specialist was assigned.",
   "type": "CLIENT",
   "disableInterruptions": true,
   "config": {
@@ -10,6 +10,14 @@
         "userConfirmed": {
           "type": "boolean",
           "description": "Must be true only after the visitor explicitly agrees during this conversation to receive Amy's follow-up email."
+        },
+        "callbackPhone": {
+          "type": "string",
+          "description": "Optional callback number spoken and explicitly confirmed by the visitor in this conversation. Never infer or copy it from private application data."
+        },
+        "callbackPhoneConfirmed": {
+          "type": "boolean",
+          "description": "Include only as true after the visitor explicitly confirms the callback number."
         }
       },
       "required": ["userConfirmed"],

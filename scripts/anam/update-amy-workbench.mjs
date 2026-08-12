@@ -40,10 +40,15 @@ if (personaId !== PINNED_IDENTITY.id) {
     throw new Error('Refusing update: configured Amy persona ID is not the pinned Cara 4 identity.');
 }
 
-const toolDefinitions = JSON.parse(await fs.readFile(
+const workbenchToolDefinitions = JSON.parse(await fs.readFile(
     new URL('../../config/anam/amy-workbench-client-tools.json', import.meta.url),
     'utf8',
 ));
+const agentMailToolDefinition = JSON.parse(await fs.readFile(
+    new URL('../../config/anam/amy-agentmail-client-tool.json', import.meta.url),
+    'utf8',
+));
+const toolDefinitions = [...workbenchToolDefinitions, agentMailToolDefinition];
 const promptUpgrade = normalize(await fs.readFile(
     new URL('../../config/anam/amy-workbench-prompt-upgrade.md', import.meta.url),
     'utf8',
@@ -54,6 +59,10 @@ const reliabilityUpgrade = normalize(await fs.readFile(
 )).trim();
 const publicSectorUpgrade = normalize(await fs.readFile(
     new URL('../../config/anam/amy-public-sector-upgrade.md', import.meta.url),
+    'utf8',
+)).trim();
+const agentMailUpgrade = normalize(await fs.readFile(
+    new URL('../../config/anam/amy-agentmail-prompt-upgrade.md', import.meta.url),
     'utf8',
 )).trim();
 
@@ -75,6 +84,7 @@ for (const [label, replacement, startMarker, endMarker] of [
     ['reliability', reliabilityUpgrade, RELIABILITY_START, RELIABILITY_END],
     ['public-sector', publicSectorUpgrade, PUBLIC_SECTOR_START, PUBLIC_SECTOR_END],
     ['Workbench', promptUpgrade, WORKBENCH_START, WORKBENCH_END],
+    ['AgentMail', agentMailUpgrade, '<!-- AMY_AGENTMAIL_START -->', '<!-- AMY_AGENTMAIL_END -->'],
 ]) {
     if (!replacement.includes(startMarker) || !replacement.includes(endMarker)) {
         throw new Error(`Refusing update: local Amy ${label} prompt markers are malformed or missing.`);
@@ -258,6 +268,7 @@ const expectedPrompt = [
     [reliabilityUpgrade, RELIABILITY_START, RELIABILITY_END],
     [publicSectorUpgrade, PUBLIC_SECTOR_START, PUBLIC_SECTOR_END],
     [promptUpgrade, WORKBENCH_START, WORKBENCH_END],
+    [agentMailUpgrade, '<!-- AMY_AGENTMAIL_START -->', '<!-- AMY_AGENTMAIL_END -->'],
 ].reduce(
     (prompt, [replacement, startMarker, endMarker]) => replaceManagedBlock(
         prompt,

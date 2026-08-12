@@ -13,6 +13,7 @@ import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
 import {
     readAmyAnamContactFromRequest,
     readDaniAnamContactFromRequest,
+    normalizeAmyCallbackPhone,
 } from '@/lib/anam/contact-token';
 import {
     AmyAnamRequestError,
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'Amy session tracking is unavailable' }, { status: 503 });
         }
         const body = await readBoundedJsonObject(request, 8 * 1024);
-        const allowedFields = new Set(['launchId', 'sessionId', 'userConfirmed']);
+        const allowedFields = new Set(['launchId', 'sessionId', 'userConfirmed', 'callbackPhone', 'callbackPhoneConfirmed']);
         if (Object.keys(body).some(key => !allowedFields.has(key))) {
             return noStoreJson({ error: 'Email request contained unsupported fields' }, { status: 400 });
         }
@@ -58,6 +59,12 @@ export async function POST(request: Request) {
         }
         if (typeof body.userConfirmed !== 'boolean') {
             return noStoreJson({ error: 'A valid email preference is required' }, { status: 400 });
+        }
+        const callbackPhone = typeof body.callbackPhone === 'string' && body.callbackPhone.trim()
+            ? normalizeAmyCallbackPhone(body.callbackPhone)
+            : undefined;
+        if (callbackPhone && body.callbackPhoneConfirmed !== true) {
+            return noStoreJson({ error: 'Callback number confirmation is required' }, { status: 400 });
         }
 
         const preAuthRate = await consumeAmyAnamDistributedRateLimit({
@@ -182,6 +189,7 @@ export async function POST(request: Request) {
             displayName,
             email: contact.email,
             contactSecret: isDani ? daniSessionSecrets.contactSecret : spine.signingSecret,
+            ...(isAmy && callbackPhone ? { callbackPhone } : {}),
         });
         return noStoreJson({
             ...result,
@@ -193,6 +201,9 @@ export async function POST(request: Request) {
             return noStoreJson({ error: error.message }, { status: error.status });
         }
         const message = error instanceof Error ? error.message : '';
+        if (/valid callback number/i.test(message)) {
+            return noStoreJson({ error: 'Enter a valid callback number' }, { status: 400 });
+        }
         if (/unavailable|not configured/i.test(message)) {
             return noStoreJson({ error: 'Email is temporarily unavailable' }, { status: 503 });
         }

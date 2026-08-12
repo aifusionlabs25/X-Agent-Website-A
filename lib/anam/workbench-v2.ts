@@ -298,6 +298,8 @@ const TERM_RULES: Array<[RegExp, string]> = [
     [/\bSCCM\b/i, 'SCCM'],
     [/\bMDM\b/i, 'MDM'],
     [/\bAzure\b/i, 'Azure'],
+    [/\bcloud migration\b|\bworkloads?\b.{0,35}\bcloud\b/i, 'Cloud migration'],
+    [/\blegacy apps?\b|\blegacy applications?\b/i, 'Legacy applications'],
     [/\bAWS\b|Amazon Web Services/i, 'AWS'],
     [/\bVMware\b/i, 'VMware'],
     [/\bSAP\b/i, 'SAP'],
@@ -648,6 +650,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
     const hasAiDiscovery = /\bAI\b|artificial intelligence|runbook automation|migration runbooks?|technical document(?:ation)? search|analy[sz](?:e|ing) telemetry|internal (?:IT )?assistant|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out/i.test(sourceText);
     const hasPlannedCloudMigration = /\b(?:planned|planning|prepare|preparing)\b.{0,45}\bcloud migration\b|\bcloud migration\b.{0,45}\b(?:planned|planning|prepare|preparing)\b/i.test(sessionText);
+    const hasCommittedCloudMigration = /\b(?:pushing for|moving|migrate|migration|core workloads?)\b.{0,60}\bcloud\b|\bcloud migration\b/i.test(sessionText);
+    const hasYearEndCloudDeadline = /\b(?:core )?workloads?\b.{0,45}\bcloud\b.{0,35}\bby year[ -]?end\b|\bby year[ -]?end\b.{0,50}\b(?:cloud|workloads?)\b/i.test(sessionText);
+    const hasInternalPrivacyBoundaries = /\binternal privacy boundaries\b|\bprivacy boundaries\b/i.test(sessionText);
+    const hasStateRampRequirement = /\b(?:under|requires?|required|must meet)\s+StateRAMP\b|\bStateRAMP\b.{0,35}\b(?:state[- ]level data|required|requirement)\b/i.test(sessionText);
     const hasStaffingOptimization = /\bAI\b.{0,90}\boptimi[sz](?:e|ing|ation)\b.{0,35}\bstaff(?:ing)?(?: schedules?)?\b|\boptimi[sz](?:e|ing|ation)\b.{0,35}\bstaff(?:ing)?(?: schedules?)?\b.{0,90}\bAI\b/i.test(sessionText);
     const hasShiftCalendarData = /\bshift calendars?\b/i.test(sessionText);
     const hasPayrollLogData = /\bpayroll logs?\b/i.test(sessionText);
@@ -711,6 +717,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Cloud migration and AI staffing discovery'
         : hasErpCutover && hasArizonaSvar && hasAiDiscovery
         ? 'Azure ERP, Arizona SVAR, and AI discovery'
+        : hasCommittedCloudMigration && hasStateRampRequirement
+        ? 'StateRAMP cloud modernization'
         : dualTrack ? 'Azure ERP and municipal compliance planning' : LANE_LABELS[laneId];
     const scale = extractScale(allText);
     const objective = hasCloudAndStaffingAi
@@ -723,6 +731,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Separate ${modernizationWorkstreams.join(', ')} into distinct workstreams so procurement and finance can evaluate budget, funding, sourcing, and timing without treating them as one program.`
         : hasInfrastructureRefreshDecision
         ? `Give ${infrastructureDecisionAudience} a supported decision on which server and network components require refresh${infrastructureCostFrame} at ${infrastructureDecisionGate}, ${infrastructureTimingFrame}.`
+        : hasCommittedCloudMigration && hasStateRampRequirement
+        ? 'Move the confirmed core workloads and legacy applications toward the cloud by year-end while treating AI as a separate, unapproved discovery track and preserving the agency\'s StateRAMP and internal privacy boundaries.'
         : hasPublicSafetyAi
         ? `Keep the ${hasFundedDeviceRefresh ? 'funded ' : ''}device refresh on its reported track while leadership explores whether AI can reduce administrative burden without assuming an AI pilot or a validated CJIS boundary.`
         : hasHealthcareOperations && hasRisingPatientIntake
@@ -733,6 +743,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         || (certainStatements.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
     const explicitTiming = explicitTimingFrom(userTurns);
     const timing = explicitTiming
+        || (hasYearEndCloudDeadline ? 'Core cloud workloads by year-end' : '')
         || (hasModernizationPortfolio && hasCurrentFiscalYearPressure
         ? 'Current fiscal-year deadline'
         : dualTrack && /few weeks/i.test(allText)
@@ -751,6 +762,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Do not treat ${infrastructureEvidenceBasis} as sufficient evidence; validate component scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', cost drivers' : ''}, and delay exposure before recommending timing${hasAssumedSmallerOfficeMerger ? ', and keep the smaller-office expansion as a planning assumption until its inventory is validated' : ''}.`
         : hasHealthcareOperations
         ? `${needsItValidation ? 'IT must confirm EHR export access and available operational evidence' : 'Available EHR operational evidence is not yet confirmed'}; root cause, permissible data use, and any analysis or dashboard design require specialist validation.`
+        : hasCommittedCloudMigration && hasStateRampRequirement
+        ? `StateRAMP is a confirmed requirement${hasInternalPrivacyBoundaries ? '; internal privacy and data-classification boundaries must be validated against any proposed cloud services' : ''}. Do not claim a compliant design, approved service, or implementation path without public-sector, cloud, security, and privacy specialist validation.`
         : hasPublicSafetyAi
         ? `${hasVisitorReportedNonSensitiveData ? 'Administrative data was described as non-sensitive, but that label does not establish that the workflow is outside CJIS; ' : ''}the agency security owner and appropriate Insight Public Sector specialists must validate data, users, systems, integrations, policy, and controls before any pilot or technical path is scoped.`
         : hasActiveIncident
@@ -863,6 +876,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Environment', 'Modernization workstreams', modernizationWorkstreamStatus),
         makeFact('Priorities', 'Device refresh status', hasFundedDeviceRefresh ? 'Funded; rollout is expected to start next quarter.' : ''),
         makeFact('Priorities', 'Cloud migration status', hasPlannedCloudMigration ? 'Planned workstream; keep its scope and decision gates separate from AI exploration.' : ''),
+        makeFact('Priorities', 'Cloud migration status', hasCommittedCloudMigration && !hasPlannedCloudMigration ? 'Confirmed workstream covering core workloads and selected legacy applications.' : ''),
         makeFact('Priorities', 'AI staffing status', hasStaffingOptimization ? `${hasNoApprovedAiPilot ? 'Exploration only; no pilot is approved.' : 'Early discovery; approval status remains unconfirmed.'} COO sponsorship was reported.` : ''),
         makeFact('Priorities', 'AI status', hasAiInterestOnly ? 'Leadership interest only; no pilot is approved, funded, or scheduled.' : ''),
         makeFact('Constraints', 'Data boundary', hasCloudAndStaffingAi && hasExcludedCjisData ? 'Visitor requested that CJIS data remain out of scope; authorized data and security owners must validate the usable boundary.' : ''),
@@ -876,6 +890,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Procurement', 'Contract-path status', modernizationContractStatus),
         makeFact('Constraints', 'Primary guardrail', constraint),
         makeFact('Constraints', 'Governance drivers', compliance.join(' / ')),
+        makeFact('Constraints', 'Privacy boundary', hasInternalPrivacyBoundaries ? 'Internal privacy and data-classification boundaries must be validated against any proposed cloud services.' : ''),
         makeFact('Timing', 'Timing', timing),
         makeFact('Timing', 'Deferral preference', deferralPreference),
         makeFact('Identity', 'Stakeholder context', stakeholder),
