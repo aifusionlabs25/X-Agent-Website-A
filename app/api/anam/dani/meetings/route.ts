@@ -64,6 +64,7 @@ function parseMeetingUrl(raw: unknown): { url: string; provider: MeetingProvider
 }
 
 function parseJoinAt(raw: unknown) {
+    if (raw === undefined || raw === null || raw === '') return null;
     if (typeof raw !== 'string' || raw.length > 80) {
         throw new AmyAnamRequestError('Choose when Dani should join', 400);
     }
@@ -88,6 +89,7 @@ function parseInvite(payload: unknown) {
         provider: typeof value.provider === 'string' ? value.provider : 'unknown',
         status: typeof value.status === 'string' ? value.status : 'pending',
         joinAt: typeof value.joinAt === 'string' ? value.joinAt : null,
+        joinState: typeof value.joinState === 'string' ? value.joinState : null,
         sessionId: typeof value.sessionId === 'string' ? value.sessionId : null,
         statusReason: typeof value.statusReason === 'string' ? value.statusReason.slice(0, 500) : null,
     };
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
                 meetingUrl: meeting.url,
                 displayName: 'Dani AI Solutions Director',
                 personaId: DANI_PERSONA_ID,
-                joinAt,
+                ...(joinAt ? { joinAt } : {}),
                 groupCall: body.groupCall,
                 clientLabel: `xagent-dani-${randomUUID()}`,
             }),

@@ -31,9 +31,12 @@ type InviteState = {
     provider: string;
     status: string;
     joinAt: string | null;
+    joinState: string | null;
     sessionId: string | null;
     statusReason: string | null;
 };
+
+type JoinTiming = 'now' | 'scheduled';
 
 const PROVIDERS: Record<DaniMeetingProvider, { name: string; hint: string; className: string }> = {
     google: { name: 'Google Meet', hint: 'Paste a Meet link', className: styles.googleMark },
@@ -67,6 +70,7 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
     const [step, setStep] = useState(1);
     const [provider, setProvider] = useState<DaniMeetingProvider>(initialProvider);
     const [meetingUrl, setMeetingUrl] = useState('');
+    const [joinTiming, setJoinTiming] = useState<JoinTiming>('now');
     const [date, setDate] = useState(() => localDate());
     const [time, setTime] = useState('10:30');
     const [timezone, setTimezone] = useState('America/Phoenix');
@@ -109,10 +113,12 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
         return () => window.clearInterval(timer);
     }, [invite]);
 
-    const joinAt = useMemo(() => {
+    const scheduledJoinAt = useMemo(() => {
         const value = new Date(`${date}T${time}:00`);
         return Number.isNaN(value.getTime()) ? null : value.toISOString();
     }, [date, time]);
+
+    const joinAt = joinTiming === 'scheduled' ? scheduledJoinAt : null;
 
     async function sendCode() {
         setBusy(true);
@@ -154,14 +160,14 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
     }
 
     async function createInvite() {
-        if (!joinAt) return;
+        if (joinTiming === 'scheduled' && !joinAt) return;
         setBusy(true);
         setError('');
         try {
             const response = await fetch('/api/anam/dani/meetings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ meetingUrl, joinAt, groupCall, purpose }),
+                body: JSON.stringify({ meetingUrl, ...(joinAt ? { joinAt } : {}), groupCall, purpose }),
             });
             const payload = await response.json() as { invite?: InviteState; error?: string };
             if (!response.ok || !payload.invite) throw new Error(payload.error || 'Dani could not be scheduled');
@@ -174,22 +180,41 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
     }
 
     if (invite) {
+        const joinState = invite.joinState?.replaceAll('_', ' ') ?? null;
+        const hostAction = provider === 'teams' ? 'Open Teams as host' : provider === 'google' ? 'Open Google Meet as host' : 'Open Zoom as host';
+        const statusCopy = invite.status === 'active'
+            ? joinState === 'media active'
+                ? 'Dani is connected with active audio and video.'
+                : 'Dani has joined the call and her session is active.'
+            : joinState === 'waiting room'
+                ? 'Dani is in the lobby. Admit her from the participant list.'
+                : invite.status === 'pending' && invite.joinAt
+                    ? 'Dani is scheduled. She will connect separately at the time below.'
+                    : invite.status === 'pending'
+                        ? 'Dani is connecting separately now. Watch the lobby and participant list.'
+                        : invite.status === 'failed'
+                            ? 'Dani could not enter this meeting. Review the status below before trying again.'
+                            : 'The meeting invitation has finished.';
         return (
             <div className={styles.scheduler} data-dani-meeting-state="confirmed">
                 <div className={styles.confirmIcon}><Check size={25} /></div>
                 <p className={styles.eyebrow}>Invitation created</p>
                 <h1 className={styles.title}>Dani is on the agenda.</h1>
-                <p className={styles.intro}>We are tracking the Anam invitation from this page. A host may still need to admit Dani from the waiting room.</p>
+                <p className={styles.intro}>{statusCopy}</p>
+                <div className={styles.liveStatus} data-status={invite.status}>
+                    <span aria-hidden="true" />
+                    <div><strong>{joinState || invite.status.replaceAll('_', ' ')}</strong><small>This follows Dani&apos;s Anam participant—not the meeting window on your computer.</small></div>
+                </div>
                 <dl className={styles.confirmFacts}>
                     <div><dt>Platform</dt><dd>{PROVIDERS[provider].name}</dd></div>
                     <div><dt>Status</dt><dd>{invite.status.replaceAll('_', ' ')}</dd></div>
-                    <div><dt>Joins</dt><dd>{invite.joinAt ? new Date(invite.joinAt).toLocaleString() : 'As soon as capacity is available'}</dd></div>
+                    <div><dt>Joins</dt><dd>{invite.joinAt ? new Date(invite.joinAt).toLocaleString() : 'Now'}</dd></div>
                     <div><dt>Mode</dt><dd>{groupCall ? 'Group meeting · name gated' : '1:1 conversation'}</dd></div>
                 </dl>
                 {invite.statusReason ? <p className={styles.error}>{invite.statusReason}</p> : null}
                 <div className={styles.actions}>
                     <Link href="/agents/dani" className={styles.secondaryButton}>Back to Dani</Link>
-                    <a href={meetingUrl} target="_blank" rel="noreferrer" className={styles.primaryButton}>Open meeting <ExternalLink size={15} /></a>
+                    <a href={meetingUrl} target="_blank" rel="noreferrer" className={styles.primaryButton}>{hostAction} <ExternalLink size={15} /></a>
                 </div>
             </div>
         );
@@ -227,11 +252,26 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
                         const detected = detectProvider(value);
                         if (detected) setProvider(detected);
                     }} placeholder="Paste the meeting invitation link" autoComplete="url" /></label>
-                    <div className={styles.fieldGrid}>
-                        <label><span><CalendarDays size={14} /> Date</span><input type="date" min={localDate(0)} value={date} onChange={event => setDate(event.target.value)} /></label>
-                        <label><span><Clock3 size={14} /> Time</span><input type="time" value={time} onChange={event => setTime(event.target.value)} /></label>
-                        <label>Timezone<input value={timezone} readOnly aria-describedby="timezone-help" /><small id="timezone-help">Detected from your browser.</small></label>
-                    </div>
+                    <fieldset>
+                        <legend>When should Dani join?</legend>
+                        <div className={styles.timingGrid}>
+                            <button type="button" aria-pressed={joinTiming === 'now'} data-selected={joinTiming === 'now'} onClick={() => setJoinTiming('now')}>
+                                <Video size={20} /><span><strong>Join now</strong><small>Dani connects separately after you confirm.</small></span>{joinTiming === 'now' ? <Check size={16} /> : null}
+                            </button>
+                            <button type="button" aria-pressed={joinTiming === 'scheduled'} data-selected={joinTiming === 'scheduled'} onClick={() => setJoinTiming('scheduled')}>
+                                <CalendarDays size={20} /><span><strong>Schedule for later</strong><small>Reserve Dani for a future meeting.</small></span>{joinTiming === 'scheduled' ? <Check size={16} /> : null}
+                            </button>
+                        </div>
+                    </fieldset>
+                    {joinTiming === 'scheduled' ? (
+                        <div className={styles.fieldGrid}>
+                            <label><span><CalendarDays size={14} /> Date</span><input type="date" min={localDate(0)} value={date} onChange={event => setDate(event.target.value)} /></label>
+                            <label><span><Clock3 size={14} /> Time</span><input type="time" value={time} onChange={event => setTime(event.target.value)} /></label>
+                            <label>Timezone<input value={timezone} readOnly aria-describedby="timezone-help" /><small id="timezone-help">Detected from your browser.</small></label>
+                        </div>
+                    ) : (
+                        <div className={styles.joinNowNote}><Clock3 size={18} /><p><strong>Dani joins independently.</strong> After the invitation is created, open the meeting as host and admit Dani if she appears in the lobby.</p></div>
+                    )}
                 </div>
             ) : step === 2 ? (
                 <div className={styles.formStack}>
@@ -248,7 +288,7 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
             ) : (
                 <div className={styles.formStack}>
                     <div className={styles.reviewCard}>
-                        <div>{platformMark(provider)}<span><strong>{PROVIDERS[provider].name}</strong><small>{new Date(joinAt ?? '').toLocaleString()} · {groupCall ? 'Group meeting' : '1:1 conversation'}</small></span></div>
+                        <div>{platformMark(provider)}<span><strong>{PROVIDERS[provider].name}</strong><small>{joinAt ? new Date(joinAt).toLocaleString() : 'Join now'} · {groupCall ? 'Group meeting' : '1:1 conversation'}</small></span></div>
                         <button type="button" onClick={() => setStep(1)}>Edit</button>
                     </div>
                     {purpose.trim() ? <p className={styles.purposeReview}><strong>Working objective:</strong> {purpose.trim()}</p> : null}
@@ -279,7 +319,7 @@ export default function DaniMeetingScheduler({ initialProvider }: { initialProvi
             <div className={styles.actions}>
                 {step > 1 ? <button type="button" className={styles.secondaryButton} onClick={() => setStep(value => value - 1)}>Back</button> : <span />}
                 {step < 3 ? (
-                    <button type="button" className={styles.primaryButton} onClick={() => setStep(value => value + 1)} disabled={step === 1 && (!meetingUrl.trim() || !joinAt)}>Continue <ArrowRight size={16} /></button>
+                    <button type="button" className={styles.primaryButton} onClick={() => setStep(value => value + 1)} disabled={step === 1 && (!meetingUrl.trim() || (joinTiming === 'scheduled' && !joinAt))}>Continue <ArrowRight size={16} /></button>
                 ) : (
                     <button type="button" className={styles.primaryButton} onClick={createInvite} disabled={!verified || busy}>{busy ? <LoaderCircle className={styles.spinner} size={16} /> : null} Invite Dani <ArrowRight size={16} /></button>
                 )}
