@@ -414,7 +414,7 @@ test('Visual brief is a six-slide deterministic microdeck', () => {
     assert.ok(model.visualBrief.slides.every((slide) => /conversation so far/i.test(slide.boundary)));
 });
 
-test('Anam client tools use the current API shape and route five named views', async () => {
+test('Anam client tools use the current API shape and route five named views plus deterministic close', async () => {
     const tools = (await import('../config/anam/amy-workbench-client-tools.json', { with: { type: 'json' } })).default;
     assert.deepEqual(tools.map((tool) => tool.name), [
         'show_live_notes',
@@ -422,6 +422,7 @@ test('Anam client tools use the current API shape and route five named views', a
         'show_solution_roadmap',
         'show_visual_brief',
         'show_solution_catalog',
+        'end_amy_session',
     ]);
     assert.ok(tools.every((tool) => tool.type === 'CLIENT'));
     assert.ok(tools.every((tool) => tool.config?.awaitResult === true));
@@ -433,7 +434,48 @@ test('Anam client tools use the current API shape and route five named views', a
     assert.match(tools[3].description, /meaningful business objective plus at least two/i);
     assert.match(tools[3].description, /not an approved design.*production plan/i);
     assert.match(tools[3].description, /healthcare or EHR conversations.*never infer a root cause.*internal workflow stage.*chart design/is);
+    assert.match(tools[5].description, /unmistakable visitor closing intent/i);
+    assert.match(tools[5].description, /never ask for confirmation/i);
     assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist/i);
+});
+
+test('Amy public-sector visual replay preserves stakeholders and updates funding without inventing a contract', () => {
+    const baseUserTurns = [
+        "Hey, Amy. Nice to meet you. I'm Tom.",
+        "Well, I'm still figuring out what to ask. You ever have one of those projects where everybody says modernization, but they mean something different?",
+        "So far, I've got field teams asking for rugged laptops, another group talking about AI inspections, and now leadership wants better connectivity at remote sites. It's all being called modernization.",
+        "Honestly, that's part of the confusion. I think they're lumping it all together. But these might be separate. The budget is one big pool though. And I'm running out of time in this fiscal year.",
+        "That would help. I think rugged devices might be a straightforward procurement. But AI inspections are more experimental. Remote connectivity is tied to state funding. So yes, splitting makes sense. But I'm not sure how to explain that to our procurement team.",
+        "It's our procurement officer and finance lead. They need to know which budget line each piece hits and whether anything requires competitive bidding or can fit under an existing contract vehicle. That's where I get stuck.",
+        "I believe we have a state contract that might cover hardware, but I'll need to confirm. The AI side probably doesn't have a contract path yet. So yes, if you can help me map this, that would be golden.",
+        'Yes, show me that brief. I need something to make sense of these parts before I get cornered by finance.',
+    ];
+    const asTurns = (items) => items.map((content) => ({ role: 'user', content }));
+    const revision1 = buildAmyWorkbenchModel(asTurns(baseUserTurns), '', '', 'visual');
+    const revision2 = buildAmyWorkbenchModel(asTurns([
+        ...baseUserTurns,
+        'This helps. Actually, I just remembered the connectivity project might involve federal funding, so that could change the procurement path. Can we update that?',
+    ]), '', '', 'visual');
+    const value = (model, label) => model.facts.find((fact) => fact.label === label)?.value ?? '';
+    const serialized = JSON.stringify(revision2);
+
+    assert.equal(value(revision1, 'Stakeholder context'), 'Procurement officer and finance lead');
+    assert.equal(value(revision2, 'Stakeholder context'), 'Procurement officer and finance lead');
+    assert.match(value(revision2, 'Modernization workstreams'), /Rugged devices.*straightforward procurement.*AI inspections.*experimental.*Remote-site connectivity.*funding-dependent/i);
+    assert.match(value(revision1, 'Funding context'), /State funding was reported/i);
+    assert.doesNotMatch(value(revision1, 'Funding context'), /federal/i);
+    assert.match(value(revision2, 'Funding context'), /State funding was reported.*federal funding may also apply.*unconfirmed planning assumption/is);
+    assert.match(value(revision2, 'Contract-path status'), /hardware may fit an existing state contract.*unconfirmed.*No contract path has been identified for AI inspections/is);
+    assert.match(value(revision2, 'Timing'), /current fiscal-year deadline/i);
+    assert.doesNotMatch(serialized, /Arizona|SVAR|GSA/i);
+    assert.match(revision2.quality.label, /Needs clarification/i);
+    assert.ok(revision2.quality.missing.includes('purchasing jurisdiction'));
+    assert.ok(revision2.quality.missing.includes('purchasing entity'));
+    assert.ok(revision2.quality.missing.includes('confirmed connectivity funding source'));
+    assert.match(revision2.visualBrief.slides[0].bullets.join(' '), /federal funding may also apply.*unconfirmed/i);
+
+    const delta = diffAmyWorkbenchFacts(revision1, revision2);
+    assert.deepEqual(delta.map((change) => `${change.kind}:${change.label}`), ['updated:Funding context']);
 });
 
 test('Workbench prompt protects visitor review time from filler and premature closing', async () => {

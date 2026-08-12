@@ -40,6 +40,8 @@ import {
 } from '@/lib/anam/evan-address-route';
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
+import { createAmyFarewellCloseCoordinator } from '@/lib/anam/amy-session-close';
+import { inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -133,6 +135,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let requestedCloseReason: string | null = null;
         let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
+        let amyCloseCoordinator: ReturnType<typeof createAmyFarewellCloseCoordinator> | null = null;
+        let suppressingAmyUnsafeOutput = false;
         let completedUserTurns = 0;
         let confirmedMemoryName: string | null = null;
         let requestedCloseFallbackTimer: number | null = null;
@@ -254,6 +258,35 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             });
         };
 
+        const handleAmyRequestedEnd = () => {
+            if (!isAmyCara4Variant(sessionVariant) || closeHandled) return;
+            requestedCloseReason = 'user_requested_end';
+            if (isMounted) setIsFinalizing(true);
+
+            if (!activeClient) {
+                closeHandled = true;
+                if (isMounted) {
+                    setIsFinalizing(false);
+                    onCloseRef.current?.();
+                }
+                return;
+            }
+
+            void activeClient.stopStreaming().catch(() => undefined).finally(() => {
+                requestedCloseFallbackTimer = window.setTimeout(() => {
+                    if (closeHandled || !isMounted) return;
+                    closeHandled = true;
+                    void completeOnce('user_requested_end')
+                        .catch(() => undefined)
+                        .finally(() => {
+                            if (!isMounted) return;
+                            setIsFinalizing(false);
+                            onCloseRef.current?.();
+                        });
+                }, 1_500);
+            });
+        };
+
         const currentWorkbenchTranscriptSignature = () => {
             const latestTurn = transcriptRef.current.at(-1);
             return [
@@ -351,6 +384,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     daniCloseCoordinator = createDaniFarewellCloseCoordinator({
                         stopStreaming: handleDaniRequestedEnd,
                         onStopError: () => console.error('[Dani Anam] Farewell close was not confirmed'),
+                    });
+                }
+                if (isAmyCara4) {
+                    amyCloseCoordinator = createAmyFarewellCloseCoordinator({
+                        stopStreaming: handleAmyRequestedEnd,
+                        onStopError: () => console.error('[Amy Anam] Farewell close was not confirmed'),
                     });
                 }
                 const cancelWorkbenchHandlers: Array<() => void> = [];
@@ -570,6 +609,61 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
+                    const normalizedRole = transcriptRole(messageEvent.role);
+                    if (isAmyCara4 && normalizedRole === 'agent') {
+                        if (suppressingAmyUnsafeOutput) {
+                            if (messageEvent.endOfSpeech) {
+                                if (currentMessageRef.current) {
+                                    recordTurn(messageEvent.role, currentMessageRef.current);
+                                }
+                                amyCloseCoordinator?.completeFarewell();
+                                currentMessageRef.current = '';
+                                currentRoleRef.current = '';
+                                suppressingAmyUnsafeOutput = false;
+                            }
+                            return;
+                        }
+
+                        const accumulated = messageEvent.role === currentRoleRef.current
+                            ? `${currentMessageRef.current}${messageEvent.content}`
+                            : messageEvent.content;
+                        const unsafeOutput = inspectAmyLiveOutput(accumulated);
+                        if (unsafeOutput) {
+                            if (messageEvent.role !== currentRoleRef.current && currentMessageRef.current) {
+                                recordTurn(currentRoleRef.current, currentMessageRef.current);
+                            }
+                            currentRoleRef.current = messageEvent.role;
+                            currentMessageRef.current = unsafeOutput.safePrefix;
+                            suppressingAmyUnsafeOutput = true;
+                            console.warn('[Amy Anam] Unsafe provider output interrupted', {
+                                reason: unsafeOutput.reason,
+                                contentLogged: false,
+                            });
+                            try {
+                                anamClient.interruptPersona();
+                            } catch {
+                                console.error('[Amy Anam] Unsafe provider output interruption was not confirmed');
+                            }
+                            if (messageEvent.endOfSpeech) {
+                                if (currentMessageRef.current) {
+                                    recordTurn(messageEvent.role, currentMessageRef.current);
+                                }
+                                amyCloseCoordinator?.completeFarewell();
+                                currentMessageRef.current = '';
+                                currentRoleRef.current = '';
+                                suppressingAmyUnsafeOutput = false;
+                            }
+                            return;
+                        }
+                    } else if (normalizedRole === 'user' && suppressingAmyUnsafeOutput) {
+                        if (currentMessageRef.current) {
+                            recordTurn(currentRoleRef.current, currentMessageRef.current);
+                        }
+                        currentMessageRef.current = '';
+                        currentRoleRef.current = '';
+                        suppressingAmyUnsafeOutput = false;
+                    }
+
                     if (messageEvent.role !== currentRoleRef.current) {
                         if (currentMessageRef.current) {
                             recordTurn(currentRoleRef.current, currentMessageRef.current);
@@ -590,6 +684,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         if (transcriptRole(messageEvent.role) === 'agent') {
                             evanCloseCoordinator?.completeFarewell();
                             daniCloseCoordinator?.completeFarewell();
+                            amyCloseCoordinator?.completeFarewell();
                         }
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
@@ -601,6 +696,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     closeHandled = true;
                     evanCloseCoordinator?.dispose();
                     daniCloseCoordinator?.dispose();
+                    amyCloseCoordinator?.dispose();
                     console.log('Anam connection closed');
 
                     if (sessionSpineActive) {
@@ -636,6 +732,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 };
 
                 if (isAmyCara4) {
+                    removeCloseToolHandler = anamClient.registerToolCallHandler(
+                        'end_amy_session',
+                        {
+                            onStart: async () => {
+                                requestedCloseReason = 'user_requested_end';
+                                const armed = amyCloseCoordinator?.arm() === true;
+                                console.info('[Amy Anam] Farewell close armed', { armed });
+                                return JSON.stringify({
+                                    status: armed ? 'farewell_required' : 'farewell_already_armed',
+                                    instruction: armed
+                                        ? 'Say exactly: "Thanks for talking this through with me. Take care." Ask no question, add no recap, and introduce no new topic. The browser will close after the farewell finishes.'
+                                        : 'Do not speak again. The farewell close is already armed and the browser will close the session.',
+                                });
+                            },
+                        },
+                    );
                     removeIdentityToolHandler = anamClient.registerToolCallHandler(
                         'confirm_live_identity',
                         {
@@ -903,16 +1015,25 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     );
                 }
 
+                const handleServerWarning = () => {
+                    console.warn('[Anam] Server warning received', {
+                        persona: isAmyCara4 ? 'amy-cara4' : isDani ? 'dani' : isEvan ? 'evan' : 'other',
+                        contentLogged: false,
+                    });
+                };
+
                 anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                 anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
                 anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                 anamClient.addListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
+                anamClient.addListener(AnamEvent.SERVER_WARNING, handleServerWarning);
                 removeClientListeners = () => {
                     anamClient.removeListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
                     anamClient.removeListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                     anamClient.removeListener(AnamEvent.SESSION_READY, handleSessionReady);
                     anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                     anamClient.removeListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
+                    anamClient.removeListener(AnamEvent.SERVER_WARNING, handleServerWarning);
                     cancelWorkbenchHandlers.forEach((cancel) => cancel());
                 };
 
@@ -945,6 +1066,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             removeCloseToolHandler?.();
             evanCloseCoordinator?.dispose();
             daniCloseCoordinator?.dispose();
+            amyCloseCoordinator?.dispose();
             // Cleanup on unmount
             if (activeClient) {
                 void completeOnce('unmount').catch(() => undefined);

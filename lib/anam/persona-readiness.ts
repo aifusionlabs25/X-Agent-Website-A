@@ -8,7 +8,7 @@ const ANAM_API_BASE = 'https://api.anam.ai/v1';
 export const AMY_CARA4_REQUIRED_TOOL_NAMES = [
     'Knowledge_Amy',
     'confirm_live_identity',
-    'end_call',
+    'end_amy_session',
     'search_insight_catalog',
     'show_live_notes',
     'show_session_brief',
@@ -42,6 +42,11 @@ export const EVAN_REQUIRED_PROMPT_MARKERS = [
     '<!-- EVAN_ANAM_CORE_END -->',
     '<!-- EVAN_AGENTMAIL_START -->',
     '<!-- EVAN_AGENTMAIL_END -->',
+] as const;
+
+export const AMY_CARA4_FORBIDDEN_TOOL_NAMES = [
+    'capture_sales_handoff',
+    'end_call',
 ] as const;
 
 export const DANI_EXPECTED_NAME = 'Dani AI Solutions Director';
@@ -136,6 +141,7 @@ export type AmyCara4PersonaReadiness = {
     sessionDataRetentionConfigured: boolean;
     anamTranscriptionPipelineConfigured: boolean;
     missingToolNames: string[];
+    forbiddenToolNames: string[];
     missingPromptMarkers: string[];
 };
 
@@ -242,6 +248,8 @@ export function inspectAmyCara4PersonaReadiness(
     const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
     const missingToolNames = AMY_CARA4_REQUIRED_TOOL_NAMES
         .filter(name => !toolNames.has(name));
+    const forbiddenToolNames = AMY_CARA4_FORBIDDEN_TOOL_NAMES
+        .filter(name => toolNames.has(name));
     const missingPromptMarkers = AMY_CARA4_REQUIRED_PROMPT_MARKERS
         .filter(marker => !prompt.includes(marker));
 
@@ -251,12 +259,14 @@ export function inspectAmyCara4PersonaReadiness(
             && sessionDataRetentionConfigured
             && anamTranscriptionPipelineConfigured
             && missingToolNames.length === 0
+            && forbiddenToolNames.length === 0
             && missingPromptMarkers.length === 0,
         personaIdMatches,
         cara4AvatarConfigured,
         sessionDataRetentionConfigured,
         anamTranscriptionPipelineConfigured,
         missingToolNames,
+        forbiddenToolNames,
         missingPromptMarkers,
     };
 }

@@ -5,8 +5,13 @@ import { fileURLToPath } from 'node:url';
 
 const API_BASE = 'https://api.anam.ai/v1';
 const APPLY_CONFIRMATION = 'CONFIRM_AMY_WORKBENCH_SYNC';
+const RELIABILITY_START = '<!-- AMY_CARA4_RELIABILITY_START -->';
+const RELIABILITY_END = '<!-- AMY_CARA4_RELIABILITY_END -->';
+const PUBLIC_SECTOR_START = '<!-- AMY_PUBLIC_SECTOR_START -->';
+const PUBLIC_SECTOR_END = '<!-- AMY_PUBLIC_SECTOR_END -->';
 const WORKBENCH_START = '<!-- AMY_WORKBENCH_START -->';
 const WORKBENCH_END = '<!-- AMY_WORKBENCH_END -->';
+const FORBIDDEN_TOOL_NAMES = new Set(['capture_sales_handoff', 'end_call']);
 const REQUIRED_MANAGED_MARKER_PAIRS = [
     ['<!-- AMY_CONVERSATION_NATURALNESS_START -->', '<!-- AMY_CONVERSATION_NATURALNESS_END -->'],
     ['<!-- AMY_CARA4_RELIABILITY_START -->', '<!-- AMY_CARA4_RELIABILITY_END -->'],
@@ -42,6 +47,14 @@ const promptUpgrade = normalize(await fs.readFile(
     new URL('../../config/anam/amy-workbench-prompt-upgrade.md', import.meta.url),
     'utf8',
 )).trim();
+const reliabilityUpgrade = normalize(await fs.readFile(
+    new URL('../../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url),
+    'utf8',
+)).trim();
+const publicSectorUpgrade = normalize(await fs.readFile(
+    new URL('../../config/anam/amy-public-sector-upgrade.md', import.meta.url),
+    'utf8',
+)).trim();
 
 if (!Array.isArray(toolDefinitions) || toolDefinitions.length === 0) {
     throw new Error('Refusing update: local Amy Workbench tool definitions are missing.');
@@ -57,8 +70,14 @@ const invalidDescription = toolDefinitions.find((tool) => {
 if (invalidDescription) {
     throw new Error(`Refusing update: ${invalidDescription.name || 'Workbench tool'} description must contain 1 to 1024 characters.`);
 }
-if (!promptUpgrade.includes(WORKBENCH_START) || !promptUpgrade.includes(WORKBENCH_END)) {
-    throw new Error('Refusing update: local Amy Workbench prompt markers are malformed or missing.');
+for (const [label, replacement, startMarker, endMarker] of [
+    ['reliability', reliabilityUpgrade, RELIABILITY_START, RELIABILITY_END],
+    ['public-sector', publicSectorUpgrade, PUBLIC_SECTOR_START, PUBLIC_SECTOR_END],
+    ['Workbench', promptUpgrade, WORKBENCH_START, WORKBENCH_END],
+]) {
+    if (!replacement.includes(startMarker) || !replacement.includes(endMarker)) {
+        throw new Error(`Refusing update: local Amy ${label} prompt markers are malformed or missing.`);
+    }
 }
 
 const sha256 = (value) => crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
@@ -177,12 +196,12 @@ function assertManagedPrompt(prompt) {
     }
 }
 
-function replaceManagedBlock(prompt, replacement) {
+function replaceManagedBlock(prompt, replacement, startMarker, endMarker) {
     const current = normalize(prompt).trim();
     assertManagedPrompt(current);
-    const start = current.indexOf(WORKBENCH_START);
-    const end = current.indexOf(WORKBENCH_END);
-    const after = end + WORKBENCH_END.length;
+    const start = current.indexOf(startMarker);
+    const end = current.indexOf(endMarker);
+    const after = end + endMarker.length;
     const beforeBlock = current.slice(0, start).trim();
     const afterBlock = current.slice(after).trim();
     return `${beforeBlock}${beforeBlock ? '\n\n' : ''}${replacement}${afterBlock ? `\n\n${afterBlock}` : ''}\n`;
@@ -235,7 +254,19 @@ const [before, toolListPayload] = await Promise.all([
 assertIdentity(before);
 const beforePrompt = normalize(before.brain?.systemPrompt);
 assertManagedPrompt(beforePrompt);
-const expectedPrompt = replaceManagedBlock(beforePrompt, promptUpgrade);
+const expectedPrompt = [
+    [reliabilityUpgrade, RELIABILITY_START, RELIABILITY_END],
+    [publicSectorUpgrade, PUBLIC_SECTOR_START, PUBLIC_SECTOR_END],
+    [promptUpgrade, WORKBENCH_START, WORKBENCH_END],
+].reduce(
+    (prompt, [replacement, startMarker, endMarker]) => replaceManagedBlock(
+        prompt,
+        replacement,
+        startMarker,
+        endMarker,
+    ),
+    beforePrompt,
+);
 assertManagedPrompt(expectedPrompt);
 const beforePromptHash = sha256(beforePrompt);
 const expectedPromptHash = sha256(expectedPrompt);
@@ -247,9 +278,8 @@ const toolDeltas = toolDefinitions.map((definition) => toolDefinitionDelta(
 ));
 const currentPersonaToolIds = (before.tools ?? []).map(toolId).filter(Boolean);
 const currentPersonaToolNames = (before.tools ?? []).map((tool) => tool.name);
-const forbiddenHandoff = allTools.find((tool) => tool.name === 'capture_sales_handoff')
-    ?? (before.tools ?? []).find((tool) => tool.name === 'capture_sales_handoff');
-const forbiddenHandoffId = toolId(forbiddenHandoff);
+const forbiddenAttachedToolNames = currentPersonaToolNames
+    .filter((name) => FORBIDDEN_TOOL_NAMES.has(name));
 const applying = process.argv.includes('--apply');
 
 if (!applying) {
@@ -263,9 +293,7 @@ if (!applying) {
         expectedPromptChars: expectedPrompt.length,
         toolDeltas,
         wouldAttachToolNames: workbenchNames.filter((name) => !currentPersonaToolNames.includes(name)),
-        wouldRemoveToolNames: forbiddenHandoffId && currentPersonaToolIds.includes(forbiddenHandoffId)
-            ? ['capture_sales_handoff']
-            : [],
+        wouldRemoveToolNames: forbiddenAttachedToolNames,
         protectedProviderStateSha256: sha256(stableJson(protectedProviderState(before))),
         applyConfirmation: APPLY_CONFIRMATION,
         backupRequired: true,
@@ -322,14 +350,14 @@ if (!applying) {
         if (!toolId(tool)) throw new Error(`Required Anam workbench tool is unavailable: ${name}`);
         return tool;
     });
-    const forbiddenHandoffIds = new Set([
+    const forbiddenToolIds = new Set([
         ...refreshedTools,
         ...(before.tools ?? []),
-    ].filter((tool) => tool.name === 'capture_sales_handoff').map(toolId).filter(Boolean));
+    ].filter((tool) => FORBIDDEN_TOOL_NAMES.has(tool.name)).map(toolId).filter(Boolean));
     const nextToolIds = [...new Set([
         ...currentPersonaToolIds,
         ...workbenchTools.map(toolId),
-    ])].filter((id) => !forbiddenHandoffIds.has(id)).sort();
+    ])].filter((id) => !forbiddenToolIds.has(id)).sort();
 
     await anam(`/personas/${personaId}`, {
         method: 'PUT',
@@ -352,7 +380,9 @@ if (!applying) {
     const failures = [];
     if (sha256(verifiedPrompt) !== expectedPromptHash) failures.push('prompt');
     if (JSON.stringify(verifiedToolIds) !== JSON.stringify(nextToolIds)) failures.push('attachedToolIds');
-    if (verifiedToolNames.includes('capture_sales_handoff')) failures.push('capture_sales_handoff');
+    for (const forbiddenName of FORBIDDEN_TOOL_NAMES) {
+        if (verifiedToolNames.includes(forbiddenName)) failures.push(forbiddenName);
+    }
     if (stableJson(protectedProviderState(verified)) !== stableJson(protectedProviderState(before))) {
         failures.push('protectedPersonaProviderState');
     }
@@ -384,5 +414,6 @@ if (!applying) {
         workbenchToolDefinitionsVerified: true,
         protectedPersonaProviderStateUnchanged: true,
         captureSalesHandoffAttached: false,
+        legacyEndCallAttached: false,
     }, null, 2));
 }

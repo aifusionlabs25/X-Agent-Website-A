@@ -15,6 +15,10 @@ const workbenchPrompt = await readFile(
     new URL('../config/anam/amy-workbench-prompt-upgrade.md', import.meta.url),
     'utf8',
 );
+const publicSectorPrompt = await readFile(
+    new URL('../config/anam/amy-public-sector-upgrade.md', import.meta.url),
+    'utf8',
+);
 const clientTools = JSON.parse(await readFile(
     new URL('../config/anam/amy-workbench-client-tools.json', import.meta.url),
     'utf8',
@@ -97,6 +101,18 @@ test('Amy keeps claim, handoff, and artifact guardrails intact', () => {
     assert.match(prompt, /Never invent or imply confirmed products.*certifications.*contract eligibility/s);
     assert.match(prompt, /Keep technology fit, compliance, procurement, contract vehicles, funding.*distinct/s);
     assert.match(prompt, /approved attached knowledge source/i);
+});
+
+test('Amy fact-finds contract context without inventing jurisdiction or confirming a vehicle', () => {
+    assert.match(publicSectorPrompt, /only after the visitor explicitly identifies Arizona or names SVAR/i);
+    assert.match(publicSectorPrompt, /Never volunteer Arizona SVAR from browser location, IP-derived location, timezone, locale, area code, prior-session geography/i);
+    assert.match(publicSectorPrompt, /general mention of procurement.*does not authorize Amy to name a vehicle/is);
+    assert.match(publicSectorPrompt, /purchasing organization type, state or jurisdiction, actual purchasing entity, confirmed or possible funding source/is);
+    assert.match(publicSectorPrompt, /Which state or jurisdiction will make the purchase\?/i);
+    assert.match(publicSectorPrompt, /Bad: "Do you have an Arizona SVAR or GSA schedule\?"/i);
+    assert.match(publicSectorPrompt, /does not confirm that a contract applies, covers a category, avoids competitive bidding, permits a funding source, establishes eligibility/i);
+    assert.match(publicSectorPrompt, /move gracefully to the next business decision or specialist-validation step/i);
+    assert.match(publicSectorPrompt, /Do not seek a redundant confirmation/i);
 });
 
 test('Amy truthfully rebuilds visual updates and confirms only the committed delta', () => {
@@ -185,7 +201,10 @@ test('Amy Workbench updater is dry-run first, identity-pinned, backed up, and fu
 
     assert.match(workbenchUpdater, /function normalizedToolDefinition[\s\S]*description:[\s\S]*type:[\s\S]*config:/);
     assert.match(workbenchUpdater, /JSON\.stringify\(verifiedToolIds\) !== JSON\.stringify\(nextToolIds\)/);
-    assert.match(workbenchUpdater, /verifiedToolNames\.includes\('capture_sales_handoff'\)/);
+    assert.match(workbenchUpdater, /FORBIDDEN_TOOL_NAMES = new Set\(\['capture_sales_handoff', 'end_call'\]\)/);
+    assert.match(workbenchUpdater, /legacyEndCallAttached: false/);
+    assert.match(workbenchUpdater, /reliabilityUpgrade/);
+    assert.match(workbenchUpdater, /publicSectorUpgrade/);
     assert.match(workbenchUpdater, /descriptionTypeConfig/);
     assert.match(workbenchUpdater, /protectedPersonaProviderStateUnchanged: true/);
     assert.match(workbenchUpdater, /workbenchToolDefinitionsVerified: true/);

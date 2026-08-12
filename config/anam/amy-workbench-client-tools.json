@@ -53,7 +53,7 @@
   },
   {
     "name": "show_visual_brief",
-    "description": "Open/rebuild Amy's Visual Brief for a visual or update, refresh, rebuild, or regenerate request. For updates, call this tool again; speech is not an update. Require a meaningful business objective plus at least two grounding signals; otherwise ask one brief clarification. contentChanged, appliedChanges, and visibleFacts are the only source of truth. Confirm receipt facts in one short sentence. If contentChanged is false or the requested delta is absent from both appliedChanges and visibleFacts, say the requested change did not land and ask one precise clarification. Label planning assumptions explicitly; keep concurrent timelines separate and named; preserve merger or added-site/system scope expansion, never a generic guardrail. In healthcare or EHR conversations, never infer a root cause, internal workflow stage, field/event, export, method, chart design, permission, or compliance. Call silently with {}. No farewell calls. Working view only; not an approved design or production plan.",
+    "description": "Open/rebuild Amy's Visual Brief for a visual, update, refresh, rebuild, or regenerate request. For updates, call this tool again; speech is not an update. Require a meaningful business objective plus at least two grounding signals. contentChanged, appliedChanges, and visibleFacts are the only source of truth. Confirm in one short sentence. If the requested delta is absent from both appliedChanges and visibleFacts, say the requested change did not land and ask one precise clarification. Preserve facts. Stakeholders are people or roles only. Keep funding, contracts, workstreams, and concurrent timelines separate and named. Label planning assumptions explicitly. Preserve scope expansion, not a generic guardrail. Never infer jurisdiction from session location or invent a named contract, eligibility, budget, or sourcing result. In healthcare or EHR conversations, never infer a root cause, internal workflow stage, or chart design. Call silently with {}. Working view only; not an approved design or production plan.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {
@@ -82,6 +82,21 @@
           }
         },
         "required": ["query"],
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
+  },
+  {
+    "name": "end_amy_session",
+    "description": "End Amy's one-to-one website session only after unmistakable visitor closing intent such as 'let's wrap up,' 'I think we can wrap now,' 'I'm done,' 'end the call,' 'goodbye,' or 'take care.' A bare thanks is not enough. Call silently with exactly {} and at most once; never ask for confirmation. After farewell_required, say exactly: 'Thanks for talking this through with me. Take care.' After farewell_already_armed, say nothing. Never emit tool syntax as dialogue.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       },
       "awaitResult": true,

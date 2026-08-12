@@ -58,6 +58,9 @@ console.log(JSON.stringify({
     legacyBehaviorHeaderOffset: prompt.indexOf('# Amy Cara 4 behavior upgrade'),
     legacyThreeFactRulePresent: /at least three confirmed facts/i.test(prompt),
     toolNames: (persona.tools ?? []).map(tool => tool.name).sort(),
+    customCloseToolAttached: (persona.tools ?? []).some(tool => tool.name === 'end_amy_session'),
+    legacyEndCallAttached: (persona.tools ?? []).some(tool => tool.name === 'end_call'),
+    forbiddenSalesHandoffAttached: (persona.tools ?? []).some(tool => tool.name === 'capture_sales_handoff'),
     knowledgeTool: knowledgeTool ? {
         id: knowledgeTool._toolId ?? knowledgeTool.id ?? null,
         type: knowledgeTool.type ?? null,

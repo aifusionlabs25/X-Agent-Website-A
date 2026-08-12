@@ -1,0 +1,95 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+import { inspectAmyLiveOutput } from '../lib/anam/amy-live-output-guard.ts';
+import { createAmyFarewellCloseCoordinator } from '../lib/anam/amy-session-close.ts';
+
+function scheduler() {
+    let nextId = 1;
+    const pending = new Map();
+    return {
+        schedule(callback, delay) {
+            const id = nextId++;
+            pending.set(id, { callback, delay });
+            return id;
+        },
+        cancel(id) {
+            pending.delete(id);
+        },
+        runDelay(delay) {
+            const match = [...pending].find(([, task]) => task.delay === delay);
+            assert.ok(match, `missing timer for ${delay}ms`);
+            pending.delete(match[0]);
+            match[1].callback();
+        },
+        count() {
+            return pending.size;
+        },
+    };
+}
+
+test('Amy closes once after one exact farewell without confirmation', async () => {
+    const timers = scheduler();
+    let stops = 0;
+    const coordinator = createAmyFarewellCloseCoordinator({
+        stopStreaming: async () => { stops += 1; },
+        schedule: timers.schedule,
+        cancel: timers.cancel,
+        fallbackMs: 12_000,
+        audioDrainMs: 2_500,
+    });
+
+    assert.equal(coordinator.arm(), true);
+    assert.equal(coordinator.arm(), false);
+    assert.equal(coordinator.completeFarewell(), true);
+    assert.equal(coordinator.completeFarewell(), false);
+    timers.runDelay(2_500);
+    await Promise.resolve();
+    assert.equal(stops, 1);
+    assert.equal(timers.count(), 0);
+});
+
+test('Amy uses one bounded fallback close when no farewell completes', async () => {
+    const timers = scheduler();
+    let stops = 0;
+    const coordinator = createAmyFarewellCloseCoordinator({
+        stopStreaming: () => { stops += 1; },
+        schedule: timers.schedule,
+        cancel: timers.cancel,
+        fallbackMs: 12_000,
+    });
+    assert.equal(coordinator.arm(), true);
+    timers.runDelay(12_000);
+    await Promise.resolve();
+    assert.equal(stops, 1);
+});
+
+test('Amy output guard suppresses provider fallbacks and exposed close markup', () => {
+    assert.deepEqual(
+        inspectAmyLiveOutput("The visual brief is updated. Sorry, I'm having trouble thinking right now."),
+        { reason: 'provider_fallback', safePrefix: 'The visual brief is updated.' },
+    );
+    assert.deepEqual(
+        inspectAmyLiveOutput('<end_call{ "confirmed": true }>'),
+        { reason: 'tool_markup', safePrefix: '' },
+    );
+    assert.deepEqual(
+        inspectAmyLiveOutput('Sorry, I am having trouble'),
+        { reason: 'provider_fallback', safePrefix: '' },
+    );
+    assert.equal(inspectAmyLiveOutput("I'm sorry that procurement is complicated."), null);
+});
+
+test('Amy player registers deterministic close and interrupts unsafe provider output before streaming', async () => {
+    const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
+    const registration = player.indexOf("registerToolCallHandler(\n                        'end_amy_session'");
+    const streaming = player.indexOf("anamClient.streamToVideoElement('persona-video')");
+    assert.ok(registration > 0 && registration < streaming);
+    assert.match(player, /amyCloseCoordinator = createAmyFarewellCloseCoordinator\(\{[\s\S]{0,180}stopStreaming: handleAmyRequestedEnd/);
+    assert.match(player, /inspectAmyLiveOutput\(accumulated\)/);
+    assert.match(player, /anamClient\.interruptPersona\(\)/);
+    assert.match(player, /contentLogged: false/);
+    assert.match(player, /status: armed \? 'farewell_required' : 'farewell_already_armed'/);
+    assert.match(player, /Say exactly: "Thanks for talking this through with me\. Take care\."/);
+    assert.match(player, /Do not speak again\. The farewell close is already armed/);
+});

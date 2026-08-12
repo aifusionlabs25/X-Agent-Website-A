@@ -32,6 +32,7 @@ test('Cara 4 preflight accepts the complete Amy feature configuration', () => {
         sessionDataRetentionConfigured: true,
         anamTranscriptionPipelineConfigured: true,
         missingToolNames: [],
+        forbiddenToolNames: [],
         missingPromptMarkers: [],
     });
 });
@@ -50,7 +51,7 @@ test('Cara 4 preflight detects the exact stripped configuration from the failed 
     assert.equal(result.ready, false);
     assert.deepEqual(result.missingToolNames, [
         'confirm_live_identity',
-        'end_call',
+        'end_amy_session',
         'show_live_notes',
         'show_session_brief',
         'show_solution_catalog',
@@ -59,6 +60,20 @@ test('Cara 4 preflight detects the exact stripped configuration from the failed 
         'skip_turn',
     ]);
     assert.deepEqual(result.missingPromptMarkers, AMY_CARA4_REQUIRED_PROMPT_MARKERS);
+});
+
+test('Cara 4 preflight rejects legacy close and handoff tools', () => {
+    const result = inspectAmyCara4PersonaReadiness({
+        ...healthyPersona(),
+        tools: [
+            ...healthyPersona().tools,
+            { name: 'end_call' },
+            { name: 'capture_sales_handoff' },
+        ],
+    }, PERSONA_ID);
+
+    assert.equal(result.ready, false);
+    assert.deepEqual(result.forbiddenToolNames, ['capture_sales_handoff', 'end_call']);
 });
 
 test('Cara 4 preflight also rejects the wrong persona or avatar model', () => {

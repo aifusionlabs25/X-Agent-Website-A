@@ -25,6 +25,12 @@ const liveIdentityTool = JSON.parse(await fs.readFile(
     new URL('../../config/anam/amy-live-identity-client-tool.json', import.meta.url),
     'utf8',
 ));
+const workbenchTools = JSON.parse(await fs.readFile(
+    new URL('../../config/anam/amy-workbench-client-tools.json', import.meta.url),
+    'utf8',
+));
+const sessionCloseTool = workbenchTools.find((tool) => tool.name === 'end_amy_session');
+if (!sessionCloseTool) throw new Error('Local end_amy_session tool definition is unavailable.');
 
 async function anam(pathname, init = {}) {
     const response = await fetch(`${API_BASE}${pathname}`, {
@@ -76,6 +82,8 @@ const [persona, toolListPayload] = await Promise.all([
 const allTools = listData(toolListPayload);
 let identityTool = allTools.find(tool => tool.name === liveIdentityTool.name);
 let identityToolCreated = false;
+let closeTool = allTools.find(tool => tool.name === sessionCloseTool.name);
+let closeToolCreated = false;
 
 if (identityTool) {
     identityTool = await anam(`/tools/${toolId(identityTool)}`, {
@@ -90,8 +98,21 @@ if (identityTool) {
     identityToolCreated = true;
 }
 
+if (closeTool) {
+    closeTool = await anam(`/tools/${toolId(closeTool)}`, {
+        method: 'PUT',
+        body: JSON.stringify(sessionCloseTool),
+    });
+} else {
+    closeTool = await anam('/tools', {
+        method: 'POST',
+        body: JSON.stringify(sessionCloseTool),
+    });
+    closeToolCreated = true;
+}
+
 const refreshedTools = listData(await anam('/tools?perPage=100'));
-const requiredNames = ['confirm_live_identity', 'skip_turn', 'end_call'];
+const requiredNames = ['confirm_live_identity', 'skip_turn', 'end_amy_session'];
 const requiredTools = requiredNames.map(name => {
     const tool = refreshedTools.find(candidate => candidate.name === name);
     if (!toolId(tool)) throw new Error(`Required Anam tool is unavailable: ${name}`);
@@ -99,10 +120,12 @@ const requiredTools = requiredNames.map(name => {
 });
 const preservedToolIds = (persona.tools ?? []).map(toolId).filter(Boolean);
 const requiredToolIds = requiredTools.map(toolId);
-const forbiddenHandoff = refreshedTools.find(tool => tool.name === 'capture_sales_handoff');
-const forbiddenHandoffId = toolId(forbiddenHandoff);
+const forbiddenToolIds = new Set(refreshedTools
+    .filter(tool => ['capture_sales_handoff', 'end_call'].includes(tool.name))
+    .map(toolId)
+    .filter(Boolean));
 const nextToolIds = [...new Set([...preservedToolIds, ...requiredToolIds])]
-    .filter(id => id !== forbiddenHandoffId)
+    .filter(id => !forbiddenToolIds.has(id))
     .sort();
 const promptWithReliability = replaceManagedBlock(
     persona.brain?.systemPrompt,
@@ -160,6 +183,8 @@ console.log(JSON.stringify({
     personaId: verified.id,
     identityToolId: toolId(identityTool),
     identityToolCreated,
+    closeToolId: toolId(closeTool),
+    closeToolCreated,
     attachedToolNames: (verified.tools ?? []).map(tool => tool.name).sort(),
     toolCount: verifiedToolIds.length,
     promptSha256: sha256(prompt),
@@ -169,6 +194,7 @@ console.log(JSON.stringify({
     enableAudioPassthrough: verified.enableAudioPassthrough,
     publicSectorConfigured: prompt.includes(PUBLIC_SECTOR_START)
         && prompt.includes(PUBLIC_SECTOR_END),
-    captureSalesHandoffAttached: forbiddenHandoffId ? verifiedToolIds.includes(forbiddenHandoffId) : false,
+    captureSalesHandoffAttached: (verified.tools ?? []).some(tool => tool.name === 'capture_sales_handoff'),
+    legacyEndCallAttached: (verified.tools ?? []).some(tool => tool.name === 'end_call'),
 }, null, 2));
 

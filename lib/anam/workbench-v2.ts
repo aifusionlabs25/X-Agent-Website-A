@@ -353,7 +353,7 @@ function detectLane(text: string): LaneId {
     const scores: Array<[LaneId, RegExp[]]> = [
         ['customer-experience', [/customer experience|contact cent(?:er|re)|call cent(?:er|re)|call wait|wait times?|customer satisfaction|\bCSAT\b/i, /call recordings?|ticket logs?|speech[- ]to[- ]text|sentiment|predictive routing|service interactions?/i]],
         ['education', [/student|university|college|school district|higher education|K-?12/i, /\bSIS\b|student information system|student retention|attendance|grades?|drop(?:ping)? out/i]],
-        ['public-sector', [/county|municipal|city government|state agency|federal agency|public sector|higher education|K-?12/i, /procurement|contract vehicle|CJIS|FedRAMP|StateRAMP/i]],
+        ['public-sector', [/county|municipal|city government|state agency|federal agency|public sector|higher education|K-?12|state funding|federal funding/i, /procurement|competitive bidding|contract vehicle|state contract|CJIS|FedRAMP|StateRAMP/i]],
         ['mobility', [/warehouse|distribution center|picking|outbound shipping/i, /WMS|rugged|scanner|forklift|Zebra|Honeywell|MDM/i]],
         ['endpoint', [/endpoint|Windows 11|Intune|SCCM|Copilot|device refresh|laptops?/i, /branch|workplace/i]],
         ['security', [/security|cyber|ransomware|MFA|zero trust|CrowdStrike|privileged access/i, /recovery|backup|audit|insurance/i]],
@@ -633,6 +633,28 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sourceText);
     const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
     const hasAiDiscovery = /\bAI\b|artificial intelligence|runbook automation|migration runbooks?|technical document(?:ation)? search|analy[sz](?:e|ing) telemetry|internal (?:IT )?assistant|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out/i.test(sourceText);
+    const hasRuggedDeviceWorkstream = /\brugged (?:laptops?|devices?|hardware)\b/i.test(sessionText);
+    const hasAiInspectionWorkstream = /\bAI[- ]?(?:driven )?inspections?\b/i.test(sessionText);
+    const hasRemoteConnectivityWorkstream = /\b(?:remote[- ]site connectivity|connectivity at remote sites?)\b/i.test(sessionText);
+    const hasRuggedProcurementFraming = /\brugged (?:laptops?|devices?|hardware)\b.{0,55}\b(?:straightforward|clear) procurement\b|\b(?:straightforward|clear) procurement\b.{0,55}\brugged\b/i.test(sessionText);
+    const hasExperimentalAiInspections = /\bAI[- ]?(?:driven )?inspections?\b.{0,45}\bexperimental\b|\bexperimental\b.{0,45}\bAI[- ]?(?:driven )?inspections?\b/i.test(sessionText);
+    const modernizationWorkstreams = unique([
+        hasRuggedDeviceWorkstream ? 'Rugged devices' : '',
+        hasAiInspectionWorkstream ? 'AI inspections' : '',
+        hasRemoteConnectivityWorkstream ? 'Remote-site connectivity' : '',
+    ], 4);
+    const hasModernizationPortfolio = modernizationWorkstreams.length >= 2
+        && /\bmoderni[sz]ation\b|\bworkstreams?\b/i.test(sessionText);
+    const hasSingleBudgetPool = /\b(?:one|single) (?:big )?(?:budget )?(?:pool|pull)\b|\bbudget is (?:one|a single)\b|\blumping?\b.{0,30}\bbudget\b/i.test(sessionText);
+    const hasCurrentFiscalYearPressure = /\brunning out of time\b.{0,35}\b(?:this|current) fiscal year\b|\b(?:this|current) fiscal year\b.{0,50}\b(?:deadline|time|budget|procurement)\b/i.test(sessionText);
+    const hasStateConnectivityFunding = /\bremote connectivity\b.{0,55}\bstate funding\b|\bstate funding\b.{0,55}\b(?:remote )?connectivity\b/i.test(sessionText);
+    const hasPossibleFederalConnectivityFunding = /\b(?:remote )?connectivity\b.{0,75}\b(?:might|may|could|possibly)\b.{0,20}\bfederal funding\b|\bfederal funding\b.{0,75}\b(?:remote )?connectivity\b/i.test(sessionText);
+    const hasPossibleHardwareStateContract = /\bstate contract\b.{0,55}\b(?:cover|covers|covering)\b.{0,25}\b(?:hardware|rugged)\b|\b(?:hardware|rugged)\b.{0,55}\bstate contract\b/i.test(sessionText);
+    const hasUnknownAiContractPath = /\bAI\b.{0,50}\b(?:does not|doesn't|probably doesn't|no)\b.{0,25}\bcontract path\b|\bAI side\b.{0,55}\bcontract path\b/i.test(sessionText);
+    const hasProcurementOfficerAndFinanceLead = /\bprocurement officer\b.{0,45}\bfinance lead\b|\bfinance lead\b.{0,45}\bprocurement officer\b/i.test(sessionText);
+    const hasExplicitPurchasingJurisdiction = /\bstate of [A-Z][A-Za-z ]{2,30}\b|\b(?:purchasing|procuring) (?:state|jurisdiction)\b.{0,30}\b[A-Z][A-Za-z ]{2,30}\b|\b(?:county|city|municipal|federal|tribal) (?:agency|government|organization)\b/i.test(sessionText);
+    const hasExplicitPurchasingEntity = /\b(?:agency|department|county|city|district|authority|prime contractor|subcontractor) (?:will|would|is|are) (?:buying|purchasing|procuring|ordering)\b|\bpurchasing entity\b/i.test(sessionText);
+    const hasNamedContractVehicle = /\bSVAR\b|\bGSA\b|\bSEWP\b|\bNASPO\b|\bOMNIA\b|\bSourcewell\b|\bcontract\s+(?:number|vehicle)\s+[A-Z0-9-]+/i.test(sessionText);
     const hasStudentRiskUseCase = /student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out/i.test(sourceText);
     const hasAiCustomerExperience = /customer experience|contact cent(?:er|re)|call cent(?:er|re)|call wait|wait times?|customer satisfaction|\bCSAT\b/i.test(sourceText)
         && /\bAI\b|artificial intelligence|call recordings?|ticket logs?|speech[- ]to[- ]text|sentiment|predictive routing/i.test(sourceText);
@@ -672,6 +694,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Plan three distinct tracks: protect the ERP cutover within a tight overnight outage window; clarify the Arizona SVAR software purchasing path without treating it as compliance; and scope the confirmed AI opportunities.'
         : dualTrack
         ? 'Plan two separate workstreams: protect the ERP cutover within a tight overnight outage window, and pre-scope municipal compliance while awaiting prime-contractor flow-down.'
+        : hasModernizationPortfolio
+        ? `Separate ${modernizationWorkstreams.join(', ')} into distinct workstreams so procurement and finance can evaluate budget, funding, sourcing, and timing without treating them as one program.`
         : hasInfrastructureRefreshDecision
         ? `Give ${infrastructureDecisionAudience} a supported decision on which server and network components require refresh${infrastructureCostFrame} at ${infrastructureDecisionGate}, ${infrastructureTimingFrame}.`
         : hasHealthcareOperations && hasRisingPatientIntake
@@ -682,7 +706,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         || (certainStatements.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
     const explicitTiming = explicitTimingFrom(userTurns);
     const timing = explicitTiming
-        || (dualTrack && /few weeks/i.test(allText)
+        || (hasModernizationPortfolio && hasCurrentFiscalYearPressure
+        ? 'Current fiscal-year deadline'
+        : dualTrack && /few weeks/i.test(allText)
         ? 'Detailed planning may begin in a few weeks, dependent on compliance clarification from the prime contractor.'
         : hasInfrastructureRefreshDecision && hasBudgetReviewNextQuarter
         ? 'Budget review next quarter'
@@ -690,6 +716,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const constraintStatements = substantiveStatements.filter((statement) => !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
     const constraint = dualTrack
         ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
+        : hasModernizationPortfolio
+        ? `${hasSingleBudgetPool ? 'One budget pool currently spans distinct workstreams; ' : ''}map each workstream to its reported funding and sourcing status without assuming a jurisdiction, named vehicle, budget line, competitive-bid outcome, or contract eligibility.`
         : hasInfrastructureRefreshDecision
         ? `Do not treat ${infrastructureEvidenceBasis} as sufficient evidence; validate component scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', cost drivers' : ''}, and delay exposure before recommending timing${hasAssumedSmallerOfficeMerger ? ', and keep the smaller-office expansion as a planning assumption until its inventory is validated' : ''}.`
         : hasHealthcareOperations
@@ -699,13 +727,15 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : lastSentence(constraintStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
     const stakeholder = stakeholderWasCleared(userTurns)
         ? ''
+        : hasProcurementOfficerAndFinanceLead
+        ? 'Procurement officer and finance lead'
         : hasInfrastructureRefreshDecision && /\bboard\b/i.test(sessionText) && /\bIT team\b|\bIT says\b/i.test(sessionText)
         ? 'Board decision audience; IT team supplying infrastructure and risk evidence'
         : hasHealthcareOperations && /\bCEO\b/i.test(sessionText)
         ? 'CEO / executive leadership'
         : hasAiCustomerExperience && /\bCEO\b/i.test(allText) && /\bboard\b/i.test(allText)
         ? 'CEO and board leadership'
-        : lastSentence(substantiveStatements, /decision|stakeholder|\bCEO\b|\bboard\b|CIO|CFO|CTO|director|vice president|\bVP\b|executive|procurement|leadership|owner/i);
+        : lastSentence(substantiveStatements, /decision[- ]maker|stakeholder|\bCEO\b|\bboard\b|CIO|CFO|CTO|director|vice president|\bVP\b|executive|procurement (?:officer|lead|director|manager|team)|finance (?:officer|lead|director|manager|team)|leadership|owner/i);
     const organization = hasArizonaSvar
         ? 'State of Arizona agency; Arizona SVAR purchasing path raised for specialist validation.'
         : lastSentence(substantiveStatements, /county|city|agency|company|our firm|the firm|hospital|health system|manufactur|distribution|university|school district/i);
@@ -759,6 +789,26 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const expansionImpact = hasAssumedSmallerOfficeMerger && expandsScopeAndBudget
         ? 'Planning scope and budget expand to account for the smaller-office systems; quantify the impact after inventory validation.'
         : '';
+    const modernizationWorkstreamStatus = hasModernizationPortfolio
+        ? unique([
+            hasRuggedDeviceWorkstream ? `Rugged devices${hasRuggedProcurementFraming ? ' - described as straightforward procurement' : ''}` : '',
+            hasAiInspectionWorkstream ? `AI inspections${hasExperimentalAiInspections ? ' - described as experimental' : ''}` : '',
+            hasRemoteConnectivityWorkstream ? 'Remote-site connectivity - funding-dependent workstream' : '',
+        ], 4).join(' / ')
+        : '';
+    const modernizationFundingStatus = hasModernizationPortfolio && hasRemoteConnectivityWorkstream
+        ? hasPossibleFederalConnectivityFunding
+            ? `${hasStateConnectivityFunding ? 'State funding was reported for remote-site connectivity; ' : ''}federal funding may also apply and remains an unconfirmed planning assumption that could change the procurement path.`
+            : hasStateConnectivityFunding
+            ? 'State funding was reported for remote-site connectivity.'
+            : ''
+        : '';
+    const modernizationContractStatus = hasModernizationPortfolio
+        ? unique([
+            hasPossibleHardwareStateContract ? 'Rugged hardware may fit an existing state contract; applicability is unconfirmed.' : '',
+            hasUnknownAiContractPath ? 'No contract path has been identified for AI inspections.' : '',
+        ], 3).join(' / ')
+        : '';
 
     const facts = [
         makeFact('Organization', 'Context', organization),
@@ -768,12 +818,15 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Environment', hasHealthcareOperations ? 'Evidence source' : 'Available data', dataSources.join(' / ')),
         makeFact('Environment', 'Reported workflow change', healthcareOperationalChange),
         makeFact('Environment', 'Audit evidence', infrastructureAuditEvidence),
+        makeFact('Environment', 'Modernization workstreams', modernizationWorkstreamStatus),
         makeFact('Constraints', 'Evidence status', healthcareEvidenceStatus),
         makeFact('Constraints', 'Planning assumption', smallerOfficePlanningAssumption),
         makeFact('Constraints', 'Scope and budget impact', expansionImpact),
         makeFact('Priorities', 'Current objective', objective.includes('still being clarified') || objective.startsWith('Waiting') ? '' : objective),
         makeFact('Priorities', 'AI discovery', hasAiDiscovery ? aiDiscovery : ''),
         makeFact('Procurement', 'Arizona SVAR', hasArizonaSvar ? 'Software Value-Added Reseller purchasing contract; confirm software category, purchaser, and ordering path with an Insight Public Sector specialist.' : ''),
+        makeFact('Procurement', 'Funding context', modernizationFundingStatus),
+        makeFact('Procurement', 'Contract-path status', modernizationContractStatus),
         makeFact('Constraints', 'Primary guardrail', constraint),
         makeFact('Constraints', 'Governance drivers', compliance.join(' / ')),
         makeFact('Timing', 'Timing', timing),
@@ -784,6 +837,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ].filter((fact): fact is AmyWorkbenchFact => Boolean(fact));
 
     const openQuestions = unique([
+        hasModernizationPortfolio && !hasExplicitPurchasingJurisdiction ? 'Which state or jurisdiction will make the purchase?' : '',
+        hasModernizationPortfolio && !hasExplicitPurchasingEntity ? 'Which organization or contracting entity will actually make the purchase?' : '',
+        hasModernizationPortfolio && hasPossibleFederalConnectivityFunding ? 'Is federal funding confirmed for remote-site connectivity, and what funding requirements must procurement validate?' : '',
+        hasModernizationPortfolio && !hasNamedContractVehicle ? 'What existing contract or solicitation path, if any, has the procurement owner identified for each workstream?' : '',
         hasInfrastructureRefreshDecision ? 'Which specific servers and network components are in scope, and what are their support and lifecycle statuses?' : '',
         hasInfrastructureRefreshDecision && hasOutdatedFirmwareAudit ? 'What severity, exploitability, and business exposure are tied to the outdated-firmware findings?' : '',
         hasInfrastructureRefreshDecision && !hasOutdatedFirmwareAudit ? 'What validated lifecycle, support, reliability, or security evidence is driving the refresh request?' : '',
@@ -817,6 +874,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ...uncertainItems.map((item) => `Please clarify: ${item}`),
     ], 4);
     const priorities = unique([
+        hasModernizationPortfolio ? `Keep ${modernizationWorkstreams.join(', ')} as separate workstreams rather than one modernization program.` : '',
+        hasModernizationPortfolio && modernizationFundingStatus ? modernizationFundingStatus : '',
+        hasModernizationPortfolio ? 'Gather jurisdiction, purchasing entity, funding, vehicle or solicitation status, timing, and owners without confirming contract applicability or eligibility.' : '',
         hasInfrastructureRefreshDecision && hasOutdatedFirmwareAudit ? 'Separate the confirmed outdated-firmware audit finding from unvalidated claims about overall security severity.' : '',
         hasInfrastructureRefreshDecision ? `Compare targeted remediation, phased refresh, full refresh, and deferral only after component-level ${hasInfrastructureCostConcern ? 'cost and ' : ''}risk evidence is available.` : '',
         hasInfrastructureRefreshDecision && hasBudgetReviewNextQuarter && prefersDeferralToNextYear ? 'Keep the next-quarter budget decision separate from the preference to defer implementation until next year.' : '',
@@ -837,7 +897,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         compliance.length ? `Account for ${compliance.join(', ')}.` : '',
         terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : '',
     ], 5);
-    const nextStep = hasHealthcareOperations
+    const nextStep = hasModernizationPortfolio
+        ? 'Complete the jurisdiction, purchasing-entity, funding, contract-path, timing, and owner facts, then have the procurement owner and an Insight Public Sector specialist validate the appropriate sourcing route without treating Amy\'s working brief as a contract confirmation.'
+        : hasHealthcareOperations
         ? 'Have the authorized data owner and the appropriate Insight healthcare and data specialists validate available operational evidence and privacy boundaries before scoping an analysis or dashboard.'
         : hasInfrastructureRefreshDecision
         ? `Have the IT owner and appropriate Insight infrastructure and security specialists validate the component inventory, ${hasOutdatedFirmwareAudit ? 'firmware exposure, ' : ''}lifecycle status${hasInfrastructureCostConcern ? ', and option-level costs' : ''} before ${infrastructureDecisionGate}${hasAssumedSmallerOfficeMerger ? ', including the assumed smaller-office scope as a separately validated input' : ''}.`
@@ -853,7 +915,14 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const roadmapFacts = facts
         .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
-    const phases = hasInfrastructureRefreshDecision
+    const phases = hasModernizationPortfolio
+        ? [
+            { number: '01', title: 'Separate the workstreams', detail: `Keep ${modernizationWorkstreams.join(', ')} distinct, including their different maturity, funding, and sourcing questions.` },
+            { number: '02', title: 'Complete procurement facts', detail: 'Capture the purchasing jurisdiction and entity, confirmed or possible funding, existing vehicle or solicitation status, timing, and responsible roles without naming an unraised vehicle.' },
+            { number: '03', title: 'Validate the sourcing paths', detail: 'Have the procurement owner and an Insight Public Sector specialist validate category coverage, eligibility, bidding requirements, funding restrictions, and the appropriate route for each workstream.' },
+            { number: '04', title: 'Set separate decisions', detail: 'Give procurement and finance a bounded choice for each workstream without implying contract confirmation, approval, pricing, or committed funding.' },
+        ]
+        : hasInfrastructureRefreshDecision
         ? [
             {
                 number: '01',
@@ -885,6 +954,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Develop ${currentTracks.length} coordinated but independently gated tracks: ${currentTracks.join(', ')}.`
         : dualTrack
         ? 'Develop two coordinated but independently gated paths: ERP cutover readiness and municipal compliance pre-scoping.'
+        : hasModernizationPortfolio
+        ? `Give procurement and finance separate, fact-based decision paths for ${modernizationWorkstreams.join(', ')} without confirming a contract vehicle or funding eligibility.`
         : hasInfrastructureRefreshDecision
         ? `Frame a ${hasBoardAudience ? 'board' : 'leadership'} decision among targeted remediation, phased refresh, full refresh, or deferral using validated component, risk${hasInfrastructureCostConcern ? ', and cost' : ''} evidence${hasAssumedSmallerOfficeMerger ? ', with the smaller-office expansion kept as a separately validated planning assumption' : ''}.`
         : laneId === 'healthcare-operations'
@@ -901,7 +972,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         general: 'Turn the confirmed objective and constraints into a practical next decision.',
     } satisfies Record<LaneId, string>)[laneId];
 
-    const environmentItems = unique([...terms, ...infrastructureComponents, ...dataSources, ...workloads], 10);
+    const environmentItems = unique([...modernizationWorkstreams, ...terms, ...infrastructureComponents, ...dataSources, ...workloads], 10);
     const discussionPoints = unique(facts.map((fact) => `${fact.label}: ${fact.value}`), 12);
     const qualityMissing = unique([
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'business objective' : '',
@@ -911,6 +982,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         hasInfrastructureRefreshDecision && !hasValidatedSecuritySeverity ? `validated ${infrastructureExposureLabel}` : '',
         hasInfrastructureRefreshDecision && hasInfrastructureCostConcern && !hasCostBreakdown ? 'option-level cost evidence' : '',
         hasHealthcareOperations && !hasAuthorizedHealthcareEvidence ? 'authorized operational evidence' : '',
+        hasModernizationPortfolio && !hasExplicitPurchasingJurisdiction ? 'purchasing jurisdiction' : '',
+        hasModernizationPortfolio && !hasExplicitPurchasingEntity ? 'purchasing entity' : '',
+        hasModernizationPortfolio && hasPossibleFederalConnectivityFunding ? 'confirmed connectivity funding source' : '',
         !requestedOutput ? 'requested artifact' : '',
     ], 4);
     const quality = {
@@ -918,33 +992,48 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         label: qualityMissing.length <= 1 ? 'Conversation grounded' : 'Needs clarification',
         missing: qualityMissing,
     };
-    const slideBoundary = hasHealthcareOperations
+    const slideBoundary = hasModernizationPortfolio
+        ? 'Working procurement-discovery view only. Jurisdiction, purchasing entity, funding requirements, category coverage, bidding obligations, eligibility, and the appropriate sourcing route require procurement-owner and Insight Public Sector specialist validation.'
+        : hasHealthcareOperations
         ? 'Working healthcare-operations view only. Root cause, EHR data availability, privacy boundaries, and any analysis or dashboard design require authorized data-owner and Insight specialist validation.'
         : hasInfrastructureRefreshDecision
         ? `Working infrastructure decision view only. Component scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', option costs' : ''}, delay exposure${hasAssumedSmallerOfficeMerger ? ', merger inventory' : ''}, and any recommendation require IT-owner and Insight specialist validation.`
         : 'Working view based on the conversation so far; specialist validation is still required.';
-    const businessOutcome = hasInfrastructureRefreshDecision
+    const businessOutcome = hasModernizationPortfolio
+        ? `Give procurement and finance a clear separation of ${modernizationWorkstreams.join(', ')} without inventing a contract path`
+        : hasInfrastructureRefreshDecision
         ? `Give ${infrastructureDecisionAudience} a supported refresh-versus-deferral decision without treating ${infrastructureEvidenceBasis} as proof that a full replacement is required`
         : hasHealthcareOperations
         ? 'Give leadership a credible view of rising patient-intake times without inventing a root cause'
         : hasAiCustomerExperience
         ? 'Reduce call wait times and improve customer satisfaction'
         : roadmapOutcome;
-    const decisionFrame = decision || (hasInfrastructureRefreshDecision
+    const decisionFrame = decision || (hasModernizationPortfolio
+        ? 'Decide which workstreams can advance within the current fiscal year after the purchasing jurisdiction, entity, funding requirements, and sourcing options are validated.'
+        : hasInfrastructureRefreshDecision
         ? `Decide at ${infrastructureDecisionGate} whether validated evidence supports targeted remediation, a phased or full refresh${prefersDeferralToNextYear ? ', or deferral to next year' : ', and what timing is justified'}.`
         : hasHealthcareOperations
         ? 'Decide whether the confirmed operational evidence is sufficient to authorize a specialist-defined clinic comparison.'
         : hasAiCustomerExperience
         ? 'Decide whether to authorize a bounded offline AI-CX concept for leadership review before considering a production pilot.'
         : nextStep);
-    const visualTitle = hasInfrastructureRefreshDecision
+    const visualTitle = hasModernizationPortfolio
+        ? 'Three modernization workstreams—three fact-finding paths'
+        : hasInfrastructureRefreshDecision
         ? `What ${hasBoardAudience ? 'the board' : 'leadership'} knows—and what IT still must validate`
         : hasHealthcareOperations
         ? 'Separate what is known from what still needs validation'
         : hasAiCustomerExperience
         ? 'A credible AI-CX story—without adding outage risk'
         : lane;
-    const evidenceAndConstraints = hasInfrastructureRefreshDecision
+    const evidenceAndConstraints = hasModernizationPortfolio
+        ? unique([
+            modernizationWorkstreamStatus ? `Confirmed workstreams: ${modernizationWorkstreamStatus}` : '',
+            modernizationFundingStatus ? `Funding context: ${modernizationFundingStatus}` : '',
+            modernizationContractStatus ? `Contract-path status: ${modernizationContractStatus}` : '',
+            constraint,
+        ], 6)
+        : hasInfrastructureRefreshDecision
         ? unique([
             'Confirmed: The refresh request covers servers and network equipment.',
             infrastructureAuditEvidence ? `Confirmed: ${infrastructureAuditEvidence}` : '',
@@ -967,7 +1056,14 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             constraint,
             ...compliance,
         ], 6);
-    const executiveBullets = hasInfrastructureRefreshDecision
+    const executiveBullets = hasModernizationPortfolio
+        ? unique([
+            `Workstreams: ${modernizationWorkstreams.join(', ')}`,
+            timing ? `Decision pressure: ${timing}` : '',
+            modernizationFundingStatus ? `Funding: ${modernizationFundingStatus}` : '',
+            'Boundary: No contract applicability or eligibility has been confirmed.',
+        ], 4)
+        : hasInfrastructureRefreshDecision
         ? unique([
             smallerOfficePlanningAssumption ? `Planning assumption: ${smallerOfficePlanningAssumption}${expansionImpact ? ` ${expansionImpact}` : ''}` : '',
             hasBudgetReviewNextQuarter && prefersDeferralToNextYear
@@ -987,7 +1083,14 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             'Unknown: The clinics may not share the same root cause.',
         ], 3)
         : unique([businessOutcome, timing, constraint], 3);
-    const decisionBullets = hasInfrastructureRefreshDecision
+    const decisionBullets = hasModernizationPortfolio
+        ? unique([
+            stakeholder ? `Participants: ${stakeholder}` : '',
+            requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
+            timing ? `Decision timing: ${timing}` : '',
+            'Open: Purchasing jurisdiction, entity, and validated sourcing route',
+        ], 4)
+        : hasInfrastructureRefreshDecision
         ? unique([
             stakeholder ? `Participants: ${stakeholder}` : '',
             requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
@@ -1001,7 +1104,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             timing ? `Decision timing: ${timing}` : 'Decision timing: Not confirmed',
         ], 4)
         : unique([stakeholder, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', timing], 4);
-    const evidenceSummary = hasInfrastructureRefreshDecision
+    const evidenceSummary = hasModernizationPortfolio
+        ? 'Keep reported workstreams, funding, contract-path status, stakeholders, and timing separate; leave jurisdiction and eligibility unconfirmed until the responsible specialists validate them.'
+        : hasInfrastructureRefreshDecision
         ? `Separate the confirmed refresh request${hasOutdatedFirmwareAudit ? ' and audit finding' : ''} from unvalidated ${infrastructureExposureLabel}, replacement scope${hasInfrastructureCostConcern ? ', cost' : ''}, and delay-risk claims.`
         : hasHealthcareOperations
         ? 'Keep confirmed operational facts, pending evidence, and unconfirmed hypotheses visibly separate.'
