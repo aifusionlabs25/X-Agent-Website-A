@@ -49,6 +49,227 @@
     object-position: 50% 22%;
 }
 
+.choiceShell {
+    display: grid;
+    min-height: 100svh;
+    grid-template-rows: minmax(18rem, 38svh) auto;
+}
+
+.choicePortraitImage {
+    object-fit: cover;
+    object-position: 58% 34%;
+    transform: scale(1.015);
+}
+
+.choicePortraitWash {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgb(7 12 10 / 5%), rgb(7 12 10 / 38%)),
+        linear-gradient(90deg, rgb(7 12 10 / 14%), transparent 42%);
+}
+
+.choiceBrand {
+    position: absolute;
+    top: max(1.5rem, env(safe-area-inset-top));
+    left: max(1.5rem, env(safe-area-inset-left));
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: white;
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 18px rgb(0 0 0 / 36%);
+}
+
+.choiceBrand > span {
+    width: 0.5rem;
+    height: 0.5rem;
+    background: var(--dani-rust);
+    border-radius: 50%;
+}
+
+.choicePortraitCopy {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 1.65rem max(1.5rem, env(safe-area-inset-left));
+    color: white;
+    background: linear-gradient(180deg, transparent, rgb(8 13 11 / 72%));
+}
+
+.choicePortraitCopy p {
+    color: #c7f0e1;
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.choicePortraitCopy h2 {
+    margin-top: 0.55rem;
+    font-size: clamp(2.75rem, 10vw, 4.5rem);
+    font-weight: 600;
+    line-height: 0.83;
+    letter-spacing: -0.055em;
+}
+
+.choicePanel,
+.schedulerPanel {
+    display: flex;
+    min-width: 0;
+    padding:
+        clamp(2rem, 7vw, 5rem)
+        max(1.25rem, env(safe-area-inset-right))
+        max(2rem, env(safe-area-inset-bottom))
+        max(1.25rem, env(safe-area-inset-left));
+}
+
+.choiceContent {
+    width: min(100%, 54rem);
+    margin: auto;
+}
+
+.choiceRule {
+    width: 3.5rem;
+    height: 2px;
+    margin-bottom: 1rem;
+    background: var(--dani-rust);
+}
+
+.choiceEyebrow {
+    color: var(--dani-teal);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+}
+
+.choiceHeading {
+    max-width: 10ch;
+    margin-top: 0.7rem;
+    font-size: clamp(3rem, 8vw, 5.25rem);
+    font-weight: 600;
+    line-height: 0.87;
+    letter-spacing: -0.06em;
+}
+
+.choiceIntro {
+    max-width: 43rem;
+    margin-top: 1.15rem;
+    color: var(--dani-muted);
+    font-size: 0.88rem;
+    line-height: 1.65;
+}
+
+.talkNowCard {
+    display: flex;
+    min-height: 5.6rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.55rem;
+    padding: 1rem 1.1rem 1rem 1.25rem;
+    color: white;
+    background:
+        linear-gradient(120deg, rgb(255 255 255 / 6%), transparent 44%),
+        var(--dani-teal);
+    border: 1px solid rgb(7 72 65 / 72%);
+    border-radius: 10px;
+    box-shadow: 0 18px 42px rgb(18 110 100 / 18%), inset 0 1px 0 rgb(255 255 255 / 15%);
+    transition: transform 170ms ease, box-shadow 170ms ease;
+}
+
+.talkNowCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 46px rgb(18 110 100 / 24%), inset 0 1px 0 rgb(255 255 255 / 18%);
+}
+
+.talkNowCard > span:first-child {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.talkNowCard strong { font-size: 1rem; }
+.talkNowCard small { color: rgb(233 251 244 / 78%); font-size: 0.68rem; }
+
+.talkNowAction {
+    display: inline-flex;
+    min-height: 2.8rem;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.7rem 0.95rem;
+    color: var(--dani-ink);
+    background: var(--dani-paper);
+    border-radius: 7px;
+    font-size: 0.7rem;
+    font-weight: 850;
+}
+
+.choiceDivider {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.8rem;
+    margin: 1.15rem 0 0.8rem;
+    color: #777a74;
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    font-size: 0.5rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.choiceDivider::before,
+.choiceDivider::after {
+    height: 1px;
+    content: "";
+    background: var(--dani-line);
+}
+
+.meetingChoiceGrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.meetingChoiceGrid > a {
+    display: flex;
+    min-width: 0;
+    min-height: 4.8rem;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.72rem;
+    background: linear-gradient(145deg, rgb(255 255 255 / 72%), rgb(255 255 255 / 30%));
+    border: 1px solid rgb(181 172 155 / 88%);
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 78%), 0 12px 30px rgb(49 43 30 / 5%);
+    backdrop-filter: blur(15px);
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.meetingChoiceGrid > a:hover {
+    transform: translateY(-2px);
+    border-color: #6fa499;
+    box-shadow: inset 0 1px 0 white, 0 16px 32px rgb(49 43 30 / 8%);
+}
+
+.meetingChoiceGrid > a > span:nth-child(2) {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 0.2rem;
+}
+
+.meetingChoiceGrid strong { overflow: hidden; font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+.meetingChoiceGrid small { color: #747971; font-size: 0.58rem; line-height: 1.3; }
+.meetingChoiceGrid > a > svg { flex: 0 0 auto; color: var(--dani-teal); }
+.choiceFootnote { margin-top: 0.7rem; color: #858880; font-size: 0.62rem; text-align: center; }
+
 .entryPanel {
     overscroll-behavior: contain;
 }
@@ -530,6 +751,48 @@
     }
 }
 
+@media (min-width: 1024px) {
+    .choiceShell {
+        grid-template-columns: minmax(21rem, 35%) minmax(0, 65%);
+        grid-template-rows: 100svh;
+    }
+
+    .choicePanel,
+    .schedulerPanel {
+        height: 100svh;
+        overflow-y: auto;
+        padding:
+            clamp(2rem, 5vh, 4rem)
+            clamp(2.4rem, 5vw, 6rem)
+            clamp(2rem, 5vh, 4rem);
+    }
+
+    .choicePortraitImage {
+        object-position: 58% 38%;
+        transform: scale(1.01);
+    }
+
+    .choicePortraitCopy {
+        padding: 2.4rem clamp(2rem, 4vw, 3.4rem);
+    }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+    .choicePanel,
+    .schedulerPanel { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+    .choiceHeading { font-size: clamp(3rem, 5.4vw, 4.65rem); }
+    .choiceIntro { margin-top: 0.85rem; line-height: 1.45; }
+    .talkNowCard { min-height: 4.8rem; margin-top: 1rem; }
+    .choiceDivider { margin-top: 0.85rem; }
+    .meetingChoiceGrid > a { min-height: 4.2rem; }
+}
+
+@media (max-width: 760px) {
+    .meetingChoiceGrid { grid-template-columns: 1fr; }
+    .talkNowCard { align-items: stretch; flex-direction: column; }
+    .talkNowAction { width: 100%; justify-content: center; }
+}
+
 /* A wide laptop viewport should read as one composed screen, not a form inside
    a scroll pane. Preserve the generous editorial scale on taller displays and
    tighten only the vertical rhythm when height is the limiting dimension. */
@@ -603,4 +866,8 @@
     .memoryDanger {
         transition: none;
     }
+
+    .choicePortraitImage { transform: none; }
+    .talkNowCard,
+    .meetingChoiceGrid > a { transition: none; }
 }
