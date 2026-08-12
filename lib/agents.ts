@@ -22,7 +22,7 @@ export const ALL_AGENTS: AgentData[] = [
     personaId: "120cf627-59a6-4a35-8e70-97959a89a4da",
     thumbnailSrc: "/agents/thumbnails/dani-x-agent-director-cara4-2026.jpg",
     accentColor: "#6366f1",
-    liveUrl: "/demo/dani",
+    liveUrl: "/agents/dani",
   },
   {
     slug: "taylor",
