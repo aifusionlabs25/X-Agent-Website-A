@@ -64,3 +64,16 @@ Amy: Thanks for talking this through with me. Take care.`;
     assert.equal(fallbacks.length, 2);
     assert.ok(fallbacks.every((finding) => finding.severity === 'critical'));
 });
+
+test('spoken email handling and a refused thats-it close are critical live-QA failures', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: My email is R V I C K S at gmail dot com.
+Amy: I have R-V-I-C-K-S @ gmail dot com recorded.
+User: That's it.
+Tool (end_amy_session): Result: {"status":"close_not_requested"}`;
+    const report = evaluateAmyTranscript(transcript);
+    const codes = new Set(report.findings.map((finding) => finding.code));
+    assert.equal(report.status, 'fail');
+    assert.ok(codes.has('spoken_email_handling'));
+    assert.ok(codes.has('missing_end_session_tool'));
+});

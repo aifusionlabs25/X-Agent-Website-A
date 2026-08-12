@@ -493,6 +493,49 @@ test('an enabled zero-message transcript becomes unavailable at the grace bounda
     assert.deepEqual(result.metadata, metadata);
 });
 
+test('session verification accepts Anam metadata containing Amy\'s managed prompt above 64 KiB', async () => {
+    const launch = createAmyAnamLaunch('browser-session-large-metadata-envelope', PERSONA_ID, 1_900_000_000_000);
+    const completedAt = '2030-03-17T17:47:10.000Z';
+    const responses = [
+        jsonResponse({
+            id: SESSION_ID,
+            personaId: PERSONA_ID,
+            clientLabel: launch.clientLabel,
+            startTime: launch.createdAt,
+            endTime: completedAt,
+            exitStatus: 'completed',
+            personaConfig: {
+                zeroDataRetention: false,
+                systemPrompt: 'x'.repeat(72 * 1024),
+            },
+        }),
+        jsonResponse({
+            sessionId: SESSION_ID,
+            endTime: completedAt,
+            transcriptsEnabled: true,
+            totalMessages: 2,
+            messages: [
+                { role: 'persona', message: 'The working view is open.' },
+                { role: 'user', message: 'Please email the final recap.' },
+            ],
+        }),
+    ];
+
+    const result = await fetchCompletedAnamTranscript(SESSION_ID, launch, {
+        env: { ANAM_API_KEY: 'server-only-test-key' },
+        pollDelaysMs: [0],
+        sleep: async () => undefined,
+        fetchImpl: async url => {
+            const response = responses.shift();
+            assert.ok(response, 'Unexpected fetch: ' + url);
+            return response;
+        },
+    });
+
+    assert.equal(result.status, 'ready');
+    assert.equal(result.turns.length, 2);
+});
+
 test('a completed session with a missing provider transcript remains pending before the grace boundary', async () => {
     const launch = createAmyAnamLaunch('browser-session-transcript-missing-fresh', PERSONA_ID, 1_900_000_000_000);
     const completedAt = '2030-03-17T17:47:10.000Z';

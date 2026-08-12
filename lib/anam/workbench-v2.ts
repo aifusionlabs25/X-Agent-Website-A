@@ -235,6 +235,14 @@ function requestedOutputFrom(values: string[], trackCount: number, requestedView
     return '';
 }
 
+function isPrivateContactExchange(value: string): boolean {
+    return /\b(?:email|e-mail)\b.{0,100}(?:@|\bat\b|\bdot\b|\baddress\b)|\b(?:gmail|outlook|hotmail|yahoo)\b/i.test(value);
+}
+
+function isArtifactRequestFragment(value: string): boolean {
+    return /^(?:it|that|this)\s+so\s+I\s+can\s+share\s+it\s+with\s+leadership\b/i.test(value.trim());
+}
+
 function timingFrom(values: string[]): string {
     for (const value of [...values].reverse()) {
         if (isWorkbenchRequest(value) || isConversationControl(value) || isWorkbenchEditInstruction(value)) continue;
@@ -583,13 +591,21 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const certainStatements = statements.filter((value) => !isUncertain(value));
     const substantiveStatements = certainStatements.filter((value) => !isWorkbenchRequest(value)
         && !isConversationControl(value)
-        && !isWorkbenchEditInstruction(value));
+        && !isWorkbenchEditInstruction(value)
+        && !isPrivateContactExchange(value)
+        && !isArtifactRequestFragment(value));
     const sourceText = canonical(`${substantiveStatements.join(' ')} ${roadmapTopic}`);
     const sessionText = canonical(userTurns.join(' '));
     const hasHealthcareOperations = /patient intake|patient flow|clinical workflow|pre[- ]screening|\bEHR\b|\bEMR\b|electronic (?:health|medical) record/i.test(sessionText)
         && /clinics?|hospital|health system|patient|intake/i.test(sessionText);
     const hasRisingPatientIntake = /patient intake times?.{0,55}(?:through the roof|ris(?:e|ing)|increas|longer|delay)|intake delays?/i.test(sessionText);
     const hasEhr = /\bEHR\b|electronic health record/i.test(sessionText);
+    const hasPublicSectorAuditPriorities = /\bstate agency\b/i.test(sessionText)
+        && /\bcompliance audit\b/i.test(sessionText)
+        && /\blegacy system\b/i.test(sessionText)
+        && /\bAI\b/i.test(sessionText);
+    const hasAccessControlEvidence = /\b(?:addressed|remediat(?:ed|ion)|closed)\b.{0,40}\baccess[ -]control gaps?\b|\bproof\b.{0,45}\baccess[ -]control gaps?\b/i.test(sessionText);
+    const hasAzureAd = /\bAzure\s+(?:AD|Active Directory)\b/i.test(sessionText);
     const hasNorthside = /\bNorthside\b/i.test(sessionText);
     const hasPreScreening = /pre[- ]screening/i.test(sessionText);
     const hasWorkflowChange = /(?:switched|changed?) (?:its |the )?workflows?|workflow change|added a new pre[- ]screening step/i.test(sessionText);
@@ -723,6 +739,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const scale = extractScale(allText);
     const objective = hasCloudAndStaffingAi
         ? 'Keep the planned cloud migration moving while leadership evaluates a separate, unapproved AI staffing-optimization opportunity using only authorized, appropriately scoped operational evidence.'
+        : hasPublicSectorAuditPriorities
+        ? 'Prepare for the fixed compliance audit by validating remediation evidence for access-control gaps, while sequencing the legacy-system refresh and keeping AI as a separate feasibility question rather than an assumed pilot.'
         : hasErpCutover && hasArizonaSvar && hasAiDiscovery
         ? 'Plan three distinct tracks: protect the ERP cutover within a tight overnight outage window; clarify the Arizona SVAR software purchasing path without treating it as compliance; and scope the confirmed AI opportunities.'
         : dualTrack
@@ -754,6 +772,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const constraintStatements = substantiveStatements.filter((statement) => !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
     const constraint = hasCloudAndStaffingAi
         ? `${hasNoApprovedAiPilot ? 'No AI pilot is approved; ' : ''}${hasExcludedCjisData ? 'the visitor placed CJIS data outside the requested working scope, but the authorized data owner and security specialists must validate that boundary; ' : ''}do not infer a public-safety environment, approved access, model design, or pilot plan from the discovery conversation.`
+        : hasPublicSectorAuditPriorities
+        ? `${hasAccessControlEvidence ? 'Leadership requires proof that access-control gaps were addressed within the fixed audit window' : 'The fixed compliance audit is the immediate priority'}; the legacy refresh and AI feasibility must not weaken audit readiness or be treated as approved work.`
         : dualTrack
         ? 'Protect the tight overnight ERP cutover window; do not assume a compliance framework until the prime contractor provides flow-down requirements.'
         : hasModernizationPortfolio
@@ -771,6 +791,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : lastSentence(constraintStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
     const stakeholder = stakeholderWasCleared(userTurns)
         ? ''
+        : hasPublicSectorAuditPriorities && /\bDeputy CIO\b/i.test(sessionText)
+        ? 'Deputy CIO / agency leadership'
         : hasCloudAndStaffingAi && /\bCOO\b|chief operating officer/i.test(sessionText)
         ? 'COO sponsor; data, security, and AI feasibility owners still to be confirmed'
         : hasProcurementOfficerAndFinanceLead
@@ -868,7 +890,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const facts = [
         makeFact('Organization', 'Context', organization),
         makeFact('Scale', 'Environment scale', scale),
-        makeFact('Environment', 'Technology context', unique([...terms, ...infrastructureComponents], 10).join(' / ')),
+        makeFact('Environment', 'Technology context', unique([hasAzureAd ? 'Azure AD access management' : '', ...terms.filter(term => !(hasAzureAd && term === 'Azure')), ...infrastructureComponents], 10).join(' / ')),
         makeFact('Environment', 'Critical workloads', workloads.join(' / ')),
         makeFact('Environment', hasHealthcareOperations ? 'Evidence source' : 'Available data', dataSources.join(' / ')),
         makeFact('Environment', 'Reported workflow change', healthcareOperationalChange),
@@ -889,6 +911,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Procurement', 'Funding context', modernizationFundingStatus),
         makeFact('Procurement', 'Contract-path status', modernizationContractStatus),
         makeFact('Constraints', 'Primary guardrail', constraint),
+        makeFact('Constraints', 'Audit evidence requirement', hasAccessControlEvidence ? 'Show proof that identified access-control gaps were addressed.' : ''),
         makeFact('Constraints', 'Governance drivers', compliance.join(' / ')),
         makeFact('Constraints', 'Privacy boundary', hasInternalPrivacyBoundaries ? 'Internal privacy and data-classification boundaries must be validated against any proposed cloud services.' : ''),
         makeFact('Timing', 'Timing', timing),

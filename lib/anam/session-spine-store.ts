@@ -369,6 +369,20 @@ export async function removeAmyAnamFinalizationDueEntry(
     await redisCommand(['ZREM', finalizationDueKey(), externalSessionId], options);
 }
 
+export async function scheduleAmyAnamFinalizationDueEntry(input: {
+    externalSessionId: string;
+    dueAt: number;
+}, options: StoreOptions = {}): Promise<void> {
+    const externalSessionId = String(input.externalSessionId ?? '').trim();
+    if (!SAFE_SESSION_ID_PATTERN.test(externalSessionId) || !Number.isFinite(input.dueAt)) {
+        throw new Error('Amy Anam finalization retry schedule was invalid');
+    }
+    await redisPipeline([
+        ['ZADD', finalizationDueKey(), Math.trunc(input.dueAt), externalSessionId],
+        ['EXPIRE', finalizationDueKey(), AMY_ANAM_RECORD_TTL_SECONDS],
+    ], options);
+}
+
 export async function scheduleDaniAnamEmailRetryDueEntry(input: {
     externalSessionId: string;
     dueAt: number;

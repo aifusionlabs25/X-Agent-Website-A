@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { inspectAmyLiveOutput } from '../lib/anam/amy-live-output-guard.ts';
+import { hasAmySpokenEmailAttempt, inspectAmyLiveOutput } from '../lib/anam/amy-live-output-guard.ts';
 import { hasAmySoftCloseIntent, hasExplicitAmyCloseIntent } from '../lib/anam/amy-session-close.ts';
 import { createAmyFarewellCloseCoordinator } from '../lib/anam/amy-session-close.ts';
 
@@ -80,6 +80,20 @@ test('Amy output guard suppresses provider fallbacks and exposed close markup', 
         { reason: 'provider_fallback', safePrefix: '' },
     );
     assert.equal(inspectAmyLiveOutput("I'm sorry that procurement is complicated."), null);
+    assert.deepEqual(
+        inspectAmyLiveOutput('I heard R-V-I-C-K-S @ gmail dot com. Is that right?'),
+        { reason: 'contact_privacy', safePrefix: '' },
+    );
+    assert.deepEqual(
+        inspectAmyLiveOutput('Could you please state your email address again?'),
+        { reason: 'contact_privacy', safePrefix: '' },
+    );
+    assert.equal(hasAmySpokenEmailAttempt('My email is R V I C K S at gmail.com.'), true);
+    const longReply = Array.from({ length: 41 }, (_, index) => `word${index + 1}`).join(' ');
+    assert.deepEqual(inspectAmyLiveOutput(longReply), {
+        reason: 'verbose_reply',
+        safePrefix: Array.from({ length: 40 }, (_, index) => `word${index + 1}`).join(' '),
+    });
 });
 
 test('Amy separates a useful soft closing motion from an immediate hard close', () => {
@@ -88,6 +102,7 @@ test('Amy separates a useful soft closing motion from an immediate hard close', 
     assert.equal(hasAmySoftCloseIntent("Thanks, Amy. Let's call it a day."), true);
     assert.equal(hasAmySoftCloseIntent("This was helpful. Let's wrap it here."), true);
     assert.equal(hasAmySoftCloseIntent("We're all set for now."), true);
+    assert.equal(hasAmySoftCloseIntent("That's it."), true);
     assert.equal(hasExplicitAmyCloseIntent("This was helpful. Let's wrap it here."), false);
     assert.equal(hasExplicitAmyCloseIntent("I'm done. End the session."), true);
     assert.equal(hasExplicitAmyCloseIntent('Goodbye. Take care.'), true);
@@ -106,6 +121,9 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.match(player, /status: 'closing_motion_required'/);
     assert.match(player, /pendingAmyHardCloseIntent/);
     assert.match(player, /anamClient\.interruptPersona\(\)/);
+    assert.match(player, /hasAmySpokenEmailAttempt\(completedUserTurn\)/);
+    assert.match(player, /Private contact rule: the visitor spoke an email-like phrase/);
+    assert.match(player, /Your verified check-in address is already secured privately/);
     assert.match(player, /contentLogged: false/);
     assert.match(player, /status: armed \? 'farewell_required' : 'farewell_already_armed'/);
     assert.match(player, /Say exactly: "Thanks for talking this through with me\. Take care\."/);

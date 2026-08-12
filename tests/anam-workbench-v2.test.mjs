@@ -601,6 +601,26 @@ test('Amy visual brief preserves StateRAMP, privacy, cloud scope, and year-end t
     assert.match(value('Current objective'), /core workloads.*cloud by year-end.*AI.*separate/i);
 });
 
+test('Amy public-sector audit brief preserves access-control evidence and Azure AD without ASR fragments', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: "Amy, I'm Chris, Deputy CIO for a state agency. We've got a compliance audit coming, leadership asking about AI potential, and a legacy system on its last legs. I need help prioritizing next steps." },
+        { role: 'user', content: "The compliance audit is on a fixed date, so that's the most urgent. But I'm trying to figure out if that refresh delays us or if AI is even realistic this year." },
+        { role: 'user', content: "The audit is in 90 days. They want proof we've addressed access control gaps." },
+        { role: 'user', content: 'it so I can share it with leadership.' },
+        { role: 'user', content: 'My email is R-V-I-C-K-S at gmail dot com.' },
+        { role: 'user', content: 'We use Azure AD for access management.' },
+        { role: 'user', content: 'Before we wrap, show me the visual brief.' },
+    ], '', '', 'visual');
+    const facts = model.facts.map(fact => `${fact.label}: ${fact.value}`).join('\n');
+
+    assert.match(facts, /Azure AD access management/);
+    assert.match(facts, /proof that identified access-control gaps were addressed/i);
+    assert.match(facts, /90 days/i);
+    assert.match(facts, /Deputy CIO \/ agency leadership/i);
+    assert.doesNotMatch(facts, /it so I can share it with leadership/i);
+    assert.doesNotMatch(facts, /gmail|R-V-I-C-K-S/i);
+});
+
 test('Amy player registers all five visual handlers and keeps workbench local to Cara 4', async () => {
     const player = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'));
     for (const name of ['show_live_notes', 'show_session_brief', 'show_solution_roadmap', 'show_visual_brief', 'show_solution_catalog']) {

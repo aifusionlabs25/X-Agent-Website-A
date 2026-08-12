@@ -87,7 +87,7 @@ export type AmyAnamFollowUpQueueResult = {
 };
 
 export type AmyAnamPostSessionDispatchResult = AmyAnamFollowUpResult
-    | { status: 'email_not_requested' | 'email_unavailable'; sent: false };
+    | { status: 'email_failed' | 'email_not_requested' | 'email_unavailable'; sent: false };
 
 export type AmyAnamFollowUpResult = {
     status: 'email_sent' | 'email_already_attempted';
@@ -271,6 +271,8 @@ function redactContactData(turns: AmyTranscriptTurn[], callbackPhone?: string): 
             ? String(turn.content ?? '').split(confirmedCallback).join('[private contact]')
             : String(turn.content ?? ''))
             .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[private contact]')
+            .replace(/\b(?:[A-Za-z](?:\s*[- ]\s*)){2,}[A-Za-z]\s+(?:at|at\s+symbol)\s+(?:gmail|outlook|hotmail|yahoo)(?:\s+(?:dot|\.)\s*(?:com|net|org)|\.(?:com|net|org))\b/gi, '[private contact]')
+            .replace(/\b[\w.+-]+\s+(?:at|at\s+symbol)\s+[\w.-]+(?:\s+(?:dot|\.)\s*[A-Za-z]{2,}|\.[A-Za-z]{2,})\b/gi, '[private contact]')
             .replace(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/g, '[private contact]'),
     }));
 }
@@ -422,26 +424,41 @@ export async function sendAmyAnamConversationFollowUp(input: {
         'EX',
         EMAIL_RECEIPT_TTL_SECONDS,
     ], options);
+    let activeAttempt = pending;
     if (reserved !== 'OK') {
         const existing = parseAttempt(await redisCommand([
             'GET',
             attemptKey(input.externalSessionId),
         ], options));
         if (!existing) throw new Error('Amy AgentMail attempt reservation conflicted');
-        return {
-            status: 'email_already_attempted',
-            sent: existing.status === 'sent',
-            duplicate: true,
-            receiptId: existing.receiptId,
-            provider: 'agentmail',
-            deliveryCount: existing.deliveryStatus
-                ? Object.values(existing.deliveryStatus).filter(Boolean).length
-                : existing.status === 'sent' ? 1 : 0,
-            visitorSent: existing.deliveryStatus?.visitor ?? existing.status === 'sent',
-            internalNotificationsSent: existing.deliveryStatus
-                ? existing.deliveryStatus.admin && existing.deliveryStatus.intake
-                : false,
+        if (existing.status !== 'failed') {
+            return {
+                status: 'email_already_attempted',
+                sent: existing.status === 'sent',
+                duplicate: true,
+                receiptId: existing.receiptId,
+                provider: 'agentmail',
+                deliveryCount: existing.deliveryStatus
+                    ? Object.values(existing.deliveryStatus).filter(Boolean).length
+                    : existing.status === 'sent' ? 1 : 0,
+                visitorSent: existing.deliveryStatus?.visitor ?? existing.status === 'sent',
+                internalNotificationsSent: existing.deliveryStatus
+                    ? existing.deliveryStatus.admin && existing.deliveryStatus.intake
+                    : false,
+            };
+        }
+        activeAttempt = {
+            ...pending,
+            deliveryStatus: existing.deliveryStatus ?? pending.deliveryStatus,
         };
+        await redisCommand([
+            'SET',
+            attemptKey(input.externalSessionId),
+            JSON.stringify(activeAttempt),
+            'XX',
+            'EX',
+            EMAIL_RECEIPT_TTL_SECONDS,
+        ], options);
     }
 
     try {
@@ -457,23 +474,33 @@ export async function sendAmyAnamConversationFollowUp(input: {
             model: buildAmyWorkbenchModel(safeTurns),
         });
         const [visitorResult, adminResult, intakeResult] = await Promise.allSettled([
-            sendAmyEmailWithAgentMail({ to: input.email, ...bundle.visitor }, options),
-            sendAmyEmailWithAgentMail({ to: AMY_ADMIN_EMAIL, ...bundle.admin }, options),
-            sendAmyEmailWithAgentMail({ to: AMY_INSIGHT_INTAKE_EMAIL, ...bundle.intake }, options),
+            sendAmyEmailWithAgentMail(
+                { to: input.email, ...bundle.visitor },
+                { ...options, idempotencyKey: `amy.${receiptId}.visitor.v1` },
+            ),
+            sendAmyEmailWithAgentMail(
+                { to: AMY_ADMIN_EMAIL, ...bundle.admin },
+                { ...options, idempotencyKey: `amy.${receiptId}.admin.v1` },
+            ),
+            sendAmyEmailWithAgentMail(
+                { to: AMY_INSIGHT_INTAKE_EMAIL, ...bundle.intake },
+                { ...options, idempotencyKey: `amy.${receiptId}.intake.v1` },
+            ),
         ]);
-        if (visitorResult.status === 'rejected') {
-            throw new Error('Amy visitor follow-up delivery was not confirmed');
-        }
         const deliveryStatus = {
-            visitor: true,
+            visitor: visitorResult.status === 'fulfilled',
             admin: adminResult.status === 'fulfilled',
             intake: intakeResult.status === 'fulfilled',
         };
-        if (!deliveryStatus.admin || !deliveryStatus.intake) {
-            console.error('[Amy Anam AgentMail] One or more internal notifications were not confirmed');
+        if (!deliveryStatus.visitor || !deliveryStatus.admin || !deliveryStatus.intake) {
+            activeAttempt = { ...activeAttempt, deliveryStatus };
+            throw new Error('Amy follow-up bundle delivery was not confirmed');
+        }
+        if (visitorResult.status !== 'fulfilled') {
+            throw new Error('Amy visitor follow-up delivery was not confirmed');
         }
         const sent: AmyAnamEmailAttemptRecord = {
-            ...pending,
+            ...activeAttempt,
             status: 'sent',
             completedAt: new Date().toISOString(),
             messageId: visitorResult.value.messageId,
@@ -500,7 +527,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
         };
     } catch {
         const failed: AmyAnamEmailAttemptRecord = {
-            ...pending,
+            ...activeAttempt,
             status: 'failed',
             completedAt: new Date().toISOString(),
             failureCode: 'delivery_rejected_or_unknown',

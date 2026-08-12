@@ -31,12 +31,21 @@ export async function sendAmyAnamFollowUpEmail({
     launchId,
     sessionId,
     userConfirmed,
+    callbackPhone,
+    callbackPhoneConfirmed,
     fetchImpl = fetch,
 }: SendEmailInput): Promise<AmyAnamEmailResult> {
     const response = await fetchImpl('/api/anam/session/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ launchId, sessionId, userConfirmed }),
+        body: JSON.stringify({
+            launchId,
+            sessionId,
+            userConfirmed,
+            ...(callbackPhone && callbackPhoneConfirmed === true
+                ? { callbackPhone, callbackPhoneConfirmed: true }
+                : {}),
+        }),
         cache: 'no-store',
         credentials: 'same-origin',
     });

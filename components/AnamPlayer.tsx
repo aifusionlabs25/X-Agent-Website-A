@@ -45,7 +45,7 @@ import {
     hasAmySoftCloseIntent,
     hasExplicitAmyCloseIntent,
 } from '@/lib/anam/amy-session-close';
-import { inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
+import { hasAmySpokenEmailAttempt, inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -141,6 +141,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let amyCloseCoordinator: ReturnType<typeof createAmyFarewellCloseCoordinator> | null = null;
         let suppressingAmyUnsafeOutput = false;
+        let amyPrivacyRecoveryTimer: number | null = null;
         let pendingAmyHardCloseIntent = false;
         let amyClosingMotionActive = false;
         let completedUserTurns = 0;
@@ -628,6 +629,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
+                    const deliverAmyPrivacyRecovery = () => {
+                        if (amyPrivacyRecoveryTimer !== null) {
+                            window.clearTimeout(amyPrivacyRecoveryTimer);
+                            amyPrivacyRecoveryTimer = null;
+                        }
+                        suppressingAmyUnsafeOutput = false;
+                        currentMessageRef.current = '';
+                        currentRoleRef.current = '';
+                        void anamClient.talk("Your verified check-in address is already secured privately, so we don't need to discuss it aloud.")
+                            .catch(() => console.error('[Amy Anam] Private contact recovery was not confirmed'));
+                    };
                     const normalizedRole = transcriptRole(messageEvent.role);
                     if (isAmyCara4 && normalizedRole === 'agent') {
                         if (pendingAmyHardCloseIntent) {
@@ -644,6 +656,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 currentMessageRef.current = '';
                                 currentRoleRef.current = '';
                                 suppressingAmyUnsafeOutput = false;
+                                if (amyPrivacyRecoveryTimer !== null) deliverAmyPrivacyRecovery();
                             }
                             return;
                         }
@@ -668,6 +681,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             } catch {
                                 console.error('[Amy Anam] Unsafe provider output interruption was not confirmed');
                             }
+                            if (unsafeOutput.reason === 'contact_privacy') {
+                                amyPrivacyRecoveryTimer = window.setTimeout(deliverAmyPrivacyRecovery, 300);
+                            }
                             if (messageEvent.endOfSpeech) {
                                 if (currentMessageRef.current) {
                                     recordTurn(messageEvent.role, currentMessageRef.current);
@@ -676,6 +692,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 currentMessageRef.current = '';
                                 currentRoleRef.current = '';
                                 suppressingAmyUnsafeOutput = false;
+                                if (amyPrivacyRecoveryTimer !== null) deliverAmyPrivacyRecovery();
                             }
                             return;
                         }
@@ -707,6 +724,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 if (hasExplicitAmyCloseIntent(completedUserTurn)) {
                                     pendingAmyHardCloseIntent = true;
                                     requestedCloseReason = 'user_requested_end';
+                                }
+                                if (hasAmySpokenEmailAttempt(completedUserTurn)) {
+                                    try {
+                                        anamClient.addContext('Private contact rule: the visitor spoke an email-like phrase. Do not parse, repeat, spell, confirm, or store it. The verified website check-in address remains authoritative.');
+                                    } catch {
+                                        console.error('[Amy Anam] Private contact context was not confirmed');
+                                    }
                                 }
                             }
                         }
@@ -1119,6 +1143,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             window.removeEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
             if (requestedCloseFallbackTimer !== null) {
                 window.clearTimeout(requestedCloseFallbackTimer);
+            }
+            if (amyPrivacyRecoveryTimer !== null) {
+                window.clearTimeout(amyPrivacyRecoveryTimer);
             }
             removeClientListeners?.();
             removeIdentityToolHandler?.();

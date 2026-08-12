@@ -37,7 +37,9 @@ import {
     readAmyAnamLaunch,
     readAmyAnamReceipt,
     readAmyAnamSession,
+    removeAmyAnamFinalizationDueEntry,
     releaseAmyAnamCompletionLock,
+    scheduleAmyAnamFinalizationDueEntry,
     writeAmyAnamReceipt,
 } from './session-spine-store.ts';
 
@@ -48,6 +50,15 @@ export type AmyAnamFinalizationResult =
     | 'failed'
     | 'missing'
     | 'pending';
+
+const AMY_EMAIL_RETRY_DELAY_MS = 60_000;
+
+async function scheduleAmyEmailRetry(externalSessionId: string): Promise<void> {
+    await scheduleAmyAnamFinalizationDueEntry({
+        externalSessionId,
+        dueAt: Date.now() + AMY_EMAIL_RETRY_DELAY_MS,
+    });
+}
 
 function buildHermesShadowEnvelope(
     session: AmyAnamSessionRecord,
@@ -146,6 +157,61 @@ export async function finalizeAmyAnamSession(
                     ),
                 };
                 await ensureAmyAnamHermesShadowQueued(normalizedSession, existingReceipt);
+                if (
+                    normalizedSession.agentSlug === 'amy'
+                    && existingReceipt.status === 'completed'
+                    && existingReceipt.transcript.source === 'anam_api'
+                ) {
+                    const launch = await readAmyAnamLaunch(normalizedSession.launchId);
+                    if (
+                        launch
+                        && launch.browserSessionId === normalizedSession.browserSessionId
+                        && launch.resolvedPersonaId === normalizedSession.resolvedPersonaId
+                        && launch.boundSessionId === externalSessionId
+                    ) {
+                        try {
+                            const transcript = await fetchCompletedAnamTranscript(externalSessionId, launch, {
+                                pollDelaysMs: [0, 500, 1_500],
+                                requestTimeoutMs: 2_000,
+                            });
+                            if (transcript.status === 'pending') return 'pending';
+                            if (transcript.status === 'ready') {
+                                const recoveredReceipt = buildAmyAnamReceipt({
+                                    externalSessionId,
+                                    closeReason: existingReceipt.closeReason,
+                                    source: 'anam_api',
+                                    turns: transcript.turns,
+                                    variant: normalizedSession.variant,
+                                });
+                                if (
+                                    recoveredReceipt.receiptId !== existingReceipt.receiptId
+                                    || recoveredReceipt.transcript.contentSha256 !== existingReceipt.transcript.contentSha256
+                                ) return 'completed';
+                                const emailResult = await dispatchAmyAnamPostSessionFollowUp({
+                                    session: normalizedSession,
+                                    receipt: existingReceipt,
+                                    turns: transcript.turns,
+                                });
+                                if (emailResult.sent) {
+                                    await removeAmyAnamFinalizationDueEntry(externalSessionId).catch(() => undefined);
+                                }
+                                if (
+                                    !emailResult.sent
+                                    && (
+                                        emailResult.status === 'email_failed'
+                                        || emailResult.status === 'email_already_attempted'
+                                    )
+                                ) {
+                                    await scheduleAmyEmailRetry(externalSessionId).catch(() => undefined);
+                                    return 'pending';
+                                }
+                            }
+                        } catch {
+                            await scheduleAmyEmailRetry(externalSessionId).catch(() => undefined);
+                            return 'pending';
+                        }
+                    }
+                }
                 if (
                     normalizedSession.resolvedPersonaId === DANI_PERSONA_ID
                     && normalizedSession.agentSlug === 'dani'
@@ -431,6 +497,9 @@ export async function finalizeAmyAnamSession(
                             ? ({ status: 'email_retry_expired' as const, sent: false as const })
                             : ({ status: 'email_failed' as const, sent: false as const });
                     }
+                    if (session.agentSlug === 'amy') {
+                        return { status: 'email_failed' as const, sent: false as const };
+                    }
                     return { status: 'email_unavailable' as const, sent: false as const };
                 })
                 : { status: 'email_unavailable' as const, sent: false as const };
@@ -449,6 +518,17 @@ export async function finalizeAmyAnamSession(
                     || emailResult.status === 'email_failed'
                 )
             ) return 'pending';
+            if (
+                session.agentSlug === 'amy'
+                && !emailResult.sent
+                && (
+                    emailResult.status === 'email_failed'
+                    || emailResult.status === 'email_already_attempted'
+                )
+            ) {
+                await scheduleAmyEmailRetry(externalSessionId).catch(() => undefined);
+                return 'pending';
+            }
             return 'completed';
         } catch (error) {
             console.warn('[Amy Anam Finalization] Finalization step failed', {

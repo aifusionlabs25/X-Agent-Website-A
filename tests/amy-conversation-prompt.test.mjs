@@ -272,6 +272,8 @@ test('Amy closes with an outcome motion, private check-in email offer, and optio
     assert.match(reliabilityPrompt, /phone follow-up would be useful/i);
     assert.match(reliabilityPrompt, /hard close.*goodbye.*skips the closing motion/is);
     assert.match(emailPrompt, /Never ask for it, spell it, repeat it.*email address/is);
+    assert.match(emailPrompt, /speaks or spells an email address.*do not parse it, reconstruct it, repeat it, correct it, or store it/is);
+    assert.match(emailPrompt, /Spoken words such as "at," "at symbol," or "dot".*never update/is);
     assert.match(emailPrompt, /callback number.*explicit yes/is);
     assert.match(emailPrompt, /second tool call is allowed only to append a callback number/i);
     assert.match(workbenchUpdater, /amy-agentmail-client-tool\.json/);

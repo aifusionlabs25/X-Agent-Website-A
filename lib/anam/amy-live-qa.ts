@@ -6,6 +6,7 @@ export type AmyLiveQaFindingCode =
     | 'unsupported_cjis_boundary'
     | 'invented_ai_pilot'
     | 'invented_technical_plan'
+    | 'spoken_email_handling'
     | 'tool_markup_exposed'
     | 'premature_close_attempt'
     | 'missing_end_session_tool';
@@ -37,7 +38,8 @@ export const AMY_CANONICAL_GREETING = "Hi, I'm Amy with Insight Enterprises. Wha
 
 const HEADER = /^(?:\[([^\]]+)\]\s+)?(Amy(?:\s+Insight SDR[^:]*)?|User|Visitor|Tool(?:\s*\([^)]*\))?):\s*(.*)$/i;
 const SPEAKING_TIME = /^\(Speaking time:/i;
-const EXPLICIT_CLOSE = /\b(?:(?:let'?s|we can|we should)\s+(?:call it a day|wrap\s+(?:(?:it|this)\s+)?up)|(?:end|close|stop)\s+(?:the\s+|this\s+|our\s+)?(?:call|conversation|session)|i(?:'m| am)\s+done|that(?:'s| is)\s+all|goodbye|take\s+care)\b/i;
+const EXPLICIT_CLOSE = /\b(?:(?:let'?s|we can|we should)\s+(?:call it a day|wrap\s+(?:(?:it|this)\s+)?up)|(?:end|close|stop)\s+(?:the\s+|this\s+|our\s+)?(?:call|conversation|session)|i(?:'m| am)\s+done|goodbye|take\s+care)\b/i;
+const SOFT_CLOSE = /\b(?:we(?:'re| are) all set|let'?s wrap(?: it| this)?(?: up)?|call it a day)\b|^\s*that(?:'s| is) (?:it|all)[.!]?\s*$/i;
 const SOFT_COMPLETION = /\b(?:that(?:'s| is) what i needed|i(?:'ll| will) take this forward|i(?:'ll| will) run with this)\b/i;
 const TOOL_MARKUP = /<\s*end_(?:call|amy_session)\b|\bend_(?:call|amy_session)\s*\{/i;
 
@@ -81,6 +83,7 @@ const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     unsupported_cjis_boundary: 30,
     invented_ai_pilot: 25,
     invented_technical_plan: 30,
+    spoken_email_handling: 35,
     tool_markup_exposed: 35,
     premature_close_attempt: 30,
     missing_end_session_tool: 25,
@@ -108,6 +111,9 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         if (/\b(?:sorry,?\s+)?i(?:'m| am)\s+(?:having trouble thinking|unable to think|not able to think)\b|\bsomething went wrong in my thinking\b/i.test(assistant.content)) {
             add('provider_fallback_exposed', 'critical', index, assistant.content);
         }
+        if (/\b(?:state|say|repeat|spell|share).{0,50}\b(?:email|e-mail|address)\b|\b(?:I heard|I have|I got|I've got|recorded).{0,120}(?:@|\bat\s+(?:gmail|outlook|hotmail|yahoo)\b|\b(?:gmail|outlook|hotmail|yahoo)\s+(?:dot|\.)\s*com\b)/i.test(assistant.content)) {
+            add('spoken_email_handling', 'critical', index, assistant.content);
+        }
         if (TOOL_MARKUP.test(assistant.content)) {
             add('tool_markup_exposed', 'critical', index, assistant.content);
             if (priorUser && SOFT_COMPLETION.test(priorUser.content) && !EXPLICIT_CLOSE.test(priorUser.content)) {
@@ -127,14 +133,19 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
     }
 
     for (const user of userTurns) {
-        if (!EXPLICIT_CLOSE.test(user.content)) continue;
+        if (!EXPLICIT_CLOSE.test(user.content) && !SOFT_CLOSE.test(user.content)) continue;
         const index = turns.indexOf(user);
-        if (!turns.slice(index + 1).some((turn) => turn.role === 'tool' && /end_amy_session/i.test(turn.speaker))) {
+        if (!turns.slice(index + 1).some((turn) => (
+            turn.role === 'tool'
+            && /end_amy_session/i.test(turn.speaker)
+            && !/close_not_requested/i.test(turn.content)
+        ))) {
             add('missing_end_session_tool', 'critical', index, user.content);
         }
     }
 
-    const deduction = findings.reduce((sum, item) => sum + item.deduction, 0);
+    const deduction = [...new Map(findings.map((item) => [item.code, item.deduction])).values()]
+        .reduce((sum, item) => sum + item, 0);
     return {
         status: findings.some((item) => item.severity === 'critical') ? 'fail' : 'pass',
         score: Math.max(0, 100 - deduction),

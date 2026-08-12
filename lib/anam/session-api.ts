@@ -9,7 +9,10 @@ import type { AmyAnamLaunchRecord, AmyTranscriptTurn } from './session-spine.ts'
 const ANAM_API_BASE = 'https://api.anam.ai/v1';
 const DEFAULT_REQUEST_TIMEOUT_MS = 5_000;
 const DEFAULT_POLL_DELAYS_MS = [0, 250, 750, 1_500, 2_500];
-const MAX_METADATA_RESPONSE_BYTES = 64 * 1024;
+// Anam includes the complete persona configuration in session metadata. Amy's
+// managed prompt is intentionally substantial, so a valid metadata envelope can
+// exceed 64 KiB even though the identity fields we validate remain small.
+const MAX_METADATA_RESPONSE_BYTES = 256 * 1024;
 const MAX_TRANSCRIPT_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 export const AMY_ANAM_EMPTY_TRANSCRIPT_GRACE_MS = 30 * 60 * 1000;
@@ -88,10 +91,22 @@ async function readBoundedJsonResponse(response: Response, maxBytes: number): Pr
         throw new AnamSessionApiError('Anam API response was too large', 502);
     }
 
-    const raw = await response.text();
-    if (Buffer.byteLength(raw, 'utf8') > maxBytes) {
-        throw new AnamSessionApiError('Anam API response was too large', 502);
+    const reader = response.body?.getReader();
+    if (!reader) throw new AnamSessionApiError('Anam API response was invalid', 502);
+    const decoder = new TextDecoder();
+    let raw = '';
+    let receivedBytes = 0;
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        receivedBytes += value.byteLength;
+        if (receivedBytes > maxBytes) {
+            await reader.cancel().catch(() => undefined);
+            throw new AnamSessionApiError('Anam API response was too large', 502);
+        }
+        raw += decoder.decode(value, { stream: true });
     }
+    raw += decoder.decode();
 
     try {
         return JSON.parse(raw);

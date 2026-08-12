@@ -145,11 +145,12 @@ test('follow-up content is deterministic, redacts contact data, and escapes HTML
             { role: 'user', content: 'We need to migrate our ERP to Azure. Email me at attacker@example.com <script>alert(1)</script>.' },
             { role: 'agent', content: 'What continuity requirement matters most?' },
             { role: 'user', content: 'The overnight maintenance window is critical.' },
-            { role: 'user', content: 'Before we close, can you send a Pulse Session email?' },
+            { role: 'user', content: 'My address is R V I C K S at gmail dot com. Before we close, can you send a Pulse Session email?' },
         ],
     });
     assert.match(message.text, /ERP|Azure/i);
     assert.doesNotMatch(message.text, /attacker@example\.com/i);
+    assert.doesNotMatch(message.text, /R V I C K S|gmail dot com/i);
     assert.doesNotMatch(message.html, /<script>/i);
     assert.match(message.html, /AI-powered conversational agent/i);
     assert.match(message.html, /Insight · Follow-up from Amy/i);
@@ -190,7 +191,10 @@ test('email permission queues without sending, then finalization sends the compl
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-        agentMailRequests.push(JSON.parse(init.body));
+        agentMailRequests.push({
+            body: JSON.parse(init.body),
+            idempotencyKey: new Headers(init.headers).get('Idempotency-Key'),
+        });
         return new Response(JSON.stringify({ message_id: 'msg_once', thread_id: 'thr_once' }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -239,23 +243,128 @@ test('email permission queues without sending, then finalization sends the compl
     assert.equal(dispatched.deliveryCount, 3);
     assert.equal(dispatched.internalNotificationsSent, true);
     assert.equal(agentMailRequests.length, 3);
-    assert.deepEqual(agentMailRequests.map(request => request.to), [
+    assert.deepEqual(agentMailRequests.map(request => request.body.to), [
         ['rvicks@gmail.com'], ['aifusionlabs@gmail.com'], ['aifusionlabs@gmail.com'],
     ]);
-    assert.match(agentMailRequests[0].html, /Here&#039;s the recap I promised/i);
-    assert.match(agentMailRequests[1].subject, /AMY SESSION/i);
-    assert.match(agentMailRequests[1].html, /Final call duration/i);
-    assert.match(agentMailRequests[1].html, />5m 0s</i);
-    assert.doesNotMatch(agentMailRequests[1].html, /Elapsed at email request|Live when follow-up was requested/i);
-    assert.match(agentMailRequests[2].subject, /INSIGHT INTAKE/i);
-    assert.match(agentMailRequests[2].html, /Sales &amp; Operations/i);
-    assert.match(agentMailRequests[2].html, /Customer value and urgency/i);
-    assert.match(agentMailRequests[2].html, /Recommended pursuit plan/i);
-    assert.match(agentMailRequests[2].html, /Recommended next-meeting objective/i);
+    assert.equal(new Set(agentMailRequests.map(request => request.idempotencyKey)).size, 3);
+    assert.ok(agentMailRequests.every(request => /^amy\.[a-f0-9]{32}\.(?:visitor|admin|intake)\.v1$/.test(request.idempotencyKey)));
+    assert.match(agentMailRequests[0].body.html, /Here&#039;s the recap I promised/i);
+    assert.match(agentMailRequests[1].body.subject, /AMY SESSION/i);
+    assert.match(agentMailRequests[1].body.html, /Final call duration/i);
+    assert.match(agentMailRequests[1].body.html, />5m 0s</i);
+    assert.doesNotMatch(agentMailRequests[1].body.html, /Elapsed at email request|Live when follow-up was requested/i);
+    assert.match(agentMailRequests[2].body.subject, /INSIGHT INTAKE/i);
+    assert.match(agentMailRequests[2].body.html, /Sales &amp; Operations/i);
+    assert.match(agentMailRequests[2].body.html, /Customer value and urgency/i);
+    assert.match(agentMailRequests[2].body.html, /Recommended pursuit plan/i);
+    assert.match(agentMailRequests[2].body.html, /Recommended next-meeting objective/i);
     const storedReceipts = [...store.values()].join('\n');
     assert.doesNotMatch(storedReceipts, /rvicks@gmail\.com|Azure|ERP migration/i);
     assert.match(storedReceipts, /"rawEmailStored":false/);
     assert.match(storedReceipts, /"messageContentStored":false/);
+});
+
+test('failed Amy email bundle retries with stable per-lane idempotency keys', async () => {
+    const store = new Map();
+    const attempts = [];
+    const successfulByKey = new Map();
+    let adminFailedOnce = false;
+    const fetchImpl = async (url, init) => {
+        if (String(url).startsWith('https://redis.agentmail.test/')) {
+            const commands = JSON.parse(init.body);
+            const results = commands.map(command => {
+                const [operation, key, storedValue, condition] = command;
+                if (operation === 'GET') return { result: store.get(key) ?? null };
+                if (operation === 'DEL') return { result: store.delete(key) ? 1 : 0 };
+                if (operation === 'SET' && condition === 'NX') {
+                    if (store.has(key)) return { result: null };
+                    store.set(key, storedValue);
+                    return { result: 'OK' };
+                }
+                if (operation === 'SET' && condition === 'XX') {
+                    if (!store.has(key)) return { result: null };
+                    store.set(key, storedValue);
+                    return { result: 'OK' };
+                }
+                throw new Error(`Unexpected Redis command: ${operation}`);
+            });
+            return new Response(JSON.stringify(results), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        const body = JSON.parse(init.body);
+        const idempotencyKey = new Headers(init.headers).get('Idempotency-Key');
+        attempts.push({ idempotencyKey, to: body.to[0] });
+        if (successfulByKey.has(idempotencyKey)) {
+            return new Response(JSON.stringify(successfulByKey.get(idempotencyKey)), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        if (idempotencyKey.endsWith('.admin.v1') && !adminFailedOnce) {
+            adminFailedOnce = true;
+            return new Response(JSON.stringify({ error: 'temporary' }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        const response = {
+            message_id: `msg_${idempotencyKey.split('.').at(-2)}`,
+            thread_id: `thr_${idempotencyKey.split('.').at(-2)}`,
+        };
+        successfulByKey.set(idempotencyKey, response);
+        return new Response(JSON.stringify(response), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    };
+    const queueInput = {
+        externalSessionId: SESSION_ID,
+        browserSessionId: BROWSER_ID,
+        displayName: 'Rob',
+        email: 'rvicks@gmail.com',
+        contactSecret: SECRET,
+    };
+    await queueAmyAnamConversationFollowUp(queueInput, { env: ENV, fetchImpl });
+    const session = {
+        schemaVersion: 'amy_anam_session_v1', browserSessionId: BROWSER_ID,
+        launchId: '99999999-8888-4777-8666-555555555555', externalSessionId: SESSION_ID,
+        clientLabel: 'xagent-amy:test', resolvedPersonaId: '77777777-6666-4555-8444-333333333333',
+        provider: 'anam', agentSlug: 'amy', variant: 'amy-cara4', state: 'completed',
+        createdAt: '2026-07-18T15:59:55.000Z', boundAt: '2026-07-18T16:00:00.000Z',
+        closeReceivedAt: '2026-07-18T16:05:00.000Z', closeReason: 'user_ended',
+        completedAt: '2026-07-18T16:05:10.000Z',
+    };
+    const receipt = {
+        schemaVersion: 'amy_anam_session_receipt_v1', receiptId: 'receipt-final', provider: 'anam',
+        externalSessionId: SESSION_ID, variant: 'amy-cara4', status: 'completed',
+        completedAt: '2026-07-18T16:05:10.000Z', closeReason: 'user_ended',
+        transcript: { source: 'anam_api', messageCount: 2, contentSha256: 'a'.repeat(64), rawTranscriptPersisted: false },
+        actions: { hermes: false, memory: false, email: false, sheets: false },
+    };
+    const input = {
+        session,
+        receipt,
+        turns: [
+            { role: 'user', content: 'We need an Azure AD audit brief.' },
+            { role: 'agent', content: 'I will frame the decision and evidence gaps.' },
+        ],
+    };
+
+    await assert.rejects(
+        dispatchAmyAnamPostSessionFollowUp(input, { env: ENV, fetchImpl }),
+        /could not confirm email delivery/i,
+    );
+    const retried = await dispatchAmyAnamPostSessionFollowUp(input, { env: ENV, fetchImpl });
+    assert.equal(retried.status, 'email_sent');
+    assert.equal(retried.deliveryCount, 3);
+    assert.equal(attempts.length, 6);
+    for (const lane of ['visitor', 'admin', 'intake']) {
+        const laneAttempts = attempts.filter(attempt => attempt.idempotencyKey.endsWith(`.${lane}.v1`));
+        assert.equal(laneAttempts.length, 2);
+        assert.equal(new Set(laneAttempts.map(attempt => attempt.idempotencyKey)).size, 1);
+    }
 });
 
 test('visitor follow-up embeds and attaches the final conversation-grounded Visual Brief', () => {

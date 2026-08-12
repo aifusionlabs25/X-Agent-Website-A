@@ -1,4 +1,4 @@
-export type AmyUnsafeSpokenOutputReason = 'provider_fallback' | 'tool_markup';
+export type AmyUnsafeSpokenOutputReason = 'contact_privacy' | 'provider_fallback' | 'tool_markup' | 'verbose_reply';
 
 export type AmyLiveOutputInspection = {
     reason: AmyUnsafeSpokenOutputReason;
@@ -9,6 +9,14 @@ const UNSAFE_SPOKEN_PATTERNS: Array<{
     reason: AmyUnsafeSpokenOutputReason;
     pattern: RegExp;
 }> = [
+    {
+        reason: 'contact_privacy',
+        pattern: /\b(?:could|can|would) you (?:please )?(?:state|say|repeat|spell|share).{0,45}\b(?:email|e-mail|address)\b/i,
+    },
+    {
+        reason: 'contact_privacy',
+        pattern: /\b(?:I heard|I have|I got|I've got|recorded).{0,120}(?:@|\bat\s+(?:gmail|outlook|hotmail|yahoo)\b|\b(?:gmail|outlook|hotmail|yahoo)\s+(?:dot|\.)\s*com\b)/i,
+    },
     {
         reason: 'tool_markup',
         pattern: /^\s*</,
@@ -27,6 +35,11 @@ const UNSAFE_SPOKEN_PATTERNS: Array<{
     },
 ];
 
+export function hasAmySpokenEmailAttempt(value: string): boolean {
+    return /\b(?:email|e-mail)\b.{0,80}(?:\baddress\b|@|\bat\s+(?:gmail|outlook|hotmail|yahoo)\b)|\b[A-Z](?:[ -][A-Z]){2,}\s+at\s+(?:gmail|outlook|hotmail|yahoo)\b/i
+        .test(String(value ?? ''));
+}
+
 export function inspectAmyLiveOutput(value: string): AmyLiveOutputInspection | null {
     let earliest: { reason: AmyUnsafeSpokenOutputReason; index: number } | null = null;
 
@@ -34,6 +47,14 @@ export function inspectAmyLiveOutput(value: string): AmyLiveOutputInspection | n
         const match = candidate.pattern.exec(value);
         if (!match || (earliest && match.index >= earliest.index)) continue;
         earliest = { reason: candidate.reason, index: match.index };
+    }
+
+    const words = [...value.matchAll(/\S+/g)];
+    if (words.length > 40) {
+        const overflowIndex = words[40]?.index ?? value.length;
+        if (!earliest || overflowIndex < earliest.index) {
+            earliest = { reason: 'verbose_reply', index: overflowIndex };
+        }
     }
 
     if (!earliest) return null;

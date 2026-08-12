@@ -407,3 +407,14 @@ test('owner email recovery requires the signed session browser and a same-origin
     assert.match(route, /requeueAmyAnamProviderResponseFailure\(owned\.sessionId\)/);
     assert.match(route, /X-Robots-Tag', 'noindex, nofollow'/);
 });
+
+test('Amy email delivery failures remain on the durable finalization recovery lane', async () => {
+    const [finalizer, store] = await Promise.all([
+        readFile(new URL('../lib/anam/session-finalizer.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../lib/anam/session-spine-store.ts', import.meta.url), 'utf8'),
+    ]);
+    assert.match(finalizer, /scheduleAmyEmailRetry\(externalSessionId\)/);
+    assert.match(finalizer, /emailResult\.status === 'email_failed'[\s\S]*emailResult\.status === 'email_already_attempted'/);
+    assert.match(store, /export async function scheduleAmyAnamFinalizationDueEntry/);
+    assert.match(store, /'ZADD', finalizationDueKey\(\)/);
+});
