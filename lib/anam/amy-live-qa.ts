@@ -2,12 +2,17 @@ export type AmyLiveQaFindingCode =
     | 'transcript_unreadable'
     | 'greeting_mismatch'
     | 'provider_fallback_exposed'
+    | 'reasoning_markup_exposed'
+    | 'assistant_interrupted'
     | 'verbose_reply'
     | 'unsupported_cjis_boundary'
     | 'invented_ai_pilot'
     | 'invented_technical_plan'
     | 'spoken_email_handling'
     | 'tool_markup_exposed'
+    | 'case_study_visual_substitution'
+    | 'duplicate_visual_confirmation'
+    | 'unsupported_service_commitment'
     | 'premature_close_attempt'
     | 'missing_end_session_tool';
 
@@ -28,7 +33,7 @@ export type AmyLiveQaReport = {
         userTurns: number;
         toolTurns: number;
         maximumAssistantWords: number;
-        repliesOverFortyWords: number;
+        repliesOverSixtyWords: number;
     };
 };
 
@@ -38,10 +43,12 @@ export const AMY_CANONICAL_GREETING = "Hi, I'm Amy with Insight Enterprises. Who
 
 const HEADER = /^(?:\[([^\]]+)\]\s+)?(Amy(?:\s+Insight SDR[^:]*)?|User|Visitor|Tool(?:\s*\([^)]*\))?):\s*(.*)$/i;
 const SPEAKING_TIME = /^\(Speaking time:/i;
-const EXPLICIT_CLOSE = /\b(?:(?:let'?s|we can|we should)\s+(?:call it a day|wrap\s+(?:(?:it|this)\s+)?up)|(?:end|close|stop)\s+(?:the\s+|this\s+|our\s+)?(?:call|conversation|session)|i(?:'m| am)\s+done|goodbye|take\s+care)\b/i;
-const SOFT_CLOSE = /\b(?:we(?:'re| are) all set|let'?s wrap(?: it| this)?(?: up)?|call it a day)\b|^\s*that(?:'s| is) (?:it|all)[.!]?\s*$/i;
+const EXPLICIT_CLOSE = /\b(?:(?:let'?s|we can|we should)\s+(?:call it a day|wrap\s+(?:(?:it|this)\s+)?up)|(?:end|close|stop)\s+(?:the\s+|this\s+|our\s+)?(?:call|conversation|session)|i(?:'m| am)\s+done|goodbye|take\s+care|that(?:'s| is)\s+a\s+wrap(?:\s+on\s+(?:the\s+)?role[ -]?play)?|(?:the\s+)?role[ -]?play\s+(?:is\s+)?(?:over|finished|done))\b/i;
+const SOFT_CLOSE = /\b(?:we(?:'re| are) all set|let'?s wrap(?: it| this)?(?: up)?|call it a day|thanks? for (?:your|the) time|i(?:'ve| have) got what i need|we(?:'ll| will) talk next steps)\b|^\s*that(?:'s| is) (?:it|all)[.!]?\s*$/i;
 const SOFT_COMPLETION = /\b(?:that(?:'s| is) what i needed|i(?:'ll| will) take this forward|i(?:'ll| will) run with this)\b/i;
 const TOOL_MARKUP = /<\s*end_(?:call|amy_session)\b|\bend_(?:call|amy_session)\s*\{/i;
+const PENDING_REQUEST = /\bbefore\s+we\s+(?:wrap|finish|end)\b[\s\S]{0,180}\b(?:can|could|would|will|show|tell|explain|help|what|how|why)\b/i;
+const CUSTOMER_EVIDENCE_REQUEST = /\b(?:case stud(?:y|ies)|customer (?:example|reference|story)|similar (?:customer|client|organization|public[- ]sector environment)|what Insight has done|proof point|prior outcome)\b/i;
 
 function countWords(value: string): number {
     return value.match(/[\p{L}\p{N}]+(?:[-'’][\p{L}\p{N}]+)*/gu)?.length ?? 0;
@@ -79,12 +86,17 @@ const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     transcript_unreadable: 100,
     greeting_mismatch: 8,
     provider_fallback_exposed: 40,
+    reasoning_markup_exposed: 40,
+    assistant_interrupted: 35,
     verbose_reply: 8,
     unsupported_cjis_boundary: 30,
     invented_ai_pilot: 25,
     invented_technical_plan: 30,
     spoken_email_handling: 35,
     tool_markup_exposed: 35,
+    case_study_visual_substitution: 30,
+    duplicate_visual_confirmation: 8,
+    unsupported_service_commitment: 25,
     premature_close_attempt: 30,
     missing_end_session_tool: 25,
 };
@@ -107,7 +119,13 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
     for (const assistant of assistantTurns) {
         const index = turns.indexOf(assistant);
         const priorUser = [...turns.slice(0, index)].reverse().find((turn) => turn.role === 'user');
-        if (assistant.words > 40) add('verbose_reply', assistant.words > 90 ? 'critical' : 'warning', index, assistant.content);
+        if (assistant.words > 60) add('verbose_reply', assistant.words > 90 ? 'critical' : 'warning', index, assistant.content);
+        if (/\(Message was interrupted\)/i.test(assistant.content)) {
+            add('assistant_interrupted', 'critical', index, assistant.content);
+        }
+        if (/<\/?\s*think\b/i.test(assistant.content)) {
+            add('reasoning_markup_exposed', 'critical', index, assistant.content);
+        }
         if (/\b(?:sorry,?\s+)?i(?:'m| am)\s+(?:having trouble thinking|unable to think|not able to think)\b|\bsomething went wrong in my thinking\b/i.test(assistant.content)) {
             add('provider_fallback_exposed', 'critical', index, assistant.content);
         }
@@ -119,6 +137,12 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
             if (priorUser && SOFT_COMPLETION.test(priorUser.content) && !EXPLICIT_CLOSE.test(priorUser.content)) {
                 add('premature_close_attempt', 'critical', index, priorUser.content);
             }
+        }
+        if (/\bthe visual brief is now open\b[\s\S]{0,100}\bthe visual brief is now open\b/i.test(assistant.content)) {
+            add('duplicate_visual_confirmation', 'warning', index, assistant.content);
+        }
+        if (/\bwe(?:'ll| will) work with you to\b|\b(?:an )?Insight specialist can\b.{0,100}\b(?:draft|deliver|create)\b.{0,80}\b(?:detailed|tailored|modernization)\b/i.test(assistant.content)) {
+            add('unsupported_service_commitment', 'critical', index, assistant.content);
         }
         if (/\b(?:non[- ]CJIS|non[- ]sensitive)\b[\s\S]{0,180}\b(?:keep it out|outside)\b[\s\S]{0,80}\b(?:protected domain|CJIS)\b|\bstandard security controls rather than the full CJIS regime\b/i.test(assistant.content)) {
             add('unsupported_cjis_boundary', 'critical', index, assistant.content);
@@ -133,8 +157,17 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
     }
 
     for (const user of userTurns) {
-        if (!EXPLICIT_CLOSE.test(user.content) && !SOFT_CLOSE.test(user.content)) continue;
         const index = turns.indexOf(user);
+        if (CUSTOMER_EVIDENCE_REQUEST.test(user.content)) {
+            const nextUserIndex = turns.findIndex((turn, turnIndex) => turnIndex > index && turn.role === 'user');
+            const beforeNextUser = turns.slice(index + 1, nextUserIndex < 0 ? turns.length : nextUserIndex);
+            const visualOpened = beforeNextUser.some((turn) => turn.role === 'tool' && /show_visual_brief/i.test(turn.speaker));
+            const illustrativeRequested = /\b(?:illustrative|hypothetical|working view|not a case study)\b/i.test(user.content);
+            if (visualOpened && !illustrativeRequested) {
+                add('case_study_visual_substitution', 'critical', index, user.content);
+            }
+        }
+        if (PENDING_REQUEST.test(user.content) || (!EXPLICIT_CLOSE.test(user.content) && !SOFT_CLOSE.test(user.content))) continue;
         if (!turns.slice(index + 1).some((turn) => (
             turn.role === 'tool'
             && /end_amy_session/i.test(turn.speaker)
@@ -155,7 +188,7 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
             userTurns: userTurns.length,
             toolTurns: toolTurns.length,
             maximumAssistantWords: Math.max(0, ...assistantTurns.map((turn) => turn.words)),
-            repliesOverFortyWords: assistantTurns.filter((turn) => turn.words > 40).length,
+            repliesOverSixtyWords: assistantTurns.filter((turn) => turn.words > 60).length,
         },
     };
 }

@@ -46,6 +46,7 @@ import {
     hasExplicitAmyCloseIntent,
 } from '@/lib/anam/amy-session-close';
 import { hasAmySpokenEmailAttempt, inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
+import type { AmyUnsafeSpokenOutputReason } from '@/lib/anam/amy-live-output-guard';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -141,7 +142,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let amyCloseCoordinator: ReturnType<typeof createAmyFarewellCloseCoordinator> | null = null;
         let suppressingAmyUnsafeOutput = false;
-        let amyPrivacyRecoveryTimer: number | null = null;
+        let amyUnsafeOutputRecoveryTimer: number | null = null;
+        let pendingAmyUnsafeOutputReason: AmyUnsafeSpokenOutputReason | null = null;
         let pendingAmyHardCloseIntent = false;
         let amyClosingMotionActive = false;
         let completedUserTurns = 0;
@@ -629,34 +631,53 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
-                    const deliverAmyPrivacyRecovery = () => {
-                        if (amyPrivacyRecoveryTimer !== null) {
-                            window.clearTimeout(amyPrivacyRecoveryTimer);
-                            amyPrivacyRecoveryTimer = null;
+                    const deliverAmyUnsafeOutputRecovery = (reason: AmyUnsafeSpokenOutputReason) => {
+                        if (amyUnsafeOutputRecoveryTimer !== null) {
+                            window.clearTimeout(amyUnsafeOutputRecoveryTimer);
+                            amyUnsafeOutputRecoveryTimer = null;
                         }
+                        pendingAmyUnsafeOutputReason = null;
                         suppressingAmyUnsafeOutput = false;
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
-                        void anamClient.talk("Your verified check-in address is already secured privately, so we don't need to discuss it aloud.")
-                            .catch(() => console.error('[Amy Anam] Private contact recovery was not confirmed'));
+                        const latestUserTurn = [...transcriptRef.current]
+                            .reverse()
+                            .find((turn) => turn.role === 'user')?.content ?? '';
+                        const hardCloseRequested = hasExplicitAmyCloseIntent(latestUserTurn);
+                        const softCloseRequested = hasAmySoftCloseIntent(latestUserTurn);
+                        if (reason !== 'contact_privacy' && (hardCloseRequested || softCloseRequested)) {
+                            requestedCloseReason = 'user_requested_end';
+                            amyClosingMotionActive = false;
+                            amyCloseCoordinator?.arm();
+                            const recoveryFarewell = softCloseRequested
+                                ? 'Your session follow-up will arrive at your private check-in address. Thanks for talking this through with me. Take care.'
+                                : 'Thanks for talking this through with me. Take care.';
+                            void anamClient.talk(recoveryFarewell)
+                                .catch(() => console.error('[Amy Anam] Farewell recovery was not confirmed'));
+                            return;
+                        }
+                        const recovery = reason === 'contact_privacy'
+                            ? "Your verified check-in address is already secured privately, so we don't need to discuss it aloud."
+                            : 'Let me reset there. What would be most useful to clarify?';
+                        void anamClient.talk(recovery)
+                            .catch(() => console.error('[Amy Anam] Unsafe-output recovery was not confirmed'));
                     };
                     const normalizedRole = transcriptRole(messageEvent.role);
                     if (isAmyCara4 && normalizedRole === 'agent') {
-                        if (pendingAmyHardCloseIntent) {
-                            pendingAmyHardCloseIntent = false;
-                            requestedCloseReason = 'user_requested_end';
-                            amyCloseCoordinator?.arm();
-                        }
                         if (suppressingAmyUnsafeOutput) {
                             if (messageEvent.endOfSpeech) {
                                 if (currentMessageRef.current) {
                                     recordTurn(messageEvent.role, currentMessageRef.current);
                                 }
-                                amyCloseCoordinator?.completeFarewell();
                                 currentMessageRef.current = '';
                                 currentRoleRef.current = '';
                                 suppressingAmyUnsafeOutput = false;
-                                if (amyPrivacyRecoveryTimer !== null) deliverAmyPrivacyRecovery();
+                                if (pendingAmyUnsafeOutputReason && amyUnsafeOutputRecoveryTimer !== null) {
+                                    deliverAmyUnsafeOutputRecovery(pendingAmyUnsafeOutputReason);
+                                } else {
+                                    pendingAmyUnsafeOutputReason = null;
+                                    amyCloseCoordinator?.completeFarewell();
+                                }
                             }
                             return;
                         }
@@ -672,6 +693,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             currentRoleRef.current = messageEvent.role;
                             currentMessageRef.current = unsafeOutput.safePrefix;
                             suppressingAmyUnsafeOutput = true;
+                            pendingAmyUnsafeOutputReason = unsafeOutput.reason;
                             console.warn('[Amy Anam] Unsafe provider output interrupted', {
                                 reason: unsafeOutput.reason,
                                 contentLogged: false,
@@ -681,20 +703,32 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             } catch {
                                 console.error('[Amy Anam] Unsafe provider output interruption was not confirmed');
                             }
-                            if (unsafeOutput.reason === 'contact_privacy') {
-                                amyPrivacyRecoveryTimer = window.setTimeout(deliverAmyPrivacyRecovery, 300);
+                            if (unsafeOutput.reason !== 'tool_markup' || !unsafeOutput.safePrefix) {
+                                amyUnsafeOutputRecoveryTimer = window.setTimeout(
+                                    () => deliverAmyUnsafeOutputRecovery(unsafeOutput.reason),
+                                    300,
+                                );
                             }
                             if (messageEvent.endOfSpeech) {
                                 if (currentMessageRef.current) {
                                     recordTurn(messageEvent.role, currentMessageRef.current);
                                 }
-                                amyCloseCoordinator?.completeFarewell();
                                 currentMessageRef.current = '';
                                 currentRoleRef.current = '';
                                 suppressingAmyUnsafeOutput = false;
-                                if (amyPrivacyRecoveryTimer !== null) deliverAmyPrivacyRecovery();
+                                if (pendingAmyUnsafeOutputReason && amyUnsafeOutputRecoveryTimer !== null) {
+                                    deliverAmyUnsafeOutputRecovery(unsafeOutput.reason);
+                                } else {
+                                    pendingAmyUnsafeOutputReason = null;
+                                    amyCloseCoordinator?.completeFarewell();
+                                }
                             }
                             return;
+                        }
+                        if (pendingAmyHardCloseIntent) {
+                            pendingAmyHardCloseIntent = false;
+                            requestedCloseReason = 'user_requested_end';
+                            amyCloseCoordinator?.arm();
                         }
                     } else if (normalizedRole === 'user' && suppressingAmyUnsafeOutput) {
                         if (currentMessageRef.current) {
@@ -703,6 +737,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
                         suppressingAmyUnsafeOutput = false;
+                        pendingAmyUnsafeOutputReason = null;
+                        if (amyUnsafeOutputRecoveryTimer !== null) {
+                            window.clearTimeout(amyUnsafeOutputRecoveryTimer);
+                            amyUnsafeOutputRecoveryTimer = null;
+                        }
                     }
 
                     if (messageEvent.role !== currentRoleRef.current) {
@@ -1153,8 +1192,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             if (requestedCloseFallbackTimer !== null) {
                 window.clearTimeout(requestedCloseFallbackTimer);
             }
-            if (amyPrivacyRecoveryTimer !== null) {
-                window.clearTimeout(amyPrivacyRecoveryTimer);
+            if (amyUnsafeOutputRecoveryTimer !== null) {
+                window.clearTimeout(amyUnsafeOutputRecoveryTimer);
             }
             removeClientListeners?.();
             removeIdentityToolHandler?.();

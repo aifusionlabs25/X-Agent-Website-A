@@ -243,6 +243,15 @@ function isArtifactRequestFragment(value: string): boolean {
     return /^(?:it|that|this)\s+so\s+I\s+can\s+share\s+it\s+with\s+leadership\b/i.test(value.trim());
 }
 
+function isCustomerEvidenceRequest(value: string): boolean {
+    return /\b(?:case stud(?:y|ies)|customer (?:example|reference|story)|similar (?:customer|client|organization|public[- ]sector environment)|what Insight has done|proof point|prior outcome)\b/i.test(value);
+}
+
+function isGeneralAdviceRequest(value: string): boolean {
+    return /^(?:what|which)\s+(?:key\s+)?(?:information|details?)\b.{0,90}\b(?:gather|provide|need)\b/i.test(value.trim())
+        || /^are we talking\b.{0,160}\bor something else\b/i.test(value.trim());
+}
+
 function timingFrom(values: string[]): string {
     for (const value of [...values].reverse()) {
         if (isWorkbenchRequest(value) || isConversationControl(value) || isWorkbenchEditInstruction(value)) continue;
@@ -593,7 +602,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         && !isConversationControl(value)
         && !isWorkbenchEditInstruction(value)
         && !isPrivateContactExchange(value)
-        && !isArtifactRequestFragment(value));
+        && !isArtifactRequestFragment(value)
+        && !isCustomerEvidenceRequest(value)
+        && !isGeneralAdviceRequest(value));
     const sourceText = canonical(`${substantiveStatements.join(' ')} ${roadmapTopic}`);
     const sessionText = canonical(userTurns.join(' '));
     const hasHealthcareOperations = /patient intake|patient flow|clinical workflow|pre[- ]screening|\bEHR\b|\bEMR\b|electronic (?:health|medical) record/i.test(sessionText)
@@ -803,7 +814,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'CEO / executive leadership'
         : hasAiCustomerExperience && /\bCEO\b/i.test(allText) && /\bboard\b/i.test(allText)
         ? 'CEO and board leadership'
-        : lastSentence(substantiveStatements, /decision[- ]maker|stakeholder|\bCEO\b|\bboard\b|CIO|CFO|CTO|director|vice president|\bVP\b|executive|procurement (?:officer|lead|director|manager|team)|finance (?:officer|lead|director|manager|team)|leadership|owner/i);
+        : lastSentence(substantiveStatements, /decision[- ]maker|stakeholder|\bCEO\b|\bboard\b|CIO|CFO|CTO|director|vice president|\bVP\b|executive|(?:IT|technology|operations?) manager|procurement (?:officer|lead|director|manager|team)|finance (?:officer|lead|director|manager|team)|leadership|owner/i);
     const organization = hasArizonaSvar
         ? 'State of Arizona agency; Arizona SVAR purchasing path raised for specialist validation.'
         : lastSentence(substantiveStatements, /county|city|agency|company|our firm|the firm|hospital|health system|manufactur|distribution|university|school district/i);

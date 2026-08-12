@@ -1,0 +1,18 @@
+Amy: Hi, I'm Amy with Insight Enterprises. Who am I speaking with today?
+User: I'm the IT Operations Manager for a city government in Arizona. We are starting a secure, standardized endpoint modernization effort.
+Amy: You'll want a concise picture that ties the current environment to the goals you've set. Start with endpoint hardware, OS versions, and management tools, paired with a snapshot
+(Message was interrupted)
+User: Once I have that inventory, what is typically the next step?
+Amy: We'll work with you to compare the current devices against the latest security baselines and compliance requirements
+(Message was interrupted)
+User: What would the next contact look like?
+Amy: An Insight specialist can review the inventory and draft a detailed modernization plan tailored to the city's needs. If you'd like that, I'll note
+(Message was interrupted)
+User: Before we wrap, could you show a quick example of what Insight has done for a similar public sector environment?
+Tool (show_visual_brief): Result: {"status":"view_rebuilt"}
+Amy: The visual brief is now open. The visual brief is now open on your screen.
+User: That gives me a good picture. We'll talk next steps. Thanks for your time.
+Amy: <think
+(Message was interrupted)
+User: All right, that's a wrap on the role play.
+Tool (end_amy_session): Result: {"status":"close_not_requested"}

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { AMY_CANONICAL_GREETING, evaluateAmyTranscript } from '../lib/anam/amy-live-qa.ts';
 
@@ -76,4 +77,22 @@ Tool (end_amy_session): Result: {"status":"close_not_requested"}`;
     assert.equal(report.status, 'fail');
     assert.ok(codes.has('spoken_email_handling'));
     assert.ok(codes.has('missing_end_session_tool'));
+});
+
+test('latest endpoint transcript fails on hard truncation, reasoning leakage, proof substitution, commitments, and closing', async () => {
+    const transcript = await readFile(
+        new URL('./fixtures/amy-endpoint-truncation-session.txt', import.meta.url),
+        'utf8',
+    );
+    const report = evaluateAmyTranscript(transcript);
+    const codes = new Set(report.findings.map((finding) => finding.code));
+    assert.equal(report.status, 'fail');
+    for (const code of [
+        'assistant_interrupted',
+        'reasoning_markup_exposed',
+        'case_study_visual_substitution',
+        'duplicate_visual_confirmation',
+        'unsupported_service_commitment',
+        'missing_end_session_tool',
+    ]) assert.ok(codes.has(code), `expected ${code}`);
 });
