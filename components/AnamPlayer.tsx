@@ -42,6 +42,7 @@ import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-clos
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 import {
     createAmyFarewellCloseCoordinator,
+    hasAmyEmailPermission,
     hasAmySoftCloseIntent,
     hasExplicitAmyCloseIntent,
 } from '@/lib/anam/amy-session-close';
@@ -144,6 +145,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let amyPrivacyRecoveryTimer: number | null = null;
         let pendingAmyHardCloseIntent = false;
         let amyClosingMotionActive = false;
+        let amyEmailQueuePromise: ReturnType<typeof sendAmyAnamFollowUpEmail> | null = null;
         let completedUserTurns = 0;
         let confirmedMemoryName: string | null = null;
         let requestedCloseFallbackTimer: number | null = null;
@@ -627,6 +629,29 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     }
                 };
 
+                const queueAmyEmailFromConversation = () => {
+                    if (amyEmailQueuePromise) return amyEmailQueuePromise;
+                    const request = (async () => {
+                        if (tokenPayload.agentMailAvailable !== true) {
+                            throw new Error('Email is temporarily unavailable');
+                        }
+                        if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
+                            throw new Error('The private session is not ready');
+                        }
+                        await bindingPromise;
+                        return sendAmyAnamFollowUpEmail({
+                            launchId,
+                            sessionId: providerSessionId,
+                            userConfirmed: true,
+                        });
+                    })();
+                    amyEmailQueuePromise = request;
+                    request.catch(() => {
+                        if (amyEmailQueuePromise === request) amyEmailQueuePromise = null;
+                    });
+                    return request;
+                };
+
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
                     const deliverAmyPrivacyRecovery = () => {
@@ -721,9 +746,40 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             if (messageEvent.role === 'user') {
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
                                 const completedUserTurn = currentMessageRef.current.trim();
+                                const previousAgentTurn = [...transcriptRef.current]
+                                    .reverse()
+                                    .find((turn) => turn.role === 'agent')?.content ?? '';
                                 if (hasExplicitAmyCloseIntent(completedUserTurn)) {
                                     pendingAmyHardCloseIntent = true;
                                     requestedCloseReason = 'user_requested_end';
+                                }
+                                if (hasAmySoftCloseIntent(completedUserTurn)) {
+                                    amyClosingMotionActive = true;
+                                    try {
+                                        anamClient.addContext('Closing motion is active. Give one concise outcome recap, then ask exactly once whether the visitor wants the final recap and Visual Brief emailed to the private check-in address. Do not say goodbye yet.');
+                                    } catch {
+                                        console.error('[Amy Anam] Closing motion context was not confirmed');
+                                    }
+                                }
+                                if (hasAmyEmailPermission(completedUserTurn, previousAgentTurn)) {
+                                    void queueAmyEmailFromConversation()
+                                        .then((result) => {
+                                            console.info('[Amy Anam AgentMail] Conversation consent recorded', {
+                                                status: result.status,
+                                                queued: result.queued,
+                                                duplicate: result.duplicate,
+                                                contactContentLogged: false,
+                                            });
+                                            anamClient.addContext('Email receipt confirmed: the post-session recap and Visual Brief are queued for the private check-in address. Confirm that once without repeating the address. Do not ask for email permission again.');
+                                        })
+                                        .catch(() => {
+                                            console.error('[Amy Anam AgentMail] Conversation consent was not recorded');
+                                            try {
+                                                anamClient.addContext('The post-session email could not be scheduled. Say that plainly and do not claim it will be sent.');
+                                            } catch {
+                                                console.error('[Amy Anam] Email failure context was not confirmed');
+                                            }
+                                        });
                                 }
                                 if (hasAmySpokenEmailAttempt(completedUserTurn)) {
                                     try {
@@ -899,14 +955,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     ? payload.arguments.callbackPhone.trim()
                                     : '';
                                 const callbackPhoneConfirmed = payload.arguments.callbackPhoneConfirmed === true;
-                                const result = await sendAmyAnamFollowUpEmail({
-                                    launchId,
-                                    sessionId: providerSessionId,
-                                    userConfirmed: true,
-                                    ...(callbackPhone && callbackPhoneConfirmed
-                                        ? { callbackPhone, callbackPhoneConfirmed: true }
-                                        : {}),
-                                });
+                                const result = callbackPhone && callbackPhoneConfirmed
+                                    ? await sendAmyAnamFollowUpEmail({
+                                        launchId,
+                                        sessionId: providerSessionId,
+                                        userConfirmed: true,
+                                        callbackPhone,
+                                        callbackPhoneConfirmed: true,
+                                    })
+                                    : await queueAmyEmailFromConversation();
                                 console.info('[Amy Anam AgentMail] Post-session intent recorded', {
                                     status: result.status,
                                     queued: result.queued,

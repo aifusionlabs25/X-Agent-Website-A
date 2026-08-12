@@ -559,8 +559,6 @@ test('Amy feature tabs and content use readable production typography', async ()
     assert.match(workbench, /Exit full screen/);
     assert.match(workbench, /data-expanded=\{isExpanded\}/);
     assert.match(workbench, /lg:w-\[min\(62vw,980px\)\]/);
-    assert.match(workbench, /isExpanded \? 'lg:grid-cols-\[176px_minmax\(0,1fr\)\]'/);
-    assert.match(workbench, /isExpanded \? 'sm:grid-cols-2' : 'grid-cols-1'/);
     assert.match(workbench, /event\.key === 'Escape'/);
     assert.match(workbench, /event\.key === 'ArrowLeft'/);
     assert.match(workbench, /event\.key === 'ArrowRight'/);
@@ -576,11 +574,16 @@ test('Amy feature tabs and content use readable production typography', async ()
     assert.match(workbench, /visualSlideIndex/);
     assert.match(workbench, /onVisualSlideIndexChange/);
     assert.doesNotMatch(workbench, /setSlideIndex/);
+    assert.match(workbench, /isVisualView \? 'flex flex-col overflow-y-auto py-3 md:overflow-hidden'/);
+    assert.match(workbench, /grid h-full min-h-\[300px\] grid-rows-\[auto_auto_minmax\(0,1fr\)_auto\]/);
+    assert.match(workbench, /md:grid-cols-3/);
+    assert.match(workbench, /Visual Brief controls/);
+    assert.doesNotMatch(workbench, /min-h-\[440px\]/);
+    assert.match(workbench, /document\.body\.style\.overflow = 'hidden'/);
+    assert.match(workbench, /document\.documentElement\.style\.overflow = 'hidden'/);
 
     assert.match(workbench, /text-\[11px\][^`]+sm:text-sm/);
     assert.match(workbench, /text-sm leading-6 text-zinc-400/);
-    assert.match(workbench, /text-xs leading-5 text-zinc-400/);
-    assert.doesNotMatch(workbench, /text-\[(?:9|10)px\]/);
 });
 
 test('Amy visual brief preserves StateRAMP, privacy, cloud scope, and year-end timing', () => {

@@ -165,5 +165,7 @@ test('email delivery occurs only after final transcript retrieval and durable se
     assert.ok(receiptWrite > transcriptFetch, 'session receipt was written before final transcript retrieval');
     assert.ok(emailDispatch > receiptWrite, 'email was dispatched before post-session finalization');
     assert.match(finalizer, /turns:\s*transcript\.status === 'ready' \? transcript\.turns : \[\]/);
-    assert.doesNotMatch(player, /sendAmyAnamFollowUpEmail\([\s\S]*transcript:/);
+    const emailCalls = [...player.matchAll(/sendAmyAnamFollowUpEmail\(\{([\s\S]*?)\}\)/g)];
+    assert.ok(emailCalls.length >= 1, 'email client was not called');
+    for (const call of emailCalls) assert.doesNotMatch(call[1], /transcript:/);
 });

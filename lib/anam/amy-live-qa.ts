@@ -34,7 +34,7 @@ export type AmyLiveQaReport = {
 
 type Turn = { role: 'assistant' | 'user' | 'tool'; speaker: string; content: string; words: number };
 
-export const AMY_CANONICAL_GREETING = "Hi, I'm Amy with Insight Enterprises. What would be most useful to work through today?";
+export const AMY_CANONICAL_GREETING = "Hi, I'm Amy with Insight Enterprises. Who am I speaking with today?";
 
 const HEADER = /^(?:\[([^\]]+)\]\s+)?(Amy(?:\s+Insight SDR[^:]*)?|User|Visitor|Tool(?:\s*\([^)]*\))?):\s*(.*)$/i;
 const SPEAKING_TIME = /^\(Speaking time:/i;

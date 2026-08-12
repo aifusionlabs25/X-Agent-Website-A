@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const API_BASE = 'https://api.anam.ai/v1';
 const APPLY_CONFIRMATION = 'CONFIRM_AMY_WORKBENCH_SYNC';
-const AMY_INITIAL_MESSAGE = "Hi, I'm Amy with Insight Enterprises. What would be most useful to work through today?";
+const AMY_INITIAL_MESSAGE = "Hi, I'm Amy with Insight Enterprises. Who am I speaking with today?";
 const RELIABILITY_START = '<!-- AMY_CARA4_RELIABILITY_START -->';
 const RELIABILITY_END = '<!-- AMY_CARA4_RELIABILITY_END -->';
 const PUBLIC_SECTOR_START = '<!-- AMY_PUBLIC_SECTOR_START -->';

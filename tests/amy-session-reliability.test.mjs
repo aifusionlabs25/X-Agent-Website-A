@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { hasAmySpokenEmailAttempt, inspectAmyLiveOutput } from '../lib/anam/amy-live-output-guard.ts';
-import { hasAmySoftCloseIntent, hasExplicitAmyCloseIntent } from '../lib/anam/amy-session-close.ts';
+import {
+    hasAmyEmailOffer,
+    hasAmyEmailPermission,
+    hasAmySoftCloseIntent,
+    hasExplicitAmyCloseIntent,
+} from '../lib/anam/amy-session-close.ts';
 import { createAmyFarewellCloseCoordinator } from '../lib/anam/amy-session-close.ts';
 
 function scheduler() {
@@ -108,6 +113,18 @@ test('Amy separates a useful soft closing motion from an immediate hard close', 
     assert.equal(hasExplicitAmyCloseIntent('Goodbye. Take care.'), true);
 });
 
+test('Amy deterministically recognizes direct and offer-bound email permission', () => {
+    const offer = 'Would you like me to email the final recap and Visual Brief to your private check-in address?';
+    assert.equal(hasAmyEmailOffer(offer), true);
+    assert.equal(hasAmyEmailPermission('Yes, please do.', offer), true);
+    assert.equal(hasAmyEmailPermission('Go ahead.', offer), true);
+    assert.equal(hasAmyEmailPermission('Yes, no problem.', offer), true);
+    assert.equal(hasAmyEmailPermission('Email me the summary, please.'), true);
+    assert.equal(hasAmyEmailPermission('Can you send the Visual Brief?'), true);
+    assert.equal(hasAmyEmailPermission('No, please do not send it.', offer), false);
+    assert.equal(hasAmyEmailPermission('Yes, that is the right priority.', 'Should access control be the priority?'), false);
+});
+
 test('Amy player registers deterministic close and interrupts unsafe provider output before streaming', async () => {
     const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
     const registration = player.indexOf("registerToolCallHandler(\n                        'end_amy_session'");
@@ -122,6 +139,9 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.match(player, /pendingAmyHardCloseIntent/);
     assert.match(player, /anamClient\.interruptPersona\(\)/);
     assert.match(player, /hasAmySpokenEmailAttempt\(completedUserTurn\)/);
+    assert.match(player, /hasAmyEmailPermission\(completedUserTurn, previousAgentTurn\)/);
+    assert.match(player, /queueAmyEmailFromConversation\(\)/);
+    assert.match(player, /Conversation consent recorded/);
     assert.match(player, /Private contact rule: the visitor spoke an email-like phrase/);
     assert.match(player, /Your verified check-in address is already secured privately/);
     assert.match(player, /contentLogged: false/);

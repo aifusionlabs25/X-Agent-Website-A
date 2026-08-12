@@ -245,7 +245,9 @@ test('Amy conversation block installer refuses malformed managed markers', () =>
 });
 
 test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
-    assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. What would be most useful to work through today\?/);
+    assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. Who am I speaking with today\?/);
+    assert.match(prompt, /After the visitor gives a name.*What would be most useful to work through today/s);
+    assert.match(prompt, /Never stack the name question and the discovery question/i);
     assert.match(prompt, /never speak a numbered plan or more than forty words/i);
     assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
     assert.match(workbenchUpdater, /AMY_INITIAL_MESSAGE/);

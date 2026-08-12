@@ -106,8 +106,9 @@ export default function AmyAnamWorkbenchV2({
         [catalogQuery, requestedView, roadmapTopic, turns],
     );
     const [isExpanded, setIsExpanded] = useState(false);
+    const isVisualView = view === 'visual';
     const activeSlide = model.visualBrief.slides[visualSlideIndex] ?? model.visualBrief.slides[0];
-    const displayedAppliedChanges = revision > 1 ? appliedChanges.slice(0, 3) : [];
+    const displayedAppliedChanges = revision > 1 && !isVisualView ? appliedChanges.slice(0, 3) : [];
 
     useEffect(() => {
         if (!isOpen) return;
@@ -119,6 +120,18 @@ export default function AmyAnamWorkbenchV2({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isExpanded, isOpen, model.visualBrief.slides.length, onVisualSlideIndexChange, view, visualSlideIndex]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const previousBodyOverflow = document.body.style.overflow;
+        const previousRootOverflow = document.documentElement.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previousBodyOverflow;
+            document.documentElement.style.overflow = previousRootOverflow;
+        };
+    }, [isOpen]);
 
     const closeWorkbench = () => {
         setIsExpanded(false);
@@ -139,17 +152,17 @@ export default function AmyAnamWorkbenchV2({
                 isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-full opacity-0'
             }`}
         >
-            <header className="relative overflow-hidden border-b border-white/10 px-5 pb-4 pt-5 sm:px-7">
+            <header className={`relative overflow-hidden border-b border-white/10 px-5 sm:px-7 ${isVisualView ? 'pb-2 pt-3' : 'pb-4 pt-5'}`}>
                 <div className="pointer-events-none absolute -right-24 -top-32 h-64 w-64 rounded-full bg-[#ff2f8a]/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-11 w-11 flex-none items-center justify-center rounded-sm bg-[#ff2f8a] text-white shadow-[0_16px_40px_rgba(255,47,138,0.28)]">
+                        <div className={`flex flex-none items-center justify-center rounded-sm bg-[#ff2f8a] text-white shadow-[0_16px_40px_rgba(255,47,138,0.28)] ${isVisualView ? 'h-9 w-9' : 'h-11 w-11'}`}>
                             <Sparkles size={20} />
                         </div>
                         <div className="min-w-0">
                             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#ff68a9]">Insight intelligence layer</p>
                             <h2 className="truncate text-xl font-semibold tracking-[-0.02em]">Amy Intelligence</h2>
-                            <p className="mt-0.5 text-sm text-zinc-400">Live planning, visuals, and solution context</p>
+                            <p className={`mt-0.5 text-zinc-400 ${isVisualView ? 'text-xs' : 'text-sm'}`}>Live planning, visuals, and solution context</p>
                         </div>
                     </div>
                     <div className="flex flex-none items-center gap-2">
@@ -170,7 +183,7 @@ export default function AmyAnamWorkbenchV2({
                     </div>
                 </div>
 
-                <div className="relative mt-5 grid grid-cols-5 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10" role="tablist" aria-label="Amy Intelligence views">
+                <div className={`relative grid grid-cols-5 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10 ${isVisualView ? 'mt-3' : 'mt-5'}`} role="tablist" aria-label="Amy Intelligence views">
                     {TABS.map((tab) => {
                         const Icon = tab.icon;
                         const selected = view === tab.id;
@@ -181,7 +194,7 @@ export default function AmyAnamWorkbenchV2({
                                 role="tab"
                                 aria-selected={selected}
                                 onClick={() => onViewChange(tab.id)}
-                                className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 bg-[#101014] px-1 text-[11px] font-semibold transition sm:flex-row sm:gap-1.5 sm:text-sm ${selected ? 'bg-white text-black' : 'text-zinc-300 hover:bg-[#18181d] hover:text-white'}`}
+                                className={`flex min-w-0 flex-col items-center justify-center gap-1 bg-[#101014] px-1 text-[11px] font-semibold transition sm:flex-row sm:gap-1.5 sm:text-sm ${isVisualView ? 'min-h-11' : 'min-h-14'} ${selected ? 'bg-white text-black' : 'text-zinc-300 hover:bg-[#18181d] hover:text-white'}`}
                             >
                                 <Icon size={14} />
                                 <span className="truncate">{tab.label}</span>
@@ -191,10 +204,10 @@ export default function AmyAnamWorkbenchV2({
                 </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-7">
+            <div className={`min-h-0 flex-1 px-5 sm:px-7 ${isVisualView ? 'flex flex-col overflow-y-auto py-3 md:overflow-hidden' : 'overflow-y-auto py-6'}`}>
                 {revision > 0 && (
                     <section
-                        className={`mb-5 border px-4 py-3 ${appliedChanges.length > 0 ? 'border-emerald-300/20 bg-emerald-300/[0.055]' : 'border-amber-300/20 bg-amber-300/[0.055]'}`}
+                        className={`${isVisualView ? 'mb-2 px-3 py-2' : 'mb-5 px-4 py-3'} border ${appliedChanges.length > 0 ? 'border-emerald-300/20 bg-emerald-300/[0.055]' : 'border-amber-300/20 bg-amber-300/[0.055]'}`}
                     >
                         <div className="flex flex-wrap items-center justify-between gap-2" role="status" aria-live="polite" aria-atomic="true">
                             <p className={`text-xs font-bold uppercase tracking-[0.14em] ${appliedChanges.length > 0 ? 'text-emerald-300' : 'text-amber-200'}`}>
@@ -223,10 +236,10 @@ export default function AmyAnamWorkbenchV2({
                         )}
                     </section>
                 )}
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div className={`flex flex-wrap items-center justify-between gap-3 ${isVisualView ? 'mb-2' : 'mb-5'}`}>
                     <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Active lane</p>
-                        <p className="mt-1 text-sm font-semibold text-zinc-100">{model.lane}</p>
+                        <p className={`${isVisualView ? 'mt-0 text-xs' : 'mt-1 text-sm'} font-semibold text-zinc-100`}>{model.lane}</p>
                     </div>
                     <div
                         className={`inline-flex items-center gap-2 border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] ${model.status === 'live' && model.quality.level === 'grounded' ? 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300' : 'border-amber-300/20 bg-amber-300/[0.06] text-amber-200'}`}
@@ -327,66 +340,51 @@ export default function AmyAnamWorkbenchV2({
                         </div>
                     </section>
                 ) : view === 'visual' ? (
-                    <section aria-labelledby="amy-visual-heading">
-                        <div className="flex items-end justify-between gap-4">
-                            <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{model.quality.level === 'grounded' ? 'Conversation-grounded decision brief' : 'Developing conversation working brief'}</p><h3 id="amy-visual-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
+                    <section aria-labelledby="amy-visual-heading" className="flex min-h-0 flex-1 flex-col">
+                        <div className="flex flex-none items-end justify-between gap-4">
+                            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{model.quality.level === 'grounded' ? 'Conversation-grounded decision brief' : 'Developing conversation working brief'}</p><h3 id="amy-visual-heading" className="mt-0.5 text-xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
                             <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{visualSlideIndex + 1} / {model.visualBrief.slides.length}</p>
                         </div>
                         {model.quality.level === 'developing' && model.quality.missing.length > 0 && (
-                            <div className="mt-5 flex items-start gap-3 border border-amber-300/20 bg-amber-300/[0.05] px-4 py-3 text-sm leading-6 text-amber-100/80">
+                            <div className="mt-2 flex flex-none items-start gap-3 border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2 text-xs leading-5 text-amber-100/80">
                                 <AlertTriangle size={16} className="mt-0.5 flex-none text-amber-300" />
                                 <span>This brief is still forming. Clarify {model.quality.missing.join(', ')} before treating it as leadership-ready.</span>
                             </div>
                         )}
-                        <div className={`mt-6 grid gap-4 ${isExpanded ? 'lg:grid-cols-[176px_minmax(0,1fr)]' : ''}`}>
-                            {isExpanded && <nav className="hidden border-y border-white/10 py-2 lg:block" aria-label="Visual Brief slides">
-                                {model.visualBrief.slides.map((slide, index) => (
-                                    <button
-                                        key={slide.id}
-                                        type="button"
-                                        onClick={() => onVisualSlideIndexChange(index)}
-                                        aria-current={index === visualSlideIndex ? 'step' : undefined}
-                                        className={`group flex w-full items-start gap-3 border-l px-3 py-3 text-left transition ${index === visualSlideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-white' : 'border-white/10 text-zinc-500 hover:border-white/25 hover:text-zinc-200'}`}
-                                    >
-                                        <span className={`mt-0.5 text-xs font-bold ${index === visualSlideIndex ? 'text-[#ff68a9]' : 'text-zinc-600'}`}>{String(index + 1).padStart(2, '0')}</span>
-                                        <span className="text-xs font-semibold leading-5">{VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}</span>
-                                    </button>
-                                ))}
-                            </nav>}
+                        <div className="mt-2 min-h-0 flex-1">
                             <div
-                                className="relative min-h-[440px] overflow-hidden rounded-[2px] border border-[#f4c6d9] bg-[#fffaf7] px-6 py-7 text-[#302529] shadow-[0_26px_80px_rgba(0,0,0,0.35)] sm:px-9 sm:py-9"
+                                className="relative grid h-full min-h-[300px] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-[2px] border border-[#f4c6d9] bg-[#fffaf7] px-[clamp(1rem,3vw,2.25rem)] py-[clamp(0.85rem,2vh,1.75rem)] text-[#302529] shadow-[0_26px_80px_rgba(0,0,0,0.35)]"
                                 aria-live="polite"
                             >
                                 <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full border border-[#e80064]/10" />
                                 <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-[#ef0065]/[0.055] blur-2xl" />
-                                <div className="relative flex items-center justify-between gap-4 border-b border-[#3a292f]/10 pb-4">
+                                <div className="relative flex items-center justify-between gap-4 border-b border-[#3a292f]/10 pb-2">
                                     <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#c50055]">{activeSlide.eyebrow}</p>
                                     <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e7b82]">Insight · Working view</span>
                                 </div>
-                                <div className="relative mt-8 max-w-3xl">
-                                    <h4 className={`max-w-2xl [font-family:Georgia,'Times_New_Roman',serif] font-normal leading-[0.98] tracking-[-0.045em] text-[#2d2326] ${isExpanded ? 'text-[clamp(2rem,4vw,3.7rem)]' : 'text-[clamp(1.8rem,3vw,2.8rem)]'}`}>{activeSlide.title}</h4>
-                                    <p className="mt-5 max-w-2xl text-[15px] leading-7 text-[#6f5f64]">{activeSlide.summary}</p>
+                                <div className="relative mt-[clamp(0.7rem,1.6vh,1.35rem)] max-w-3xl">
+                                    <h4 className="max-w-2xl text-[clamp(1.65rem,3vw,3rem)] [font-family:Georgia,'Times_New_Roman',serif] font-normal leading-[0.98] tracking-[-0.045em] text-[#2d2326]">{activeSlide.title}</h4>
+                                    <p className="mt-3 max-w-2xl text-[clamp(0.78rem,1.3vw,0.95rem)] leading-6 text-[#6f5f64]">{activeSlide.summary}</p>
                                 </div>
-                                <div className={`relative mt-8 grid gap-3 ${isExpanded ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+                                <div className="relative mt-[clamp(0.7rem,1.7vh,1.25rem)] grid min-h-0 content-start gap-2 md:grid-cols-3">
                                     {activeSlide.bullets.map((bullet, index) => (
-                                        <div key={bullet} className={`${index === 0 ? 'border-[#d6005b] bg-[#d6005b] text-white' : 'border-[#eadde2] bg-white/80 text-[#56474c]'} min-h-24 border px-4 py-4 text-sm leading-6 shadow-[0_10px_28px_rgba(74,38,52,0.05)]`}>
-                                            <span className={`mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] ${index === 0 ? 'text-pink-100' : 'text-[#c50055]'}`}>Signal {String(index + 1).padStart(2, '0')}</span>
+                                        <div key={bullet} className={`${index === 0 ? 'border-[#d6005b] bg-[#d6005b] text-white' : 'border-[#eadde2] bg-white/80 text-[#56474c]'} min-h-0 border px-3 py-3 text-[clamp(0.72rem,1.15vw,0.875rem)] leading-5 shadow-[0_10px_28px_rgba(74,38,52,0.05)]`}>
+                                            <span className={`mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] ${index === 0 ? 'text-pink-100' : 'text-[#c50055]'}`}>Signal {String(index + 1).padStart(2, '0')}</span>
                                             {bullet}
                                         </div>
                                     ))}
                                 </div>
-                                <p className="relative mt-8 border-t border-[#3a292f]/10 pt-4 text-xs leading-5 text-[#86747a]">{activeSlide.boundary}</p>
+                                <p className="relative mt-3 border-t border-[#3a292f]/10 pt-2 text-[11px] leading-4 text-[#86747a]">{activeSlide.boundary}</p>
                             </div>
                         </div>
-                        <div className={`mt-4 gap-2 overflow-x-auto pb-1 ${isExpanded ? 'flex lg:hidden' : 'flex'}`} aria-label="Visual Brief slide picker">
+                        <div className="mt-2 flex flex-none items-center gap-2" aria-label="Visual Brief controls">
+                            <button type="button" onClick={() => onVisualSlideIndexChange(Math.max(0, visualSlideIndex - 1))} disabled={visualSlideIndex === 0} className="inline-flex h-8 flex-none items-center gap-1 rounded-full border border-white/10 px-3 text-xs text-zinc-300 transition hover:bg-white/5 disabled:opacity-30" aria-label="Previous Visual Brief slide"><ChevronLeft size={14} /> Previous</button>
+                            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto" aria-label="Visual Brief slide picker">
                             {model.visualBrief.slides.map((slide, index) => (
-                                <button key={slide.id} type="button" onClick={() => onVisualSlideIndexChange(index)} aria-current={index === visualSlideIndex ? 'step' : undefined} className={`flex-none border px-3 py-2 text-xs font-semibold ${index === visualSlideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-[#ff8bbc]' : 'border-white/10 text-zinc-400'}`}>{String(index + 1).padStart(2, '0')} {VISUAL_SLIDE_LABELS[slide.id] ?? 'Slide'}</button>
+                                <button key={slide.id} type="button" onClick={() => onVisualSlideIndexChange(index)} aria-label={`Open slide ${index + 1}: ${VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}`} aria-current={index === visualSlideIndex ? 'step' : undefined} className={`h-1.5 flex-none transition-all ${index === visualSlideIndex ? 'w-7 bg-[#ff2f8a]' : 'w-2 bg-white/20'}`} />
                             ))}
-                        </div>
-                        <div className="mt-4 flex items-center justify-between gap-4">
-                            <button type="button" onClick={() => onVisualSlideIndexChange(Math.max(0, visualSlideIndex - 1))} disabled={visualSlideIndex === 0} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30"><ChevronLeft size={15} /> Previous</button>
-                            <div className="hidden gap-1.5 sm:flex">{model.visualBrief.slides.map((slide, index) => <button key={slide.id} type="button" onClick={() => onVisualSlideIndexChange(index)} aria-label={`Open slide ${index + 1}: ${VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}`} aria-current={index === visualSlideIndex ? 'step' : undefined} className={`h-1.5 transition-all ${index === visualSlideIndex ? 'w-7 bg-[#ff2f8a]' : 'w-2 bg-white/20'}`} />)}</div>
-                            <button type="button" onClick={() => onVisualSlideIndexChange(Math.min(model.visualBrief.slides.length - 1, visualSlideIndex + 1))} disabled={visualSlideIndex === model.visualBrief.slides.length - 1} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 disabled:opacity-30">Next <ChevronRight size={15} /></button>
+                            </div>
+                            <button type="button" onClick={() => onVisualSlideIndexChange(Math.min(model.visualBrief.slides.length - 1, visualSlideIndex + 1))} disabled={visualSlideIndex === model.visualBrief.slides.length - 1} className="inline-flex h-8 flex-none items-center gap-1 rounded-full border border-white/10 px-3 text-xs text-zinc-300 transition hover:bg-white/5 disabled:opacity-30" aria-label="Next Visual Brief slide">Next <ChevronRight size={14} /></button>
                         </div>
                     </section>
                 ) : (
@@ -410,7 +408,7 @@ export default function AmyAnamWorkbenchV2({
                 )}
             </div>
 
-            <footer className="flex items-start gap-3 border-t border-white/10 bg-black/30 px-5 py-4 text-xs leading-5 text-zinc-400 sm:px-7">
+            <footer className={`items-start gap-3 border-t border-white/10 bg-black/30 px-5 text-xs text-zinc-400 sm:px-7 ${isVisualView ? 'hidden py-2 md:flex md:leading-4' : 'flex py-4 leading-5'}`}>
                 <ShieldCheck size={15} className="mt-0.5 flex-none text-emerald-400" />
                 <span>{AMY_WORKBENCH_BOUNDARY}</span>
             </footer>
