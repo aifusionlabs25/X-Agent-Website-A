@@ -92,6 +92,11 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(scheduler, /Set the room\./);
     assert.match(scheduler, /Set her role\./);
     assert.match(scheduler, /Confirm the invitation\./);
+    assert.match(scheduler, /Join now/);
+    assert.match(scheduler, /Schedule for later/);
+    assert.match(scheduler, /Dani joins independently/);
+    assert.match(scheduler, /Open Teams as host/);
+    assert.match(scheduler, /invite\.joinState/);
     assert.match(scheduler, /fetch\('\/api\/anam\/dani\/meetings'/);
     assert.match(scheduler, /fetch\('\/api\/anam\/dani\/access'/);
     assert.match(scheduler, /fetch\('\/api\/anam\/dani\/access\/verify'/);
@@ -118,6 +123,8 @@ test('Dani meeting creation is verified, rate-limited, server-side, and status-a
     assert.match(route, /https:\/\/api\.anam\.ai\/v1\/meetings\/invites/);
     assert.match(route, /personaId: DANI_PERSONA_ID/);
     assert.match(route, /groupCall: body\.groupCall/);
+    assert.match(route, /raw === undefined \|\| raw === null \|\| raw === ''/);
+    assert.match(route, /\.\.\.\(joinAt \? \{ joinAt \} : \{\}\)/);
     assert.match(route, /xagent-dani-\$\{randomUUID\(\)\}/);
     assert.match(route, /meet\.google\.com/);
     assert.match(route, /\.zoom\.us/);
