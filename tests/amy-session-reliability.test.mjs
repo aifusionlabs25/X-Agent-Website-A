@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { inspectAmyLiveOutput } from '../lib/anam/amy-live-output-guard.ts';
+import { hasExplicitAmyCloseIntent } from '../lib/anam/amy-session-close.ts';
 import { createAmyFarewellCloseCoordinator } from '../lib/anam/amy-session-close.ts';
 
 function scheduler() {
@@ -73,11 +74,19 @@ test('Amy output guard suppresses provider fallbacks and exposed close markup', 
         inspectAmyLiveOutput('<end_call{ "confirmed": true }>'),
         { reason: 'tool_markup', safePrefix: '' },
     );
+    assert.deepEqual(inspectAmyLiveOutput('<'), { reason: 'tool_markup', safePrefix: '' });
     assert.deepEqual(
         inspectAmyLiveOutput('Sorry, I am having trouble'),
         { reason: 'provider_fallback', safePrefix: '' },
     );
     assert.equal(inspectAmyLiveOutput("I'm sorry that procurement is complicated."), null);
+});
+
+test('Amy close intent rejects soft completion and accepts explicit closing language', () => {
+    assert.equal(hasExplicitAmyCloseIntent("That's what I needed. I'll take this forward."), false);
+    assert.equal(hasExplicitAmyCloseIntent('Before we wrap, can you show me a summary?'), false);
+    assert.equal(hasExplicitAmyCloseIntent("Thanks, Amy. Let's call it a day."), true);
+    assert.equal(hasExplicitAmyCloseIntent("I'm done. End the session."), true);
 });
 
 test('Amy player registers deterministic close and interrupts unsafe provider output before streaming', async () => {
@@ -87,6 +96,8 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.ok(registration > 0 && registration < streaming);
     assert.match(player, /amyCloseCoordinator = createAmyFarewellCloseCoordinator\(\{[\s\S]{0,180}stopStreaming: handleAmyRequestedEnd/);
     assert.match(player, /inspectAmyLiveOutput\(accumulated\)/);
+    assert.match(player, /hasExplicitAmyCloseIntent\(latestUserTurn\)/);
+    assert.match(player, /status: 'close_not_requested'/);
     assert.match(player, /anamClient\.interruptPersona\(\)/);
     assert.match(player, /contentLogged: false/);
     assert.match(player, /status: armed \? 'farewell_required' : 'farewell_already_armed'/);

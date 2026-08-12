@@ -297,6 +297,28 @@ test('contact-center outage transcript produces a grounded AI-CX leadership brie
     assert.equal(model.facts.some((fact) => fact.label === 'Context' && /firm date/i.test(fact.value)), false);
 });
 
+test('CJIS device-refresh replay separates the funded rollout from unapproved AI interest', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: "We've got a device refresh funded. Leadership is asking about AI and security is pushing compliance." },
+        { role: 'user', content: "We don't have the AI pilot scheduled yet. Just interest. The device rollout starts next quarter." },
+        { role: 'user', content: 'We are under CJIS because of law enforcement data and state security standards.' },
+        { role: 'user', content: 'The ideas are administrative paperwork, shift scheduling, and staffing reports. Nothing like case files; we would call it non-sensitive.' },
+        { role: 'user', content: "I'm the owner, but I need buy-in from our operations director. Show me a visual brief." },
+    ], '', '', 'visual');
+
+    const serialized = JSON.stringify(model);
+    assert.equal(model.lane, 'Public-sector modernization');
+    assert.equal(model.quality.level, 'developing');
+    assert.ok(model.quality.missing.some((item) => /CJIS.*data boundary/i.test(item)));
+    assert.match(model.facts.find((fact) => fact.label === 'Device refresh status')?.value ?? '', /Funded.*next quarter/i);
+    assert.match(model.facts.find((fact) => fact.label === 'AI status')?.value ?? '', /interest only.*no pilot.*approved.*funded.*scheduled/i);
+    assert.match(model.facts.find((fact) => fact.label === 'Available data')?.value ?? '', /non-sensitive.*CJIS boundary not validated/i);
+    assert.match(model.visualBrief.slides[0].title, /Two tracks.*one committed.*one still to validate/i);
+    assert.match(serialized, /administrative paperwork.*shift scheduling.*staffing reports/i);
+    assert.match(serialized, /agency security-owner.*Insight.*validation/i);
+    assert.doesNotMatch(serialized, /10\s*%|host the model|private cloud|same quarter as the first batch|certify the AI tool/i);
+});
+
 test('Corrections replace rejected terms and uncertain speech remains separate', () => {
     const model = buildAmyWorkbenchModel([
         { role: 'user', content: 'We use SCCM for 850 endpoints.' },

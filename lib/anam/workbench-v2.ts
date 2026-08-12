@@ -591,6 +591,13 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const hasWorkflowChange = /(?:switched|changed?) (?:its |the )?workflows?|workflow change|added a new pre[- ]screening step/i.test(sessionText);
     const needsItValidation = /(?:check|confirm) with IT.{0,55}(?:EHR )?export|IT.{0,55}(?:check|confirm).{0,55}(?:EHR )?export/i.test(sessionText);
     const hasAuthorizedHealthcareEvidence = /(?:authorized|approved|permitted).{0,60}(?:aggregated|de-identified|operational (?:data|metrics)|EHR export)/i.test(sessionText);
+    const hasPublicSafetyAi = /\bCJIS\b/i.test(sessionText) && /\bAI\b|artificial intelligence/i.test(sessionText);
+    const hasDeviceRefresh = /\bdevice refresh\b|\bnew devices\b/i.test(sessionText);
+    const hasFundedDeviceRefresh = hasDeviceRefresh && /\bdevice refresh\b.{0,35}\bfunded\b|\bfunded\b.{0,35}\bdevice refresh\b/i.test(sessionText);
+    const hasAiInterestOnly = hasPublicSafetyAi && /\b(?:no|don't have|do not have)\b.{0,35}\bAI pilot\b.{0,35}\b(?:scheduled|approved|funded)\b|\bjust interest\b/i.test(sessionText);
+    const hasPublicSafetyAdminUseCases = hasPublicSafetyAi && /administrative paperwork|shift scheduling|staffing reports?/i.test(sessionText);
+    const hasVisitorReportedNonSensitiveData = hasPublicSafetyAi && /\bnon[- ]sensitive\b|\bnothing like case files\b/i.test(sessionText);
+    const hasValidatedPublicSafetyDataBoundary = hasPublicSafetyAi && /(?:security owner|agency security|CISO|data owner).{0,80}(?:confirmed|validated|approved).{0,80}(?:outside|not subject to|not within).{0,20}\bCJIS\b/i.test(sessionText);
     const hasInfrastructureRefreshDecision = /\binfrastructure refresh\b/i.test(sessionText)
         && /\bservers?\b/i.test(sessionText)
         && /\bnetwork equipment\b/i.test(sessionText);
@@ -698,6 +705,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Separate ${modernizationWorkstreams.join(', ')} into distinct workstreams so procurement and finance can evaluate budget, funding, sourcing, and timing without treating them as one program.`
         : hasInfrastructureRefreshDecision
         ? `Give ${infrastructureDecisionAudience} a supported decision on which server and network components require refresh${infrastructureCostFrame} at ${infrastructureDecisionGate}, ${infrastructureTimingFrame}.`
+        : hasPublicSafetyAi
+        ? `Keep the ${hasFundedDeviceRefresh ? 'funded ' : ''}device refresh on its reported track while leadership explores whether AI can reduce administrative burden without assuming an AI pilot or a validated CJIS boundary.`
         : hasHealthcareOperations && hasRisingPatientIntake
         ? 'Give the CEO a credible view of rising patient-intake times across two clinics without assuming the clinics share one cause or that the Northside workflow change is responsible.'
         : hasAiCustomerExperience
@@ -722,6 +731,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Do not treat ${infrastructureEvidenceBasis} as sufficient evidence; validate component scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', cost drivers' : ''}, and delay exposure before recommending timing${hasAssumedSmallerOfficeMerger ? ', and keep the smaller-office expansion as a planning assumption until its inventory is validated' : ''}.`
         : hasHealthcareOperations
         ? `${needsItValidation ? 'IT must confirm EHR export access and available operational evidence' : 'Available EHR operational evidence is not yet confirmed'}; root cause, permissible data use, and any analysis or dashboard design require specialist validation.`
+        : hasPublicSafetyAi
+        ? `${hasVisitorReportedNonSensitiveData ? 'Administrative data was described as non-sensitive, but that label does not establish that the workflow is outside CJIS; ' : ''}the agency security owner and appropriate Insight Public Sector specialists must validate data, users, systems, integrations, policy, and controls before any pilot or technical path is scoped.`
         : hasActiveIncident
         ? `Active network outage with no confirmed restoration time${hasDelayedMigration ? '; cloud migration is delayed' : ''}.`
         : lastSentence(constraintStatements, /constraint|cannot|can't|must|critical|continuity|downtime|maintenance window|budget|security|compliance|risk|aging|disruption|rollback/i);
@@ -741,6 +752,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : lastSentence(substantiveStatements, /county|city|agency|company|our firm|the firm|hospital|health system|manufactur|distribution|university|school district/i);
     const workloads = unique([
         hasHealthcareOperations ? 'Patient intake operations' : '',
+        hasPublicSafetyAdminUseCases ? 'Administrative paperwork / Shift scheduling / Staffing reports' : '',
         /contact cent(?:er|re)|call cent(?:er|re)|call wait|customer experience/i.test(allText) ? 'Customer service and contact-center operations' : '',
         /customer portal/i.test(allText) ? 'Customer portal' : '',
         /\bERP\b/i.test(allText) ? 'ERP' : '',
@@ -751,6 +763,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ], 5);
     const dataSources = unique([
         hasHealthcareOperations && hasEhr ? `EHR operational data - ${needsItValidation ? 'export and usable event availability pending IT confirmation' : 'availability and permissible use not yet confirmed'}` : '',
+        hasVisitorReportedNonSensitiveData ? 'Visitor-described non-sensitive administrative data - CJIS boundary not validated' : '',
         /(?:call|cool) recordings?/i.test(allText) ? `${/on[- ]?prem/i.test(allText) ? 'On-premises ' : ''}call recordings` : '',
         /ticket logs?/i.test(allText) ? `${/on[- ]?prem/i.test(allText) ? 'On-premises ' : ''}ticket logs` : '',
         /\bSIS\b|student information system/i.test(allText) ? 'Student information system data' : '',
@@ -766,6 +779,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const decision = lastSentence(substantiveStatements, /we decided|we selected|we will proceed|the decision is/i);
     const aiDiscovery = hasAiCustomerExperience
         ? 'Explore approved historical contact-center data to understand wait-time drivers and customer-experience improvement opportunities.'
+        : hasAiInterestOnly
+        ? 'AI is an area of leadership interest; no pilot is approved, funded, or scheduled.'
         : lastSentence(substantiveStatements, /\bAI\b|artificial intelligence|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out|runbooks?|technical document|telemetry|internal (?:IT )?assistant/i);
     const healthcareOperationalChange = hasHealthcareOperations && hasNorthside && hasPreScreening
         ? `Northside clinic added a pre-screening step${/last month/i.test(sessionText) ? ' last month' : ''}.`
@@ -819,6 +834,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Environment', 'Reported workflow change', healthcareOperationalChange),
         makeFact('Environment', 'Audit evidence', infrastructureAuditEvidence),
         makeFact('Environment', 'Modernization workstreams', modernizationWorkstreamStatus),
+        makeFact('Priorities', 'Device refresh status', hasFundedDeviceRefresh ? 'Funded; rollout is expected to start next quarter.' : ''),
+        makeFact('Priorities', 'AI status', hasAiInterestOnly ? 'Leadership interest only; no pilot is approved, funded, or scheduled.' : ''),
         makeFact('Constraints', 'Evidence status', healthcareEvidenceStatus),
         makeFact('Constraints', 'Planning assumption', smallerOfficePlanningAssumption),
         makeFact('Constraints', 'Scope and budget impact', expansionImpact),
@@ -865,6 +882,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
                 ? 'What agency AI policy, human-review, hosting, identity, and measurable-outcome requirements apply?'
                 : 'What AI policy, human-review, hosting, identity, and measurable-outcome requirements apply?'
             : '',
+        hasPublicSafetyAi && !hasValidatedPublicSafetyDataBoundary ? 'Has the agency security owner validated whether the proposed administrative data, users, systems, and integrations sit inside or outside the CJIS boundary?' : '',
+        hasPublicSafetyAi ? 'Which agency AI policy and human-review requirements apply before feasibility work begins?' : '',
         hasArizonaSvar ? 'Who will purchase through SVAR-the agency, the prime contractor, or another eligible entity?' : '',
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'What outcome would make this initiative successful?' : '',
         !terms.length ? 'Which environment, workload, or platform is in scope?' : '',
@@ -892,6 +911,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         hasAiCustomerExperience && hasActiveIncident ? 'Keep outage stabilization separate from the board-facing AI deliverable.' : '',
         hasAiCustomerExperience ? 'Frame the near-term deliverable as a bounded offline leadership concept, not a live AI deployment or validated routing model.' : '',
         hasAiCustomerExperience ? 'Use only approved, de-identified historical data or synthetic examples until privacy, security, and operating safeguards are validated.' : '',
+        hasPublicSafetyAi ? 'Keep the funded device rollout and unapproved AI exploration as separate tracks.' : '',
+        hasPublicSafetyAi ? 'Treat the administrative-data classification and CJIS boundary as pending agency security-owner validation.' : '',
         constraint,
         timing,
         compliance.length ? `Account for ${compliance.join(', ')}.` : '',
@@ -907,6 +928,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Validate data authorization, de-identification or synthetic-data use, privacy, fairness, explainability, human review, and three-day feasibility with the appropriate institutional and Insight specialists before using student-level records.'
         : hasAiCustomerExperience
         ? 'Confirm the board decision, data authorization, privacy and on-premises boundaries, then select one bounded offline AI-CX concept for customer-experience, data, security, infrastructure, AI, and Insight specialist validation.'
+        : hasPublicSafetyAi
+        ? 'Keep the device rollout on its committed track; have the operations and agency security owners define the administrative use, data, users, systems, policy, and success decision for Insight Public Sector security and AI specialist validation before calling it a pilot.'
         : multiTrack
         ? `Confirm separate owners and decision gates for ${currentTracks.join(', ')}, including Insight Public Sector review of the SVAR ordering path.`
         : openQuestions.length
@@ -947,6 +970,13 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
                 detail: `Bring validated scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', cost' : ''}, and deferral exposure to ${infrastructureDecisionGate} while keeping any implementation timing or approval uncommitted.`,
             },
         ]
+        : hasPublicSafetyAi
+        ? [
+            { number: '01', title: 'Protect the committed track', detail: 'Keep the funded device refresh and next-quarter rollout distinct from unapproved AI exploration.' },
+            { number: '02', title: 'Define the AI decision', detail: 'Confirm the administrative burden, intended users, process owner, and evidence that would justify feasibility work without inventing a target.' },
+            { number: '03', title: 'Validate the boundary', detail: 'Have the agency security owner and Insight Public Sector specialists validate data classification, CJIS applicability, systems, identities, integrations, policy, and human review.' },
+            { number: '04', title: 'Choose the next gate', detail: 'Only after validation, decide whether a bounded feasibility exercise is appropriate; do not imply approval, architecture, hosting, certification, or timing.' },
+        ]
         : currentTracks.length > 2
         ? buildMultiTrackPhases(currentTracks, aiDiscovery)
         : buildPhases(laneId, { scale, terms, constraint, timing, workloads, dataSources, dualTrack, activeIncident: hasActiveIncident });
@@ -958,6 +988,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Give procurement and finance separate, fact-based decision paths for ${modernizationWorkstreams.join(', ')} without confirming a contract vehicle or funding eligibility.`
         : hasInfrastructureRefreshDecision
         ? `Frame a ${hasBoardAudience ? 'board' : 'leadership'} decision among targeted remediation, phased refresh, full refresh, or deferral using validated component, risk${hasInfrastructureCostConcern ? ', and cost' : ''} evidence${hasAssumedSmallerOfficeMerger ? ', with the smaller-office expansion kept as a separately validated planning assumption' : ''}.`
+        : hasPublicSafetyAi
+        ? 'Give leadership a two-track decision brief: protect the funded device rollout, and validate whether a separate administrative-AI feasibility track is responsible and permitted.'
         : laneId === 'healthcare-operations'
         ? 'Frame a credible executive comparison while keeping root cause, EHR evidence, privacy boundaries, and any dashboard design explicitly unconfirmed.'
         : compact(roadmapTopic) || ({
@@ -982,14 +1014,16 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         hasInfrastructureRefreshDecision && !hasValidatedSecuritySeverity ? `validated ${infrastructureExposureLabel}` : '',
         hasInfrastructureRefreshDecision && hasInfrastructureCostConcern && !hasCostBreakdown ? 'option-level cost evidence' : '',
         hasHealthcareOperations && !hasAuthorizedHealthcareEvidence ? 'authorized operational evidence' : '',
+        hasPublicSafetyAi && !hasValidatedPublicSafetyDataBoundary ? 'agency-validated CJIS and data boundary' : '',
+        hasPublicSafetyAi && hasAiInterestOnly ? 'approved AI feasibility decision and owner' : '',
         hasModernizationPortfolio && !hasExplicitPurchasingJurisdiction ? 'purchasing jurisdiction' : '',
         hasModernizationPortfolio && !hasExplicitPurchasingEntity ? 'purchasing entity' : '',
         hasModernizationPortfolio && hasPossibleFederalConnectivityFunding ? 'confirmed connectivity funding source' : '',
         !requestedOutput ? 'requested artifact' : '',
     ], 4);
     const quality = {
-        level: qualityMissing.length <= 1 ? 'grounded' as const : 'developing' as const,
-        label: qualityMissing.length <= 1 ? 'Conversation grounded' : 'Needs clarification',
+        level: qualityMissing.length === 0 ? 'grounded' as const : 'developing' as const,
+        label: qualityMissing.length === 0 ? 'Conversation grounded' : 'Needs clarification',
         missing: qualityMissing,
     };
     const slideBoundary = hasModernizationPortfolio
@@ -998,11 +1032,15 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Working healthcare-operations view only. Root cause, EHR data availability, privacy boundaries, and any analysis or dashboard design require authorized data-owner and Insight specialist validation.'
         : hasInfrastructureRefreshDecision
         ? `Working infrastructure decision view only. Component scope, ${infrastructureExposureLabel}${hasInfrastructureCostConcern ? ', option costs' : ''}, delay exposure${hasAssumedSmallerOfficeMerger ? ', merger inventory' : ''}, and any recommendation require IT-owner and Insight specialist validation.`
+        : hasPublicSafetyAi
+        ? 'Working public-safety discovery view only. Administrative data labels do not establish the CJIS boundary; agency security-owner and Insight Public Sector specialist validation is required before any pilot, hosting, architecture, control, or compliance claim.'
         : 'Working view based on the conversation so far; specialist validation is still required.';
     const businessOutcome = hasModernizationPortfolio
         ? `Give procurement and finance a clear separation of ${modernizationWorkstreams.join(', ')} without inventing a contract path`
         : hasInfrastructureRefreshDecision
         ? `Give ${infrastructureDecisionAudience} a supported refresh-versus-deferral decision without treating ${infrastructureEvidenceBasis} as proof that a full replacement is required`
+        : hasPublicSafetyAi
+        ? 'Keep the funded device refresh on track while treating AI as unapproved discovery until its data and CJIS boundaries are validated'
         : hasHealthcareOperations
         ? 'Give leadership a credible view of rising patient-intake times without inventing a root cause'
         : hasAiCustomerExperience
@@ -1012,6 +1050,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Decide which workstreams can advance within the current fiscal year after the purchasing jurisdiction, entity, funding requirements, and sourcing options are validated.'
         : hasInfrastructureRefreshDecision
         ? `Decide at ${infrastructureDecisionGate} whether validated evidence supports targeted remediation, a phased or full refresh${prefersDeferralToNextYear ? ', or deferral to next year' : ', and what timing is justified'}.`
+        : hasPublicSafetyAi
+        ? 'Decide whether the administrative AI interest merits a separately governed feasibility step after the agency validates the data and CJIS boundary.'
         : hasHealthcareOperations
         ? 'Decide whether the confirmed operational evidence is sufficient to authorize a specialist-defined clinic comparison.'
         : hasAiCustomerExperience
@@ -1021,6 +1061,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Three modernization workstreams—three fact-finding paths'
         : hasInfrastructureRefreshDecision
         ? `What ${hasBoardAudience ? 'the board' : 'leadership'} knows—and what IT still must validate`
+        : hasPublicSafetyAi
+        ? 'Two tracks—one committed, one still to validate'
         : hasHealthcareOperations
         ? 'Separate what is known from what still needs validation'
         : hasAiCustomerExperience
@@ -1048,6 +1090,14 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             healthcareEvidenceStatus ? `Pending validation: ${healthcareEvidenceStatus}` : '',
             hasPreScreening ? 'Unconfirmed hypothesis: The pre-screening step has not been established as the bottleneck.' : '',
             'Unknown: The two clinics may not share the same root cause.',
+        ], 6)
+        : hasPublicSafetyAi
+        ? unique([
+            hasFundedDeviceRefresh ? 'Confirmed: The device refresh is funded and expected to begin next quarter.' : '',
+            hasAiInterestOnly ? 'Confirmed: AI is an area of leadership interest; no pilot is scheduled.' : '',
+            hasPublicSafetyAdminUseCases ? 'Reported use cases: Administrative paperwork, shift scheduling, and staffing reports.' : '',
+            hasVisitorReportedNonSensitiveData ? 'Unvalidated: The visitor described the data as non-sensitive and outside case files; the CJIS boundary is not confirmed.' : '',
+            'Pending: Agency security-owner and Insight specialist validation of data, users, systems, integrations, policy, and controls.',
         ], 6)
         : unique([
             ...dataSources,
@@ -1082,6 +1132,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             healthcareOperationalChange ? `Confirmed: ${healthcareOperationalChange}` : '',
             'Unknown: The clinics may not share the same root cause.',
         ], 3)
+        : hasPublicSafetyAi
+        ? unique([businessOutcome, hasFundedDeviceRefresh ? 'Device rollout: Next quarter' : timing, 'AI status: Interest only; no approved or scheduled pilot'], 3)
         : unique([businessOutcome, timing, constraint], 3);
     const decisionBullets = hasModernizationPortfolio
         ? unique([
@@ -1103,6 +1155,12 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
             timing ? `Decision timing: ${timing}` : 'Decision timing: Not confirmed',
         ], 4)
+        : hasPublicSafetyAi
+        ? unique([
+            stakeholder ? `Participants: ${stakeholder}; agency security owner still required` : 'Participants: Agency security owner and operations owner still need validation roles',
+            requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
+            'Open: CJIS/data boundary and agency AI policy',
+        ], 4)
         : unique([stakeholder, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', timing], 4);
     const evidenceSummary = hasModernizationPortfolio
         ? 'Keep reported workstreams, funding, contract-path status, stakeholders, and timing separate; leave jurisdiction and eligibility unconfirmed until the responsible specialists validate them.'
@@ -1110,6 +1168,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Separate the confirmed refresh request${hasOutdatedFirmwareAudit ? ' and audit finding' : ''} from unvalidated ${infrastructureExposureLabel}, replacement scope${hasInfrastructureCostConcern ? ', cost' : ''}, and delay-risk claims.`
         : hasHealthcareOperations
         ? 'Keep confirmed operational facts, pending evidence, and unconfirmed hypotheses visibly separate.'
+        : hasPublicSafetyAi
+        ? 'Separate the funded device facts, unapproved AI interest, visitor-reported data labels, and specialist-validation requirements.'
         : 'Confirmed current-session evidence and operating boundaries—without filling gaps with assumptions.';
     const visualSlides: VisualSlide[] = [
         { id: 'executive_snapshot', eyebrow: '01 / Executive snapshot', title: visualTitle, summary: objective, bullets: executiveBullets.length ? executiveBullets : ['Discovery is in progress.'], boundary: slideBoundary },

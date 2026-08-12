@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const API_BASE = 'https://api.anam.ai/v1';
 const APPLY_CONFIRMATION = 'CONFIRM_AMY_WORKBENCH_SYNC';
+const AMY_INITIAL_MESSAGE = "Hi, I'm Amy with Insight Enterprises. What would be most useful to work through today?";
 const RELIABILITY_START = '<!-- AMY_CARA4_RELIABILITY_START -->';
 const RELIABILITY_END = '<!-- AMY_CARA4_RELIABILITY_END -->';
 const PUBLIC_SECTOR_START = '<!-- AMY_PUBLIC_SECTOR_START -->';
@@ -147,7 +148,6 @@ function protectedProviderState(persona) {
         avatarModel: persona.avatarModel,
         voiceId: persona.voice?.id ?? null,
         llmId: persona.llmId ?? null,
-        initialMessage: persona.initialMessage ?? null,
         voiceDetectionOptions: persona.voiceDetectionOptions ?? null,
         zeroDataRetention: persona.zeroDataRetention ?? null,
         enableAudioPassthrough: persona.enableAudioPassthrough ?? null,
@@ -289,6 +289,8 @@ if (!applying) {
         beforePromptSha256: beforePromptHash,
         expectedPromptSha256: expectedPromptHash,
         promptChanged: beforePromptHash !== expectedPromptHash,
+        initialMessageChanged: (before.initialMessage ?? null) !== AMY_INITIAL_MESSAGE,
+        expectedInitialMessage: AMY_INITIAL_MESSAGE,
         currentPromptChars: beforePrompt.length,
         expectedPromptChars: expectedPrompt.length,
         toolDeltas,
@@ -363,6 +365,7 @@ if (!applying) {
         method: 'PUT',
         body: JSON.stringify({
             systemPrompt: expectedPrompt,
+            initialMessage: AMY_INITIAL_MESSAGE,
             toolIds: nextToolIds,
         }),
     });
@@ -379,6 +382,7 @@ if (!applying) {
     const verifiedTools = listData(verifiedToolsPayload);
     const failures = [];
     if (sha256(verifiedPrompt) !== expectedPromptHash) failures.push('prompt');
+    if (verified.initialMessage !== AMY_INITIAL_MESSAGE) failures.push('initialMessage');
     if (JSON.stringify(verifiedToolIds) !== JSON.stringify(nextToolIds)) failures.push('attachedToolIds');
     for (const forbiddenName of FORBIDDEN_TOOL_NAMES) {
         if (verifiedToolNames.includes(forbiddenName)) failures.push(forbiddenName);
@@ -410,6 +414,7 @@ if (!applying) {
         toolCount: verifiedToolIds.length,
         beforePromptSha256: beforePromptHash,
         afterPromptSha256: sha256(verifiedPrompt),
+        initialMessage: verified.initialMessage,
         workbenchPromptConfigured: true,
         workbenchToolDefinitionsVerified: true,
         protectedPersonaProviderStateUnchanged: true,

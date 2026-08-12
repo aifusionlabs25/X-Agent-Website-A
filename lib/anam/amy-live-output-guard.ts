@@ -10,6 +10,10 @@ const UNSAFE_SPOKEN_PATTERNS: Array<{
     pattern: RegExp;
 }> = [
     {
+        reason: 'tool_markup',
+        pattern: /^\s*</,
+    },
+    {
         reason: 'provider_fallback',
         pattern: /\b(?:sorry[,\s]*)?i(?:'m| am) having trouble(?: thinking(?: right now)?)?\b/i,
     },

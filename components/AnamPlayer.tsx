@@ -40,7 +40,7 @@ import {
 } from '@/lib/anam/evan-address-route';
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
-import { createAmyFarewellCloseCoordinator } from '@/lib/anam/amy-session-close';
+import { createAmyFarewellCloseCoordinator, hasExplicitAmyCloseIntent } from '@/lib/anam/amy-session-close';
 import { inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
 
 interface AnamPlayerProps {
@@ -736,6 +736,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         'end_amy_session',
                         {
                             onStart: async () => {
+                                const latestUserTurn = [...transcriptRef.current]
+                                    .reverse()
+                                    .find((turn) => turn.role === 'user')?.content ?? '';
+                                if (!hasExplicitAmyCloseIntent(latestUserTurn)) {
+                                    console.warn('[Amy Anam] Premature close tool call refused', {
+                                        contentLogged: false,
+                                    });
+                                    return JSON.stringify({
+                                        status: 'close_not_requested',
+                                        instruction: 'The visitor has not explicitly asked to end the session. Do not say goodbye, do not expose tool syntax, and do not claim the session is closing. Wait silently for the visitor to continue.',
+                                    });
+                                }
                                 requestedCloseReason = 'user_requested_end';
                                 const armed = amyCloseCoordinator?.arm() === true;
                                 console.info('[Amy Anam] Farewell close armed', { armed });

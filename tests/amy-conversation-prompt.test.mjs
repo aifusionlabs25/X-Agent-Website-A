@@ -19,6 +19,10 @@ const publicSectorPrompt = await readFile(
     new URL('../config/anam/amy-public-sector-upgrade.md', import.meta.url),
     'utf8',
 );
+const reliabilityPrompt = await readFile(
+    new URL('../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url),
+    'utf8',
+);
 const clientTools = JSON.parse(await readFile(
     new URL('../config/anam/amy-workbench-client-tools.json', import.meta.url),
     'utf8',
@@ -238,6 +242,22 @@ test('Amy conversation block installer refuses malformed managed markers', () =>
         () => installAmyConversationBlock(`${AMY_CONVERSATION_START_MARKER}\nbroken`, prompt),
         /markers are malformed/i,
     );
+});
+
+test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
+    assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. What would be most useful to work through today\?/);
+    assert.match(prompt, /never speak a numbered plan or more than forty words/i);
+    assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
+    assert.match(workbenchUpdater, /AMY_INITIAL_MESSAGE/);
+    assert.match(workbenchUpdater, /initialMessage: AMY_INITIAL_MESSAGE/);
+});
+
+test('Amy separates AI interest from a pilot and preserves the CJIS boundary', () => {
+    assert.match(prompt, /Interest in AI is not a pilot/i);
+    assert.match(prompt, /What would you do if you were me.*does not expand Amy's authority/s);
+    assert.match(prompt, /non-sensitive.*do not prove.*outside the CJIS boundary/s);
+    assert.match(publicSectorPrompt, /administrative.*non-sensitive.*not case files.*does not establish.*outside the CJIS boundary/s);
+    assert.match(reliabilityPrompt, /That's what I needed.*not explicit closing intent/s);
 });
 
 test('Amy WebSocket smoke test is identity-pinned and exposes no credentials', () => {
