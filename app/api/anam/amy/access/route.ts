@@ -142,6 +142,8 @@ export async function POST(request: Request) {
         const contactToken = createAmyAnamContactToken({
             browserSessionId: created.session.id,
             email: normalizeAmyAnamMemoryEmail(email),
+            displayName: identity.displayName,
+            purpose: 'amy_follow_up',
             secret: spine.signingSecret,
         });
         const history = await readAmyAnamApprovedMemoryHistory(identity);

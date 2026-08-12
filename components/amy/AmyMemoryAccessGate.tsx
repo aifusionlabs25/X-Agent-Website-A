@@ -359,7 +359,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                         </p>
                         <h1 className="mt-3 text-4xl font-semibold tracking-tight">Meet Amy.</h1>
                         <p className="mt-3 text-sm leading-6 text-zinc-400">
-                            Sign in to begin. Use the same email next time if you want Amy to recognize reviewed conversation notes.
+                            Sign in to begin. We use this address privately for your post-session recap, Visual Brief, and follow-up support.
                         </p>
                     </div>
                     <div className="hidden">
@@ -438,6 +438,9 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                         >
                             {submitting ? 'Getting things ready…' : 'Continue to Amy'}
                         </button>
+                        <p className="text-xs leading-5 text-zinc-500">
+                            By continuing, you agree to receive Amy&apos;s session follow-up at the email above. Amy will not ask you to repeat or confirm the address during the conversation.
+                        </p>
                         <button
                             type="button"
                             onClick={() => void checkAccess()}

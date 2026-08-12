@@ -21,7 +21,7 @@ type ContactPayload = {
     email: string;
     callbackPhone?: string;
     displayName?: string;
-    purpose?: 'dani_follow_up' | 'evan_follow_up';
+    purpose?: 'amy_follow_up' | 'dani_follow_up' | 'evan_follow_up';
     emailOwnershipVerified?: true;
     exp: number;
 };
@@ -30,7 +30,7 @@ export type AmyAnamContact = {
     email: string;
     callbackPhone?: string;
     displayName?: string;
-    purpose?: 'dani_follow_up' | 'evan_follow_up';
+    purpose?: 'amy_follow_up' | 'dani_follow_up' | 'evan_follow_up';
     emailOwnershipVerified?: true;
 };
 
@@ -89,7 +89,7 @@ export function createAmyAnamContactToken(input: {
     email: string;
     callbackPhone?: string;
     displayName?: string;
-    purpose?: 'dani_follow_up' | 'evan_follow_up';
+    purpose?: 'amy_follow_up' | 'dani_follow_up' | 'evan_follow_up';
     secret: string;
     now?: number;
     ttlSeconds?: number;
@@ -106,7 +106,7 @@ export function createAmyAnamContactToken(input: {
         ...(input.callbackPhone ? { callbackPhone: normalizeAmyCallbackPhone(input.callbackPhone) } : {}),
         exp: now + ttlSeconds * 1_000,
         ...(input.displayName?.trim() ? { displayName: input.displayName.normalize('NFKC').trim().slice(0, 120) } : {}),
-        ...(input.purpose === 'dani_follow_up' || input.purpose === 'evan_follow_up'
+        ...(input.purpose === 'amy_follow_up' || input.purpose === 'dani_follow_up' || input.purpose === 'evan_follow_up'
             ? { purpose: input.purpose }
             : {}),
     };
@@ -207,7 +207,7 @@ export function readAmyAnamContactToken(input: {
             ...(typeof payload.displayName === 'string' && payload.displayName.trim()
                 ? { displayName: payload.displayName.normalize('NFKC').trim().slice(0, 120) }
                 : {}),
-            ...(payload.purpose === 'dani_follow_up' || payload.purpose === 'evan_follow_up'
+            ...(payload.purpose === 'amy_follow_up' || payload.purpose === 'dani_follow_up' || payload.purpose === 'evan_follow_up'
                 ? { purpose: payload.purpose }
                 : {}),
         };

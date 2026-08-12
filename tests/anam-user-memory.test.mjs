@@ -313,5 +313,8 @@ test('check-in pauses before launch and clearly reports whether prior memory was
     assert.match(gate, /Check email/);
     assert.match(gate, /Continue fresh/);
     assert.match(gate, /Your email stays private and is never shown to Amy\./);
+    assert.match(gate, /post-session recap, Visual Brief, and follow-up support/i);
+    assert.match(gate, /By continuing, you agree to receive Amy&apos;s session follow-up/i);
+    assert.match(gate, /will not ask you to repeat or confirm the address/i);
     assert.match(gate, /<details className="hidden">/);
 });

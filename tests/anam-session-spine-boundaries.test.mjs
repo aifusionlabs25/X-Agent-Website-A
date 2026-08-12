@@ -169,3 +169,15 @@ test('email delivery occurs only after final transcript retrieval and durable se
     assert.ok(emailCalls.length >= 1, 'email client was not called');
     for (const call of emailCalls) assert.doesNotMatch(call[1], /transcript:/);
 });
+
+test('Amy follow-up is authorized at check-in and queued after verified session binding', () => {
+    const verified = bindRoute.indexOf('await verifyAnamSessionForLaunch');
+    const bound = bindRoute.indexOf('await bindAmyAnamLaunch');
+    const queued = bindRoute.indexOf('await queueAmyAnamConversationFollowUp');
+    assert.ok(verified >= 0 && bound > verified && queued > bound);
+    assert.match(bindRoute, /launchAgentSlug === 'amy'/);
+    assert.match(bindRoute, /contact\?\.displayName && contact\.purpose === 'amy_follow_up'/);
+    assert.match(bindRoute, /amyFollowUpQueued/);
+    assert.match(bindRoute, /amyFollowUpDuplicate/);
+    assert.match(bindRoute, /outbound:\s*false/);
+});
