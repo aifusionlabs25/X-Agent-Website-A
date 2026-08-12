@@ -112,6 +112,20 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(landing, /<DaniMemoryControls placement="inline" \/>/);
 });
 
+test('homepage and agent registry enter Dani through the experience selector', async () => {
+    const [hero, agents] = await Promise.all([
+        read('../components/home/HeroBillboard.tsx'),
+        read('../lib/agents.ts'),
+    ]);
+
+    assert.match(hero, /href="\/agents\/dani"/);
+    assert.match(hero, /Meet Dani/);
+    assert.doesNotMatch(hero, /setIsPlaying/);
+    assert.doesNotMatch(hero, /<DaniContactGate>/);
+    assert.match(agents, /slug: "dani"[\s\S]*liveUrl: "\/agents\/dani"/);
+    assert.doesNotMatch(agents, /slug: "dani"[\s\S]*liveUrl: "\/demo\/dani"/);
+});
+
 test('Dani meeting creation is verified, rate-limited, server-side, and status-aware', async () => {
     const route = await read('../app/api/anam/dani/meetings/route.ts');
 

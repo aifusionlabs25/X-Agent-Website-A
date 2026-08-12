@@ -1,16 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Square, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { Play, ArrowRight } from 'lucide-react';
 import GhostlyBackground from './GhostlyBackground';
-import AnamPlayer from '../AnamPlayer';
-import DaniContactGate from '../dani/DaniContactGate';
 
 export default function HeroBillboard() {
-    const [isPlaying, setIsPlaying] = useState(false);
-
     return (
         <section className="relative w-full h-screen min-h-[540px] overflow-hidden bg-zinc-950">
             <GhostlyBackground />
@@ -21,17 +17,12 @@ export default function HeroBillboard() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.8 }}
             >
-                {/* Hero image or Live Video */}
-                <AnimatePresence mode="wait">
-                    {!isPlaying ? (
-                        <motion.div
-                            key="static-hero"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.8 }}
-                            className="absolute inset-0"
-                        >
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.8 }}
+                    className="absolute inset-0"
+                >
                             <Image
                                 src="/agents/thumbnails/dani-x-agent-director-cara4-2026.jpg"
                                 alt="Dani - AI Solutions Director"
@@ -80,16 +71,19 @@ export default function HeroBillboard() {
                                 </motion.p>
 
                                 <div className="flex flex-col sm:flex-row gap-4">
-                                    <motion.button
+                                    <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
                                         transition={{ delay: 0.5 }}
-                                        onClick={() => setIsPlaying(true)}
-                                        className="flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 font-bold px-8 py-3.5 rounded-md transition-colors"
                                     >
-                                        <Play size={18} className="fill-black" />
-                                        Talk with Dani
-                                    </motion.button>
+                                        <Link
+                                            href="/agents/dani"
+                                            className="flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 font-bold px-8 py-3.5 rounded-md transition-colors"
+                                        >
+                                            <Play size={18} className="fill-black" />
+                                            Meet Dani
+                                        </Link>
+                                    </motion.div>
                                     <motion.a
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
@@ -102,36 +96,7 @@ export default function HeroBillboard() {
                                     </motion.a>
                                 </div>
                             </div>
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="live-video"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 1.2 }}
-                            className="fixed inset-0 z-[100] bg-black"
-                        >
-                            <DaniContactGate>
-                                <>
-                                    <AnamPlayer
-                                        personaId="120cf627-59a6-4a35-8e70-97959a89a4da"
-                                        onClose={() => setIsPlaying(false)}
-                                    />
-                                    <div className="absolute bottom-8 left-8 z-[101] md:bottom-16 md:left-16">
-                                        <button
-                                            onClick={() => setIsPlaying(false)}
-                                            className="flex items-center gap-2 rounded-md bg-red-600 px-7 py-3 text-sm font-bold text-white shadow-lg shadow-red-900/50 transition-colors hover:bg-red-500"
-                                        >
-                                            <Square size={16} className="fill-white" />
-                                            End Session
-                                        </button>
-                                    </div>
-                                </>
-                            </DaniContactGate>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                </motion.div>
             </motion.div>
         </section>
     );
