@@ -113,7 +113,7 @@ test('Amy separates a useful soft closing motion from an immediate hard close', 
     assert.equal(hasExplicitAmyCloseIntent('Goodbye. Take care.'), true);
 });
 
-test('Amy deterministically recognizes direct and offer-bound email permission', () => {
+test('legacy email permission recognition remains bounded but is not used by the live player', async () => {
     const offer = 'Would you like me to email the final recap and Visual Brief to your private check-in address?';
     assert.equal(hasAmyEmailOffer(offer), true);
     assert.equal(hasAmyEmailPermission('Yes, please do.', offer), true);
@@ -123,6 +123,9 @@ test('Amy deterministically recognizes direct and offer-bound email permission',
     assert.equal(hasAmyEmailPermission('Can you send the Visual Brief?'), true);
     assert.equal(hasAmyEmailPermission('No, please do not send it.', offer), false);
     assert.equal(hasAmyEmailPermission('Yes, that is the right priority.', 'Should access control be the priority?'), false);
+    const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
+    assert.doesNotMatch(player, /hasAmyEmailPermission/);
+    assert.doesNotMatch(player, /queueAmyEmailFromConversation/);
 });
 
 test('Amy player registers deterministic close and interrupts unsafe provider output before streaming', async () => {
@@ -139,9 +142,9 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.match(player, /pendingAmyHardCloseIntent/);
     assert.match(player, /anamClient\.interruptPersona\(\)/);
     assert.match(player, /hasAmySpokenEmailAttempt\(completedUserTurn\)/);
-    assert.match(player, /hasAmyEmailPermission\(completedUserTurn, previousAgentTurn\)/);
-    assert.match(player, /queueAmyEmailFromConversation\(\)/);
-    assert.match(player, /Conversation consent recorded/);
+    assert.match(player, /email_pre_authorized_at_check_in/);
+    assert.match(player, /Ask no question, request no contact details/);
+    assert.doesNotMatch(player, /ask permission to email/i);
     assert.match(player, /Private contact rule: the visitor spoke an email-like phrase/);
     assert.match(player, /Your verified check-in address is already secured privately/);
     assert.match(player, /contentLogged: false/);

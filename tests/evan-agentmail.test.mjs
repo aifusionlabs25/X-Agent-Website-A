@@ -303,7 +303,7 @@ test('Evan browser integration makes email optional while preserving secure gues
     assert.match(geocodeRoute, /readAmyAnamBrowserSession/);
     assert.doesNotMatch(geocodeRoute, /readAmyAnamContactFromRequest/);
 
-    assert.match(contactToken, /purpose\?: 'dani_follow_up' \| 'evan_follow_up'/);
+    assert.match(contactToken, /purpose\?: 'amy_follow_up' \| 'dani_follow_up' \| 'evan_follow_up'/);
     assert.match(evanAgentMail, /purpose: 'evan_follow_up'/);
     assert.match(evanAgentMail, /contact\.purpose !== 'evan_follow_up'/);
     assert.match(emailTool, /userConfirmed/);

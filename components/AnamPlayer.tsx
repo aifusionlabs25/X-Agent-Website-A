@@ -42,7 +42,6 @@ import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-clos
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 import {
     createAmyFarewellCloseCoordinator,
-    hasAmyEmailPermission,
     hasAmySoftCloseIntent,
     hasExplicitAmyCloseIntent,
 } from '@/lib/anam/amy-session-close';
@@ -145,7 +144,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let amyPrivacyRecoveryTimer: number | null = null;
         let pendingAmyHardCloseIntent = false;
         let amyClosingMotionActive = false;
-        let amyEmailQueuePromise: ReturnType<typeof sendAmyAnamFollowUpEmail> | null = null;
         let completedUserTurns = 0;
         let confirmedMemoryName: string | null = null;
         let requestedCloseFallbackTimer: number | null = null;
@@ -629,29 +627,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     }
                 };
 
-                const queueAmyEmailFromConversation = () => {
-                    if (amyEmailQueuePromise) return amyEmailQueuePromise;
-                    const request = (async () => {
-                        if (tokenPayload.agentMailAvailable !== true) {
-                            throw new Error('Email is temporarily unavailable');
-                        }
-                        if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
-                            throw new Error('The private session is not ready');
-                        }
-                        await bindingPromise;
-                        return sendAmyAnamFollowUpEmail({
-                            launchId,
-                            sessionId: providerSessionId,
-                            userConfirmed: true,
-                        });
-                    })();
-                    amyEmailQueuePromise = request;
-                    request.catch(() => {
-                        if (amyEmailQueuePromise === request) amyEmailQueuePromise = null;
-                    });
-                    return request;
-                };
-
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
                     const deliverAmyPrivacyRecovery = () => {
@@ -746,9 +721,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             if (messageEvent.role === 'user') {
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
                                 const completedUserTurn = currentMessageRef.current.trim();
-                                const previousAgentTurn = [...transcriptRef.current]
-                                    .reverse()
-                                    .find((turn) => turn.role === 'agent')?.content ?? '';
                                 if (hasExplicitAmyCloseIntent(completedUserTurn)) {
                                     pendingAmyHardCloseIntent = true;
                                     requestedCloseReason = 'user_requested_end';
@@ -756,30 +728,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 if (hasAmySoftCloseIntent(completedUserTurn)) {
                                     amyClosingMotionActive = true;
                                     try {
-                                        anamClient.addContext('Closing motion is active. Give one concise outcome recap, then ask exactly once whether the visitor wants the final recap and Visual Brief emailed to the private check-in address. Do not say goodbye yet.');
+                                        anamClient.addContext('Closing motion is active. In no more than two short sentences, recap the visitor\'s priority, the confirmed boundary, and the next human validation. State that the session follow-up will arrive at the private check-in address. Ask no question, do not request contact details, and then silently call end_amy_session for the farewell.');
                                     } catch {
                                         console.error('[Amy Anam] Closing motion context was not confirmed');
                                     }
-                                }
-                                if (hasAmyEmailPermission(completedUserTurn, previousAgentTurn)) {
-                                    void queueAmyEmailFromConversation()
-                                        .then((result) => {
-                                            console.info('[Amy Anam AgentMail] Conversation consent recorded', {
-                                                status: result.status,
-                                                queued: result.queued,
-                                                duplicate: result.duplicate,
-                                                contactContentLogged: false,
-                                            });
-                                            anamClient.addContext('Email receipt confirmed: the post-session recap and Visual Brief are queued for the private check-in address. Confirm that once without repeating the address. Do not ask for email permission again.');
-                                        })
-                                        .catch(() => {
-                                            console.error('[Amy Anam AgentMail] Conversation consent was not recorded');
-                                            try {
-                                                anamClient.addContext('The post-session email could not be scheduled. Say that plainly and do not claim it will be sent.');
-                                            } catch {
-                                                console.error('[Amy Anam] Email failure context was not confirmed');
-                                            }
-                                        });
                                 }
                                 if (hasAmySpokenEmailAttempt(completedUserTurn)) {
                                     try {
@@ -851,7 +803,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     amyClosingMotionActive = true;
                                     return JSON.stringify({
                                         status: 'closing_motion_required',
-                                        instruction: 'Do not say goodbye yet. Give one concise outcome recap: the visitor\'s priority, the confirmed guardrail, and the useful next decision. Then ask permission to email the final recap and Visual Brief to the private check-in address. Never say or repeat the address. Offer an optional callback number only after email permission is resolved.',
+                                        instruction: 'Do not say goodbye yet. In no more than two short sentences, recap the visitor\'s priority, the confirmed boundary, and the next human validation. State that the session follow-up will arrive at the private check-in address. Ask no question, request no contact details, and then silently call end_amy_session again for the farewell.',
                                     });
                                 }
                                 if (!hardCloseRequested && !amyClosingMotionActive) {
@@ -941,10 +893,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     });
                                 }
                                 if (completedUserTurns < 1) {
-                                    throw new Error('Continue the conversation before offering an email follow-up.');
-                                }
-                                if (payload.arguments.userConfirmed !== true) {
-                                    throw new Error('Ask the visitor for explicit permission before sending email.');
+                                    throw new Error('Continue the conversation before recording an optional volunteered callback preference.');
                                 }
                                 if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
                                     throw new Error('The private session is not ready. Continue the conversation and try once more.');
@@ -955,15 +904,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     ? payload.arguments.callbackPhone.trim()
                                     : '';
                                 const callbackPhoneConfirmed = payload.arguments.callbackPhoneConfirmed === true;
-                                const result = callbackPhone && callbackPhoneConfirmed
-                                    ? await sendAmyAnamFollowUpEmail({
-                                        launchId,
-                                        sessionId: providerSessionId,
-                                        userConfirmed: true,
-                                        callbackPhone,
-                                        callbackPhoneConfirmed: true,
-                                    })
-                                    : await queueAmyEmailFromConversation();
+                                if (!callbackPhone || !callbackPhoneConfirmed) {
+                                    return JSON.stringify({
+                                        status: 'email_pre_authorized_at_check_in',
+                                        queued: true,
+                                        sent: false,
+                                        duplicate: true,
+                                        instruction: 'The default session follow-up was authorized at website check-in and queued when the session bound. Do not mention email, ask permission, request contact details, or repeat the address. Continue the business conversation, or complete the active closing motion.',
+                                    });
+                                }
+                                const result = await sendAmyAnamFollowUpEmail({
+                                    launchId,
+                                    sessionId: providerSessionId,
+                                    userConfirmed: true,
+                                    callbackPhone,
+                                    callbackPhoneConfirmed: true,
+                                });
                                 console.info('[Amy Anam AgentMail] Post-session intent recorded', {
                                     status: result.status,
                                     queued: result.queued,
@@ -976,13 +932,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     sent: false,
                                     duplicate: result.duplicate,
                                     receiptId: result.receiptId,
-                                    instruction: amyClosingMotionActive && callbackPhoneConfirmed
-                                        ? 'Confirm briefly that the callback preference is included without repeating the number. Then silently call end_amy_session and give the required farewell.'
-                                        : amyClosingMotionActive
-                                            ? 'Confirm briefly that the final recap and Visual Brief will be emailed to the private check-in address after this session ends. Never say or repeat the address. Ask once whether a phone follow-up would be useful; if the visitor declines, silently call end_amy_session. If the visitor provides a callback number, confirm it once, then call send_follow_up_email again with callbackPhoneConfirmed true.'
-                                            : result.duplicate
-                                                ? 'Confirm briefly that the post-session email is already scheduled. Do not say it was sent yet, and do not end the call automatically.'
-                                                : 'Confirm briefly that the follow-up will be emailed after this session ends. Do not say it was sent yet. Then continue naturally and end only when the visitor clearly says they are finished.',
+                                    instruction: amyClosingMotionActive
+                                        ? 'Confirm briefly that the volunteered callback preference is included without repeating the number. Then silently call end_amy_session and give the required farewell.'
+                                        : 'Confirm the volunteered callback preference once without repeating the number, then continue naturally. Do not discuss or reconfirm the email address.',
                                 });
                             },
                         },

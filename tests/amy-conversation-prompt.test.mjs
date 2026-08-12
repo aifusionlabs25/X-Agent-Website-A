@@ -74,6 +74,9 @@ test('Amy recognizes executive altitude and preserves her SDR mental model', () 
 test('Amy enforces an SDR depth ceiling even when a visitor requests technical detail', () => {
     assert.match(prompt, /request for detail does not expand Amy's authority/i);
     assert.match(prompt, /architect, data engineer, analyst, clinician, security, privacy, or compliance specialist/i);
+    assert.match(prompt, /Technical credibility means translating a technical signal into the business decision.*never means solving/is);
+    assert.match(prompt, /authority ladder.*confirmed business meaning.*fact that remains unvalidated.*appropriate Insight specialist/is);
+    assert.match(prompt, /stop before assessment, diagnosis, product selection, solution design, configuration, implementation/is);
     assert.match(prompt, /Never infer causation, internal workflow stages, system fields or events, data availability, export capability/s);
     assert.match(prompt, /one high-level hypothesis.*label it unconfirmed/is);
     assert.match(prompt, /Each spoken turn does one useful job/i);
@@ -252,7 +255,7 @@ test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
     assert.match(workbenchUpdater, /AMY_INITIAL_MESSAGE/);
     assert.match(workbenchUpdater, /initialMessage: AMY_INITIAL_MESSAGE/);
-    assert.match(reliabilityPrompt, /After a meaningful Workbench brief exists.*offer the follow-up email once/s);
+    assert.match(reliabilityPrompt, /website check-in already authorizes the standard follow-up bundle/i);
     assert.match(reliabilityPrompt, /closing intent wins.*do not delay the close/s);
 });
 
@@ -264,25 +267,28 @@ test('Amy separates AI interest from a pilot and preserves the CJIS boundary', (
     assert.match(reliabilityPrompt, /That's what I needed.*not explicit closing intent/s);
 });
 
-test('Amy closes with an outcome motion, private check-in email offer, and optional confirmed callback', async () => {
+test('Amy closes with an outcome motion and relies on check-in-authorized follow-up', async () => {
     const emailPrompt = await readFile(new URL('../config/anam/amy-agentmail-prompt-upgrade.md', import.meta.url), 'utf8');
     const emailTool = JSON.parse(await readFile(new URL('../config/anam/amy-agentmail-client-tool.json', import.meta.url), 'utf8'));
     assert.match(reliabilityPrompt, /soft close.*wrap it here.*closing motion/is);
     assert.match(reliabilityPrompt, /soft close.*Call `end_amy_session` silently.*closing_motion_required/is);
-    assert.match(reliabilityPrompt, /priority, the confirmed guardrail, and the useful next decision/i);
-    assert.match(reliabilityPrompt, /final recap and Visual Brief emailed to the private check-in address/i);
-    assert.match(reliabilityPrompt, /phone follow-up would be useful/i);
+    assert.match(reliabilityPrompt, /priority, the confirmed boundary, and the next human validation/i);
+    assert.match(reliabilityPrompt, /session follow-up will arrive at the private check-in address/i);
+    assert.match(reliabilityPrompt, /Never offer email, ask email permission.*solicit a phone number/is);
     assert.match(reliabilityPrompt, /hard close.*goodbye.*skips the closing motion/is);
-    assert.match(emailPrompt, /Never ask for it, spell it, repeat it.*email address/is);
+    assert.match(emailPrompt, /authorizes the standard post-session email bundle at website check-in/i);
+    assert.match(emailPrompt, /Never offer email, ask permission to send it.*ask the visitor to confirm contact information/is);
     assert.match(emailPrompt, /speaks or spells an email address.*do not parse it, reconstruct it, repeat it, correct it, or store it/is);
     assert.match(emailPrompt, /Spoken words such as "at," "at symbol," or "dot".*never update/is);
-    assert.match(emailPrompt, /callback number.*explicit yes/is);
-    assert.match(emailPrompt, /second tool call is allowed only to append a callback number/i);
+    assert.match(emailPrompt, /Do not call send_follow_up_email for the standard email bundle/i);
+    assert.match(emailPrompt, /Do not pause for confirmation and do not ask for a phone number/i);
     assert.match(workbenchUpdater, /amy-agentmail-client-tool\.json/);
     assert.match(workbenchUpdater, /amy-agentmail-prompt-upgrade\.md/);
     assert.match(workbenchUpdater, /AMY_AGENTMAIL_START/);
     assert.ok(emailTool.config.parameters.properties.callbackPhone);
     assert.ok(emailTool.config.parameters.properties.callbackPhoneConfirmed);
+    assert.equal(emailTool.config.parameters.properties.userConfirmed, undefined);
+    assert.deepEqual(emailTool.config.parameters.required, ['callbackPhone', 'callbackPhoneConfirmed']);
 });
 
 test('Amy WebSocket smoke test is identity-pinned and exposes no credentials', () => {

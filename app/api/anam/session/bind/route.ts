@@ -10,6 +10,7 @@ import {
     readDaniAnamFollowUpAuthorization,
 } from '@/lib/anam/dani-agentmail';
 import { queueEvanAnamConversationFollowUp } from '@/lib/anam/evan-agentmail';
+import { queueAmyAnamConversationFollowUp } from '@/lib/anam/agentmail';
 import {
     readDaniAnamBrowserSession,
     readDaniAnamSessionSecrets,
@@ -118,6 +119,8 @@ export async function POST(request: Request) {
             const memoryConfig = readAmyAnamMemoryConfig();
             const daniMemoryConfig = readDaniAnamMemoryConfig();
             let memoryIdentityLinked = false;
+            let amyFollowUpQueued = false;
+            let amyFollowUpDuplicate = false;
             let daniFollowUpQueued = false;
             let daniFollowUpDuplicate = false;
             let evanFollowUpQueued = false;
@@ -132,6 +135,29 @@ export async function POST(request: Request) {
                 }
                 memoryIdentityLinked = memoryLinkStatus === 'linked'
                     || memoryLinkStatus === 'duplicate';
+            }
+            if (launchAgentSlug === 'amy') {
+                const contact = readAmyAnamContactFromRequest({
+                    request,
+                    browserSessionId: browserSession.id,
+                    secret: config.signingSecret,
+                });
+                if (contact?.displayName && contact.purpose === 'amy_follow_up') {
+                    const queued = await queueAmyAnamConversationFollowUp({
+                        externalSessionId: sessionId,
+                        browserSessionId: browserSession.id,
+                        displayName: contact.displayName,
+                        email: contact.email,
+                        contactSecret: config.signingSecret,
+                    });
+                    amyFollowUpQueued = queued.queued;
+                    amyFollowUpDuplicate = queued.duplicate;
+                }
+                console.info('[Amy Anam Bind] Follow-up intent result', {
+                    queued: amyFollowUpQueued,
+                    duplicate: amyFollowUpDuplicate,
+                    contactContentLogged: false,
+                });
             }
             if (daniMemoryConfig.gatesOpen && launchAgentSlug === 'dani') {
                 const memoryLinkStatus = await linkDaniAnamSessionMemoryIdentity({
@@ -197,6 +223,8 @@ export async function POST(request: Request) {
                 duplicate: status === 'duplicate',
                 canary: true,
                 memoryIdentityLinked,
+                amyFollowUpQueued,
+                amyFollowUpDuplicate,
                 daniFollowUpQueued,
                 daniFollowUpDuplicate,
                 evanFollowUpQueued,

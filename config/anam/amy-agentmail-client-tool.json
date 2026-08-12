@@ -1,16 +1,12 @@
 {
   "name": "send_follow_up_email",
-  "description": "Schedule the approved visitor, admin, and Insight intake email bundle for backend delivery only after the session closes and the final transcript is available. During a natural closing motion, ask once for permission to email the final recap and Visual Brief to the private website check-in address; never ask for, spell, repeat, or submit that email address. After email permission is resolved, ask once whether a phone follow-up would be useful. A visitor may optionally provide and explicitly confirm one callback number; otherwise omit it without pressure. Call silently with userConfirmed true, and include callbackPhone plus callbackPhoneConfirmed true only after the visitor confirms the number. Never claim email was already sent, a callback was scheduled, or a specialist was assigned.",
+  "description": "The standard visitor, admin, and Insight intake email bundle is already authorized at website check-in and queued by the backend when the session binds. Do not call this tool for the standard follow-up, do not offer email, and do not ask for contact details. Call only if the visitor independently volunteers a callback number and explicitly confirms that number; include callbackPhone and callbackPhoneConfirmed true. Never claim email was already sent, a callback was scheduled, or a specialist was assigned.",
   "type": "CLIENT",
   "disableInterruptions": true,
   "config": {
     "parameters": {
       "type": "object",
       "properties": {
-        "userConfirmed": {
-          "type": "boolean",
-          "description": "Must be true only after the visitor explicitly agrees during this conversation to receive Amy's follow-up email."
-        },
         "callbackPhone": {
           "type": "string",
           "description": "Optional callback number spoken and explicitly confirmed by the visitor in this conversation. Never infer or copy it from private application data."
@@ -20,7 +16,7 @@
           "description": "Include only as true after the visitor explicitly confirms the callback number."
         }
       },
-      "required": ["userConfirmed"],
+      "required": ["callbackPhone", "callbackPhoneConfirmed"],
       "additionalProperties": false
     },
     "awaitResult": true,
