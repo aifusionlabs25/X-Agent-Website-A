@@ -1,4 +1,4 @@
-export type AmyUnsafeSpokenOutputReason = 'contact_privacy' | 'provider_fallback' | 'tool_markup' | 'verbose_reply';
+export type AmyUnsafeSpokenOutputReason = 'contact_privacy' | 'provider_fallback' | 'tool_markup';
 
 export type AmyLiveOutputInspection = {
     reason: AmyUnsafeSpokenOutputReason;
@@ -47,14 +47,6 @@ export function inspectAmyLiveOutput(value: string): AmyLiveOutputInspection | n
         const match = candidate.pattern.exec(value);
         if (!match || (earliest && match.index >= earliest.index)) continue;
         earliest = { reason: candidate.reason, index: match.index };
-    }
-
-    const words = [...value.matchAll(/\S+/g)];
-    if (words.length > 40) {
-        const overflowIndex = words[40]?.index ?? value.length;
-        if (!earliest || overflowIndex < earliest.index) {
-            earliest = { reason: 'verbose_reply', index: overflowIndex };
-        }
     }
 
     if (!earliest) return null;

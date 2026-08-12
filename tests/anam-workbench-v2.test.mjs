@@ -37,6 +37,19 @@ test('Amy workbench v2 prioritizes public-sector context and removes contact det
     assert.doesNotMatch(JSON.stringify(model), /tester@example\.com|602-555-0199/);
 });
 
+test('public-sector proof requests do not become stakeholder or constraint facts', () => {
+    const model = buildAmyWorkbenchModel([
+        { role: 'user', content: "I'm the IT Operations Manager for a city government in Arizona. We're in the early stages of secure, standardized endpoint modernization." },
+        { role: 'user', content: 'What key information should I gather first? Are we talking hardware inventories, user needs, security baselines, or something else?' },
+        { role: 'user', content: 'Could you show a quick example of what Insight has done for a similar public sector environment?' },
+    ], '', '', 'visual');
+    const stakeholder = model.facts.find((fact) => fact.label === 'Stakeholder context')?.value ?? '';
+    const constraint = model.facts.find((fact) => fact.label === 'Primary guardrail')?.value ?? '';
+    assert.match(stakeholder, /IT Operations Manager/i);
+    assert.doesNotMatch(stakeholder, /similar public sector|quick example/i);
+    assert.doesNotMatch(constraint, /hardware inventories|something else/i);
+});
+
 test('Northside patient-intake visual stays healthcare-grounded and preserves unknowns', () => {
     const turns = [
         { role: 'agent', content: "Hi, I'm Amy with Insight. What would be most useful for us to work through today?" },

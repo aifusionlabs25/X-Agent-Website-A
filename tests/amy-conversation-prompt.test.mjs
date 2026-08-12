@@ -251,12 +251,18 @@ test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. Who am I speaking with today\?/);
     assert.match(prompt, /After the visitor gives a name.*What would be most useful to work through today/s);
     assert.match(prompt, /Never stack the name question and the discovery question/i);
-    assert.match(prompt, /never speak a numbered plan or more than forty words/i);
+    assert.match(prompt, /finish the current sentence and complete the thought/i);
+    assert.match(prompt, /up to roughly sixty words/i);
     assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
     assert.match(workbenchUpdater, /AMY_INITIAL_MESSAGE/);
     assert.match(workbenchUpdater, /initialMessage: AMY_INITIAL_MESSAGE/);
     assert.match(reliabilityPrompt, /website check-in already authorizes the standard follow-up bundle/i);
     assert.match(reliabilityPrompt, /closing intent wins.*do not delay the close/s);
+    assert.match(reliabilityPrompt, /that's a wrap.*hard close/i);
+    assert.match(reliabilityPrompt, /Before we wrap.*not a close/i);
+    assert.match(prompt, /similar customer example, case study.*evidence request/is);
+    assert.match(prompt, /Never substitute a conversation-generated Workbench view for customer proof/i);
+    assert.match(workbenchPrompt, /never call show_visual_brief solely for customer proof/i);
 });
 
 test('Amy separates AI interest from a pilot and preserves the CJIS boundary', () => {

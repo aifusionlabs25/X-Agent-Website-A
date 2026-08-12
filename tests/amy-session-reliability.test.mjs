@@ -94,11 +94,8 @@ test('Amy output guard suppresses provider fallbacks and exposed close markup', 
         { reason: 'contact_privacy', safePrefix: '' },
     );
     assert.equal(hasAmySpokenEmailAttempt('My email is R V I C K S at gmail.com.'), true);
-    const longReply = Array.from({ length: 41 }, (_, index) => `word${index + 1}`).join(' ');
-    assert.deepEqual(inspectAmyLiveOutput(longReply), {
-        reason: 'verbose_reply',
-        safePrefix: Array.from({ length: 40 }, (_, index) => `word${index + 1}`).join(' '),
-    });
+    const longReply = Array.from({ length: 100 }, (_, index) => `word${index + 1}`).join(' ');
+    assert.equal(inspectAmyLiveOutput(longReply), null);
 });
 
 test('Amy separates a useful soft closing motion from an immediate hard close', () => {
@@ -111,6 +108,11 @@ test('Amy separates a useful soft closing motion from an immediate hard close', 
     assert.equal(hasExplicitAmyCloseIntent("This was helpful. Let's wrap it here."), false);
     assert.equal(hasExplicitAmyCloseIntent("I'm done. End the session."), true);
     assert.equal(hasExplicitAmyCloseIntent('Goodbye. Take care.'), true);
+    assert.equal(hasExplicitAmyCloseIntent("All right, that's a wrap on the role play."), true);
+    assert.equal(hasExplicitAmyCloseIntent('The role play is over.'), true);
+    assert.equal(hasAmySoftCloseIntent('That gives me a good picture. Thanks for your time.'), true);
+    assert.equal(hasAmySoftCloseIntent("I've got what I need. We'll talk next steps."), true);
+    assert.equal(hasAmySoftCloseIntent("I've got what I need. Before we wrap, could you show me a visual?"), false);
 });
 
 test('legacy email permission recognition remains bounded but is not used by the live player', async () => {
@@ -146,6 +148,9 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.match(player, /Ask no question, request no contact details/);
     assert.doesNotMatch(player, /ask permission to email/i);
     assert.match(player, /Private contact rule: the visitor spoke an email-like phrase/);
+    assert.match(player, /deliverAmyUnsafeOutputRecovery/);
+    assert.match(player, /Farewell recovery was not confirmed/);
+    assert.doesNotMatch(player, /verbose_reply/);
     assert.match(player, /Your verified check-in address is already secured privately/);
     assert.match(player, /contentLogged: false/);
     assert.match(player, /status: armed \? 'farewell_required' : 'farewell_already_armed'/);
