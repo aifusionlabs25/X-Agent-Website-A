@@ -255,3 +255,23 @@ test('email permission queues without sending, then finalization sends the compl
     assert.match(storedReceipts, /"rawEmailStored":false/);
     assert.match(storedReceipts, /"messageContentStored":false/);
 });
+
+test('visitor follow-up embeds and attaches the final conversation-grounded Visual Brief', () => {
+    const message = buildAmyConversationFollowUp({
+        displayName: 'Rob',
+        turns: [
+            { role: 'user', content: "We're planning a cloud migration. We also want to use AI to optimize staffing schedules." },
+            { role: 'user', content: 'The COO is sponsoring it. We have shift calendars and payroll logs, no pilot is approved, and CJIS data should be excluded.' },
+            { role: 'user', content: 'Show me the visual brief and include it in the follow-up.' },
+        ],
+    });
+    assert.match(message.html, /Your final Visual Brief/i);
+    assert.match(message.html, /Two tracks.*one planned.*exploratory/is);
+    assert.match(message.text, /FINAL VISUAL BRIEF/i);
+    assert.equal(message.attachments?.length, 1);
+    assert.equal(message.attachments?.[0]?.filename, 'amy-visual-brief.html');
+    assert.equal(message.attachments?.[0]?.contentType, 'text/html; charset=utf-8');
+    assert.match(message.attachments?.[0]?.content ?? '', /01 \/ Executive snapshot/i);
+    assert.match(message.attachments?.[0]?.content ?? '', /06 \/ Next decision/i);
+    assert.doesNotMatch(message.attachments?.[0]?.content ?? '', /device refresh|funded device|call recordings|ticket logs|Insight Public Sector/i);
+});

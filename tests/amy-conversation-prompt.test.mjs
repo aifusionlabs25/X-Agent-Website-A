@@ -250,6 +250,8 @@ test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
     assert.match(workbenchUpdater, /AMY_INITIAL_MESSAGE/);
     assert.match(workbenchUpdater, /initialMessage: AMY_INITIAL_MESSAGE/);
+    assert.match(reliabilityPrompt, /After a meaningful Workbench brief exists.*offer the follow-up email once/s);
+    assert.match(reliabilityPrompt, /closing intent wins.*do not delay the close/s);
 });
 
 test('Amy separates AI interest from a pilot and preserves the CJIS boundary', () => {

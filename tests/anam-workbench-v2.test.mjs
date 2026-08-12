@@ -521,6 +521,35 @@ test('Workbench prompt protects visitor review time from filler and premature cl
     assert.match(prompt, /Never infer a root cause, internal workflow stage, EHR field or event, export capability/i);
 });
 
+test('Amy visual brief preserves the planned cloud track and latest staffing refinement without inventing public-safety facts', () => {
+    const userTurns = [
+        "We're planning a cloud migration, but leadership has been asking about AI too. I'm trying to figure out if we can do both at the same time.",
+        "The cloud migration is planned. The AI part is early. We're looking at improving customer service, maybe call center automation, but nothing is committed.",
+        'The COO is sponsoring the AI side. She wants a separate track outlined so we can evaluate it without slowing down the cloud work.',
+        'Yes, show me the visual brief.',
+        'We want to use AI to optimize staffing schedules. We have shift calendars and payroll logs. I want to exclude CJIS data. There is no AI pilot approved yet. It is just exploration.',
+        'Please update the visual brief with that.',
+    ].map((content) => ({ role: 'user', content }));
+    const model = buildAmyWorkbenchModel(userTurns, '', '', 'visual');
+    const value = (label) => model.facts.find((fact) => fact.label === label)?.value ?? '';
+
+    assert.equal(model.lane, 'Cloud migration and AI staffing discovery');
+    assert.match(value('Cloud migration status'), /planned workstream/i);
+    assert.match(value('AI staffing status'), /exploration only.*no pilot is approved.*COO/i);
+    assert.match(value('Critical workloads'), /staffing schedule operations/i);
+    assert.match(value('Available data'), /shift calendars.*payroll logs/is);
+    assert.match(value('Data boundary'), /CJIS data remain out of scope.*must validate/i);
+    assert.match(value('Stakeholder context'), /COO sponsor/i);
+    assert.match(model.brief.objective, /planned cloud migration.*separate, unapproved AI staffing/i);
+    assert.match(model.visualBrief.slides[0].title, /two tracks.*one planned.*exploratory/i);
+    assert.match(model.visualBrief.slides[0].bullets.join(' '), /Cloud migration.*AI staffing optimization.*no approved pilot/is);
+    assert.match(model.quality.label, /Needs clarification/i);
+    assert.equal(value('Device refresh status'), '');
+    assert.doesNotMatch(value('Critical workloads'), /customer service|contact center/i);
+    assert.doesNotMatch(value('Available data'), /call recordings|ticket logs/i);
+    assert.doesNotMatch(value('Primary guardrail'), /agency security owner|Insight Public Sector|on-premises/i);
+});
+
 test('Amy feature tabs and content use readable production typography', async () => {
     const workbench = await import('node:fs/promises').then((fs) => fs.readFile(
         new URL('../components/amy/AmyAnamWorkbenchV2.tsx', import.meta.url),
@@ -529,7 +558,9 @@ test('Amy feature tabs and content use readable production typography', async ()
     assert.match(workbench, /Open full screen/);
     assert.match(workbench, /Exit full screen/);
     assert.match(workbench, /data-expanded=\{isExpanded\}/);
-    assert.match(workbench, /lg:w-\[min\(56vw,820px\)\]/);
+    assert.match(workbench, /lg:w-\[min\(62vw,980px\)\]/);
+    assert.match(workbench, /isExpanded \? 'lg:grid-cols-\[176px_minmax\(0,1fr\)\]'/);
+    assert.match(workbench, /isExpanded \? 'sm:grid-cols-2' : 'grid-cols-1'/);
     assert.match(workbench, /event\.key === 'Escape'/);
     assert.match(workbench, /event\.key === 'ArrowLeft'/);
     assert.match(workbench, /event\.key === 'ArrowRight'/);

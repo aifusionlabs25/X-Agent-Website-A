@@ -5,6 +5,11 @@ export type AmyEmailContent = {
     subject: string;
     text: string;
     html: string;
+    attachments?: Array<{
+        filename: string;
+        contentType: string;
+        content: string;
+    }>;
 };
 
 export type AmyEmailBundle = {
@@ -166,6 +171,32 @@ function transcriptSnapshot(turns: AmyTranscriptTurn[]): string[] {
         .slice(-16);
 }
 
+function visualBriefCards(model: AmyWorkbenchModel): string {
+    return model.visualBrief.slides.map((slide, index) => `
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:${index ? '16px' : '10px'};background:#fffaf7;border:1px solid #f0cfdd;">
+<tr><td style="padding:19px 20px;">
+<div style="font-size:10px;line-height:15px;letter-spacing:.16em;text-transform:uppercase;color:${INSIGHT_MAGENTA};font-weight:700;">${escapeHtml(slide.eyebrow)}</div>
+<div style="margin-top:7px;color:#302529;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:29px;font-weight:700;">${escapeHtml(slide.title)}</div>
+<div style="margin-top:8px;color:#6f5f64;font-size:13px;line-height:20px;">${escapeHtml(slide.summary)}</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:11px;">${bulletRows(slide.bullets)}</table>
+<div style="margin-top:12px;padding-top:10px;border-top:1px solid #eadde2;color:#86747a;font-size:10px;line-height:16px;">${escapeHtml(slide.boundary)}</div>
+</td></tr></table>`).join('');
+}
+
+function visualBriefText(model: AmyWorkbenchModel): string[] {
+    return [
+        'FINAL VISUAL BRIEF',
+        ...model.visualBrief.slides.flatMap((slide) => [
+            '',
+            `${slide.eyebrow}: ${slide.title}`,
+            slide.summary,
+            ...slide.bullets.map((bullet) => `- ${bullet}`),
+            `Boundary: ${slide.boundary}`,
+        ]),
+        '',
+    ];
+}
+
 export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const generatedAt = input.generatedAt ?? new Date().toISOString();
     const name = safeName(input.displayName);
@@ -182,6 +213,8 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const organization = factValue(facts, 'Context');
     const scale = factValue(facts, 'Environment scale');
     const requestedOutput = factValue(facts, 'Requested output');
+    const includeVisualBrief = /visual brief/i.test(requestedOutput)
+        || input.turns.some((turn) => turn.role === 'user' && /\bvisual brief\b/i.test(turn.content));
     const nextStep = clean(input.model.brief.nextStep, 600)
         || 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';
     const priorities = unique(
@@ -224,6 +257,7 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
 <div style="margin-top:8px;color:#263548;font-size:15px;line-height:24px;">${escapeHtml(objective)}</div>
 </td></tr></table>
 ${highlights.length ? `<div style="margin-top:28px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">What we heard</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:9px;">${bulletRows(highlights)}</table>` : ''}
+${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Your final Visual Brief</div><p style="margin:7px 0 0;color:#657184;font-size:13px;line-height:20px;">This is the finalized conversation-grounded revision. A standalone HTML copy is attached for easier review and printing.</p>${visualBriefCards(input.model)}` : ''}
 <div style="margin-top:28px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Suggested next step</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:11px;background:#fff7fa;border:1px solid #f2cedc;"><tr><td style="padding:17px 19px;color:#5f2340;font-size:14px;line-height:22px;font-weight:600;">${escapeHtml(nextStep)}</td></tr></table>
 <p style="margin:28px 0 0;color:#435166;font-size:14px;line-height:22px;">I shared this working recap with the Insight team. The appropriate specialists will review it and follow up with you from here.</p>
@@ -237,6 +271,7 @@ ${highlights.length ? `<div style="margin-top:28px;font-size:18px;line-height:24
         'Thanks again for speaking with me. I organized the key points we discussed so you and the Insight team can continue from the same context.', '',
         `Conversation objective: ${objective}`, '',
         ...textSection('What we heard', highlights),
+        ...(includeVisualBrief ? visualBriefText(input.model) : []),
         `Suggested next step: ${nextStep}`, '',
         'I shared this working recap with the Insight team. The appropriate specialists will review it and follow up with you from here.', '',
         'Have an update, or want to share Amy with a colleague? Each person should check in with their own email so conversations stay organized.',
@@ -318,6 +353,18 @@ ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height
     ].join('\n');
 
     const subjectContext = clean(input.model.lane, 90) || 'Technology planning';
+    const visualAttachment = includeVisualBrief ? {
+        filename: 'amy-visual-brief.html',
+        contentType: 'text/html; charset=utf-8',
+        content: shell({
+            preview: `Final Visual Brief for the ${subjectContext.toLowerCase()} conversation.`,
+            eyebrow: 'Insight · Amy Visual Brief',
+            title: input.model.visualBrief.title || 'Conversation working brief',
+            subtitle: 'Final conversation-grounded revision for review and printing.',
+            body: visualBriefCards(input.model),
+            footer: "AI-generated working brief. It is not a final design, quote, commitment, architecture, contract, or compliance determination.",
+        }),
+    } : null;
     return {
         visitor: {
             subject: `${subjectContext} | A follow-up from Amy`,
@@ -330,6 +377,7 @@ ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height
                 body: visitorBody,
                 footer: "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination.",
             }),
+            ...(visualAttachment ? { attachments: [visualAttachment] } : {}),
         },
         admin: {
             subject: `[AMY SESSION] ${name} · ${subjectContext} · ${elapsed}`,

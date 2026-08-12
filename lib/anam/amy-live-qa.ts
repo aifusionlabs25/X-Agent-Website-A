@@ -1,6 +1,7 @@
 export type AmyLiveQaFindingCode =
     | 'transcript_unreadable'
     | 'greeting_mismatch'
+    | 'provider_fallback_exposed'
     | 'verbose_reply'
     | 'unsupported_cjis_boundary'
     | 'invented_ai_pilot'
@@ -36,7 +37,7 @@ export const AMY_CANONICAL_GREETING = "Hi, I'm Amy with Insight Enterprises. Wha
 
 const HEADER = /^(?:\[([^\]]+)\]\s+)?(Amy(?:\s+Insight SDR[^:]*)?|User|Visitor|Tool(?:\s*\([^)]*\))?):\s*(.*)$/i;
 const SPEAKING_TIME = /^\(Speaking time:/i;
-const EXPLICIT_CLOSE = /\b(?:(?:let'?s|we can|we should)\s+(?:call it a day|wrap\s+(?:it\s+)?up)|(?:end|close|stop)\s+(?:the\s+|this\s+|our\s+)?(?:call|conversation|session)|i(?:'m| am)\s+done|that(?:'s| is)\s+all|goodbye|take\s+care)\b/i;
+const EXPLICIT_CLOSE = /\b(?:(?:let'?s|we can|we should)\s+(?:call it a day|wrap\s+(?:(?:it|this)\s+)?up)|(?:end|close|stop)\s+(?:the\s+|this\s+|our\s+)?(?:call|conversation|session)|i(?:'m| am)\s+done|that(?:'s| is)\s+all|goodbye|take\s+care)\b/i;
 const SOFT_COMPLETION = /\b(?:that(?:'s| is) what i needed|i(?:'ll| will) take this forward|i(?:'ll| will) run with this)\b/i;
 const TOOL_MARKUP = /<\s*end_(?:call|amy_session)\b|\bend_(?:call|amy_session)\s*\{/i;
 
@@ -75,6 +76,7 @@ function parse(input: string): Turn[] {
 const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     transcript_unreadable: 100,
     greeting_mismatch: 8,
+    provider_fallback_exposed: 40,
     verbose_reply: 8,
     unsupported_cjis_boundary: 30,
     invented_ai_pilot: 25,
@@ -103,6 +105,9 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         const index = turns.indexOf(assistant);
         const priorUser = [...turns.slice(0, index)].reverse().find((turn) => turn.role === 'user');
         if (assistant.words > 40) add('verbose_reply', assistant.words > 90 ? 'critical' : 'warning', index, assistant.content);
+        if (/\b(?:sorry,?\s+)?i(?:'m| am)\s+(?:having trouble thinking|unable to think|not able to think)\b|\bsomething went wrong in my thinking\b/i.test(assistant.content)) {
+            add('provider_fallback_exposed', 'critical', index, assistant.content);
+        }
         if (TOOL_MARKUP.test(assistant.content)) {
             add('tool_markup_exposed', 'critical', index, assistant.content);
             if (priorUser && SOFT_COMPLETION.test(priorUser.content) && !EXPLICIT_CLOSE.test(priorUser.content)) {

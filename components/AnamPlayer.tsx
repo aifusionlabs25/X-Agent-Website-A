@@ -318,6 +318,19 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 }
             }
         };
+
+        const latestSynchronizedUserTurn = async () => {
+            await waitForWorkbenchTranscriptToSettle();
+            const synchronizedTurns = [...transcriptRef.current];
+            const pendingContent = currentMessageRef.current.trim();
+            if (pendingContent && transcriptRole(currentRoleRef.current) === 'user') {
+                const latest = synchronizedTurns.at(-1);
+                if (latest?.role !== 'user' || latest.content !== pendingContent) {
+                    synchronizedTurns.push({ role: 'user', content: pendingContent });
+                }
+            }
+            return [...synchronizedTurns].reverse().find((turn) => turn.role === 'user')?.content ?? '';
+        };
         window.addEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
 
         const initializeAnam = async () => {
@@ -736,9 +749,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         'end_amy_session',
                         {
                             onStart: async () => {
-                                const latestUserTurn = [...transcriptRef.current]
-                                    .reverse()
-                                    .find((turn) => turn.role === 'user')?.content ?? '';
+                                const latestUserTurn = await latestSynchronizedUserTurn();
                                 if (!hasExplicitAmyCloseIntent(latestUserTurn)) {
                                     console.warn('[Amy Anam] Premature close tool call refused', {
                                         contentLogged: false,
@@ -1125,7 +1136,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <div className={`flex h-full w-full items-center justify-center transition-[padding] duration-500 ease-out ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(58vw,860px)]' : ''}`}>
+            <div className={`flex h-full w-full items-center justify-center transition-[padding] duration-500 ease-out ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(62vw,980px)]' : ''}`}>
                 <video
                     ref={videoRef}
                     id="persona-video"

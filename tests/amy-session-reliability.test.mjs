@@ -87,6 +87,7 @@ test('Amy close intent rejects soft completion and accepts explicit closing lang
     assert.equal(hasExplicitAmyCloseIntent('Before we wrap, can you show me a summary?'), false);
     assert.equal(hasExplicitAmyCloseIntent("Thanks, Amy. Let's call it a day."), true);
     assert.equal(hasExplicitAmyCloseIntent("I'm done. End the session."), true);
+    assert.equal(hasExplicitAmyCloseIntent("I think we're good now. Let's wrap this up."), true);
 });
 
 test('Amy player registers deterministic close and interrupts unsafe provider output before streaming', async () => {
@@ -96,7 +97,8 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.ok(registration > 0 && registration < streaming);
     assert.match(player, /amyCloseCoordinator = createAmyFarewellCloseCoordinator\(\{[\s\S]{0,180}stopStreaming: handleAmyRequestedEnd/);
     assert.match(player, /inspectAmyLiveOutput\(accumulated\)/);
-    assert.match(player, /hasExplicitAmyCloseIntent\(latestUserTurn\)/);
+    assert.match(player, /const latestUserTurn = await latestSynchronizedUserTurn\(\)/);
+    assert.match(player, /await waitForWorkbenchTranscriptToSettle\(\)/);
     assert.match(player, /status: 'close_not_requested'/);
     assert.match(player, /anamClient\.interruptPersona\(\)/);
     assert.match(player, /contentLogged: false/);

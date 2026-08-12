@@ -134,7 +134,7 @@ export default function AmyAnamWorkbenchV2({
             className={`absolute z-[70] flex w-full flex-col overflow-hidden bg-[#0b0b0d]/[0.985] text-white shadow-[-32px_0_90px_rgba(0,0,0,0.58)] backdrop-blur-2xl transition-[transform,opacity,width] duration-500 ease-out ${
                 isExpanded
                     ? 'inset-0 max-w-none border-l-0'
-                    : 'inset-y-0 right-0 border-l border-white/10 lg:w-[min(56vw,820px)]'
+                    : 'inset-y-0 right-0 border-l border-white/10 lg:w-[min(62vw,980px)]'
             } ${
                 isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-full opacity-0'
             }`}
@@ -338,8 +338,8 @@ export default function AmyAnamWorkbenchV2({
                                 <span>This brief is still forming. Clarify {model.quality.missing.join(', ')} before treating it as leadership-ready.</span>
                             </div>
                         )}
-                        <div className="mt-6 grid gap-4 xl:grid-cols-[176px_minmax(0,1fr)]">
-                            <nav className="hidden border-y border-white/10 py-2 xl:block" aria-label="Visual Brief slides">
+                        <div className={`mt-6 grid gap-4 ${isExpanded ? 'lg:grid-cols-[176px_minmax(0,1fr)]' : ''}`}>
+                            {isExpanded && <nav className="hidden border-y border-white/10 py-2 lg:block" aria-label="Visual Brief slides">
                                 {model.visualBrief.slides.map((slide, index) => (
                                     <button
                                         key={slide.id}
@@ -352,7 +352,7 @@ export default function AmyAnamWorkbenchV2({
                                         <span className="text-xs font-semibold leading-5">{VISUAL_SLIDE_LABELS[slide.id] ?? slide.eyebrow}</span>
                                     </button>
                                 ))}
-                            </nav>
+                            </nav>}
                             <div
                                 className="relative min-h-[440px] overflow-hidden rounded-[2px] border border-[#f4c6d9] bg-[#fffaf7] px-6 py-7 text-[#302529] shadow-[0_26px_80px_rgba(0,0,0,0.35)] sm:px-9 sm:py-9"
                                 aria-live="polite"
@@ -364,10 +364,10 @@ export default function AmyAnamWorkbenchV2({
                                     <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e7b82]">Insight · Working view</span>
                                 </div>
                                 <div className="relative mt-8 max-w-3xl">
-                                    <h4 className="max-w-2xl [font-family:Georgia,'Times_New_Roman',serif] text-[clamp(2rem,4vw,3.7rem)] font-normal leading-[0.98] tracking-[-0.045em] text-[#2d2326]">{activeSlide.title}</h4>
+                                    <h4 className={`max-w-2xl [font-family:Georgia,'Times_New_Roman',serif] font-normal leading-[0.98] tracking-[-0.045em] text-[#2d2326] ${isExpanded ? 'text-[clamp(2rem,4vw,3.7rem)]' : 'text-[clamp(1.8rem,3vw,2.8rem)]'}`}>{activeSlide.title}</h4>
                                     <p className="mt-5 max-w-2xl text-[15px] leading-7 text-[#6f5f64]">{activeSlide.summary}</p>
                                 </div>
-                                <div className="relative mt-8 grid gap-3 sm:grid-cols-2">
+                                <div className={`relative mt-8 grid gap-3 ${isExpanded ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
                                     {activeSlide.bullets.map((bullet, index) => (
                                         <div key={bullet} className={`${index === 0 ? 'border-[#d6005b] bg-[#d6005b] text-white' : 'border-[#eadde2] bg-white/80 text-[#56474c]'} min-h-24 border px-4 py-4 text-sm leading-6 shadow-[0_10px_28px_rgba(74,38,52,0.05)]`}>
                                             <span className={`mb-2 block text-[11px] font-bold uppercase tracking-[0.16em] ${index === 0 ? 'text-pink-100' : 'text-[#c50055]'}`}>Signal {String(index + 1).padStart(2, '0')}</span>
@@ -378,7 +378,7 @@ export default function AmyAnamWorkbenchV2({
                                 <p className="relative mt-8 border-t border-[#3a292f]/10 pt-4 text-xs leading-5 text-[#86747a]">{activeSlide.boundary}</p>
                             </div>
                         </div>
-                        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 xl:hidden" aria-label="Visual Brief slide picker">
+                        <div className={`mt-4 gap-2 overflow-x-auto pb-1 ${isExpanded ? 'flex lg:hidden' : 'flex'}`} aria-label="Visual Brief slide picker">
                             {model.visualBrief.slides.map((slide, index) => (
                                 <button key={slide.id} type="button" onClick={() => onVisualSlideIndexChange(index)} aria-current={index === visualSlideIndex ? 'step' : undefined} className={`flex-none border px-3 py-2 text-xs font-semibold ${index === visualSlideIndex ? 'border-[#ff2f8a] bg-[#ff2f8a]/10 text-[#ff8bbc]' : 'border-white/10 text-zinc-400'}`}>{String(index + 1).padStart(2, '0')} {VISUAL_SLIDE_LABELS[slide.id] ?? 'Slide'}</button>
                             ))}

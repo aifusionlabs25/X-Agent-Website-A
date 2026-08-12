@@ -46,3 +46,21 @@ Amy: Thanks for talking this through with me. Take care.`;
     assert.equal(report.status, 'pass');
     assert.equal(report.findings.length, 0);
 });
+
+test('provider fallback language is a critical live-QA failure even after a successful visual tool call', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Please show me the visual brief.
+Tool (show_visual_brief): Result: {"status":"view_rebuilt"}
+Amy: The visual brief is now open. Sorry, I'm having trouble thinking right now.
+User: Update it with the staffing scope.
+Tool (show_visual_brief): Result: {"status":"view_rebuilt"}
+Amy: Sorry, I'm having trouble thinking right now.
+User: Let's wrap up.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    const fallbacks = report.findings.filter((finding) => finding.code === 'provider_fallback_exposed');
+    assert.equal(report.status, 'fail');
+    assert.equal(fallbacks.length, 2);
+    assert.ok(fallbacks.every((finding) => finding.severity === 'critical'));
+});
