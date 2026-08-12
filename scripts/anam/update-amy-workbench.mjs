@@ -23,6 +23,7 @@ const PINNED_IDENTITY = Object.freeze({
     llmId: 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7',
 });
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const normalize = (value) => String(value ?? '').replace(/\r\n?/g, '\n');
 const personaId = process.env.ANAM_AMY_CARA4_PERSONA_ID?.trim();
 const apiKey = process.env.ANAM_API_KEY?.trim();
 
@@ -37,7 +38,7 @@ const toolDefinitions = JSON.parse(await fs.readFile(
     new URL('../../config/anam/amy-workbench-client-tools.json', import.meta.url),
     'utf8',
 ));
-const promptUpgrade = (await fs.readFile(
+const promptUpgrade = normalize(await fs.readFile(
     new URL('../../config/anam/amy-workbench-prompt-upgrade.md', import.meta.url),
     'utf8',
 )).trim();
@@ -49,11 +50,17 @@ const workbenchNames = toolDefinitions.map((tool) => String(tool?.name ?? '').tr
 if (workbenchNames.some((name) => !name) || new Set(workbenchNames).size !== workbenchNames.length) {
     throw new Error('Refusing update: local Amy Workbench tool names are missing or duplicated.');
 }
+const invalidDescription = toolDefinitions.find((tool) => {
+    const description = String(tool?.description ?? '').trim();
+    return !description || description.length > 1_024;
+});
+if (invalidDescription) {
+    throw new Error(`Refusing update: ${invalidDescription.name || 'Workbench tool'} description must contain 1 to 1024 characters.`);
+}
 if (!promptUpgrade.includes(WORKBENCH_START) || !promptUpgrade.includes(WORKBENCH_END)) {
     throw new Error('Refusing update: local Amy Workbench prompt markers are malformed or missing.');
 }
 
-const normalize = (value) => String(value ?? '').replace(/\r\n?/g, '\n');
 const sha256 = (value) => crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
 const toolId = (tool) => tool?._toolId ?? tool?.id ?? null;
 const readOption = (name) => process.argv.slice(2)

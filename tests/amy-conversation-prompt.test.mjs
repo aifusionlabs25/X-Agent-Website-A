@@ -164,6 +164,8 @@ test('Amy Workbench updater is dry-run first, identity-pinned, backed up, and fu
     assert.match(workbenchUpdater, /freshly fetched Amy prompt/i);
     assert.match(workbenchUpdater, /path\.isAbsolute\(rawBackupDir\)/);
     assert.match(workbenchUpdater, /backup-dir must be outside the repository/i);
+    assert.match(workbenchUpdater, /description must contain 1 to 1024 characters/i);
+    assert.match(workbenchUpdater, /const promptUpgrade = normalize\(await fs\.readFile/);
     assert.match(workbenchUpdater, /persona: before/);
     assert.match(workbenchUpdater, /matchingWorkbenchTools/);
     assert.match(workbenchUpdater, /flag: 'wx'/);

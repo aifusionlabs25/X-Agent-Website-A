@@ -426,6 +426,7 @@ test('Anam client tools use the current API shape and route five named views', a
     assert.ok(tools.every((tool) => tool.type === 'CLIENT'));
     assert.ok(tools.every((tool) => tool.config?.awaitResult === true));
     assert.ok(tools.every((tool) => tool.config?.parameters?.type === 'object'));
+    assert.ok(tools.every((tool) => tool.description.length >= 1 && tool.description.length <= 1_024));
     assert.match(tools[4].description, /does not return live inventory, pricing, availability/i);
     assert.match(tools[2].description, /asks to see what a plan would look like/i);
     assert.match(tools[2].description, /before speaking a step-by-step plan/i);
