@@ -1,0 +1,275 @@
+'use client';
+
+import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
+import {
+    ArrowLeft,
+    ArrowRight,
+    CalendarDays,
+    Check,
+    Clock3,
+    LoaderCircle,
+    LockKeyhole,
+    Mail,
+    ShieldCheck,
+    UserRound,
+    UsersRound,
+    Video,
+} from 'lucide-react';
+import {
+    createMeetingConciergeInvite,
+    detectMeetingConciergeProvider,
+    localMeetingConciergeDate,
+    readMeetingConciergeInvite,
+    readMeetingConciergeOrganizer,
+} from '@/lib/meeting-concierge/v1/client';
+import type {
+    MeetingConciergeClientAdapter,
+    MeetingConciergeInvite,
+    MeetingConciergeJoinTiming,
+    MeetingConciergeProvider,
+} from '@/lib/meeting-concierge/v1/contracts';
+import { MEETING_CONCIERGE_VERSION } from '@/lib/meeting-concierge/v1/contracts';
+
+export type MeetingConciergeStyleContract = Record<
+    | 'scheduler' | 'backLink' | 'topline' | 'headingRow' | 'eyebrow' | 'title' | 'steps'
+    | 'formStack' | 'providerGrid' | 'timingGrid' | 'fieldGrid' | 'joinNowNote' | 'roleGrid'
+    | 'optional' | 'note' | 'reviewCard' | 'purposeReview' | 'verifiedCard' | 'verifyPanel'
+    | 'sectionTitle' | 'sectionCopy' | 'fieldGridTwo' | 'memoryChoice' | 'verifyButton'
+    | 'spinner' | 'consentCopy' | 'error' | 'actions' | 'secondaryButton' | 'primaryButton'
+    | 'platformMark' | 'googleMark' | 'zoomMark' | 'teamsMark' | 'confirmIcon' | 'intro'
+    | 'liveStatus' | 'confirmFacts',
+    string
+>;
+
+type MeetingConciergeProps = {
+    adapter: MeetingConciergeClientAdapter;
+    initialProvider: MeetingConciergeProvider;
+    styles: MeetingConciergeStyleContract;
+};
+
+const PROVIDER_COPY: Record<MeetingConciergeProvider, { name: string; hint: string }> = {
+    google: { name: 'Google Meet', hint: 'Paste a Meet link' },
+    zoom: { name: 'Zoom', hint: 'Paste a Zoom link' },
+    teams: { name: 'Microsoft Teams', hint: 'Paste a Teams link' },
+};
+
+function platformMark(provider: MeetingConciergeProvider, styles: MeetingConciergeStyleContract) {
+    const className = provider === 'google' ? styles.googleMark : provider === 'zoom' ? styles.zoomMark : styles.teamsMark;
+    return <span aria-hidden="true" className={`${styles.platformMark} ${className}`}>{provider === 'teams' ? 'T' : <Video size={17} />}</span>;
+}
+
+function CheckInFields({
+    adapter,
+    styles,
+    onAuthenticated,
+    onError,
+}: {
+    adapter: MeetingConciergeClientAdapter;
+    styles: MeetingConciergeStyleContract;
+    onAuthenticated: (displayName: string | null) => void;
+    onError: (value: string) => void;
+}) {
+    const checkIn = adapter.checkIn;
+    const [displayName, setDisplayName] = useState('');
+    const [email, setEmail] = useState('');
+    const [accessCode, setAccessCode] = useState('');
+    const [memoryConsent, setMemoryConsent] = useState(checkIn?.defaultMemoryConsent ?? false);
+    const [submitting, setSubmitting] = useState(false);
+
+    async function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!checkIn) return;
+        onError('');
+        setSubmitting(true);
+        try {
+            const organizer = await checkIn.submit({ displayName, email, accessCode, memoryConsent });
+            setEmail('');
+            setAccessCode('');
+            onAuthenticated(organizer.displayName);
+        } catch (caught) {
+            onError(caught instanceof Error ? caught.message : `${adapter.agent.name} check-in could not be completed`);
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    if (!checkIn) return null;
+    return (
+        <form className={styles.verifyPanel} onSubmit={submit}>
+            <p className={styles.sectionTitle}>{adapter.copy.checkInTitle}</p>
+            <p className={styles.sectionCopy}>{adapter.copy.checkInDescription}</p>
+            <div className={styles.fieldGridTwo}>
+                <label><span><UserRound size={14} /> Name</span><input required value={displayName} onChange={event => setDisplayName(event.target.value)} autoComplete="name" /></label>
+                <label><span><Mail size={14} /> Email</span><input required type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" /></label>
+            </div>
+            <label><span><LockKeyhole size={14} /> Access code</span><input required type="password" value={accessCode} onChange={event => setAccessCode(event.target.value)} autoComplete="current-password" /></label>
+            <label className={styles.memoryChoice}>
+                <input type="checkbox" checked={memoryConsent} onChange={event => setMemoryConsent(event.target.checked)} />
+                <span><strong>Remember this email</strong><small>{adapter.agent.name} may find reviewed notes on a future visit. Leave this off to start fresh.</small></span>
+            </label>
+            <button type="submit" className={styles.verifyButton} disabled={submitting || displayName.trim().length < 2 || !email.includes('@') || !accessCode}>
+                {submitting ? <LoaderCircle className={styles.spinner} size={16} /> : null} Complete check-in
+            </button>
+            <p className={styles.consentCopy}>{adapter.copy.consent}</p>
+        </form>
+    );
+}
+
+function statusCopy(agentName: string, invite: MeetingConciergeInvite, joinState: string | null) {
+    if (invite.status === 'active') return joinState === 'media active'
+        ? `${agentName} is connected with active audio and video.`
+        : `${agentName} has joined the call and the session is active.`;
+    if (joinState === 'waiting room') return `${agentName} is in the lobby. Admit the agent from the participant list.`;
+    if (invite.status === 'pending' && invite.joinAt) return `${agentName} is scheduled and will connect separately at the time below.`;
+    if (invite.status === 'pending') return `${agentName} is connecting separately now. Watch the lobby and participant list.`;
+    if (invite.status === 'failed') return `${agentName} could not enter this meeting. Review the status below before trying again.`;
+    return 'The meeting invitation has finished.';
+}
+
+export default function MeetingConcierge({ adapter, initialProvider, styles }: MeetingConciergeProps) {
+    const { meetingApiPath } = adapter.agent;
+    const [step, setStep] = useState(1);
+    const [provider, setProvider] = useState<MeetingConciergeProvider>(initialProvider);
+    const [meetingUrl, setMeetingUrl] = useState('');
+    const [joinTiming, setJoinTiming] = useState<MeetingConciergeJoinTiming>('now');
+    const [date, setDate] = useState(() => localMeetingConciergeDate());
+    const [time, setTime] = useState('10:30');
+    const [timezone, setTimezone] = useState('America/Phoenix');
+    const [groupCall, setGroupCall] = useState(true);
+    const [purpose, setPurpose] = useState('');
+    const [displayName, setDisplayName] = useState('');
+    const [authenticated, setAuthenticated] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+    const [invite, setInvite] = useState<MeetingConciergeInvite | null>(null);
+
+    useEffect(() => {
+        try {
+            setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix');
+        } catch {
+            // Keep the visible fallback when browser timezone data is unavailable.
+        }
+        void readMeetingConciergeOrganizer(meetingApiPath)
+            .then(organizer => {
+                setAuthenticated(organizer.authenticated);
+                setDisplayName(organizer.displayName ?? 'Organizer');
+            })
+            .catch(() => undefined);
+    }, [meetingApiPath]);
+
+    const inviteId = invite?.id ?? null;
+    const inviteStatus = invite?.status ?? null;
+    useEffect(() => {
+        if (!inviteId || inviteStatus === 'ended' || inviteStatus === 'failed' || inviteStatus === 'cancelled') return;
+        const timer = window.setInterval(() => {
+            void readMeetingConciergeInvite(meetingApiPath, inviteId)
+                .then(setInvite)
+                .catch(() => undefined);
+        }, 15_000);
+        return () => window.clearInterval(timer);
+    }, [inviteId, inviteStatus, meetingApiPath]);
+
+    const scheduledJoinAt = (() => {
+        const value = new Date(`${date}T${time}:00`);
+        return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    })();
+    const joinAt = joinTiming === 'scheduled' ? scheduledJoinAt : null;
+
+    async function createInvite() {
+        if (joinTiming === 'scheduled' && !joinAt) return;
+        setBusy(true);
+        setError('');
+        try {
+            const created = await createMeetingConciergeInvite(meetingApiPath, {
+                meetingUrl,
+                ...(joinAt ? { joinAt } : {}),
+                groupCall,
+                purpose,
+            });
+            setInvite(created);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : `${adapter.agent.name} could not be scheduled`);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    if (invite) {
+        const joinState = invite.joinState?.replaceAll('_', ' ') ?? null;
+        return (
+            <div className={styles.scheduler} data-meeting-concierge-version={MEETING_CONCIERGE_VERSION} data-meeting-concierge-agent={adapter.agent.key} data-meeting-concierge-state="confirmed">
+                <div className={styles.confirmIcon}><Check size={25} /></div>
+                <p className={styles.eyebrow}>Invitation created</p>
+                <h1 className={styles.title}>{adapter.copy.confirmedTitle}</h1>
+                <p className={styles.intro}>{statusCopy(adapter.agent.name, invite, joinState)}</p>
+                <div className={styles.liveStatus} data-status={invite.status} role="status" aria-live="polite">
+                    <span aria-hidden="true" />
+                    <div><strong>{joinState || invite.status.replaceAll('_', ' ')}</strong><small>This follows {adapter.agent.name}&apos;s Anam participant—not the meeting window on your computer.</small></div>
+                </div>
+                <dl className={styles.confirmFacts}>
+                    <div><dt>Platform</dt><dd>{PROVIDER_COPY[provider].name}</dd></div>
+                    <div><dt>Status</dt><dd>{invite.status.replaceAll('_', ' ')}</dd></div>
+                    <div><dt>Joins</dt><dd>{invite.joinAt ? new Date(invite.joinAt).toLocaleString() : 'Now'}</dd></div>
+                    <div><dt>Mode</dt><dd>{groupCall ? 'Group meeting · name gated' : '1:1 conversation'}</dd></div>
+                </dl>
+                {invite.statusReason ? <p className={styles.error}>{invite.statusReason}</p> : null}
+                <div className={styles.actions}>
+                    <button type="button" className={styles.secondaryButton} onClick={() => { setInvite(null); setMeetingUrl(''); setStep(1); }}>Schedule another meeting</button>
+                    <Link href={adapter.agent.returnHref} className={styles.primaryButton}>Return to {adapter.agent.name} <ArrowRight size={15} /></Link>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={styles.scheduler} data-meeting-concierge-version={MEETING_CONCIERGE_VERSION} data-meeting-concierge-agent={adapter.agent.key} data-meeting-concierge-step={step}>
+            <Link href={adapter.agent.returnHref} className={styles.backLink}><ArrowLeft size={15} /> Back to {adapter.agent.name}</Link>
+            <div className={styles.topline} aria-hidden="true" />
+            <div className={styles.headingRow}>
+                <div><p className={styles.eyebrow}>{adapter.copy.eyebrow}</p><h1 className={styles.title}>{step === 1 ? 'Set the room.' : step === 2 ? 'Set the role.' : 'Confirm the invitation.'}</h1></div>
+                <ol className={styles.steps} aria-label="Meeting invitation progress">{[1, 2, 3].map(item => <li key={item} aria-current={item === step ? 'step' : undefined} data-active={item === step} data-complete={item < step}>{String(item).padStart(2, '0')}</li>)}</ol>
+            </div>
+
+            {step === 1 ? (
+                <div className={styles.formStack}>
+                    <fieldset><legend>Meeting platform</legend><div className={styles.providerGrid}>{(Object.keys(PROVIDER_COPY) as MeetingConciergeProvider[]).map(item => (
+                        <button key={item} type="button" aria-pressed={provider === item} data-selected={provider === item} onClick={() => setProvider(item)}>{platformMark(item, styles)}<span><strong>{PROVIDER_COPY[item].name}</strong><small>{PROVIDER_COPY[item].hint}</small></span>{provider === item ? <Check size={16} /> : null}</button>
+                    ))}</div></fieldset>
+                    <label>Meeting link<input type="url" value={meetingUrl} onChange={event => { const value = event.target.value; setMeetingUrl(value); const detected = detectMeetingConciergeProvider(value); if (detected) setProvider(detected); }} placeholder="Paste the meeting invitation link" autoComplete="url" /></label>
+                    <fieldset><legend>When should {adapter.agent.name} join?</legend><div className={styles.timingGrid}>
+                        <button type="button" aria-pressed={joinTiming === 'now'} data-selected={joinTiming === 'now'} onClick={() => setJoinTiming('now')}><Video size={20} /><span><strong>Join now</strong><small>{adapter.agent.name} connects separately after you confirm.</small></span>{joinTiming === 'now' ? <Check size={16} /> : null}</button>
+                        <button type="button" aria-pressed={joinTiming === 'scheduled'} data-selected={joinTiming === 'scheduled'} onClick={() => setJoinTiming('scheduled')}><CalendarDays size={20} /><span><strong>Schedule for later</strong><small>Reserve {adapter.agent.name} for a future meeting.</small></span>{joinTiming === 'scheduled' ? <Check size={16} /> : null}</button>
+                    </div></fieldset>
+                    {joinTiming === 'scheduled' ? <div className={styles.fieldGrid}>
+                        <label><span><CalendarDays size={14} /> Date</span><input type="date" min={localMeetingConciergeDate(0)} value={date} onChange={event => setDate(event.target.value)} /></label>
+                        <label><span><Clock3 size={14} /> Time</span><input type="time" value={time} onChange={event => setTime(event.target.value)} /></label>
+                        <label>Timezone<input value={timezone} readOnly aria-describedby="meeting-concierge-timezone-help" /><small id="meeting-concierge-timezone-help">Detected from your browser.</small></label>
+                    </div> : <div className={styles.joinNowNote}><Clock3 size={18} /><p><strong>{adapter.agent.name} joins independently.</strong> After the invitation is created, open the meeting as host and admit the agent if needed.</p></div>}
+                </div>
+            ) : step === 2 ? (
+                <div className={styles.formStack}>
+                    <fieldset><legend>How should {adapter.agent.name} participate?</legend><div className={styles.roleGrid}>
+                        <button type="button" aria-pressed={groupCall} data-selected={groupCall} onClick={() => setGroupCall(true)}><UsersRound size={22} /><span><strong>Group meeting</strong><small>Joins quietly and responds when someone says “{adapter.agent.groupWakeName}.”</small></span>{groupCall ? <Check size={17} /> : null}</button>
+                        <button type="button" aria-pressed={!groupCall} data-selected={!groupCall} onClick={() => setGroupCall(false)}><UserRound size={22} /><span><strong>1:1 conversation</strong><small>Greets the participant and responds naturally.</small></span>{!groupCall ? <Check size={17} /> : null}</button>
+                    </div></fieldset>
+                    <label>Meeting purpose <span className={styles.optional}>Optional</span><textarea value={purpose} onChange={event => setPurpose(event.target.value)} maxLength={500} placeholder={`Give ${adapter.agent.name} a short, factual objective for the room.`} /></label>
+                    <div className={styles.note}><ShieldCheck size={18} /><p>{adapter.copy.personaBoundary}</p></div>
+                </div>
+            ) : (
+                <div className={styles.formStack}>
+                    <div className={styles.reviewCard}><div>{platformMark(provider, styles)}<span><strong>{PROVIDER_COPY[provider].name}</strong><small>{joinAt ? new Date(joinAt).toLocaleString() : 'Join now'} · {groupCall ? 'Group meeting' : '1:1 conversation'}</small></span></div><button type="button" onClick={() => setStep(1)}>Edit</button></div>
+                    {purpose.trim() ? <p className={styles.purposeReview}><strong>Working objective:</strong> {purpose.trim()}</p> : null}
+                    {authenticated ? <div className={styles.verifiedCard}><ShieldCheck size={21} /><div><strong>{adapter.copy.authenticatedLabel}</strong><span>{displayName || 'Verified organizer'} · existing consent and follow-up settings remain unchanged.</span></div></div> : <CheckInFields adapter={adapter} styles={styles} onAuthenticated={name => { setAuthenticated(true); setDisplayName(name ?? 'Organizer'); }} onError={setError} />}
+                    <div className={styles.note}><Mail size={18} /><p>{adapter.copy.contactBoundary}</p></div>
+                </div>
+            )}
+
+            {error ? <p role="alert" className={styles.error}>{error}</p> : null}
+            <div className={styles.actions}>
+                {step > 1 ? <button type="button" className={styles.secondaryButton} onClick={() => setStep(value => value - 1)}>Back</button> : <span />}
+                {step < 3 ? <button type="button" className={styles.primaryButton} onClick={() => setStep(value => value + 1)} disabled={step === 1 && (!meetingUrl.trim() || (joinTiming === 'scheduled' && !joinAt))}>Continue <ArrowRight size={16} /></button> : <button type="button" className={styles.primaryButton} onClick={createInvite} disabled={!authenticated || busy}>{busy ? <LoaderCircle className={styles.spinner} size={16} /> : null} Invite {adapter.agent.name} <ArrowRight size={16} /></button>}
+            </div>
+        </div>
+    );
+}

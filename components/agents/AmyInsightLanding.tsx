@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, CalendarPlus } from 'lucide-react';
 import { ALL_AGENTS } from '@/lib/agents';
 import InsightMotionMark from './InsightMotionMark';
 import styles from './AmyInsightLanding.module.css';
@@ -67,6 +67,9 @@ export default function AmyInsightLanding() {
             <div className={styles.actions}>
               <Link href={amyDemoHref} className={styles.primaryAction}>
                 Meet with Amy <ArrowRight size={18} aria-hidden="true" />
+              </Link>
+              <Link href="/agents/amy?meeting=google" className={styles.conciergeAction}>
+                <CalendarPlus size={17} aria-hidden="true" /> Invite Amy to a meeting
               </Link>
             </div>
 
