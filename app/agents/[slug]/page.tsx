@@ -6,6 +6,7 @@ import { ALL_AGENTS } from '@/lib/agents';
 import { Play } from 'lucide-react';
 import EvanLandingPage from '@/components/evan/EvanLandingPage';
 import AmyInsightLanding from '@/components/agents/AmyInsightLanding';
+import { AmyMeetingConcierge } from '@/components/amy/AmyMeetingScheduler';
 import DaniEditorialLanding from '@/components/dani/DaniEditorialLanding';
 
 interface Props {
@@ -45,6 +46,15 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
     if (!agent) notFound();
 
     if (agent.slug === 'amy') {
+        const rawMeetingProvider = Array.isArray(resolvedSearchParams.meeting)
+            ? resolvedSearchParams.meeting[0]
+            : resolvedSearchParams.meeting;
+        const meetingProvider = rawMeetingProvider === 'google'
+            || rawMeetingProvider === 'zoom'
+            || rawMeetingProvider === 'teams'
+            ? rawMeetingProvider
+            : null;
+        if (meetingProvider) return <AmyMeetingConcierge initialProvider={meetingProvider} />;
         return <AmyInsightLanding />;
     }
 
