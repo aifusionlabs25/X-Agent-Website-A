@@ -6,17 +6,27 @@ Meeting Concierge v1 is the reusable X-Agent meeting-invitation flow for Google 
 
 - `lib/meeting-concierge/v1/contracts.ts` defines the versioned client contract.
 - `lib/meeting-concierge/v1/client.ts` contains agent-neutral browser requests and provider detection.
-- `lib/meeting-concierge/v1/server.ts` validates requests, calls Anam, rate-limits operations, and issues signed status tickets bound to both the agent and organizer.
+- `lib/meeting-concierge/v1/server.ts` validates requests, creates and removes Anam participants, rate-limits operations, and issues signed status tickets bound to both the agent and organizer.
+- `lib/meeting-concierge/v1/persona-snapshot.ts` creates a meeting-scoped persona snapshot from the agent's saved Anam persona. This is where a website-only close tool can be swapped for Anam's native meeting `end_call` tool without changing the saved persona.
 - `components/meeting-concierge/v1/MeetingConcierge.tsx` owns the accessible three-step interaction.
 - Each agent supplies a client adapter, a thin API route/server adapter, and a branded shell/CSS module.
 
 ## Install for the next agent
 
 1. Add `lib/meeting-concierge/v1/adapters/<agent>-client.ts`. Set only that agent's name, canonical return route, API route, copy, wake name, and existing check-in callback.
-2. Add `app/api/anam/<agent>/meetings/route.ts`. Resolve the agent's persona through its established configuration. Supply only that agent's browser/session reader, organizer identity, consent/contact-purpose check, signing secret, and rate limiter.
+2. Add `app/api/anam/<agent>/meetings/route.ts`. Resolve the agent's persona through its established configuration. Supply only that agent's browser/session reader, organizer identity, consent/contact-purpose check, signing secret, and rate limiter. Export the shared `GET`, `POST`, and `DELETE` handlers.
 3. Add a branded shell that renders the shared `MeetingConcierge` component and maps its CSS module to `MeetingConciergeStyleContract`. Do not fork the shared interaction.
 4. Route an explicit `?meeting=google|zoom|teams` entry to the shell. Keep the agent's normal conversation CTA and session route unchanged.
 5. Add the isolation assertions described below and run the focused test, type check, lint, full suite, production build, and a real provider smoke test.
+
+## Exit and usage controls
+
+- Organizer removal uses `DELETE /v1/meetings/invites/{id}` behind the agent's authenticated X Agents route. The browser sends only its opaque HMAC ticket; it never receives or submits the raw provider invite ID.
+- The shared UI keeps the active invitation in agent-namespaced browser storage. Reloading the same route restores monitoring and the removal control. Stored controls expire locally after eight days.
+- A meeting-scoped persona snapshot copies the saved persona's avatar, voice, LLM, prompt, tools, and provider settings at invitation time. Remove only that agent's website-only close tool and add Anam's native `end_call` tool. Never attach another agent's close tool.
+- Add a short meeting-only prompt suffix: an explicit request directed at the agent to leave is confirmed intent, needs no follow-up confirmation, and invokes `end_call` exactly once. Casual thanks alone is not closing intent.
+- Set `maxSessionLengthSeconds` through the shared duration choices. This bounds abandoned sessions even if the organizer closes the X Agents page.
+- Organizer removal and spoken self-exit are independent safety paths. Test both in a real provider meeting before release.
 
 ## Non-negotiable isolation
 
@@ -25,6 +35,7 @@ Meeting Concierge v1 is the reusable X-Agent meeting-invitation flow for Google 
 - Preserve the agent's existing consent semantics; Meeting Concierge must not create a parallel consent or contact system.
 - Keep AgentMail downstream of the agent's existing session workflow. The module must not send, suppress, or redirect agent follow-up email.
 - Status polling uses an opaque HMAC ticket bound to `agentKey` and the organizer's isolated browser identity. Never expose or accept a raw Anam invite ID from the browser.
+- Organizer removal must verify the same agent-and-organizer ticket again, use a separate rate-limit scope, and remain idempotent for terminal invitations.
 - Keep client labels, rate-limit scopes, URLs, and UI data attributes namespaced by the adapter's `agentKey`.
 
 ## Amy reference adapter

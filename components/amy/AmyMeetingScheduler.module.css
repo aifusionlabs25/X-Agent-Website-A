@@ -43,14 +43,16 @@
 .scheduler textarea { min-height: 6rem; resize: vertical; }
 .scheduler input:focus, .scheduler textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(229 0 104 / 10%), inset 0 1px 0 white; }
 .scheduler label small { margin-top: -.25rem; color: #827471; font-family: 'Avenir Next', 'Segoe UI', sans-serif; font-size: .7rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
-.providerGrid, .roleGrid, .timingGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .65rem; }
-.providerGrid button, .roleGrid button, .timingGrid button, .reviewCard, .verifiedCard, .note, .verifyPanel, .joinNowNote, .liveStatus { border: 1px solid rgb(202 182 181 / 88%); background: linear-gradient(145deg, rgb(255 255 255 / 76%), rgb(255 255 255 / 36%)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 82%), 0 12px 35px rgb(91 51 65 / 7%); backdrop-filter: blur(16px); }
+.providerGrid, .roleGrid, .timingGrid, .durationGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .65rem; }
+.providerGrid button, .roleGrid button, .timingGrid button, .durationGrid button, .reviewCard, .verifiedCard, .note, .verifyPanel, .joinNowNote, .liveStatus { border: 1px solid rgb(202 182 181 / 88%); background: linear-gradient(145deg, rgb(255 255 255 / 76%), rgb(255 255 255 / 36%)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 82%), 0 12px 35px rgb(91 51 65 / 7%); backdrop-filter: blur(16px); }
 .providerGrid button { display: flex; min-height: 4.7rem; align-items: center; gap: .7rem; padding: .75rem; text-align: left; border-radius: 10px; transition: transform 150ms ease, border-color 150ms ease, background 150ms ease; }
-.providerGrid button:hover, .roleGrid button:hover, .timingGrid button:hover { transform: translateY(-2px); border-color: #d76c9c; }
-.providerGrid button[data-selected='true'], .roleGrid button[data-selected='true'], .timingGrid button[data-selected='true'] { border-color: var(--accent); background: linear-gradient(145deg, rgb(255 228 241 / 88%), rgb(255 255 255 / 56%)); }
+.providerGrid button:hover, .roleGrid button:hover, .timingGrid button:hover, .durationGrid button:hover { transform: translateY(-2px); border-color: #d76c9c; }
+.providerGrid button[data-selected='true'], .roleGrid button[data-selected='true'], .timingGrid button[data-selected='true'], .durationGrid button[data-selected='true'] { border-color: var(--accent); background: linear-gradient(145deg, rgb(255 228 241 / 88%), rgb(255 255 255 / 56%)); }
 .timingGrid { grid-template-columns: 1fr 1fr; }
 .timingGrid button { display: flex; min-height: 4.8rem; align-items: center; gap: .8rem; padding: .85rem 1rem; text-align: left; border-radius: 10px; }
-.timingGrid button > span, .providerGrid button > span:nth-child(2), .roleGrid button > span { display: grid; flex: 1; gap: .2rem; }
+.durationGrid { grid-template-columns: repeat(4, 1fr); }
+.durationGrid button { display: flex; min-height: 4.2rem; align-items: center; gap: .55rem; padding: .7rem; text-align: left; border-radius: 10px; }
+.timingGrid button > span, .durationGrid button > span, .providerGrid button > span:nth-child(2), .roleGrid button > span { display: grid; flex: 1; gap: .2rem; }
 .providerGrid strong, .roleGrid strong, .timingGrid strong, .reviewCard strong, .verifiedCard strong { font-size: .78rem; }
 .providerGrid small, .roleGrid small, .timingGrid small, .reviewCard small, .verifiedCard span { color: #7b6e6b; font-size: .65rem; line-height: 1.35; }
 .platformMark { display: grid; width: 2.2rem; height: 2.2rem; flex: 0 0 auto; place-items: center; color: white; border-radius: 8px; box-shadow: 0 7px 18px rgb(0 0 0 / 12%); }
@@ -82,11 +84,18 @@
 .memoryChoice small { margin: 0 !important; }
 .consentCopy { color: #827471; }
 .actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #d8c5c7; }
-.primaryButton, .secondaryButton { display: inline-flex; min-height: 3.1rem; align-items: center; justify-content: center; gap: .55rem; padding: .7rem 1.25rem; border-radius: 8px; font-size: .76rem; font-weight: 850; transition: transform 150ms ease, background 150ms ease; }
+.primaryButton, .secondaryButton, .dangerButton { display: inline-flex; min-height: 3.1rem; align-items: center; justify-content: center; gap: .55rem; padding: .7rem 1.25rem; border-radius: 8px; font-size: .76rem; font-weight: 850; transition: transform 150ms ease, background 150ms ease; }
 .primaryButton { color: white; background: var(--accent); box-shadow: 0 14px 28px rgb(180 0 92 / 18%); }
-.primaryButton:hover, .secondaryButton:hover { transform: translateY(-1px); }
+.primaryButton:hover, .secondaryButton:hover, .dangerButton:hover { transform: translateY(-1px); }
 .primaryButton:disabled { cursor: not-allowed; opacity: .42; transform: none; }
 .secondaryButton { color: var(--ink); background: rgb(255 255 255 / 52%); border: 1px solid #cab6b5; }
+.dangerButton { color: white; background: #8b234e; border: 1px solid #72183d; box-shadow: 0 10px 24px rgb(139 35 78 / 16%); }
+.dangerButton:disabled { cursor: not-allowed; opacity: .5; transform: none; }
+.dangerPanel { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: .8rem; margin-top: 1rem; padding: .9rem; color: #6f183c; background: #fff0f6; border: 1px solid #dc8eb1; border-radius: 9px; }
+.dangerPanel > svg { align-self: start; margin-top: .1rem; }
+.dangerPanel strong { font-size: .78rem; }
+.dangerPanel p { margin-top: .2rem; color: #7f5264; font-size: .7rem; line-height: 1.4; }
+.restoredNote { margin-top: .65rem; color: #756a67; font-size: .7rem; line-height: 1.45; }
 .error { margin-top: .9rem; padding: .7rem .85rem; color: #8b234e; background: #f9dce9; border-left: 3px solid var(--accent); font-size: .74rem; line-height: 1.45; }
 .spinner { animation: spin 800ms linear infinite; }
 .confirmIcon { display: grid; width: 3.5rem; height: 3.5rem; margin-bottom: 1.5rem; place-items: center; color: white; background: var(--accent); border-radius: 50%; box-shadow: 0 12px 32px rgb(180 0 92 / 22%); }
@@ -98,6 +107,7 @@
 .liveStatus { display: flex; align-items: flex-start; gap: .75rem; margin-top: 1rem; padding: .9rem 1rem; border-radius: 9px; }
 .liveStatus > span { width: .65rem; height: .65rem; flex: 0 0 auto; margin-top: .2rem; border-radius: 50%; background: #d29b30; box-shadow: 0 0 0 5px rgb(210 155 48 / 12%); }
 .liveStatus[data-status='active'] > span { background: #2e9b6d; box-shadow: 0 0 0 5px rgb(46 155 109 / 12%); }
+.liveStatus[data-status='cancelled'] > span, .liveStatus[data-status='ended'] > span { background: #756a67; box-shadow: 0 0 0 5px rgb(117 106 103 / 12%); }
 .liveStatus[data-status='failed'] > span { background: var(--accent); box-shadow: 0 0 0 5px rgb(229 0 104 / 12%); }
 .liveStatus > div { display: grid; gap: .18rem; }
 .liveStatus strong { font-size: .64rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
@@ -115,7 +125,9 @@
 
 @media (max-width: 760px) {
     .headingRow { display: grid; gap: 1rem; }
-    .providerGrid, .fieldGrid, .fieldGridTwo, .roleGrid, .timingGrid, .confirmFacts { grid-template-columns: 1fr; }
+    .providerGrid, .fieldGrid, .fieldGridTwo, .roleGrid, .timingGrid, .durationGrid, .confirmFacts { grid-template-columns: 1fr; }
+    .dangerPanel { grid-template-columns: auto 1fr; }
+    .dangerPanel .secondaryButton, .dangerPanel .dangerButton { width: 100%; }
     .steps { order: -1; }
     .title { font-size: clamp(2.5rem, 14vw, 4rem); }
     .schedulerPanel { padding: 1.25rem; }
@@ -133,5 +145,5 @@
 
 @media (prefers-reduced-motion: reduce) {
     .scheduler, .spinner { animation: none; }
-    .providerGrid button, .roleGrid button, .timingGrid button, .primaryButton, .secondaryButton { transition: none; }
+    .providerGrid button, .roleGrid button, .timingGrid button, .durationGrid button, .primaryButton, .secondaryButton, .dangerButton { transition: none; }
 }

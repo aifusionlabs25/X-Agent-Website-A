@@ -1,9 +1,36 @@
 import type {
     MeetingConciergeCreateInput,
+    MeetingConciergeDurationMinutes,
     MeetingConciergeInvite,
     MeetingConciergeOrganizer,
     MeetingConciergeProvider,
-} from './contracts';
+    MeetingConciergeStoredInvite,
+} from './contracts.ts';
+import { MEETING_CONCIERGE_DURATION_MINUTES, MEETING_CONCIERGE_PROVIDERS } from './contracts.ts';
+
+const STORAGE_PREFIX = 'x-agent-meeting-concierge-v1';
+const MAX_STORED_INVITE_AGE_MS = 8 * 24 * 60 * 60 * 1_000;
+
+function storageKey(agentKey: string) {
+    return `${STORAGE_PREFIX}:${agentKey}`;
+}
+
+function isDuration(value: unknown): value is MeetingConciergeDurationMinutes {
+    return MEETING_CONCIERGE_DURATION_MINUTES.includes(value as MeetingConciergeDurationMinutes);
+}
+
+function isProvider(value: unknown): value is MeetingConciergeProvider {
+    return MEETING_CONCIERGE_PROVIDERS.includes(value as MeetingConciergeProvider);
+}
+
+function isInvite(value: unknown): value is MeetingConciergeInvite {
+    if (!value || typeof value !== 'object') return false;
+    const invite = value as Record<string, unknown>;
+    return typeof invite.id === 'string'
+        && invite.id.length > 20
+        && typeof invite.status === 'string'
+        && typeof invite.provider === 'string';
+}
 
 export function detectMeetingConciergeProvider(value: string): MeetingConciergeProvider | null {
     try {
@@ -57,4 +84,50 @@ export async function readMeetingConciergeInvite(apiPath: string, inviteId: stri
     const payload = await readJson(response) as { invite?: MeetingConciergeInvite; error?: string };
     if (!response.ok || !payload.invite) throw new Error(payload.error || 'Meeting status is unavailable');
     return payload.invite;
+}
+
+export async function removeMeetingConciergeInvite(apiPath: string, inviteId: string): Promise<MeetingConciergeInvite> {
+    const response = await fetch(apiPath, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ inviteId }),
+    });
+    const payload = await readJson(response) as { invite?: MeetingConciergeInvite; error?: string };
+    if (!response.ok || !payload.invite) throw new Error(payload.error || 'The meeting participant could not be removed');
+    return payload.invite;
+}
+
+export function isMeetingConciergeInviteTerminal(invite: MeetingConciergeInvite) {
+    return ['ended', 'failed', 'cancelled'].includes(invite.status)
+        || ['left', 'done', 'error'].includes(invite.joinState ?? '');
+}
+
+export function storeMeetingConciergeInvite(agentKey: string, value: MeetingConciergeStoredInvite, storage: Storage = window.localStorage) {
+    storage.setItem(storageKey(agentKey), JSON.stringify(value));
+}
+
+export function readStoredMeetingConciergeInvite(agentKey: string, storage: Storage = window.localStorage): MeetingConciergeStoredInvite | null {
+    try {
+        const raw = storage.getItem(storageKey(agentKey));
+        if (!raw) return null;
+        const value = JSON.parse(raw) as Partial<MeetingConciergeStoredInvite>;
+        if (!isInvite(value.invite)
+            || !isProvider(value.provider)
+            || typeof value.groupCall !== 'boolean'
+            || !isDuration(value.maxDurationMinutes)
+            || typeof value.savedAt !== 'number'
+            || Date.now() - value.savedAt > MAX_STORED_INVITE_AGE_MS) {
+            storage.removeItem(storageKey(agentKey));
+            return null;
+        }
+        return value as MeetingConciergeStoredInvite;
+    } catch {
+        storage.removeItem(storageKey(agentKey));
+        return null;
+    }
+}
+
+export function clearStoredMeetingConciergeInvite(agentKey: string, storage: Storage = window.localStorage) {
+    storage.removeItem(storageKey(agentKey));
 }

@@ -9,27 +9,35 @@ import {
     Check,
     Clock3,
     LoaderCircle,
+    LogOut,
     LockKeyhole,
     Mail,
     ShieldCheck,
+    TriangleAlert,
     UserRound,
     UsersRound,
     Video,
 } from 'lucide-react';
 import {
+    clearStoredMeetingConciergeInvite,
     createMeetingConciergeInvite,
     detectMeetingConciergeProvider,
+    isMeetingConciergeInviteTerminal,
     localMeetingConciergeDate,
     readMeetingConciergeInvite,
     readMeetingConciergeOrganizer,
+    readStoredMeetingConciergeInvite,
+    removeMeetingConciergeInvite,
+    storeMeetingConciergeInvite,
 } from '@/lib/meeting-concierge/v1/client';
 import type {
     MeetingConciergeClientAdapter,
+    MeetingConciergeDurationMinutes,
     MeetingConciergeInvite,
     MeetingConciergeJoinTiming,
     MeetingConciergeProvider,
 } from '@/lib/meeting-concierge/v1/contracts';
-import { MEETING_CONCIERGE_VERSION } from '@/lib/meeting-concierge/v1/contracts';
+import { MEETING_CONCIERGE_DURATION_MINUTES, MEETING_CONCIERGE_VERSION } from '@/lib/meeting-concierge/v1/contracts';
 
 export type MeetingConciergeStyleContract = Record<
     | 'scheduler' | 'backLink' | 'topline' | 'headingRow' | 'eyebrow' | 'title' | 'steps'
@@ -38,7 +46,8 @@ export type MeetingConciergeStyleContract = Record<
     | 'sectionTitle' | 'sectionCopy' | 'fieldGridTwo' | 'memoryChoice' | 'verifyButton'
     | 'spinner' | 'consentCopy' | 'error' | 'actions' | 'secondaryButton' | 'primaryButton'
     | 'platformMark' | 'googleMark' | 'zoomMark' | 'teamsMark' | 'confirmIcon' | 'intro'
-    | 'liveStatus' | 'confirmFacts',
+    | 'liveStatus' | 'confirmFacts' | 'durationGrid' | 'dangerButton' | 'dangerPanel'
+    | 'restoredNote',
     string
 >;
 
@@ -124,6 +133,8 @@ function statusCopy(agentName: string, invite: MeetingConciergeInvite, joinState
     if (invite.status === 'pending' && invite.joinAt) return `${agentName} is scheduled and will connect separately at the time below.`;
     if (invite.status === 'pending') return `${agentName} is connecting separately now. Watch the lobby and participant list.`;
     if (invite.status === 'failed') return `${agentName} could not enter this meeting. Review the status below before trying again.`;
+    if (invite.status === 'cancelled' || joinState === 'left') return `${agentName} has left the meeting and the Anam session is no longer active.`;
+    if (invite.status === 'ended' || joinState === 'done') return `${agentName}'s meeting session has ended.`;
     return 'The meeting invitation has finished.';
 }
 
@@ -137,38 +148,73 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
     const [time, setTime] = useState('10:30');
     const [timezone, setTimezone] = useState('America/Phoenix');
     const [groupCall, setGroupCall] = useState(true);
+    const [maxDurationMinutes, setMaxDurationMinutes] = useState<MeetingConciergeDurationMinutes>(30);
     const [purpose, setPurpose] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [authenticated, setAuthenticated] = useState(false);
     const [busy, setBusy] = useState(false);
+    const [removing, setRemoving] = useState(false);
+    const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+    const [restoredInvite, setRestoredInvite] = useState(false);
     const [error, setError] = useState('');
     const [invite, setInvite] = useState<MeetingConciergeInvite | null>(null);
 
     useEffect(() => {
-        try {
-            setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix');
-        } catch {
-            // Keep the visible fallback when browser timezone data is unavailable.
-        }
+        let disposed = false;
+        queueMicrotask(() => {
+            if (disposed) return;
+            try {
+                setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Phoenix');
+            } catch {
+                // Keep the visible fallback when browser timezone data is unavailable.
+            }
+            const stored = readStoredMeetingConciergeInvite(adapter.agent.key);
+            if (stored) {
+                setInvite(stored.invite);
+                setProvider(stored.provider);
+                setGroupCall(stored.groupCall);
+                setMaxDurationMinutes(stored.maxDurationMinutes);
+                setStep(3);
+                setRestoredInvite(true);
+            }
+        });
         void readMeetingConciergeOrganizer(meetingApiPath)
             .then(organizer => {
+                if (disposed) return;
                 setAuthenticated(organizer.authenticated);
                 setDisplayName(organizer.displayName ?? 'Organizer');
             })
             .catch(() => undefined);
-    }, [meetingApiPath]);
+        return () => { disposed = true; };
+    }, [adapter.agent.key, meetingApiPath]);
 
     const inviteId = invite?.id ?? null;
-    const inviteStatus = invite?.status ?? null;
     useEffect(() => {
-        if (!inviteId || inviteStatus === 'ended' || inviteStatus === 'failed' || inviteStatus === 'cancelled') return;
-        const timer = window.setInterval(() => {
+        if (!inviteId || !invite || removing || isMeetingConciergeInviteTerminal(invite)) return;
+        let disposed = false;
+        const refresh = () => {
             void readMeetingConciergeInvite(meetingApiPath, inviteId)
-                .then(setInvite)
+                .then(nextInvite => { if (!disposed) setInvite(nextInvite); })
                 .catch(() => undefined);
-        }, 15_000);
-        return () => window.clearInterval(timer);
-    }, [inviteId, inviteStatus, meetingApiPath]);
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 15_000);
+        return () => {
+            disposed = true;
+            window.clearInterval(timer);
+        };
+    }, [invite, inviteId, meetingApiPath, removing]);
+
+    useEffect(() => {
+        if (!invite) return;
+        storeMeetingConciergeInvite(adapter.agent.key, {
+            invite,
+            provider,
+            groupCall,
+            maxDurationMinutes,
+            savedAt: Date.now(),
+        });
+    }, [adapter.agent.key, groupCall, invite, maxDurationMinutes, provider]);
 
     const scheduledJoinAt = (() => {
         const value = new Date(`${date}T${time}:00`);
@@ -186,8 +232,10 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 ...(joinAt ? { joinAt } : {}),
                 groupCall,
                 purpose,
+                maxDurationMinutes,
             });
             setInvite(created);
+            setRestoredInvite(false);
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : `${adapter.agent.name} could not be scheduled`);
         } finally {
@@ -195,14 +243,47 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
         }
     }
 
+    async function removeInvite() {
+        if (!invite) return;
+        setRemoving(true);
+        setError('');
+        try {
+            const removed = await removeMeetingConciergeInvite(meetingApiPath, invite.id);
+            setInvite({
+                ...invite,
+                ...removed,
+                provider: invite.provider,
+                joinAt: invite.joinAt,
+            });
+            setConfirmingRemoval(false);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : `${adapter.agent.name} could not be removed from the meeting`);
+        } finally {
+            setRemoving(false);
+        }
+    }
+
+    function scheduleAnotherMeeting() {
+        clearStoredMeetingConciergeInvite(adapter.agent.key);
+        setInvite(null);
+        setMeetingUrl('');
+        setStep(1);
+        setConfirmingRemoval(false);
+        setRestoredInvite(false);
+        setError('');
+    }
+
     if (invite) {
         const joinState = invite.joinState?.replaceAll('_', ' ') ?? null;
+        const terminal = isMeetingConciergeInviteTerminal(invite);
+        const removalLabel = invite.status === 'pending' ? 'Cancel invitation' : `Remove ${adapter.agent.name} from meeting`;
         return (
             <div className={styles.scheduler} data-meeting-concierge-version={MEETING_CONCIERGE_VERSION} data-meeting-concierge-agent={adapter.agent.key} data-meeting-concierge-state="confirmed">
                 <div className={styles.confirmIcon}><Check size={25} /></div>
                 <p className={styles.eyebrow}>Invitation created</p>
                 <h1 className={styles.title}>{adapter.copy.confirmedTitle}</h1>
                 <p className={styles.intro}>{statusCopy(adapter.agent.name, invite, joinState)}</p>
+                {restoredInvite ? <p className={styles.restoredNote}>Restored from this browser so you can continue monitoring or remove {adapter.agent.name}.</p> : null}
                 <div className={styles.liveStatus} data-status={invite.status} role="status" aria-live="polite">
                     <span aria-hidden="true" />
                     <div><strong>{joinState || invite.status.replaceAll('_', ' ')}</strong><small>This follows {adapter.agent.name}&apos;s Anam participant—not the meeting window on your computer.</small></div>
@@ -212,10 +293,20 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                     <div><dt>Status</dt><dd>{invite.status.replaceAll('_', ' ')}</dd></div>
                     <div><dt>Joins</dt><dd>{invite.joinAt ? new Date(invite.joinAt).toLocaleString() : 'Now'}</dd></div>
                     <div><dt>Mode</dt><dd>{groupCall ? 'Group meeting · name gated' : '1:1 conversation'}</dd></div>
+                    <div><dt>Safety limit</dt><dd>{maxDurationMinutes} minutes</dd></div>
                 </dl>
                 {invite.statusReason ? <p className={styles.error}>{invite.statusReason}</p> : null}
+                {confirmingRemoval && !terminal ? <div className={styles.dangerPanel} role="alert">
+                    <TriangleAlert size={20} />
+                    <div><strong>{invite.status === 'pending' ? 'Cancel this invitation?' : `Remove ${adapter.agent.name} now?`}</strong><p>{invite.status === 'pending' ? `${adapter.agent.name} will not join this meeting.` : `${adapter.agent.name} will leave immediately and the Anam meeting session will end.`}</p></div>
+                    <button type="button" className={styles.secondaryButton} onClick={() => setConfirmingRemoval(false)} disabled={removing}>Keep meeting</button>
+                    <button type="button" className={styles.dangerButton} onClick={removeInvite} disabled={removing}>{removing ? <LoaderCircle className={styles.spinner} size={16} /> : <LogOut size={16} />} Confirm</button>
+                </div> : null}
+                {error ? <p role="alert" className={styles.error}>{error}</p> : null}
                 <div className={styles.actions}>
-                    <button type="button" className={styles.secondaryButton} onClick={() => { setInvite(null); setMeetingUrl(''); setStep(1); }}>Schedule another meeting</button>
+                    {terminal
+                        ? <button type="button" className={styles.secondaryButton} onClick={scheduleAnotherMeeting}>Schedule another meeting</button>
+                        : <button type="button" className={styles.dangerButton} onClick={() => setConfirmingRemoval(true)} disabled={confirmingRemoval || removing}><LogOut size={16} /> {removalLabel}</button>}
                     <Link href={adapter.agent.returnHref} className={styles.primaryButton}>Return to {adapter.agent.name} <ArrowRight size={15} /></Link>
                 </div>
             </div>
@@ -253,12 +344,15 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                         <button type="button" aria-pressed={groupCall} data-selected={groupCall} onClick={() => setGroupCall(true)}><UsersRound size={22} /><span><strong>Group meeting</strong><small>Joins quietly and responds when someone says “{adapter.agent.groupWakeName}.”</small></span>{groupCall ? <Check size={17} /> : null}</button>
                         <button type="button" aria-pressed={!groupCall} data-selected={!groupCall} onClick={() => setGroupCall(false)}><UserRound size={22} /><span><strong>1:1 conversation</strong><small>Greets the participant and responds naturally.</small></span>{!groupCall ? <Check size={17} /> : null}</button>
                     </div></fieldset>
+                    <fieldset><legend>Automatic safety limit</legend><div className={styles.durationGrid}>{MEETING_CONCIERGE_DURATION_MINUTES.map(minutes => (
+                        <button key={minutes} type="button" aria-pressed={maxDurationMinutes === minutes} data-selected={maxDurationMinutes === minutes} onClick={() => setMaxDurationMinutes(minutes)}><Clock3 size={18} /><span><strong>{minutes} minutes</strong><small>The meeting session ends at this limit.</small></span>{maxDurationMinutes === minutes ? <Check size={16} /> : null}</button>
+                    ))}</div></fieldset>
                     <label>Meeting purpose <span className={styles.optional}>Optional</span><textarea value={purpose} onChange={event => setPurpose(event.target.value)} maxLength={500} placeholder={`Give ${adapter.agent.name} a short, factual objective for the room.`} /></label>
                     <div className={styles.note}><ShieldCheck size={18} /><p>{adapter.copy.personaBoundary}</p></div>
                 </div>
             ) : (
                 <div className={styles.formStack}>
-                    <div className={styles.reviewCard}><div>{platformMark(provider, styles)}<span><strong>{PROVIDER_COPY[provider].name}</strong><small>{joinAt ? new Date(joinAt).toLocaleString() : 'Join now'} · {groupCall ? 'Group meeting' : '1:1 conversation'}</small></span></div><button type="button" onClick={() => setStep(1)}>Edit</button></div>
+                    <div className={styles.reviewCard}><div>{platformMark(provider, styles)}<span><strong>{PROVIDER_COPY[provider].name}</strong><small>{joinAt ? new Date(joinAt).toLocaleString() : 'Join now'} · {groupCall ? 'Group meeting' : '1:1 conversation'} · {maxDurationMinutes} minute limit</small></span></div><button type="button" onClick={() => setStep(1)}>Edit</button></div>
                     {purpose.trim() ? <p className={styles.purposeReview}><strong>Working objective:</strong> {purpose.trim()}</p> : null}
                     {authenticated ? <div className={styles.verifiedCard}><ShieldCheck size={21} /><div><strong>{adapter.copy.authenticatedLabel}</strong><span>{displayName || 'Verified organizer'} · existing consent and follow-up settings remain unchanged.</span></div></div> : <CheckInFields adapter={adapter} styles={styles} onAuthenticated={name => { setAuthenticated(true); setDisplayName(name ?? 'Organizer'); }} onError={setError} />}
                     <div className={styles.note}><Mail size={18} /><p>{adapter.copy.contactBoundary}</p></div>

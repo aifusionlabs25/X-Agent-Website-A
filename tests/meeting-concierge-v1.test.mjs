@@ -4,8 +4,12 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 
 import {
+  clearStoredMeetingConciergeInvite,
   detectMeetingConciergeProvider,
+  readStoredMeetingConciergeInvite,
+  storeMeetingConciergeInvite,
 } from '../lib/meeting-concierge/v1/client.ts';
+import { createMeetingPersonaSnapshot } from '../lib/meeting-concierge/v1/persona-snapshot.ts';
 import {
   issueMeetingConciergeStatusTicket,
   readMeetingConciergeStatusTicket,
@@ -19,6 +23,7 @@ const sharedFiles = [
   'lib/meeting-concierge/v1/client.ts',
   'lib/meeting-concierge/v1/server.ts',
   'lib/meeting-concierge/v1/tickets.ts',
+  'lib/meeting-concierge/v1/persona-snapshot.ts',
   'components/meeting-concierge/v1/MeetingConcierge.tsx',
 ];
 const amyFiles = [
@@ -52,6 +57,10 @@ test('Amy adapter uses only Amy identity, consent, persona, and routes', () => {
   assert.match(route, /resolveAnamSessionPersona/);
   assert.match(route, /contact\?\.purpose\s*!==\s*['"]amy_follow_up['"]/);
   assert.match(route, /readAmyAnamBrowserIdentity\(browser\.id\)/);
+  assert.match(route, /removeToolNames:\s*\[['"]end_amy_session['"]\]/);
+  assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);
+  assert.match(route, /Call end_call once with confirmed true/i);
+  assert.match(route, /export const DELETE = amyMeetingConcierge\.DELETE/);
   assert.doesNotMatch(route, /personaId:\s*['"][0-9a-f-]{36}['"]/i, 'persona IDs must be resolved, never hardcoded');
   assert.doesNotMatch(route, /agentmail|resend|sendEmail/i, 'Meeting Concierge must not alter AgentMail delivery');
 });
@@ -66,11 +75,73 @@ test('status tickets are signed and bound to the agent and organizer', () => {
   assert.match(tickets, /record\.organizer\s*!==\s*organizerDigest\(scope\.isolationId\)/);
   assert.match(server, /id:\s*issueMeetingConciergeStatusTicket\(/);
   assert.match(server, /readMeetingConciergeStatusTicket\(/);
+  assert.match(server, /const DELETE = async \(request: Request\)/);
+  assert.match(server, /method:\s*['"]DELETE['"]/);
+  assert.match(server, /meeting-remove:\$\{organizer\.isolationId\}/);
   assert.match(
     server,
     /const inviteId = new URL\(request\.url\)[\s\S]*if \(!inviteId\)[\s\S]*adapter\.readOrganizer\(request\)[\s\S]*return json\([\s\S]*adapter\.platform\.consumeRateLimit/,
     'the local organizer probe completes before provider-backed status infrastructure',
   );
+});
+
+test('meeting-scoped persona snapshot preserves identity and swaps only the close tool', () => {
+  const oldCloseId = '123e4567-e89b-42d3-a456-426614174000';
+  const knowledgeId = '123e4567-e89b-42d3-a456-426614174001';
+  const meetingCloseId = '123e4567-e89b-42d3-a456-426614174002';
+  const personaId = '123e4567-e89b-42d3-a456-426614174003';
+  const snapshot = createMeetingPersonaSnapshot({
+    expectedPersonaId: personaId,
+    persona: {
+      id: personaId,
+      name: 'Reference Agent',
+      avatar: { id: '123e4567-e89b-42d3-a456-426614174004' },
+      voice: { id: '123e4567-e89b-42d3-a456-426614174005' },
+      llmId: '123e4567-e89b-42d3-a456-426614174006',
+      brain: { systemPrompt: 'Base behavior', personality: 'Warm' },
+      tools: [
+        { id: oldCloseId, name: 'end_agent_session', type: 'CLIENT' },
+        { id: knowledgeId, name: 'agent_knowledge', type: 'SERVER_RAG' },
+      ],
+      initialMessage: 'Hello',
+      voiceSpeed: 1,
+      zeroDataRetention: false,
+    },
+    availableTools: [{ id: meetingCloseId, name: 'end_call', type: 'SYSTEM' }],
+    removeToolNames: ['end_agent_session'],
+    addToolNames: ['end_call'],
+    addToolTypes: { end_call: 'SYSTEM' },
+    systemPromptSuffix: 'Meeting-only behavior',
+    maxSessionLengthSeconds: 1_800,
+  });
+  assert.equal(snapshot.avatarId, '123e4567-e89b-42d3-a456-426614174004');
+  assert.equal(snapshot.voiceId, '123e4567-e89b-42d3-a456-426614174005');
+  assert.equal(snapshot.llmId, '123e4567-e89b-42d3-a456-426614174006');
+  assert.deepEqual(snapshot.toolIds, [knowledgeId, meetingCloseId]);
+  assert.equal(snapshot.maxSessionLengthSeconds, 1_800);
+  assert.match(snapshot.systemPrompt, /^Base behavior[\s\S]*Meeting-only behavior$/);
+  assert.equal(snapshot.initialMessage, 'Hello');
+});
+
+test('browser meeting control is namespaced by agent and restores only bounded records', () => {
+  const values = new Map();
+  const storage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key),
+  };
+  const state = {
+    invite: { id: 'opaque.signed.ticket.value', provider: 'microsoft_teams', status: 'active', joinAt: null, joinState: 'media_active', sessionId: null, statusReason: null },
+    provider: 'teams',
+    groupCall: true,
+    maxDurationMinutes: 30,
+    savedAt: Date.now(),
+  };
+  storeMeetingConciergeInvite('agent-a', state, storage);
+  assert.deepEqual(readStoredMeetingConciergeInvite('agent-a', storage), state);
+  assert.equal(readStoredMeetingConciergeInvite('agent-b', storage), null);
+  clearStoredMeetingConciergeInvite('agent-a', storage);
+  assert.equal(readStoredMeetingConciergeInvite('agent-a', storage), null);
 });
 
 test('a status ticket cannot cross an organizer boundary', async () => {
@@ -127,6 +198,7 @@ test('Amy brand shell implements the full shared style contract', () => {
     'spinner', 'consentCopy', 'error', 'actions', 'secondaryButton', 'primaryButton',
     'platformMark', 'googleMark', 'zoomMark', 'teamsMark', 'confirmIcon', 'intro',
     'liveStatus', 'confirmFacts',
+    'durationGrid', 'dangerButton', 'dangerPanel', 'restoredNote',
   ];
   for (const className of required) assert.match(css, new RegExp(`\\.${className}(?:\\s|,|\\{|:)`), `missing .${className}`);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
@@ -140,4 +212,6 @@ test('installation guide exists and defines the next-agent isolation checklist',
   assert.match(guide, /Never import another agent's route, cookie, browser identity/);
   assert.match(guide, /Never hardcode a persona UUID/);
   assert.match(guide, /opaque HMAC ticket/);
+  assert.match(guide, /meeting-scoped persona snapshot/i);
+  assert.match(guide, /organizer removal/i);
 });
