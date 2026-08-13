@@ -17,7 +17,11 @@ export type MeetingConciergeServerAdapter = {
     agentKey: string;
     agentName: string;
     displayName: string;
-    resolvePersonaId(): string;
+    resolvePersona(input: {
+        apiKey: string;
+        groupCall: boolean;
+        maxSessionLengthSeconds: number;
+    }): Promise<{ personaId: string } | { personaConfig: Record<string, unknown> }>;
     statusTokenSecret(): string;
     readOrganizer(request: Request): Promise<MeetingConciergeOrganizer & { isolationId: string } | null>;
     platform: {
@@ -81,6 +85,13 @@ function parseJoinAt(raw: unknown, agentName: string) {
     return new Date(timestamp).toISOString();
 }
 
+function parseDurationMinutes(raw: unknown) {
+    if (![15, 30, 45, 60].includes(Number(raw))) {
+        throw new MeetingConciergeRequestError('Choose a 15, 30, 45, or 60 minute safety limit', 400);
+    }
+    return Number(raw);
+}
+
 function parseInvite(payload: unknown): MeetingConciergeInvite {
     if (!payload || typeof payload !== 'object') throw new Error('Anam returned an invalid meeting invitation');
     const value = payload as Record<string, unknown>;
@@ -124,7 +135,7 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
 
     const POST = async (request: Request) => {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8_000);
+        const timeout = setTimeout(() => controller.abort(), 18_000);
         try {
             if (!adapter.platform.isTrustedBrowserOrigin(request)) return json({ error: 'Request origin is not allowed' }, { status: 403 });
             const preAuthRate = await adapter.platform.consumeRateLimit({
@@ -141,19 +152,26 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
             });
             if (!organizerRate.allowed) return json({ error: `This organizer has reached the daily ${adapter.agentName} meeting limit` }, { status: 429, headers: { 'Retry-After': String(organizerRate.retryAfterSeconds) } });
             const body = await adapter.platform.readBoundedJsonObject(request, 5 * 1024);
-            const allowedFields = new Set(['meetingUrl', 'joinAt', 'groupCall', 'purpose']);
+            const allowedFields = new Set(['meetingUrl', 'joinAt', 'groupCall', 'purpose', 'maxDurationMinutes']);
             if (Object.keys(body).some(key => !allowedFields.has(key))) return json({ error: 'Meeting request contained unsupported fields' }, { status: 400 });
             const meeting = parseMeetingUrl(body.meetingUrl);
             const joinAt = parseJoinAt(body.joinAt, adapter.agentName);
             if (typeof body.groupCall !== 'boolean') throw new MeetingConciergeRequestError('Choose a group or 1:1 meeting', 400);
             if (body.purpose !== undefined && (typeof body.purpose !== 'string' || body.purpose.length > 500)) throw new MeetingConciergeRequestError('Meeting purpose was too long', 400);
+            const maxDurationMinutes = parseDurationMinutes(body.maxDurationMinutes);
+            const apiKey = readApiKey();
+            const persona = await adapter.resolvePersona({
+                apiKey,
+                groupCall: body.groupCall,
+                maxSessionLengthSeconds: maxDurationMinutes * 60,
+            });
             const response = await fetch(ANAM_MEETINGS_URL, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${readApiKey()}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+                headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     meetingUrl: meeting.url,
                     displayName: adapter.displayName,
-                    personaId: adapter.resolvePersonaId(),
+                    ...persona,
                     ...(joinAt ? { joinAt } : {}),
                     groupCall: body.groupCall,
                     clientLabel: `xagent-${adapter.agentKey}-${randomUUID()}`,
@@ -228,5 +246,64 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
         }
     };
 
-    return { GET, POST };
+    const DELETE = async (request: Request) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8_000);
+        try {
+            if (!adapter.platform.isTrustedBrowserOrigin(request)) return json({ error: 'Request origin is not allowed' }, { status: 403 });
+            const preAuthRate = await adapter.platform.consumeRateLimit({
+                fingerprint: adapter.platform.requestFingerprint(request, `${adapter.agentKey}-meeting-remove-preauth`),
+                limit: 30,
+                windowSeconds: 15 * 60,
+            });
+            if (!preAuthRate.allowed) return json({ error: 'Too many meeting removal requests' }, { status: 429, headers: { 'Retry-After': String(preAuthRate.retryAfterSeconds) } });
+            const organizer = await requireOrganizer(request);
+            const organizerRate = await adapter.platform.consumeRateLimit({
+                fingerprint: `${adapter.agentKey}-meeting-remove:${organizer.isolationId}`,
+                limit: 12,
+                windowSeconds: 24 * 60 * 60,
+            });
+            if (!organizerRate.allowed) return json({ error: `This organizer has reached the daily ${adapter.agentName} meeting removal limit` }, { status: 429, headers: { 'Retry-After': String(organizerRate.retryAfterSeconds) } });
+            const body = await adapter.platform.readBoundedJsonObject(request, 2 * 1024);
+            if (Object.keys(body).some(key => key !== 'inviteId')) return json({ error: 'Meeting removal request contained unsupported fields' }, { status: 400 });
+            const ticket = typeof body.inviteId === 'string' ? body.inviteId.trim() : '';
+            const providerInviteId = readMeetingConciergeStatusTicket({
+                agentKey: adapter.agentKey,
+                isolationId: organizer.isolationId,
+                secret: adapter.statusTokenSecret(),
+                ticket,
+            });
+            const response = await fetch(`${ANAM_MEETINGS_URL}/${encodeURIComponent(providerInviteId)}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${readApiKey()}`, Accept: 'application/json' },
+                cache: 'no-store',
+                signal: controller.signal,
+            });
+            if (!response.ok) {
+                console.warn(`[${adapter.agentName} Meetings] Provider rejected removal`, { status: response.status, sensitiveContentLogged: false });
+                return json({ error: response.status === 404 ? 'Meeting invitation was not found' : `${adapter.agentName} could not be removed from the meeting` }, { status: response.status === 404 ? 404 : 502 });
+            }
+            return json({
+                invite: {
+                    id: ticket,
+                    provider: 'unknown',
+                    status: 'cancelled',
+                    joinAt: null,
+                    joinState: 'left',
+                    sessionId: null,
+                    statusReason: null,
+                },
+            });
+        } catch (error) {
+            if (error instanceof MeetingConciergeRequestError || error instanceof MeetingConciergeStatusTicketError) {
+                return json({ error: error.message }, { status: error.status });
+            }
+            const timedOut = error instanceof Error && error.name === 'AbortError';
+            return json({ error: timedOut ? 'Anam did not respond in time' : `${adapter.agentName} meeting removal is temporarily unavailable` }, { status: 503 });
+        } finally {
+            clearTimeout(timeout);
+        }
+    };
+
+    return { DELETE, GET, POST };
 }

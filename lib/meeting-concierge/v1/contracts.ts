@@ -4,6 +4,9 @@ export const MEETING_CONCIERGE_PROVIDERS = ['google', 'zoom', 'teams'] as const;
 export type MeetingConciergeProvider = (typeof MEETING_CONCIERGE_PROVIDERS)[number];
 export type MeetingConciergeJoinTiming = 'now' | 'scheduled';
 
+export const MEETING_CONCIERGE_DURATION_MINUTES = [15, 30, 45, 60] as const;
+export type MeetingConciergeDurationMinutes = (typeof MEETING_CONCIERGE_DURATION_MINUTES)[number];
+
 export type MeetingConciergeInvite = {
     id: string;
     provider: string;
@@ -24,6 +27,15 @@ export type MeetingConciergeCreateInput = {
     joinAt?: string;
     groupCall: boolean;
     purpose: string;
+    maxDurationMinutes: MeetingConciergeDurationMinutes;
+};
+
+export type MeetingConciergeStoredInvite = {
+    invite: MeetingConciergeInvite;
+    provider: MeetingConciergeProvider;
+    groupCall: boolean;
+    maxDurationMinutes: MeetingConciergeDurationMinutes;
+    savedAt: number;
 };
 
 export type MeetingConciergeCheckInFields = {
