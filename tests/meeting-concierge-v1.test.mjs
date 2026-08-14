@@ -189,6 +189,7 @@ test('Amy brand shell implements the full shared style contract', () => {
   const css = read('components/amy/AmyMeetingScheduler.module.css');
   assert.match(component, /amy-insight-sdr-hero-polished\.webp/);
   assert.match(component, /insight-logo\.png/);
+  assert.match(component, /className=\{styles\.schedulerPanel\}>\s*<Image[\s\S]{0,220}insight-logo\.png/);
   assert.match(component, /data-amy-surface=['"]meeting-concierge['"]/);
   const required = [
     'scheduler', 'backLink', 'topline', 'headingRow', 'eyebrow', 'title', 'steps',
@@ -201,8 +202,10 @@ test('Amy brand shell implements the full shared style contract', () => {
     'durationGrid', 'dangerButton', 'dangerPanel', 'restoredNote',
   ];
   for (const className of required) assert.match(css, new RegExp(`\\.${className}(?:\\s|,|\\{|:)`), `missing .${className}`);
-  assert.match(css, /\.logo\s*\{[^}]*background:\s*transparent;/s);
-  assert.doesNotMatch(css.match(/\.logo\s*\{[^}]*\}/s)?.[0] ?? '', /box-shadow|border-radius/);
+  const logoRule = css.match(/\.logo\s*\{[^}]*\}/s)?.[0] ?? '';
+  assert.match(logoRule, /right:\s*clamp\(/);
+  assert.match(logoRule, /background:\s*transparent/);
+  assert.doesNotMatch(logoRule, /left:|box-shadow|border-radius/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /@media \(max-width:\s*760px\)/);
 });

@@ -22,13 +22,13 @@ export function AmyMeetingConcierge({ initialProvider }: { initialProvider: AmyM
                         className={styles.portrait}
                     />
                     <div className={styles.portraitWash} />
-                    <Image src="/agents/insight-logo.png" alt="Insight" width={150} height={62} className={styles.logo} />
                     <div className={styles.portraitCopy}>
                         <p>Amy · Senior SDR for Insight</p>
                         <h2>Bring Amy<br />into the room.</h2>
                     </div>
                 </div>
                 <div className={styles.schedulerPanel}>
+                    <Image src="/agents/insight-logo.png" alt="Insight" width={150} height={62} className={styles.logo} />
                     <MeetingConcierge
                         adapter={amyMeetingConciergeAdapter}
                         initialProvider={initialProvider}
