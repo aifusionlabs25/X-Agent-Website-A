@@ -340,7 +340,7 @@ test('manifest and site use the exact published Dani identity and optimized Cara
     const agents = await readFile(new URL('../lib/agents.ts', import.meta.url), 'utf8');
     const hero = await readFile(new URL('../components/home/HeroBillboard.tsx', import.meta.url), 'utf8');
     assert.match(agents, new RegExp(`slug: "dani"[\\s\\S]{0,300}personaId: "${DANI_PERSONA_ID}"`));
-    assert.match(hero, new RegExp(`personaId="${DANI_PERSONA_ID}"`));
+    assert.match(hero, /href="\/agents\/dani"/);
     assert.match(agents, /dani-x-agent-director-cara4-2026\.jpg/);
     assert.match(hero, /dani-x-agent-director-cara4-2026\.jpg/);
     assert.doesNotMatch(agents.match(/slug: "dani"[\s\S]{0,300}/)?.[0] ?? '', /Dani landing page hero 1|61f0fd3e/);
