@@ -201,6 +201,8 @@ test('Amy brand shell implements the full shared style contract', () => {
     'durationGrid', 'dangerButton', 'dangerPanel', 'restoredNote',
   ];
   for (const className of required) assert.match(css, new RegExp(`\\.${className}(?:\\s|,|\\{|:)`), `missing .${className}`);
+  assert.match(css, /\.logo\s*\{[^}]*background:\s*transparent;/s);
+  assert.doesNotMatch(css.match(/\.logo\s*\{[^}]*\}/s)?.[0] ?? '', /box-shadow|border-radius/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /@media \(max-width:\s*760px\)/);
 });
