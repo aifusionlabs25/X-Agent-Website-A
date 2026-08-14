@@ -16,11 +16,11 @@
 .portraitPanel { position: relative; min-height: 100svh; overflow: hidden; background: #2d2024; }
 .portrait { object-fit: cover; object-position: 55% 44%; }
 .portraitWash { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(52 43 42 / 8%), rgb(52 43 42 / 72%)); }
-.logo { position: absolute; top: clamp(1.5rem, 4vw, 3rem); left: clamp(1.5rem, 4vw, 3rem); width: 8.2rem; height: auto; padding: 0; background: transparent; }
+.logo { position: absolute; z-index: 3; top: clamp(1.5rem, 3vw, 2.75rem); right: clamp(1.5rem, 4vw, 4rem); width: clamp(7.25rem, 10vw, 9.5rem); height: auto; padding: 0; background: transparent; }
 .portraitCopy { position: absolute; right: clamp(1.5rem, 4vw, 3rem); bottom: clamp(2rem, 5vw, 4rem); left: clamp(1.5rem, 4vw, 3rem); color: white; }
 .portraitCopy p { color: #ffd8e9; font-size: .65rem; font-weight: 850; letter-spacing: .15em; text-transform: uppercase; }
 .portraitCopy h2 { margin-top: .75rem; font-family: 'Iowan Old Style', Georgia, serif; font-size: clamp(3rem, 5.5vw, 5.8rem); font-weight: 700; letter-spacing: -.065em; line-height: .86; }
-.schedulerPanel { display: flex; min-width: 0; padding: clamp(1.5rem, 4vw, 4rem); background: radial-gradient(circle at 92% 5%, rgb(229 0 104 / 13%), transparent 25%), linear-gradient(145deg, #fffaf8, #f5e9ed); }
+.schedulerPanel { position: relative; display: flex; min-width: 0; padding: clamp(1.5rem, 4vw, 4rem); background: radial-gradient(circle at 92% 5%, rgb(229 0 104 / 13%), transparent 25%), linear-gradient(145deg, #fffaf8, #f5e9ed); }
 
 .scheduler { width: min(100%, 54rem); margin: auto; color: var(--ink); animation: scheduler-enter 420ms cubic-bezier(.22, 1, .36, 1) both; }
 .backLink { display: inline-flex; align-items: center; gap: .45rem; margin-bottom: clamp(1rem, 3vh, 2rem); color: #756a67; font-size: .72rem; font-weight: 800; }
