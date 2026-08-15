@@ -9,6 +9,7 @@ Amy's Hermes worker is post-session, analysis-only, and intentionally has no aut
 - Retirement requires the same cutoff used for inspection, the exact returned digest, `--apply`, and the literal confirmation token.
 - A job with an active lease or execution marker is protected and skipped.
 - Retired jobs receive the content-free failure code `operator_retired_stale` and move to the bounded dead-letter namespace. Their transcript is never read.
+- A missing job record is treated as an orphan pointer. Only a pre-cutoff orphan whose exact sorted-set score is covered by the inspected digest may be removed; an active marker, changed score, or restored job record prevents removal.
 - Do not run retirement while the Hermes worker is running.
 
 ## 1. Choose and record the checkpoint cutoff
@@ -28,7 +29,7 @@ Load the existing private worker environment files, then run:
 npm run hermes:amy-anam-backlog -- --cutoff=$amyHermesCutoff
 ```
 
-Review `dueCount`, `queuedBeforeCutoff`, `retirableBeforeCutoff`, `protectedBeforeCutoff`, `missingJobCount`, `oldestEnqueuedAt`, `newestEnqueuedAt`, and `snapshotDigest`. Stop if `missingJobCount` is nonzero, the scan is rejected, or any protected job is unexpected.
+Review `dueCount`, `queuedBeforeCutoff`, `retirableBeforeCutoff`, `protectedBeforeCutoff`, `missingJobCount`, `orphanBeforeCutoff`, `orphanAtOrAfterCutoff`, `oldestEnqueuedAt`, `newestEnqueuedAt`, and `snapshotDigest`. Stop if the scan is rejected, any post-cutoff orphan exists, or any protected job is unexpected.
 
 ## 3. Retire only after operator approval
 
@@ -38,7 +39,7 @@ Copy the exact digest from the inspection response. Retirement fails if the queu
 npm run hermes:amy-anam-backlog -- --cutoff=$amyHermesCutoff --apply --expected-snapshot-digest=<SHA-256-FROM-STATUS> --confirm=CONFIRM_AMY_HERMES_STALE_RETIREMENT
 ```
 
-The result reports only `attempted`, `retired`, `protectedActive`, and `stale`. Rerun the inspection command and require `queuedBeforeCutoff: 0` before starting the worker.
+The result reports only `attempted`, `retired`, `orphanPruned`, `protectedActive`, and `stale`. Rerun the inspection command and require `dueCount: 0`, `queuedBeforeCutoff: 0`, and `orphanBeforeCutoff: 0` before starting the worker.
 
 ## 4. Restart from the clean baseline
 

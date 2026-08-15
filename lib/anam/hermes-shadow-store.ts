@@ -65,6 +65,8 @@ export type AmyAnamHermesShadowBacklogStatus = {
     dueCount: number;
     scannedCount: number;
     missingJobCount: number;
+    orphanBeforeCutoff: number;
+    orphanAtOrAfterCutoff: number;
     queuedBeforeCutoff: number;
     queuedAtOrAfterCutoff: number;
     retirableBeforeCutoff: number;
@@ -82,6 +84,7 @@ export type AmyAnamHermesShadowRetirementResult = {
     expectedSnapshotDigest: string;
     attempted: number;
     retired: number;
+    orphanPruned: number;
     protectedActive: number;
     stale: number;
     contentIncluded: false;
@@ -89,6 +92,14 @@ export type AmyAnamHermesShadowRetirementResult = {
 
 type AmyAnamHermesShadowBacklogCandidate = {
     job: AmyAnamHermesShadowJob;
+    dueAt: number;
+    leased: boolean;
+    executionStarted: boolean;
+};
+
+type AmyAnamHermesShadowBacklogOrphan = {
+    jobId: string;
+    dueAt: number;
     leased: boolean;
     executionStarted: boolean;
 };
@@ -600,6 +611,7 @@ async function readAmyAnamHermesShadowBacklogSnapshot(
 ): Promise<{
     status: AmyAnamHermesShadowBacklogStatus;
     candidates: AmyAnamHermesShadowBacklogCandidate[];
+    orphans: AmyAnamHermesShadowBacklogOrphan[];
 }> {
     const cutoff = normalizeBacklogCutoff(cutoffValue);
     const overview = await redisPipeline([
@@ -610,54 +622,66 @@ async function readAmyAnamHermesShadowBacklogSnapshot(
             AMY_ANAM_HERMES_SHADOW_DUE_KEY,
             0,
             AMY_ANAM_HERMES_BACKLOG_SCAN_LIMIT - 1,
+            'WITHSCORES',
         ],
     ], options);
     const dueCountRaw = overview[0]?.result ?? null;
     const deadCountRaw = overview[1]?.result ?? null;
-    const jobIdsRaw = overview[2]?.result ?? null;
+    const dueEntriesRaw = overview[2]?.result ?? null;
     const dueCount = Number(dueCountRaw);
     const deadLetterCount = Number(deadCountRaw);
     if (!Number.isInteger(dueCount) || dueCount < 0
         || !Number.isInteger(deadLetterCount) || deadLetterCount < 0
-        || !Array.isArray(jobIdsRaw)) {
+        || !Array.isArray(dueEntriesRaw)
+        || dueEntriesRaw.length % 2 !== 0) {
         throw new Error('Amy Anam Hermes backlog counters were invalid');
     }
     if (dueCount > AMY_ANAM_HERMES_BACKLOG_SCAN_LIMIT) {
         throw new Error('Amy Anam Hermes backlog exceeded the safe inspection limit');
     }
 
-    const jobIds = jobIdsRaw.map(item => String(item));
-    if (jobIds.some(jobId => !/^[a-f0-9]{64}$/.test(jobId))) {
+    const dueEntries = Array.from({ length: dueEntriesRaw.length / 2 }, (_, index) => ({
+        jobId: String(dueEntriesRaw[index * 2]),
+        dueAt: Number(dueEntriesRaw[index * 2 + 1]),
+    }));
+    if (dueEntries.some(entry => (
+        !/^[a-f0-9]{64}$/.test(entry.jobId)
+        || !Number.isFinite(entry.dueAt)
+        || entry.dueAt < 0
+    ))) {
         throw new Error('Amy Anam Hermes backlog contained an invalid job identity');
     }
 
     const candidates: AmyAnamHermesShadowBacklogCandidate[] = [];
-    let missingJobCount = 0;
+    const orphans: AmyAnamHermesShadowBacklogOrphan[] = [];
     const batchSize = 64;
-    for (let start = 0; start < jobIds.length; start += batchSize) {
-        const batch = jobIds.slice(start, start + batchSize);
-        const commands = batch.flatMap(jobId => [
-            ['GET', amyAnamHermesShadowJobKey(jobId)],
-            ['GET', amyAnamHermesShadowLeaseKey(jobId)],
-            ['GET', amyAnamHermesShadowExecutionKey(jobId)],
+    for (let start = 0; start < dueEntries.length; start += batchSize) {
+        const batch = dueEntries.slice(start, start + batchSize);
+        const commands = batch.flatMap(entry => [
+            ['GET', amyAnamHermesShadowJobKey(entry.jobId)],
+            ['GET', amyAnamHermesShadowLeaseKey(entry.jobId)],
+            ['GET', amyAnamHermesShadowExecutionKey(entry.jobId)],
         ]);
         const results = await redisPipeline(commands, options);
         for (let index = 0; index < batch.length; index += 1) {
             const rawJob = results[index * 3]?.result ?? null;
+            const leased = results[index * 3 + 1]?.result !== null
+                && results[index * 3 + 1]?.result !== undefined;
+            const executionStarted = results[index * 3 + 2]?.result !== null
+                && results[index * 3 + 2]?.result !== undefined;
             if (rawJob === null) {
-                missingJobCount += 1;
+                orphans.push({ ...batch[index], leased, executionStarted });
                 continue;
             }
             const job = normalizeAmyAnamHermesShadowJob(rawJob);
-            if (job.pointer.jobId !== batch[index]) {
+            if (job.pointer.jobId !== batch[index].jobId) {
                 throw new Error('Amy Anam Hermes backlog job identity did not match its queue entry');
             }
             candidates.push({
                 job,
-                leased: results[index * 3 + 1]?.result !== null
-                    && results[index * 3 + 1]?.result !== undefined,
-                executionStarted: results[index * 3 + 2]?.result !== null
-                    && results[index * 3 + 2]?.result !== undefined,
+                dueAt: batch[index].dueAt,
+                leased,
+                executionStarted,
             });
         }
     }
@@ -665,6 +689,7 @@ async function readAmyAnamHermesShadowBacklogSnapshot(
     const beforeCutoff = candidates.filter(candidate => (
         Date.parse(candidate.job.pointer.enqueuedAt) < cutoff.timestamp
     ));
+    const orphansBeforeCutoff = orphans.filter(orphan => orphan.dueAt < cutoff.timestamp);
     const enqueuedTimes = candidates
         .map(candidate => candidate.job.pointer.enqueuedAt)
         .sort((left, right) => Date.parse(left) - Date.parse(right));
@@ -672,10 +697,16 @@ async function readAmyAnamHermesShadowBacklogSnapshot(
         cutoff: cutoff.iso,
         dueCount,
         deadLetterCount,
-        missingJobCount,
+        orphans: orphans.map(orphan => ({
+            jobId: orphan.jobId,
+            dueAt: orphan.dueAt,
+            leased: orphan.leased,
+            executionStarted: orphan.executionStarted,
+        })).sort((left, right) => left.jobId.localeCompare(right.jobId)),
         jobs: candidates.map(candidate => ({
             jobId: candidate.job.pointer.jobId,
             enqueuedAt: candidate.job.pointer.enqueuedAt,
+            dueAt: candidate.dueAt,
             attempts: candidate.job.attempts,
             leased: candidate.leased,
             executionStarted: candidate.executionStarted,
@@ -687,8 +718,10 @@ async function readAmyAnamHermesShadowBacklogSnapshot(
             schemaVersion: 'amy_anam_hermes_backlog_status_v1',
             cutoff: cutoff.iso,
             dueCount,
-            scannedCount: jobIds.length,
-            missingJobCount,
+            scannedCount: dueEntries.length,
+            missingJobCount: orphans.length,
+            orphanBeforeCutoff: orphansBeforeCutoff.length,
+            orphanAtOrAfterCutoff: orphans.length - orphansBeforeCutoff.length,
             queuedBeforeCutoff: beforeCutoff.length,
             queuedAtOrAfterCutoff: candidates.length - beforeCutoff.length,
             retirableBeforeCutoff: beforeCutoff.filter(candidate => (
@@ -704,6 +737,7 @@ async function readAmyAnamHermesShadowBacklogSnapshot(
             contentIncluded: false,
         },
         candidates,
+        orphans,
     };
 }
 
@@ -731,7 +765,8 @@ async function retireAmyAnamHermesShadowJob(
     });
     validateReceiptForCloud(receipt);
     const script = [
-        "if not redis.call('ZSCORE', KEYS[1], ARGV[1]) then return 'stale' end",
+        "local score = redis.call('ZSCORE', KEYS[1], ARGV[1])",
+        "if not score or tonumber(score) ~= tonumber(ARGV[7]) then return 'stale' end",
         "if redis.call('GET', KEYS[3]) or redis.call('GET', KEYS[4]) then return 'protected_active' end",
         "local raw = redis.call('GET', KEYS[2])",
         "if not raw then return 'stale' end",
@@ -764,11 +799,41 @@ async function retireAmyAnamHermesShadowJob(
         JSON.stringify(receipt),
         job.pointer.externalSessionId,
         job.pointer.enqueuedAt,
+        candidate.dueAt,
     ], options));
     if (!['retired', 'protected_active', 'stale'].includes(result)) {
         throw new Error('Amy Anam Hermes stale retirement returned an invalid result');
     }
     return result as 'retired' | 'protected_active' | 'stale';
+}
+
+async function pruneAmyAnamHermesShadowOrphan(
+    orphan: AmyAnamHermesShadowBacklogOrphan,
+    options: StoreOptions = {},
+): Promise<'orphan_pruned' | 'protected_active' | 'stale'> {
+    const script = [
+        "local score = redis.call('ZSCORE', KEYS[1], ARGV[1])",
+        "if not score or tonumber(score) ~= tonumber(ARGV[2]) then return 'stale' end",
+        "if redis.call('GET', KEYS[3]) or redis.call('GET', KEYS[4]) then return 'protected_active' end",
+        "if redis.call('GET', KEYS[2]) then return 'stale' end",
+        "redis.call('ZREM', KEYS[1], ARGV[1])",
+        "return 'orphan_pruned'",
+    ].join(' ');
+    const result = String(await redisCommand([
+        'EVAL',
+        script,
+        4,
+        AMY_ANAM_HERMES_SHADOW_DUE_KEY,
+        amyAnamHermesShadowJobKey(orphan.jobId),
+        amyAnamHermesShadowLeaseKey(orphan.jobId),
+        amyAnamHermesShadowExecutionKey(orphan.jobId),
+        orphan.jobId,
+        orphan.dueAt,
+    ], options));
+    if (!['orphan_pruned', 'protected_active', 'stale'].includes(result)) {
+        throw new Error('Amy Anam Hermes orphan pruning returned an invalid result');
+    }
+    return result as 'orphan_pruned' | 'protected_active' | 'stale';
 }
 
 export async function retireAmyAnamHermesShadowJobsBefore(input: {
@@ -787,20 +852,21 @@ export async function retireAmyAnamHermesShadowJobsBefore(input: {
     if (snapshot.status.snapshotDigest !== input.expectedSnapshotDigest) {
         throw new Error('Amy Anam Hermes backlog changed after inspection');
     }
-    if (snapshot.status.dueCount !== snapshot.status.scannedCount
-        || snapshot.status.missingJobCount !== 0) {
+    if (snapshot.status.dueCount !== snapshot.status.scannedCount) {
         throw new Error('Amy Anam Hermes backlog is inconsistent and cannot be retired safely');
     }
 
     const candidates = snapshot.candidates.filter(candidate => (
         Date.parse(candidate.job.pointer.enqueuedAt) < cutoff.timestamp
     ));
+    const orphans = snapshot.orphans.filter(orphan => orphan.dueAt < cutoff.timestamp);
     const result: AmyAnamHermesShadowRetirementResult = {
         schemaVersion: 'amy_anam_hermes_backlog_retirement_v1',
         cutoff: cutoff.iso,
         expectedSnapshotDigest: input.expectedSnapshotDigest,
-        attempted: candidates.length,
+        attempted: candidates.length + orphans.length,
         retired: 0,
+        orphanPruned: 0,
         protectedActive: 0,
         stale: 0,
         contentIncluded: false,
@@ -808,6 +874,12 @@ export async function retireAmyAnamHermesShadowJobsBefore(input: {
     for (const candidate of candidates) {
         const status = await retireAmyAnamHermesShadowJob(candidate, options);
         if (status === 'retired') result.retired += 1;
+        else if (status === 'protected_active') result.protectedActive += 1;
+        else result.stale += 1;
+    }
+    for (const orphan of orphans) {
+        const status = await pruneAmyAnamHermesShadowOrphan(orphan, options);
+        if (status === 'orphan_pruned') result.orphanPruned += 1;
         else if (status === 'protected_active') result.protectedActive += 1;
         else result.stale += 1;
     }

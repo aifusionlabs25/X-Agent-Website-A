@@ -429,6 +429,8 @@ export function normalizeAmyAnamHermesWorkerStatusResponse(
         'dueCount',
         'scannedCount',
         'missingJobCount',
+        'orphanBeforeCutoff',
+        'orphanAtOrAfterCutoff',
         'queuedBeforeCutoff',
         'queuedAtOrAfterCutoff',
         'retirableBeforeCutoff',
@@ -449,6 +451,8 @@ export function normalizeAmyAnamHermesWorkerStatusResponse(
         'dueCount',
         'scannedCount',
         'missingJobCount',
+        'orphanBeforeCutoff',
+        'orphanAtOrAfterCutoff',
         'queuedBeforeCutoff',
         'queuedAtOrAfterCutoff',
         'retirableBeforeCutoff',
@@ -468,6 +472,8 @@ export function normalizeAmyAnamHermesWorkerStatusResponse(
     if (
         Number(input.scannedCount) > Number(input.dueCount)
         || Number(input.missingJobCount) > Number(input.scannedCount)
+        || Number(input.orphanBeforeCutoff) + Number(input.orphanAtOrAfterCutoff)
+            !== Number(input.missingJobCount)
         || Number(input.queuedBeforeCutoff) + Number(input.queuedAtOrAfterCutoff)
             !== Number(input.scannedCount) - Number(input.missingJobCount)
         || Number(input.retirableBeforeCutoff) + Number(input.protectedBeforeCutoff)
@@ -484,6 +490,8 @@ export function normalizeAmyAnamHermesWorkerStatusResponse(
         dueCount: Number(input.dueCount),
         scannedCount: Number(input.scannedCount),
         missingJobCount: Number(input.missingJobCount),
+        orphanBeforeCutoff: Number(input.orphanBeforeCutoff),
+        orphanAtOrAfterCutoff: Number(input.orphanAtOrAfterCutoff),
         queuedBeforeCutoff: Number(input.queuedBeforeCutoff),
         queuedAtOrAfterCutoff: Number(input.queuedAtOrAfterCutoff),
         retirableBeforeCutoff: Number(input.retirableBeforeCutoff),
@@ -507,6 +515,7 @@ export function normalizeAmyAnamHermesWorkerRetirementResponse(
         'expectedSnapshotDigest',
         'attempted',
         'retired',
+        'orphanPruned',
         'protectedActive',
         'stale',
         'contentIncluded',
@@ -517,9 +526,10 @@ export function normalizeAmyAnamHermesWorkerRetirementResponse(
         || !/^[a-f0-9]{64}$/.test(String(input.expectedSnapshotDigest ?? ''))) {
         throw new Error('Worker backlog retirement response is invalid');
     }
-    const integerFields = ['attempted', 'retired', 'protectedActive', 'stale'] as const;
+    const integerFields = ['attempted', 'retired', 'orphanPruned', 'protectedActive', 'stale'] as const;
     if (integerFields.some(field => !Number.isInteger(input[field]) || Number(input[field]) < 0)
-        || Number(input.retired) + Number(input.protectedActive) + Number(input.stale)
+        || Number(input.retired) + Number(input.orphanPruned)
+            + Number(input.protectedActive) + Number(input.stale)
             !== Number(input.attempted)) {
         throw new Error('Worker backlog retirement counts are invalid');
     }
@@ -531,6 +541,7 @@ export function normalizeAmyAnamHermesWorkerRetirementResponse(
         expectedSnapshotDigest: String(input.expectedSnapshotDigest),
         attempted: Number(input.attempted),
         retired: Number(input.retired),
+        orphanPruned: Number(input.orphanPruned),
         protectedActive: Number(input.protectedActive),
         stale: Number(input.stale),
         contentIncluded: false,
