@@ -1,0 +1,47 @@
+# Amy Hermes backlog operations
+
+Amy's Hermes worker is post-session, analysis-only, and intentionally has no automatic learning authority. Use this procedure when the worker has been stopped long enough that queued reviews no longer represent the current Amy release.
+
+## Safety contract
+
+- Inspection is the default and does not claim, lease, process, or delete a job.
+- Responses contain counts, timestamps, and a snapshot digest only. They contain no session IDs, transcript text, summaries, contact data, or generated review content.
+- Retirement requires the same cutoff used for inspection, the exact returned digest, `--apply`, and the literal confirmation token.
+- A job with an active lease or execution marker is protected and skipped.
+- Retired jobs receive the content-free failure code `operator_retired_stale` and move to the bounded dead-letter namespace. Their transcript is never read.
+- Do not run retirement while the Hermes worker is running.
+
+## 1. Choose and record the checkpoint cutoff
+
+Use a UTC ISO timestamp immediately before the new worker baseline. Keep the exact string for both commands.
+
+```powershell
+$amyHermesCutoff = (Get-Date).ToUniversalTime().ToString('o')
+$amyHermesCutoff
+```
+
+## 2. Inspect without mutation
+
+Load the existing private worker environment files, then run:
+
+```powershell
+npm run hermes:amy-anam-backlog -- --cutoff=$amyHermesCutoff
+```
+
+Review `dueCount`, `queuedBeforeCutoff`, `retirableBeforeCutoff`, `protectedBeforeCutoff`, `missingJobCount`, `oldestEnqueuedAt`, `newestEnqueuedAt`, and `snapshotDigest`. Stop if `missingJobCount` is nonzero, the scan is rejected, or any protected job is unexpected.
+
+## 3. Retire only after operator approval
+
+Copy the exact digest from the inspection response. Retirement fails if the queue changed after inspection.
+
+```powershell
+npm run hermes:amy-anam-backlog -- --cutoff=$amyHermesCutoff --apply --expected-snapshot-digest=<SHA-256-FROM-STATUS> --confirm=CONFIRM_AMY_HERMES_STALE_RETIREMENT
+```
+
+The result reports only `attempted`, `retired`, `protectedActive`, and `stale`. Rerun the inspection command and require `queuedBeforeCutoff: 0` before starting the worker.
+
+## 4. Restart from the clean baseline
+
+Back up the Windows Scheduled Task definition before changing its path or arguments. Start the worker only after the deployed server and local worker code use the same protocol version. Confirm the task remains running and verify the next newly completed Amy session produces one content-free completion receipt.
+
+Do not use `--once` as a status command: it claims and may process a real job. Do not delete Redis keys manually.
