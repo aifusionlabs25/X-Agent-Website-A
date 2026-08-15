@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
     AMY_ANAM_HERMES_SHADOW_EXECUTION_GRACE_SECONDS,
     AMY_ANAM_HERMES_SHADOW_RECEIPT_VERSION,
@@ -17,6 +17,8 @@ import type { AmyAnamSessionRecord } from './session-spine.ts';
 
 export const AMY_ANAM_HERMES_SHADOW_DUE_KEY = 'xagent:amy:anam:hermes-shadow:due:v1';
 export const AMY_ANAM_HERMES_SHADOW_DEAD_KEY = 'xagent:amy:anam:hermes-shadow:dead:v1';
+export const AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION = 'CONFIRM_AMY_HERMES_STALE_RETIREMENT';
+const AMY_ANAM_HERMES_BACKLOG_SCAN_LIMIT = 5_000;
 
 type StoreOptions = {
     env?: NodeJS.ProcessEnv;
@@ -55,6 +57,40 @@ export type AmyAnamHermesShadowQueuedEnvelope = {
     receiptJson: string;
     dueAt: number;
     ttlSeconds: number;
+};
+
+export type AmyAnamHermesShadowBacklogStatus = {
+    schemaVersion: 'amy_anam_hermes_backlog_status_v1';
+    cutoff: string;
+    dueCount: number;
+    scannedCount: number;
+    missingJobCount: number;
+    queuedBeforeCutoff: number;
+    queuedAtOrAfterCutoff: number;
+    retirableBeforeCutoff: number;
+    protectedBeforeCutoff: number;
+    deadLetterCount: number;
+    oldestEnqueuedAt: string | null;
+    newestEnqueuedAt: string | null;
+    snapshotDigest: string;
+    contentIncluded: false;
+};
+
+export type AmyAnamHermesShadowRetirementResult = {
+    schemaVersion: 'amy_anam_hermes_backlog_retirement_v1';
+    cutoff: string;
+    expectedSnapshotDigest: string;
+    attempted: number;
+    retired: number;
+    protectedActive: number;
+    stale: number;
+    contentIncluded: false;
+};
+
+type AmyAnamHermesShadowBacklogCandidate = {
+    job: AmyAnamHermesShadowJob;
+    leased: boolean;
+    executionStarted: boolean;
 };
 
 export function amyAnamHermesShadowJobKey(jobId: string): string {
@@ -199,6 +235,7 @@ function validateReceiptForCloud(receipt: AmyAnamHermesShadowReceipt): void {
             'provider_execution_ambiguous',
             'output_contract_invalid',
             'local_output_failed',
+            'operator_retired_stale',
         ].includes(receipt.failureCode))
         || typeof receipt.hermesExecutionHappened !== 'boolean'
         || typeof receipt.outputContractValid !== 'boolean'
@@ -547,6 +584,234 @@ export async function leaseNextAmyAnamHermesShadowJob(
         if (lease) return lease;
     }
     return null;
+}
+
+function normalizeBacklogCutoff(value: string): { iso: string; timestamp: number } {
+    const timestamp = Date.parse(value);
+    if (!value || !Number.isFinite(timestamp)) {
+        throw new Error('Amy Anam Hermes backlog cutoff must be an ISO timestamp');
+    }
+    return { iso: new Date(timestamp).toISOString(), timestamp };
+}
+
+async function readAmyAnamHermesShadowBacklogSnapshot(
+    cutoffValue: string,
+    options: StoreOptions = {},
+): Promise<{
+    status: AmyAnamHermesShadowBacklogStatus;
+    candidates: AmyAnamHermesShadowBacklogCandidate[];
+}> {
+    const cutoff = normalizeBacklogCutoff(cutoffValue);
+    const overview = await redisPipeline([
+        ['ZCARD', AMY_ANAM_HERMES_SHADOW_DUE_KEY],
+        ['ZCARD', AMY_ANAM_HERMES_SHADOW_DEAD_KEY],
+        [
+            'ZRANGE',
+            AMY_ANAM_HERMES_SHADOW_DUE_KEY,
+            0,
+            AMY_ANAM_HERMES_BACKLOG_SCAN_LIMIT - 1,
+        ],
+    ], options);
+    const dueCountRaw = overview[0]?.result ?? null;
+    const deadCountRaw = overview[1]?.result ?? null;
+    const jobIdsRaw = overview[2]?.result ?? null;
+    const dueCount = Number(dueCountRaw);
+    const deadLetterCount = Number(deadCountRaw);
+    if (!Number.isInteger(dueCount) || dueCount < 0
+        || !Number.isInteger(deadLetterCount) || deadLetterCount < 0
+        || !Array.isArray(jobIdsRaw)) {
+        throw new Error('Amy Anam Hermes backlog counters were invalid');
+    }
+    if (dueCount > AMY_ANAM_HERMES_BACKLOG_SCAN_LIMIT) {
+        throw new Error('Amy Anam Hermes backlog exceeded the safe inspection limit');
+    }
+
+    const jobIds = jobIdsRaw.map(item => String(item));
+    if (jobIds.some(jobId => !/^[a-f0-9]{64}$/.test(jobId))) {
+        throw new Error('Amy Anam Hermes backlog contained an invalid job identity');
+    }
+
+    const candidates: AmyAnamHermesShadowBacklogCandidate[] = [];
+    let missingJobCount = 0;
+    const batchSize = 64;
+    for (let start = 0; start < jobIds.length; start += batchSize) {
+        const batch = jobIds.slice(start, start + batchSize);
+        const commands = batch.flatMap(jobId => [
+            ['GET', amyAnamHermesShadowJobKey(jobId)],
+            ['GET', amyAnamHermesShadowLeaseKey(jobId)],
+            ['GET', amyAnamHermesShadowExecutionKey(jobId)],
+        ]);
+        const results = await redisPipeline(commands, options);
+        for (let index = 0; index < batch.length; index += 1) {
+            const rawJob = results[index * 3]?.result ?? null;
+            if (rawJob === null) {
+                missingJobCount += 1;
+                continue;
+            }
+            const job = normalizeAmyAnamHermesShadowJob(rawJob);
+            if (job.pointer.jobId !== batch[index]) {
+                throw new Error('Amy Anam Hermes backlog job identity did not match its queue entry');
+            }
+            candidates.push({
+                job,
+                leased: results[index * 3 + 1]?.result !== null
+                    && results[index * 3 + 1]?.result !== undefined,
+                executionStarted: results[index * 3 + 2]?.result !== null
+                    && results[index * 3 + 2]?.result !== undefined,
+            });
+        }
+    }
+
+    const beforeCutoff = candidates.filter(candidate => (
+        Date.parse(candidate.job.pointer.enqueuedAt) < cutoff.timestamp
+    ));
+    const enqueuedTimes = candidates
+        .map(candidate => candidate.job.pointer.enqueuedAt)
+        .sort((left, right) => Date.parse(left) - Date.parse(right));
+    const snapshotDigest = createHash('sha256').update(JSON.stringify({
+        cutoff: cutoff.iso,
+        dueCount,
+        deadLetterCount,
+        missingJobCount,
+        jobs: candidates.map(candidate => ({
+            jobId: candidate.job.pointer.jobId,
+            enqueuedAt: candidate.job.pointer.enqueuedAt,
+            attempts: candidate.job.attempts,
+            leased: candidate.leased,
+            executionStarted: candidate.executionStarted,
+        })).sort((left, right) => left.jobId.localeCompare(right.jobId)),
+    })).digest('hex');
+
+    return {
+        status: {
+            schemaVersion: 'amy_anam_hermes_backlog_status_v1',
+            cutoff: cutoff.iso,
+            dueCount,
+            scannedCount: jobIds.length,
+            missingJobCount,
+            queuedBeforeCutoff: beforeCutoff.length,
+            queuedAtOrAfterCutoff: candidates.length - beforeCutoff.length,
+            retirableBeforeCutoff: beforeCutoff.filter(candidate => (
+                !candidate.leased && !candidate.executionStarted
+            )).length,
+            protectedBeforeCutoff: beforeCutoff.filter(candidate => (
+                candidate.leased || candidate.executionStarted
+            )).length,
+            deadLetterCount,
+            oldestEnqueuedAt: enqueuedTimes[0] ?? null,
+            newestEnqueuedAt: enqueuedTimes.at(-1) ?? null,
+            snapshotDigest,
+            contentIncluded: false,
+        },
+        candidates,
+    };
+}
+
+export async function readAmyAnamHermesShadowBacklogStatus(
+    cutoff: string,
+    options: StoreOptions = {},
+): Promise<AmyAnamHermesShadowBacklogStatus> {
+    return (await readAmyAnamHermesShadowBacklogSnapshot(cutoff, options)).status;
+}
+
+async function retireAmyAnamHermesShadowJob(
+    candidate: AmyAnamHermesShadowBacklogCandidate,
+    options: StoreOptions = {},
+): Promise<'retired' | 'protected_active' | 'stale'> {
+    const config = readAmyAnamHermesShadowConfig(options.env ?? process.env);
+    const { job } = candidate;
+    const now = options.now ?? Date.now();
+    const receipt = buildAmyAnamHermesShadowReceipt({
+        pointer: job.pointer,
+        status: 'dead_letter',
+        attempts: job.attempts,
+        now,
+        failureCode: 'operator_retired_stale',
+        hermesExecutionHappened: false,
+    });
+    validateReceiptForCloud(receipt);
+    const script = [
+        "if not redis.call('ZSCORE', KEYS[1], ARGV[1]) then return 'stale' end",
+        "if redis.call('GET', KEYS[3]) or redis.call('GET', KEYS[4]) then return 'protected_active' end",
+        "local raw = redis.call('GET', KEYS[2])",
+        "if not raw then return 'stale' end",
+        'local job = cjson.decode(raw)',
+        "if job.pointer.jobId ~= ARGV[1] or job.pointer.externalSessionId ~= ARGV[5] or job.pointer.enqueuedAt ~= ARGV[6] then return 'stale' end",
+        "redis.call('SET', KEYS[5], raw, 'EX', ARGV[2])",
+        "redis.call('ZADD', KEYS[6], ARGV[3], ARGV[1])",
+        "redis.call('EXPIRE', KEYS[6], ARGV[2])",
+        "redis.call('DEL', KEYS[2])",
+        "redis.call('ZREM', KEYS[1], ARGV[1])",
+        "redis.call('SET', KEYS[7], ARGV[4], 'EX', ARGV[2])",
+        "redis.call('SET', KEYS[8], ARGV[4], 'EX', ARGV[2])",
+        "return 'retired'",
+    ].join(' ');
+    const result = String(await redisCommand([
+        'EVAL',
+        script,
+        8,
+        AMY_ANAM_HERMES_SHADOW_DUE_KEY,
+        amyAnamHermesShadowJobKey(job.pointer.jobId),
+        amyAnamHermesShadowLeaseKey(job.pointer.jobId),
+        amyAnamHermesShadowExecutionKey(job.pointer.jobId),
+        amyAnamHermesShadowDeadJobKey(job.pointer.jobId),
+        AMY_ANAM_HERMES_SHADOW_DEAD_KEY,
+        amyAnamHermesShadowJobReceiptKey(job.pointer.jobId),
+        amyAnamHermesShadowSessionReceiptKey(job.pointer.externalSessionId),
+        job.pointer.jobId,
+        config.ttlSeconds,
+        now,
+        JSON.stringify(receipt),
+        job.pointer.externalSessionId,
+        job.pointer.enqueuedAt,
+    ], options));
+    if (!['retired', 'protected_active', 'stale'].includes(result)) {
+        throw new Error('Amy Anam Hermes stale retirement returned an invalid result');
+    }
+    return result as 'retired' | 'protected_active' | 'stale';
+}
+
+export async function retireAmyAnamHermesShadowJobsBefore(input: {
+    cutoff: string;
+    expectedSnapshotDigest: string;
+    confirmation: string;
+}, options: StoreOptions = {}): Promise<AmyAnamHermesShadowRetirementResult> {
+    if (input.confirmation !== AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION) {
+        throw new Error('Amy Anam Hermes stale retirement requires explicit confirmation');
+    }
+    if (!/^[a-f0-9]{64}$/.test(input.expectedSnapshotDigest)) {
+        throw new Error('Amy Anam Hermes backlog snapshot digest is invalid');
+    }
+    const cutoff = normalizeBacklogCutoff(input.cutoff);
+    const snapshot = await readAmyAnamHermesShadowBacklogSnapshot(cutoff.iso, options);
+    if (snapshot.status.snapshotDigest !== input.expectedSnapshotDigest) {
+        throw new Error('Amy Anam Hermes backlog changed after inspection');
+    }
+    if (snapshot.status.dueCount !== snapshot.status.scannedCount
+        || snapshot.status.missingJobCount !== 0) {
+        throw new Error('Amy Anam Hermes backlog is inconsistent and cannot be retired safely');
+    }
+
+    const candidates = snapshot.candidates.filter(candidate => (
+        Date.parse(candidate.job.pointer.enqueuedAt) < cutoff.timestamp
+    ));
+    const result: AmyAnamHermesShadowRetirementResult = {
+        schemaVersion: 'amy_anam_hermes_backlog_retirement_v1',
+        cutoff: cutoff.iso,
+        expectedSnapshotDigest: input.expectedSnapshotDigest,
+        attempted: candidates.length,
+        retired: 0,
+        protectedActive: 0,
+        stale: 0,
+        contentIncluded: false,
+    };
+    for (const candidate of candidates) {
+        const status = await retireAmyAnamHermesShadowJob(candidate, options);
+        if (status === 'retired') result.retired += 1;
+        else if (status === 'protected_active') result.protectedActive += 1;
+        else result.stale += 1;
+    }
+    return result;
 }
 
 export async function beginAmyAnamHermesShadowExecution(

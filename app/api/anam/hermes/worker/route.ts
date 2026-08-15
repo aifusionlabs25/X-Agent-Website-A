@@ -12,6 +12,8 @@ import {
     beginAmyAnamHermesShadowExecution,
     leaseNextAmyAnamHermesShadowJob,
     readAmyAnamSessionRecordForHermes,
+    readAmyAnamHermesShadowBacklogStatus,
+    retireAmyAnamHermesShadowJobsBefore,
     retryOrDeadLetterAmyAnamHermesShadowJob,
 } from '@/lib/anam/hermes-shadow-store';
 import {
@@ -55,6 +57,28 @@ export async function POST(request: Request) {
             operation = normalizeAmyAnamHermesWorkerBridgeRequest(body);
         } catch {
             return noStoreJson({ error: 'Invalid worker request' }, { status: 400 });
+        }
+
+        if (operation.operation === 'status') {
+            const status = await readAmyAnamHermesShadowBacklogStatus(operation.cutoff);
+            return noStoreJson({
+                ok: true,
+                operation: 'status',
+                ...status,
+            });
+        }
+
+        if (operation.operation === 'retire_stale') {
+            const result = await retireAmyAnamHermesShadowJobsBefore({
+                cutoff: operation.cutoff,
+                expectedSnapshotDigest: operation.expectedSnapshotDigest,
+                confirmation: operation.confirmation,
+            });
+            return noStoreJson({
+                ok: true,
+                operation: 'retire_stale',
+                ...result,
+            });
         }
 
         if (operation.operation === 'claim') {

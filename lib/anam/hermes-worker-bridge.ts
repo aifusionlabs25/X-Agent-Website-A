@@ -1,10 +1,15 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { AmyAnamHermesShadowFailureCode, AmyAnamHermesShadowReceipt } from './hermes-shadow.ts';
 import {
+    AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION,
     normalizeAmyAnamHermesShadowLease,
     normalizeAmyAnamHermesShadowReceiptForCloud,
 } from './hermes-shadow-store.ts';
-import type { AmyAnamHermesShadowLease } from './hermes-shadow-store.ts';
+import type {
+    AmyAnamHermesShadowBacklogStatus,
+    AmyAnamHermesShadowLease,
+    AmyAnamHermesShadowRetirementResult,
+} from './hermes-shadow-store.ts';
 import type { AmyAnamSessionRecord } from './session-spine.ts';
 
 export const AMY_ANAM_HERMES_WORKER_BRIDGE_MAX_BODY_BYTES = 32 * 1024;
@@ -49,6 +54,18 @@ export type AmyAnamHermesWorkerBridgeRequest =
         lease: AmyAnamHermesShadowLease;
         failureCode: AmyAnamHermesShadowFailureCode;
         hermesExecutionHappened: boolean;
+    }
+    | {
+        operation: 'status';
+        protocolVersion: typeof AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION;
+        cutoff: string;
+    }
+    | {
+        operation: 'retire_stale';
+        protocolVersion: typeof AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION;
+        cutoff: string;
+        expectedSnapshotDigest: string;
+        confirmation: typeof AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION;
     };
 
 export type AmyAnamHermesWorkerClaimResponse =
@@ -88,6 +105,16 @@ export type AmyAnamHermesWorkerFailResponse = {
     contentIncluded: false;
 };
 
+export type AmyAnamHermesWorkerStatusResponse = AmyAnamHermesShadowBacklogStatus & {
+    ok: true;
+    operation: 'status';
+};
+
+export type AmyAnamHermesWorkerRetirementResponse = AmyAnamHermesShadowRetirementResult & {
+    ok: true;
+    operation: 'retire_stale';
+};
+
 function value(source: NodeJS.ProcessEnv, key: string): string {
     return String(source[key] ?? '').replace(/^\uFEFF/, '').trim();
 }
@@ -100,6 +127,13 @@ function hasExactKeys(record: Record<string, unknown>, expected: string[]): bool
     const actual = Object.keys(record).sort();
     const keys = [...expected].sort();
     return actual.length === keys.length && actual.every((key, index) => key === keys[index]);
+}
+
+function normalizedIsoTimestamp(input: unknown, field: string): string {
+    if (typeof input !== 'string' || !input || !Number.isFinite(Date.parse(input))) {
+        throw new Error(`${field} must be an ISO timestamp`);
+    }
+    return new Date(Date.parse(input)).toISOString();
 }
 
 function normalizeBridgeUrl(raw: string): string {
@@ -162,6 +196,43 @@ export function normalizeAmyAnamHermesWorkerBridgeRequest(
         return {
             operation: 'claim',
             protocolVersion: AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
+        };
+    }
+    if (input.operation === 'status') {
+        if (
+            !hasExactKeys(input, ['operation', 'protocolVersion', 'cutoff'])
+            || input.protocolVersion !== AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION
+        ) {
+            throw new Error('Backlog status request protocol is invalid');
+        }
+        return {
+            operation: 'status',
+            protocolVersion: AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
+            cutoff: normalizedIsoTimestamp(input.cutoff, 'Backlog cutoff'),
+        };
+    }
+    if (input.operation === 'retire_stale') {
+        if (!hasExactKeys(input, [
+            'operation',
+            'protocolVersion',
+            'cutoff',
+            'expectedSnapshotDigest',
+            'confirmation',
+        ]) || input.protocolVersion !== AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION) {
+            throw new Error('Backlog retirement request protocol is invalid');
+        }
+        if (!/^[a-f0-9]{64}$/.test(String(input.expectedSnapshotDigest ?? ''))) {
+            throw new Error('Backlog retirement digest is invalid');
+        }
+        if (input.confirmation !== AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION) {
+            throw new Error('Backlog retirement confirmation is invalid');
+        }
+        return {
+            operation: 'retire_stale',
+            protocolVersion: AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
+            cutoff: normalizedIsoTimestamp(input.cutoff, 'Backlog cutoff'),
+            expectedSnapshotDigest: String(input.expectedSnapshotDigest),
+            confirmation: AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION,
         };
     }
     if (input.operation === 'ack') {
@@ -345,4 +416,123 @@ export function normalizeAmyAnamHermesWorkerTransitionResponse(
         };
     }
     throw new Error('Worker transition response operation is invalid');
+}
+
+export function normalizeAmyAnamHermesWorkerStatusResponse(
+    input: unknown,
+): AmyAnamHermesWorkerStatusResponse {
+    if (!isRecord(input) || !hasExactKeys(input, [
+        'ok',
+        'operation',
+        'schemaVersion',
+        'cutoff',
+        'dueCount',
+        'scannedCount',
+        'missingJobCount',
+        'queuedBeforeCutoff',
+        'queuedAtOrAfterCutoff',
+        'retirableBeforeCutoff',
+        'protectedBeforeCutoff',
+        'deadLetterCount',
+        'oldestEnqueuedAt',
+        'newestEnqueuedAt',
+        'snapshotDigest',
+        'contentIncluded',
+    ]) || input.ok !== true
+        || input.operation !== 'status'
+        || input.schemaVersion !== 'amy_anam_hermes_backlog_status_v1'
+        || input.contentIncluded !== false
+        || !/^[a-f0-9]{64}$/.test(String(input.snapshotDigest ?? ''))) {
+        throw new Error('Worker backlog status response is invalid');
+    }
+    const integerFields = [
+        'dueCount',
+        'scannedCount',
+        'missingJobCount',
+        'queuedBeforeCutoff',
+        'queuedAtOrAfterCutoff',
+        'retirableBeforeCutoff',
+        'protectedBeforeCutoff',
+        'deadLetterCount',
+    ] as const;
+    if (integerFields.some(field => !Number.isInteger(input[field]) || Number(input[field]) < 0)) {
+        throw new Error('Worker backlog status counts are invalid');
+    }
+    const cutoff = normalizedIsoTimestamp(input.cutoff, 'Backlog cutoff');
+    const oldestEnqueuedAt = input.oldestEnqueuedAt === null
+        ? null
+        : normalizedIsoTimestamp(input.oldestEnqueuedAt, 'Oldest enqueue time');
+    const newestEnqueuedAt = input.newestEnqueuedAt === null
+        ? null
+        : normalizedIsoTimestamp(input.newestEnqueuedAt, 'Newest enqueue time');
+    if (
+        Number(input.scannedCount) > Number(input.dueCount)
+        || Number(input.missingJobCount) > Number(input.scannedCount)
+        || Number(input.queuedBeforeCutoff) + Number(input.queuedAtOrAfterCutoff)
+            !== Number(input.scannedCount) - Number(input.missingJobCount)
+        || Number(input.retirableBeforeCutoff) + Number(input.protectedBeforeCutoff)
+            !== Number(input.queuedBeforeCutoff)
+        || ((oldestEnqueuedAt === null) !== (newestEnqueuedAt === null))
+    ) {
+        throw new Error('Worker backlog status relationships are invalid');
+    }
+    return {
+        ok: true,
+        operation: 'status',
+        schemaVersion: 'amy_anam_hermes_backlog_status_v1',
+        cutoff,
+        dueCount: Number(input.dueCount),
+        scannedCount: Number(input.scannedCount),
+        missingJobCount: Number(input.missingJobCount),
+        queuedBeforeCutoff: Number(input.queuedBeforeCutoff),
+        queuedAtOrAfterCutoff: Number(input.queuedAtOrAfterCutoff),
+        retirableBeforeCutoff: Number(input.retirableBeforeCutoff),
+        protectedBeforeCutoff: Number(input.protectedBeforeCutoff),
+        deadLetterCount: Number(input.deadLetterCount),
+        oldestEnqueuedAt,
+        newestEnqueuedAt,
+        snapshotDigest: String(input.snapshotDigest),
+        contentIncluded: false,
+    };
+}
+
+export function normalizeAmyAnamHermesWorkerRetirementResponse(
+    input: unknown,
+): AmyAnamHermesWorkerRetirementResponse {
+    if (!isRecord(input) || !hasExactKeys(input, [
+        'ok',
+        'operation',
+        'schemaVersion',
+        'cutoff',
+        'expectedSnapshotDigest',
+        'attempted',
+        'retired',
+        'protectedActive',
+        'stale',
+        'contentIncluded',
+    ]) || input.ok !== true
+        || input.operation !== 'retire_stale'
+        || input.schemaVersion !== 'amy_anam_hermes_backlog_retirement_v1'
+        || input.contentIncluded !== false
+        || !/^[a-f0-9]{64}$/.test(String(input.expectedSnapshotDigest ?? ''))) {
+        throw new Error('Worker backlog retirement response is invalid');
+    }
+    const integerFields = ['attempted', 'retired', 'protectedActive', 'stale'] as const;
+    if (integerFields.some(field => !Number.isInteger(input[field]) || Number(input[field]) < 0)
+        || Number(input.retired) + Number(input.protectedActive) + Number(input.stale)
+            !== Number(input.attempted)) {
+        throw new Error('Worker backlog retirement counts are invalid');
+    }
+    return {
+        ok: true,
+        operation: 'retire_stale',
+        schemaVersion: 'amy_anam_hermes_backlog_retirement_v1',
+        cutoff: normalizedIsoTimestamp(input.cutoff, 'Backlog cutoff'),
+        expectedSnapshotDigest: String(input.expectedSnapshotDigest),
+        attempted: Number(input.attempted),
+        retired: Number(input.retired),
+        protectedActive: Number(input.protectedActive),
+        stale: Number(input.stale),
+        contentIncluded: false,
+    };
 }
