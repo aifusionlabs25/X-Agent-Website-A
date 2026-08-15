@@ -24,9 +24,11 @@ import {
 import { buildAmyAnamReceipt } from '../lib/anam/session-spine.ts';
 import {
     AMY_ANAM_HERMES_WORKER_MAX_TIMEOUT_MS,
+    AMY_ANAM_HERMES_WORKER_RESULT_LOG_NAME,
     callAmyAnamHermesWorkerBridge,
     processOneAmyAnamHermesShadowJob,
     readAmyAnamHermesWorkerConfig,
+    writeAmyAnamHermesWorkerResultLog,
 } from '../scripts/hermes/amy-anam-shadow-worker.mjs';
 import { cleanupAmyAnamHermesLocalOutputs } from '../scripts/hermes/amy-anam-shadow-local-output.mjs';
 
@@ -157,6 +159,71 @@ test('worker bridge requires a 32-character secret and constant-shape bearer aut
     });
     assert.equal(isAmyAnamHermesWorkerAuthorized(authorized, SERVER_ENV), true);
     assert.equal(isAmyAnamHermesWorkerAuthorized(denied, SERVER_ENV), false);
+});
+
+test('worker persists only the latest content-free non-idle result locally', async () => {
+    const suffix = `${process.pid}-${Date.now()}`;
+    const hermesHome = resolve(tmpdir(), `amy-anam-worker-result-${suffix}`);
+    const config = { hermesHome };
+    try {
+        assert.equal(await writeAmyAnamHermesWorkerResultLog({
+            found: false,
+            processed: false,
+            contentIncluded: false,
+        }, config, { now: NOW }), false);
+        assert.equal(await writeAmyAnamHermesWorkerResultLog({
+            found: true,
+            processed: false,
+            status: 'dead_letter',
+            failureCode: 'hermes_execution_failed',
+            hermesExecutionHappened: true,
+            outputContractValid: false,
+            transcript: 'must never be logged',
+            externalSessionId: SESSION_ID,
+            contentIncluded: false,
+        }, config, { now: NOW }), true);
+        const raw = await readFile(resolve(hermesHome, AMY_ANAM_HERMES_WORKER_RESULT_LOG_NAME), 'utf8');
+        const record = JSON.parse(raw);
+        assert.deepEqual(record, {
+            schemaVersion: 'amy_anam_hermes_worker_result_v1',
+            observedAt: '2026-07-14T20:00:00.000Z',
+            found: true,
+            processed: false,
+            status: 'dead_letter',
+            failureCode: 'hermes_execution_failed',
+            hermesExecutionHappened: true,
+            outputContractValid: false,
+            contentIncluded: false,
+        });
+        assert.equal(raw.includes('must never be logged'), false);
+        assert.equal(raw.includes(SESSION_ID), false);
+
+        assert.equal(await writeAmyAnamHermesWorkerResultLog({
+            found: true,
+            processed: true,
+            status: 'completed',
+            hermesExecutionHappened: true,
+            outputContractValid: true,
+            contentIncluded: false,
+        }, config, { now: NOW + 1_000 }), true);
+        const replacementRaw = await readFile(
+            resolve(hermesHome, AMY_ANAM_HERMES_WORKER_RESULT_LOG_NAME),
+            'utf8',
+        );
+        assert.deepEqual(JSON.parse(replacementRaw), {
+            schemaVersion: 'amy_anam_hermes_worker_result_v1',
+            observedAt: '2026-07-14T20:00:01.000Z',
+            found: true,
+            processed: true,
+            status: 'completed',
+            failureCode: null,
+            hermesExecutionHappened: true,
+            outputContractValid: true,
+            contentIncluded: false,
+        });
+    } finally {
+        await rm(hermesHome, { recursive: true, force: true });
+    }
 });
 
 test('bridge request contracts reject extra fields, generated output, and invalid fail codes', () => {

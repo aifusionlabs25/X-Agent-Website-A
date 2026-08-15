@@ -12,6 +12,18 @@ Amy's Hermes worker is post-session, analysis-only, and intentionally has no aut
 - A missing job record is treated as an orphan pointer. Only a pre-cutoff orphan whose exact sorted-set score is covered by the inspected digest may be removed; an active marker, changed score, or restored job record prevents removal.
 - Do not run retirement while the Hermes worker is running.
 
+## Content-free failure inspection
+
+The authenticated worker bridge can report the most recent dead-letter receipt without exposing its job identity or session content. Load the private worker environment files and run:
+
+```powershell
+npm run hermes:amy-anam-backlog -- --latest-failure
+```
+
+The response is limited to `deadLetterCount`, `observedAt`, `status`, `failureCode`, `attempts`, `hermesExecutionHappened`, `outputContractValid`, and `contentIncluded: false`. It never includes a job ID, session ID, transcript, contact data, or generated review content. This command is read-only and cannot be combined with retirement arguments.
+
+The continuously running worker also atomically replaces `<HERMES_HOME>/worker-result-latest.json` after each non-idle attempt. That local receipt is likewise content-free and is intended to prevent a one-line console result from being lost in a long-running task window.
+
 ## 1. Choose and record the checkpoint cutoff
 
 Use a UTC ISO timestamp immediately before the new worker baseline. Keep the exact string for both commands.

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import {
     AMY_ANAM_HERMES_WORKER_BRIDGE_MAX_BODY_BYTES,
     AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
+    normalizeAmyAnamHermesWorkerLatestFailureResponse,
     normalizeAmyAnamHermesWorkerRetirementResponse,
     normalizeAmyAnamHermesWorkerStatusResponse,
     readAmyAnamHermesWorkerBridgeConfig,
@@ -18,12 +19,23 @@ function exactArgumentValue(args, prefix) {
 }
 
 export function readAmyAnamHermesBacklogCommand(args = process.argv.slice(2)) {
-    const allowed = new Set(['--apply']);
+    const allowed = new Set(['--apply', '--latest-failure']);
     for (const argument of args) {
         if (argument.startsWith('--cutoff=')) continue;
         if (argument.startsWith('--expected-snapshot-digest=')) continue;
         if (argument.startsWith('--confirm=')) continue;
         if (!allowed.has(argument)) throw new Error(`Unsupported argument: ${argument}`);
+    }
+    const latestFailure = args.includes('--latest-failure');
+    if (latestFailure) {
+        if (args.length !== 1) throw new Error('--latest-failure cannot be combined with backlog arguments');
+        return {
+            mode: 'latest_failure',
+            apply: false,
+            cutoff: '',
+            expectedSnapshotDigest: '',
+            confirmation: '',
+        };
     }
     const cutoffValue = exactArgumentValue(args, '--cutoff=');
     const cutoffTimestamp = Date.parse(cutoffValue);
@@ -45,7 +57,7 @@ export function readAmyAnamHermesBacklogCommand(args = process.argv.slice(2)) {
             throw new Error(`--confirm=${AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION} is required with --apply`);
         }
     }
-    return { apply, cutoff, expectedSnapshotDigest, confirmation };
+    return { mode: apply ? 'retire_stale' : 'status', apply, cutoff, expectedSnapshotDigest, confirmation };
 }
 
 async function postBridge(body, options = {}) {
@@ -79,6 +91,13 @@ async function postBridge(body, options = {}) {
 }
 
 export async function runAmyAnamHermesBacklogCommand(command, options = {}) {
+    if (command.mode === 'latest_failure') {
+        const response = await postBridge({
+            operation: 'latest_failure',
+            protocolVersion: AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
+        }, options);
+        return normalizeAmyAnamHermesWorkerLatestFailureResponse(response);
+    }
     if (!command.apply) {
         const response = await postBridge({
             operation: 'status',
