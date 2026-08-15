@@ -66,6 +66,13 @@ function jobFor(index, enqueuedAt) {
 
 function makeRedisFetch(initialJobs, options = {}) {
     const jobs = new Map(initialJobs.map(job => [job.pointer.jobId, job]));
+    const due = new Map(initialJobs.map(job => [
+        job.pointer.jobId,
+        Date.parse(job.pointer.enqueuedAt),
+    ]));
+    for (const orphan of options.orphans ?? []) {
+        due.set(orphan.jobId, orphan.dueAt);
+    }
     const leases = new Set(options.leases ?? []);
     const executions = new Set(options.executions ?? []);
     const dead = new Set();
@@ -75,9 +82,11 @@ function makeRedisFetch(initialJobs, options = {}) {
         const results = commands.map((command) => {
             const [verb, ...args] = command;
             if (verb === 'ZCARD') {
-                return { result: String(args[0]).includes(':dead:') ? dead.size : jobs.size };
+                return { result: String(args[0]).includes(':dead:') ? dead.size : due.size };
             }
-            if (verb === 'ZRANGE') return { result: [...jobs.keys()] };
+            if (verb === 'ZRANGE') {
+                return { result: [...due.entries()].flatMap(([jobId, score]) => [jobId, String(score)]) };
+            }
             if (verb === 'GET') {
                 const key = String(args[0]);
                 const jobId = key.slice(key.lastIndexOf(':') + 1);
@@ -96,11 +105,20 @@ function makeRedisFetch(initialJobs, options = {}) {
                 const keys = args.slice(2, 2 + keyCount).map(String);
                 const values = args.slice(2 + keyCount).map(String);
                 const jobId = values[0];
-                if (!jobs.has(jobId)) return { result: 'stale' };
+                if (!due.has(jobId) || Number(values.at(-1)) !== due.get(jobId)) {
+                    return { result: 'stale' };
+                }
                 if (leases.has(jobId) || executions.has(jobId)) {
                     return { result: 'protected_active' };
                 }
+                if (keyCount === 4) {
+                    if (jobs.has(jobId)) return { result: 'stale' };
+                    due.delete(jobId);
+                    return { result: 'orphan_pruned' };
+                }
+                if (!jobs.has(jobId)) return { result: 'stale' };
                 jobs.delete(jobId);
+                due.delete(jobId);
                 dead.add(jobId);
                 assert.ok(keys.some(key => key.includes(':dead-job:v1:')));
                 assert.equal(JSON.parse(values[3]).failureCode, 'operator_retired_stale');
@@ -110,7 +128,7 @@ function makeRedisFetch(initialJobs, options = {}) {
         });
         return new Response(JSON.stringify(results), { status: 200 });
     };
-    return { fetchImpl, jobs, dead, get retirementCalls() { return retirementCalls; } };
+    return { fetchImpl, jobs, due, dead, get retirementCalls() { return retirementCalls; } };
 }
 
 test('backlog status is read-only, content-free, and separates pre-checkpoint jobs', async () => {
@@ -127,6 +145,8 @@ test('backlog status is read-only, content-free, and separates pre-checkpoint jo
     assert.equal(status.queuedAtOrAfterCutoff, 1);
     assert.equal(status.retirableBeforeCutoff, 0);
     assert.equal(status.protectedBeforeCutoff, 1);
+    assert.equal(status.orphanBeforeCutoff, 0);
+    assert.equal(status.orphanAtOrAfterCutoff, 0);
     assert.equal(status.contentIncluded, false);
     assert.match(status.snapshotDigest, /^[a-f0-9]{64}$/);
     assert.equal(redis.retirementCalls, 0);
@@ -161,12 +181,14 @@ test('retirement requires an exact inspected digest and preserves active work', 
     assert.deepEqual({
         attempted: result.attempted,
         retired: result.retired,
+        orphanPruned: result.orphanPruned,
         protectedActive: result.protectedActive,
         stale: result.stale,
         contentIncluded: result.contentIncluded,
     }, {
         attempted: 2,
         retired: 1,
+        orphanPruned: 0,
         protectedActive: 1,
         stale: 0,
         contentIncluded: false,
@@ -174,6 +196,46 @@ test('retirement requires an exact inspected digest and preserves active work', 
     assert.equal(redis.jobs.has(oldJob.pointer.jobId), false);
     assert.equal(redis.jobs.has(activeJob.pointer.jobId), true);
     assert.equal(redis.dead.has(oldJob.pointer.jobId), true);
+});
+
+test('retirement prunes only digest-matched pre-cutoff orphan pointers', async () => {
+    const oldJob = jobFor(5, '2026-08-01T12:00:00.000Z');
+    const activeJob = jobFor(6, '2026-08-02T12:00:00.000Z');
+    const orphan = { jobId: 'a'.repeat(64), dueAt: Date.parse('2026-08-03T12:00:00.000Z') };
+    const postCutoffOrphan = { jobId: 'b'.repeat(64), dueAt: Date.parse(CUTOFF) };
+    const redis = makeRedisFetch([oldJob, activeJob], {
+        executions: [activeJob.pointer.jobId],
+        orphans: [orphan, postCutoffOrphan],
+    });
+    const status = await readAmyAnamHermesShadowBacklogStatus(CUTOFF, {
+        env: ENV,
+        fetchImpl: redis.fetchImpl,
+    });
+    assert.equal(status.missingJobCount, 2);
+    assert.equal(status.orphanBeforeCutoff, 1);
+    assert.equal(status.orphanAtOrAfterCutoff, 1);
+
+    const result = await retireAmyAnamHermesShadowJobsBefore({
+        cutoff: CUTOFF,
+        expectedSnapshotDigest: status.snapshotDigest,
+        confirmation: AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION,
+    }, { env: ENV, fetchImpl: redis.fetchImpl, now: Date.parse(CUTOFF) });
+    assert.deepEqual({
+        attempted: result.attempted,
+        retired: result.retired,
+        orphanPruned: result.orphanPruned,
+        protectedActive: result.protectedActive,
+        stale: result.stale,
+    }, {
+        attempted: 3,
+        retired: 1,
+        orphanPruned: 1,
+        protectedActive: 1,
+        stale: 0,
+    });
+    assert.equal(redis.due.has(orphan.jobId), false);
+    assert.equal(redis.due.has(postCutoffOrphan.jobId), true);
+    assert.equal(redis.dead.has(orphan.jobId), false);
 });
 
 test('bridge backlog contracts reject extras and validate content-free count relationships', () => {
@@ -208,6 +270,8 @@ test('bridge backlog contracts reject extras and validate content-free count rel
         dueCount: 2,
         scannedCount: 2,
         missingJobCount: 0,
+        orphanBeforeCutoff: 0,
+        orphanAtOrAfterCutoff: 0,
         queuedBeforeCutoff: 1,
         queuedAtOrAfterCutoff: 1,
         retirableBeforeCutoff: 1,
@@ -232,6 +296,7 @@ test('bridge backlog contracts reject extras and validate content-free count rel
         expectedSnapshotDigest: 'b'.repeat(64),
         attempted: 2,
         retired: 1,
+        orphanPruned: 0,
         protectedActive: 1,
         stale: 0,
         contentIncluded: false,
@@ -255,6 +320,8 @@ test('operator command defaults to inspection and requires explicit apply proof'
         dueCount: 0,
         scannedCount: 0,
         missingJobCount: 0,
+        orphanBeforeCutoff: 0,
+        orphanAtOrAfterCutoff: 0,
         queuedBeforeCutoff: 0,
         queuedAtOrAfterCutoff: 0,
         retirableBeforeCutoff: 0,
