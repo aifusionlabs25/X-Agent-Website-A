@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,6 +53,8 @@ const MAX_API_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_STDERR_BYTES = 8 * 1024;
 const HERMES_RUNTIME_INPUT_SCHEMA = 'amy_anam_hermes_runtime_input_v1';
 const HERMES_RUNTIME_OUTPUT_SCHEMA = 'amy_anam_hermes_runtime_v1';
+export const AMY_ANAM_HERMES_WORKER_RESULT_LOG_VERSION = 'amy_anam_hermes_worker_result_v1';
+export const AMY_ANAM_HERMES_WORKER_RESULT_LOG_NAME = 'worker-result-latest.json';
 const HERMES_RUNTIME_SCRIPT = fileURLToPath(
     new URL('./amy-anam-shadow-runtime.py', import.meta.url),
 );
@@ -569,6 +572,44 @@ function failureCode(error) {
     return 'hermes_execution_failed';
 }
 
+export async function writeAmyAnamHermesWorkerResultLog(result, config, options = {}) {
+    if (!result || result.found !== true) return false;
+    const observedAt = new Date(options.now ?? Date.now()).toISOString();
+    const record = {
+        schemaVersion: AMY_ANAM_HERMES_WORKER_RESULT_LOG_VERSION,
+        observedAt,
+        found: true,
+        processed: result.processed === true,
+        status: typeof result.status === 'string' ? result.status.slice(0, 32) : null,
+        failureCode: typeof result.failureCode === 'string' ? result.failureCode.slice(0, 64) : null,
+        hermesExecutionHappened: typeof result.hermesExecutionHappened === 'boolean'
+            ? result.hermesExecutionHappened
+            : null,
+        outputContractValid: typeof result.outputContractValid === 'boolean'
+            ? result.outputContractValid
+            : null,
+        contentIncluded: false,
+    };
+    const serialized = `${JSON.stringify(record, null, 2)}\n`;
+    if (Buffer.byteLength(serialized, 'utf8') > 2 * 1024) {
+        throw new Error('Amy Hermes worker result log exceeded its safety bound');
+    }
+    await mkdir(config.hermesHome, { recursive: true, mode: 0o700 });
+    const finalPath = resolve(config.hermesHome, AMY_ANAM_HERMES_WORKER_RESULT_LOG_NAME);
+    const temporaryPath = resolve(
+        config.hermesHome,
+        `.${AMY_ANAM_HERMES_WORKER_RESULT_LOG_NAME}.${randomUUID()}.tmp`,
+    );
+    try {
+        await writeFile(temporaryPath, serialized, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+        await rename(temporaryPath, finalPath);
+    } catch (error) {
+        await unlink(temporaryPath).catch(() => undefined);
+        throw error;
+    }
+    return true;
+}
+
 export async function processOneAmyAnamHermesShadowJob(options = {}) {
     const env = options.env ?? process.env;
     const config = readAmyAnamHermesWorkerConfig(env);
@@ -742,6 +783,11 @@ async function main() {
     const config = readAmyAnamHermesWorkerConfig(process.env);
     do {
         const result = await processOneAmyAnamHermesShadowJob();
+        try {
+            await writeAmyAnamHermesWorkerResultLog(result, config);
+        } catch {
+            process.stderr.write('[Amy Anam Hermes] Content-free worker result log failed\n');
+        }
         process.stdout.write(`${JSON.stringify(result)}\n`);
         if (once) {
             const exitCode = amyAnamHermesShadowWorkerExitCode(result, true);
