@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
     AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
     normalizeAmyAnamHermesWorkerBridgeRequest,
+    normalizeAmyAnamHermesWorkerLatestFailureResponse,
     normalizeAmyAnamHermesWorkerRetirementResponse,
     normalizeAmyAnamHermesWorkerStatusResponse,
 } from '../lib/anam/hermes-worker-bridge.ts';
@@ -10,10 +11,14 @@ import {
     AMY_ANAM_HERMES_STALE_RETIREMENT_CONFIRMATION,
     buildAmyAnamHermesShadowJob,
     readAmyAnamHermesShadowBacklogStatus,
+    readAmyAnamHermesLatestFailureStatus,
     retireAmyAnamHermesShadowJobsBefore,
 } from '../lib/anam/hermes-shadow-store.ts';
 import { buildAmyAnamReceipt } from '../lib/anam/session-spine.ts';
-import { createAmyAnamHermesShadowPointer } from '../lib/anam/hermes-shadow.ts';
+import {
+    buildAmyAnamHermesShadowReceipt,
+    createAmyAnamHermesShadowPointer,
+} from '../lib/anam/hermes-shadow.ts';
 import {
     readAmyAnamHermesBacklogCommand,
     runAmyAnamHermesBacklogCommand,
@@ -238,6 +243,52 @@ test('retirement prunes only digest-matched pre-cutoff orphan pointers', async (
     assert.equal(redis.dead.has(orphan.jobId), false);
 });
 
+test('latest failure inspection returns only bounded content-free metadata', async () => {
+    const job = jobFor(7, '2026-08-15T21:00:00.000Z');
+    const observedAt = Date.parse('2026-08-15T21:05:00.000Z');
+    const receipt = buildAmyAnamHermesShadowReceipt({
+        pointer: job.pointer,
+        status: 'dead_letter',
+        attempts: 1,
+        now: observedAt,
+        failureCode: 'hermes_execution_failed',
+        hermesExecutionHappened: true,
+    });
+    let calls = 0;
+    const status = await readAmyAnamHermesLatestFailureStatus({
+        env: ENV,
+        fetchImpl: async (_url, init) => {
+            calls += 1;
+            const commands = JSON.parse(String(init.body));
+            if (calls === 1) {
+                assert.deepEqual(commands.map(command => command[0]), ['ZCARD', 'ZRANGE']);
+                return new Response(JSON.stringify([
+                    { result: 1 },
+                    { result: [job.pointer.jobId, String(observedAt)] },
+                ]), { status: 200 });
+            }
+            assert.equal(commands.length, 1);
+            return new Response(JSON.stringify([{ result: JSON.stringify(receipt) }]), { status: 200 });
+        },
+    });
+    assert.deepEqual(status, {
+        schemaVersion: 'amy_anam_hermes_latest_failure_v1',
+        found: true,
+        deadLetterCount: 1,
+        observedAt: '2026-08-15T21:05:00.000Z',
+        status: 'dead_letter',
+        failureCode: 'hermes_execution_failed',
+        attempts: 1,
+        hermesExecutionHappened: true,
+        outputContractValid: false,
+        contentIncluded: false,
+    });
+    const serialized = JSON.stringify(status);
+    assert.equal(serialized.includes(job.pointer.jobId), false);
+    assert.equal(serialized.includes(job.pointer.externalSessionId), false);
+    assert.equal(serialized.includes('transcript'), false);
+});
+
 test('bridge backlog contracts reject extras and validate content-free count relationships', () => {
     assert.deepEqual(normalizeAmyAnamHermesWorkerBridgeRequest({
         operation: 'status',
@@ -302,9 +353,30 @@ test('bridge backlog contracts reject extras and validate content-free count rel
         contentIncluded: false,
     });
     assert.equal(retired.attempted, 2);
+    const failure = normalizeAmyAnamHermesWorkerLatestFailureResponse({
+        ok: true,
+        operation: 'latest_failure',
+        schemaVersion: 'amy_anam_hermes_latest_failure_v1',
+        found: true,
+        deadLetterCount: 24,
+        observedAt: '2026-08-15T21:05:00.000Z',
+        status: 'dead_letter',
+        failureCode: 'hermes_execution_failed',
+        attempts: 1,
+        hermesExecutionHappened: true,
+        outputContractValid: false,
+        contentIncluded: false,
+    });
+    assert.equal(failure.failureCode, 'hermes_execution_failed');
 });
 
 test('operator command defaults to inspection and requires explicit apply proof', async () => {
+    const latestFailure = readAmyAnamHermesBacklogCommand(['--latest-failure']);
+    assert.equal(latestFailure.mode, 'latest_failure');
+    assert.throws(() => readAmyAnamHermesBacklogCommand([
+        '--latest-failure',
+        `--cutoff=${CUTOFF}`,
+    ]), /cannot be combined/);
     const inspection = readAmyAnamHermesBacklogCommand([`--cutoff=${CUTOFF}`]);
     assert.equal(inspection.apply, false);
     assert.throws(() => readAmyAnamHermesBacklogCommand([

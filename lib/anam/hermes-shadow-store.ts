@@ -90,6 +90,19 @@ export type AmyAnamHermesShadowRetirementResult = {
     contentIncluded: false;
 };
 
+export type AmyAnamHermesLatestFailureStatus = {
+    schemaVersion: 'amy_anam_hermes_latest_failure_v1';
+    found: boolean;
+    deadLetterCount: number;
+    observedAt: string | null;
+    status: 'dead_letter' | null;
+    failureCode: AmyAnamHermesShadowFailureCode | null;
+    attempts: number | null;
+    hermesExecutionHappened: boolean | null;
+    outputContractValid: false | null;
+    contentIncluded: false;
+};
+
 type AmyAnamHermesShadowBacklogCandidate = {
     job: AmyAnamHermesShadowJob;
     dueAt: number;
@@ -746,6 +759,57 @@ export async function readAmyAnamHermesShadowBacklogStatus(
     options: StoreOptions = {},
 ): Promise<AmyAnamHermesShadowBacklogStatus> {
     return (await readAmyAnamHermesShadowBacklogSnapshot(cutoff, options)).status;
+}
+
+export async function readAmyAnamHermesLatestFailureStatus(
+    options: StoreOptions = {},
+): Promise<AmyAnamHermesLatestFailureStatus> {
+    const overview = await redisPipeline([
+        ['ZCARD', AMY_ANAM_HERMES_SHADOW_DEAD_KEY],
+        ['ZRANGE', AMY_ANAM_HERMES_SHADOW_DEAD_KEY, -1, -1, 'WITHSCORES'],
+    ], options);
+    const deadLetterCount = Number(overview[0]?.result ?? null);
+    const latestRaw = overview[1]?.result ?? null;
+    if (!Number.isInteger(deadLetterCount) || deadLetterCount < 0 || !Array.isArray(latestRaw)) {
+        throw new Error('Amy Anam Hermes failure status was invalid');
+    }
+    if (deadLetterCount === 0) {
+        if (latestRaw.length !== 0) throw new Error('Amy Anam Hermes failure status was inconsistent');
+        return {
+            schemaVersion: 'amy_anam_hermes_latest_failure_v1',
+            found: false,
+            deadLetterCount,
+            observedAt: null,
+            status: null,
+            failureCode: null,
+            attempts: null,
+            hermesExecutionHappened: null,
+            outputContractValid: null,
+            contentIncluded: false,
+        };
+    }
+    if (latestRaw.length !== 2) throw new Error('Amy Anam Hermes latest failure pointer was invalid');
+    const jobId = String(latestRaw[0]);
+    const observedAtMs = Number(latestRaw[1]);
+    if (!/^[a-f0-9]{64}$/.test(jobId) || !Number.isFinite(observedAtMs) || observedAtMs < 0) {
+        throw new Error('Amy Anam Hermes latest failure pointer was invalid');
+    }
+    const receipt = await readAmyAnamHermesShadowJobReceipt(jobId, options);
+    if (!receipt || receipt.status !== 'dead_letter' || receipt.failureCode === null) {
+        throw new Error('Amy Anam Hermes latest failure receipt was unavailable');
+    }
+    return {
+        schemaVersion: 'amy_anam_hermes_latest_failure_v1',
+        found: true,
+        deadLetterCount,
+        observedAt: new Date(observedAtMs).toISOString(),
+        status: 'dead_letter',
+        failureCode: receipt.failureCode,
+        attempts: receipt.attempts,
+        hermesExecutionHappened: receipt.hermesExecutionHappened,
+        outputContractValid: false,
+        contentIncluded: false,
+    };
 }
 
 async function retireAmyAnamHermesShadowJob(

@@ -7,6 +7,7 @@ import {
 } from './hermes-shadow-store.ts';
 import type {
     AmyAnamHermesShadowBacklogStatus,
+    AmyAnamHermesLatestFailureStatus,
     AmyAnamHermesShadowLease,
     AmyAnamHermesShadowRetirementResult,
 } from './hermes-shadow-store.ts';
@@ -25,6 +26,10 @@ const FAILURE_CODES = new Set<AmyAnamHermesShadowFailureCode>([
     'provider_execution_ambiguous',
     'output_contract_invalid',
     'local_output_failed',
+]);
+const OBSERVABLE_FAILURE_CODES = new Set<AmyAnamHermesShadowFailureCode>([
+    ...FAILURE_CODES,
+    'operator_retired_stale',
 ]);
 
 export type AmyAnamHermesWorkerSessionIdentity = {
@@ -59,6 +64,10 @@ export type AmyAnamHermesWorkerBridgeRequest =
         operation: 'status';
         protocolVersion: typeof AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION;
         cutoff: string;
+    }
+    | {
+        operation: 'latest_failure';
+        protocolVersion: typeof AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION;
     }
     | {
         operation: 'retire_stale';
@@ -113,6 +122,11 @@ export type AmyAnamHermesWorkerStatusResponse = AmyAnamHermesShadowBacklogStatus
 export type AmyAnamHermesWorkerRetirementResponse = AmyAnamHermesShadowRetirementResult & {
     ok: true;
     operation: 'retire_stale';
+};
+
+export type AmyAnamHermesWorkerLatestFailureResponse = AmyAnamHermesLatestFailureStatus & {
+    ok: true;
+    operation: 'latest_failure';
 };
 
 function value(source: NodeJS.ProcessEnv, key: string): string {
@@ -209,6 +223,18 @@ export function normalizeAmyAnamHermesWorkerBridgeRequest(
             operation: 'status',
             protocolVersion: AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
             cutoff: normalizedIsoTimestamp(input.cutoff, 'Backlog cutoff'),
+        };
+    }
+    if (input.operation === 'latest_failure') {
+        if (
+            !hasExactKeys(input, ['operation', 'protocolVersion'])
+            || input.protocolVersion !== AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION
+        ) {
+            throw new Error('Latest failure request protocol is invalid');
+        }
+        return {
+            operation: 'latest_failure',
+            protocolVersion: AMY_ANAM_HERMES_WORKER_PROTOCOL_VERSION,
         };
     }
     if (input.operation === 'retire_stale') {
@@ -544,6 +570,72 @@ export function normalizeAmyAnamHermesWorkerRetirementResponse(
         orphanPruned: Number(input.orphanPruned),
         protectedActive: Number(input.protectedActive),
         stale: Number(input.stale),
+        contentIncluded: false,
+    };
+}
+
+export function normalizeAmyAnamHermesWorkerLatestFailureResponse(
+    input: unknown,
+): AmyAnamHermesWorkerLatestFailureResponse {
+    if (!isRecord(input) || !hasExactKeys(input, [
+        'ok',
+        'operation',
+        'schemaVersion',
+        'found',
+        'deadLetterCount',
+        'observedAt',
+        'status',
+        'failureCode',
+        'attempts',
+        'hermesExecutionHappened',
+        'outputContractValid',
+        'contentIncluded',
+    ]) || input.ok !== true
+        || input.operation !== 'latest_failure'
+        || input.schemaVersion !== 'amy_anam_hermes_latest_failure_v1'
+        || typeof input.found !== 'boolean'
+        || !Number.isInteger(input.deadLetterCount)
+        || Number(input.deadLetterCount) < 0
+        || input.contentIncluded !== false) {
+        throw new Error('Worker latest failure response is invalid');
+    }
+    if (input.found === false) {
+        if (
+            input.deadLetterCount !== 0
+            || input.observedAt !== null
+            || input.status !== null
+            || input.failureCode !== null
+            || input.attempts !== null
+            || input.hermesExecutionHappened !== null
+            || input.outputContractValid !== null
+        ) {
+            throw new Error('Empty latest failure response is invalid');
+        }
+        return input as AmyAnamHermesWorkerLatestFailureResponse;
+    }
+    if (
+        Number(input.deadLetterCount) < 1
+        || input.status !== 'dead_letter'
+        || !OBSERVABLE_FAILURE_CODES.has(input.failureCode as AmyAnamHermesShadowFailureCode)
+        || !Number.isInteger(input.attempts)
+        || Number(input.attempts) < 0
+        || typeof input.hermesExecutionHappened !== 'boolean'
+        || input.outputContractValid !== false
+    ) {
+        throw new Error('Latest failure metadata is invalid');
+    }
+    return {
+        ok: true,
+        operation: 'latest_failure',
+        schemaVersion: 'amy_anam_hermes_latest_failure_v1',
+        found: true,
+        deadLetterCount: Number(input.deadLetterCount),
+        observedAt: normalizedIsoTimestamp(input.observedAt, 'Latest failure time'),
+        status: 'dead_letter',
+        failureCode: input.failureCode as AmyAnamHermesShadowFailureCode,
+        attempts: Number(input.attempts),
+        hermesExecutionHappened: input.hermesExecutionHappened,
+        outputContractValid: false,
         contentIncluded: false,
     };
 }

@@ -13,6 +13,7 @@ import {
     leaseNextAmyAnamHermesShadowJob,
     readAmyAnamSessionRecordForHermes,
     readAmyAnamHermesShadowBacklogStatus,
+    readAmyAnamHermesLatestFailureStatus,
     retireAmyAnamHermesShadowJobsBefore,
     retryOrDeadLetterAmyAnamHermesShadowJob,
 } from '@/lib/anam/hermes-shadow-store';
@@ -64,6 +65,15 @@ export async function POST(request: Request) {
             return noStoreJson({
                 ok: true,
                 operation: 'status',
+                ...status,
+            });
+        }
+
+        if (operation.operation === 'latest_failure') {
+            const status = await readAmyAnamHermesLatestFailureStatus();
+            return noStoreJson({
+                ok: true,
+                operation: 'latest_failure',
                 ...status,
             });
         }
