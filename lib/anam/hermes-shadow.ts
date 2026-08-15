@@ -116,7 +116,8 @@ export type AmyAnamHermesShadowFailureCode =
     | 'hermes_execution_failed'
     | 'provider_execution_ambiguous'
     | 'output_contract_invalid'
-    | 'local_output_failed';
+    | 'local_output_failed'
+    | 'operator_retired_stale';
 
 export type AmyAnamHermesShadowReceipt = {
     schemaVersion: typeof AMY_ANAM_HERMES_SHADOW_RECEIPT_VERSION;
