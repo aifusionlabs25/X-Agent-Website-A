@@ -209,17 +209,17 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
         const timeout = setTimeout(() => controller.abort(), 6_000);
         try {
             if (!adapter.platform.isTrustedBrowserOrigin(request)) return json({ error: 'Request origin is not allowed' }, { status: 403 });
-            const inviteId = new URL(request.url).searchParams.get('inviteId')?.trim() ?? '';
-            if (!inviteId) {
-                const organizer = await adapter.readOrganizer(request);
-                return json({ authenticated: Boolean(organizer), displayName: organizer?.displayName ?? null, rawEmailReturned: false, memoryContentReturned: false });
-            }
             const rate = await adapter.platform.consumeRateLimit({
                 fingerprint: adapter.platform.requestFingerprint(request, `${adapter.agentKey}-meeting-status-preauth`),
                 limit: 90,
                 windowSeconds: 15 * 60,
             });
             if (!rate.allowed) return json({ error: 'Too many status requests' }, { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } });
+            const inviteId = new URL(request.url).searchParams.get('inviteId')?.trim() ?? '';
+            if (!inviteId) {
+                const organizer = await adapter.readOrganizer(request);
+                return json({ authenticated: Boolean(organizer), displayName: organizer?.displayName ?? null, rawEmailReturned: false, memoryContentReturned: false });
+            }
             const organizer = await requireOrganizer(request);
             const providerInviteId = readMeetingConciergeStatusTicket({
                 agentKey: adapter.agentKey,

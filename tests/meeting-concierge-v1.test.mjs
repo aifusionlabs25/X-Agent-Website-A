@@ -122,8 +122,8 @@ test('status tickets are signed and bound to the agent and organizer', () => {
   assert.match(server, /meeting-remove:\$\{organizer\.isolationId\}/);
   assert.match(
     server,
-    /const inviteId = new URL\(request\.url\)[\s\S]*if \(!inviteId\)[\s\S]*adapter\.readOrganizer\(request\)[\s\S]*return json\([\s\S]*adapter\.platform\.consumeRateLimit/,
-    'the local organizer probe completes before provider-backed status infrastructure',
+    /adapter\.platform\.consumeRateLimit\([\s\S]*const inviteId = new URL\(request\.url\)[\s\S]*if \(!inviteId\)[\s\S]*adapter\.readOrganizer\(request\)/,
+    'status requests are rate-limited before every organizer-store lookup',
   );
 });
 
