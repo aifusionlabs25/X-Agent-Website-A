@@ -20,8 +20,8 @@ export const daniMeetingConciergeAdapter: MeetingConciergeClientAdapter = {
         contactBoundary: "The meeting module uses Dani's verified follow-up identity only. It does not read another agent's contacts, memory, consent, sessions, or email workflows.",
         authenticatedLabel: 'Verified Dani organizer',
         checkInTitle: 'Verify the organizer',
-        checkInDescription: 'A one-time code protects the meeting invitation and requested follow-up.',
-        consent: "The verified address authorizes Dani's standard meeting follow-up. Dani will not ask anyone to say an email address aloud.",
+        checkInDescription: 'A one-time code protects the meeting invitation.',
+        consent: "The verified address secures this invitation. Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1. Dani will not ask anyone to say an email address aloud.",
     },
     checkIn: {
         kind: 'email-code',

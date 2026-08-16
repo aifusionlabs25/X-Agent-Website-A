@@ -57,6 +57,8 @@ test('Amy adapter uses only Amy identity, consent, persona, and routes', () => {
   assert.match(client, /returnHref:\s*['"]\/agents\/amy['"]/);
   assert.match(client, /fetch\(['"]\/api\/anam\/amy\/access['"]/);
   assert.match(client, /body:\s*JSON\.stringify\(fields\)/);
+  assert.match(client, /Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1/);
+  assert.doesNotMatch(client, /standard session follow-up/);
 
   const route = read(amyFiles[1]);
   assert.match(route, /ANAM_AMY_CARA4_PERSONA_ID/);
@@ -83,6 +85,8 @@ test('Dani adapter uses only Dani identity, consent, persona, and routes', () =>
   assert.match(client, /fetch\(['"]\/api\/anam\/dani\/access\/verify['"]/);
   assert.match(client, /followUpConsent:\s*true/);
   assert.match(client, /memoryConsent:\s*false/);
+  assert.match(client, /Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1/);
+  assert.doesNotMatch(client, /standard meeting follow-up/);
 
   const route = read(daniFiles[1]);
   assert.match(route, /expectedPersonaId:\s*DANI_PERSONA_ID/);
@@ -261,4 +265,6 @@ test('installation guide exists and defines the next-agent isolation checklist',
   assert.match(guide, /opaque HMAC ticket/);
   assert.match(guide, /meeting-scoped persona snapshot/i);
   assert.match(guide, /organizer removal/i);
+  assert.match(guide, /does not bind a native Google Meet, Zoom, or Teams session into the website session spine/);
+  assert.match(guide, /Do not promise a transcript, recap email, returning memory, Hermes review/);
 });

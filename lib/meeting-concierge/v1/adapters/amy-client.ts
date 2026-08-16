@@ -21,7 +21,7 @@ export const amyMeetingConciergeAdapter: MeetingConciergeClientAdapter = {
         authenticatedLabel: "Secure Amy check-in active",
         checkInTitle: "Complete Amy's secure check-in",
         checkInDescription: "Use the same private check-in required for Amy's regular X Agent session.",
-        consent: "By continuing, you agree to receive Amy's standard session follow-up at this private address. Amy will not ask you to repeat it during the meeting.",
+        consent: "This private check-in secures the invitation. Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1. Amy will not ask you to repeat the address during the meeting.",
     },
     checkIn: {
         kind: 'credentials',

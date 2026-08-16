@@ -28,6 +28,12 @@ Meeting Concierge v1 is the reusable X-Agent meeting-invitation flow for Google 
 - Set `maxSessionLengthSeconds` through the shared duration choices. This bounds abandoned sessions even if the organizer closes the X Agents page.
 - Organizer removal and spoken self-exit are independent safety paths. Test both in a real provider meeting before release.
 
+## Native-meeting boundary
+
+- Version 1 schedules, monitors, and removes the Anam participant. It does not bind a native Google Meet, Zoom, or Teams session into the website session spine.
+- Do not promise a transcript, recap email, returning memory, Hermes review, or other website post-session workflow from this module. Those require a separate provider-session ingestion module.
+- Agent check-in may reuse an existing identity flow to protect invitation controls, but the UI must state this boundary plainly.
+
 ## Non-negotiable isolation
 
 - Never import another agent's route, cookie, browser identity, contact token, memory store, persona ID, provider configuration, or AgentMail handler.
