@@ -24,6 +24,22 @@ The response is limited to `deadLetterCount`, `observedAt`, `status`, `failureCo
 
 The continuously running worker also atomically replaces `<HERMES_HOME>/worker-result-latest.json` after each non-idle attempt. That local receipt is likewise content-free and is intended to prevent a one-line console result from being lost in a long-running task window.
 
+## Isolated credential maintenance
+
+OAuth renewal is never performed inside a customer review. Run the separate maintenance command from the isolated Amy worker environment:
+
+```powershell
+npm run hermes:amy-anam-auth-maintenance
+```
+
+Inspection is the default. It reports only the expiry window and whether refresh is due. The scheduled apply form is:
+
+```powershell
+npm run hermes:amy-anam-auth-maintenance -- --apply --confirm=CONFIRM_AMY_HERMES_AUTH_REFRESH
+```
+
+Apply requires `AMY_ANAM_HERMES_AUTH_MAINTENANCE_ENABLED=true`, `AMY_ANAM_HERMES_AUTH_MAINTENANCE_KILL_SWITCH=false`, the exact `openai-codex` / `gpt-5.5` identity, and an isolated absolute `HERMES_HOME`. It refreshes only inside the configured safety window, disables shared Codex credential recovery, creates a pre-refresh backup under `<HERMES_HOME>/auth-backups/`, and atomically writes `<HERMES_HOME>/auth-maintenance-latest.json`. Receipts never contain access tokens, refresh tokens, account IDs, session IDs, transcripts, or generated review content.
+
 ## 1. Choose and record the checkpoint cutoff
 
 Use a UTC ISO timestamp immediately before the new worker baseline. Keep the exact string for both commands.
