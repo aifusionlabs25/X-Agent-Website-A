@@ -80,6 +80,10 @@ export type MeetingConciergeClientAdapter = {
             defaultMemoryConsent: boolean;
         }
         | {
+            kind: 'contact';
+            submit(fields: MeetingConciergeCheckInFields): Promise<MeetingConciergeOrganizer>;
+        }
+        | {
             kind: 'email-code';
             requestCode(fields: MeetingConciergeEmailCodeRequest): Promise<MeetingConciergeEmailCodeChallenge>;
             verifyCode(fields: MeetingConciergeEmailCodeChallenge & { verificationCode: string }): Promise<MeetingConciergeOrganizer>;

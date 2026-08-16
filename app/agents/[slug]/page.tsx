@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { ALL_AGENTS } from '@/lib/agents';
 import { Play } from 'lucide-react';
 import EvanLandingPage from '@/components/evan/EvanLandingPage';
+import EvanMeetingScheduler from '@/components/evan/EvanMeetingScheduler';
 import AmyInsightLanding from '@/components/agents/AmyInsightLanding';
 import { AmyMeetingConcierge } from '@/components/amy/AmyMeetingScheduler';
 import DaniEditorialLanding from '@/components/dani/DaniEditorialLanding';
@@ -33,6 +34,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         return {
             title: 'Dani · AI Solutions Director',
             description: 'Meet Dani for a focused AI Fusion Labs working session that starts with the business problem and frames a practical next step.',
+        };
+    }
+
+    if (slug === 'evan') {
+        return {
+            title: 'Evan · Mullins Moving Concierge',
+            description: 'Plan a move with Evan or invite the Mullins Moving concierge to a Google Meet, Zoom, or Microsoft Teams conversation.',
         };
     }
 
@@ -78,7 +86,18 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
         );
     }
 
-    if (agent.slug === 'evan') return <EvanLandingPage agent={agent} />;
+    if (agent.slug === 'evan') {
+        const rawMeetingProvider = Array.isArray(resolvedSearchParams.meeting)
+            ? resolvedSearchParams.meeting[0]
+            : resolvedSearchParams.meeting;
+        const meetingProvider = rawMeetingProvider === 'google'
+            || rawMeetingProvider === 'zoom'
+            || rawMeetingProvider === 'teams'
+            ? rawMeetingProvider
+            : null;
+        if (meetingProvider) return <EvanMeetingScheduler initialProvider={meetingProvider} />;
+        return <EvanLandingPage agent={agent} />;
+    }
 
     return (
         <main className="min-h-screen bg-zinc-950 pt-20">
