@@ -45,6 +45,15 @@ export type MeetingConciergeCheckInFields = {
     memoryConsent: boolean;
 };
 
+export type MeetingConciergeEmailCodeRequest = {
+    displayName: string;
+    email: string;
+};
+
+export type MeetingConciergeEmailCodeChallenge = {
+    challengeId: string;
+};
+
 export type MeetingConciergeClientAdapter = {
     agent: {
         key: string;
@@ -64,8 +73,15 @@ export type MeetingConciergeClientAdapter = {
         checkInDescription: string;
         consent: string;
     };
-    checkIn?: {
-        submit(fields: MeetingConciergeCheckInFields): Promise<MeetingConciergeOrganizer>;
-        defaultMemoryConsent: boolean;
-    };
+    checkIn?:
+        | {
+            kind: 'credentials';
+            submit(fields: MeetingConciergeCheckInFields): Promise<MeetingConciergeOrganizer>;
+            defaultMemoryConsent: boolean;
+        }
+        | {
+            kind: 'email-code';
+            requestCode(fields: MeetingConciergeEmailCodeRequest): Promise<MeetingConciergeEmailCodeChallenge>;
+            verifyCode(fields: MeetingConciergeEmailCodeChallenge & { verificationCode: string }): Promise<MeetingConciergeOrganizer>;
+        };
 };

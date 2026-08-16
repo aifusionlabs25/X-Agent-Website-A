@@ -24,6 +24,7 @@ export const amyMeetingConciergeAdapter: MeetingConciergeClientAdapter = {
         consent: "By continuing, you agree to receive Amy's standard session follow-up at this private address. Amy will not ask you to repeat it during the meeting.",
     },
     checkIn: {
+        kind: 'credentials',
         defaultMemoryConsent: false,
         async submit(fields): Promise<MeetingConciergeOrganizer> {
             const response = await fetch('/api/anam/amy/access', {

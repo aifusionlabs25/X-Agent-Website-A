@@ -88,25 +88,17 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(css, /object-position: 58% 38%/);
     assert.match(css, /\.meetingChoiceGrid/);
     assert.match(css, /backdrop-filter: blur\(15px\)/);
-    assert.match(scheduler, /data-dani-meeting-step=\{step\}/);
-    assert.match(scheduler, /Set the room\./);
-    assert.match(scheduler, /Set her role\./);
-    assert.match(scheduler, /Confirm the invitation\./);
-    assert.match(scheduler, /Join now/);
-    assert.match(scheduler, /Schedule for later/);
-    assert.match(scheduler, /Dani joins independently/);
-    assert.match(scheduler, /Schedule another meeting/);
-    assert.match(scheduler, /Return to Dani/);
+    assert.match(scheduler, /<MeetingConcierge/);
+    assert.match(scheduler, /daniMeetingConciergeAdapter/);
+    assert.match(scheduler, /MeetingConciergeStyleContract/);
     assert.doesNotMatch(scheduler, /Open Teams/);
     assert.doesNotMatch(scheduler, /Open Google Meet/);
     assert.doesNotMatch(scheduler, /Open Zoom/);
     assert.doesNotMatch(scheduler, /target="_blank"/);
-    assert.match(scheduler, /invite\.joinState/);
-    assert.match(scheduler, /fetch\('\/api\/anam\/dani\/meetings'/);
-    assert.match(scheduler, /fetch\('\/api\/anam\/dani\/access'/);
-    assert.match(scheduler, /fetch\('\/api\/anam\/dani\/access\/verify'/);
     assert.match(meetingCss, /\.providerGrid/);
     assert.match(meetingCss, /\.roleGrid/);
+    assert.match(meetingCss, /\.durationGrid/);
+    assert.match(meetingCss, /\.dangerPanel/);
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
     assert.match(css, /\.entryPortraitImage/);
     assert.match(css, /@media \(min-width: 768px\) and \(max-height: 850px\)/);
@@ -131,25 +123,24 @@ test('homepage and agent registry enter Dani through the experience selector', a
 });
 
 test('Dani meeting creation is verified, rate-limited, server-side, and status-aware', async () => {
-    const route = await read('../app/api/anam/dani/meetings/route.ts');
+    const [route, adapter] = await Promise.all([
+        read('../app/api/anam/dani/meetings/route.ts'),
+        read('../lib/meeting-concierge/v1/adapters/dani-client.ts'),
+    ]);
 
-    assert.match(route, /isTrustedBrowserOrigin\(request\)/);
+    assert.match(route, /platform:\s*\{[\s\S]*isTrustedBrowserOrigin/);
     assert.match(route, /readDaniAnamBrowserSession/);
     assert.match(route, /readDaniAnamContactFromRequest/);
     assert.match(route, /emailOwnershipVerified !== true/);
-    assert.match(route, /requestFingerprint\(request, 'dani-meeting-create-preauth'\)/);
-    assert.match(route, /limit: 4,[\s\S]*windowSeconds: 24 \* 60 \* 60/);
-    assert.match(route, /https:\/\/api\.anam\.ai\/v1\/meetings\/invites/);
-    assert.match(route, /personaId: DANI_PERSONA_ID/);
-    assert.match(route, /groupCall: body\.groupCall/);
-    assert.match(route, /raw === undefined \|\| raw === null \|\| raw === ''/);
-    assert.match(route, /\.\.\.\(joinAt \? \{ joinAt \} : \{\}\)/);
-    assert.match(route, /xagent-dani-\$\{randomUUID\(\)\}/);
-    assert.match(route, /meet\.google\.com/);
-    assert.match(route, /\.zoom\.us/);
-    assert.match(route, /teams\.microsoft\.com/);
-    assert.match(route, /MAX_SCHEDULE_AHEAD_MS/);
-    assert.doesNotMatch(route, /meetingUrl: contact\./);
+    assert.match(route, /createMeetingConciergeHandlers/);
+    assert.match(route, /resolveMeetingPersonaSnapshot/);
+    assert.match(route, /expectedPersonaId: DANI_PERSONA_ID/);
+    assert.match(route, /removeToolNames:[\s\S]*'end_dani_session'[\s\S]*'send_dani_follow_up_email'[\s\S]*'confirm_dani_live_identity'/);
+    assert.match(route, /addToolNames: \['end_call'\]/);
+    assert.match(route, /export const DELETE = daniMeetingConcierge\.DELETE/);
+    assert.match(adapter, /followUpConsent: true/);
+    assert.match(adapter, /memoryConsent: false/);
+    assert.match(adapter, /\/api\/anam\/dani\/access\/verify/);
 });
 
 test('Dani recall controls are verified-only, content-free, and require explicit destructive confirmation', async () => {

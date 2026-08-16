@@ -83,7 +83,9 @@ function CheckInFields({
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
     const [accessCode, setAccessCode] = useState('');
-    const [memoryConsent, setMemoryConsent] = useState(checkIn?.defaultMemoryConsent ?? false);
+    const [verificationCode, setVerificationCode] = useState('');
+    const [challengeId, setChallengeId] = useState<string | null>(null);
+    const [memoryConsent, setMemoryConsent] = useState(checkIn?.kind === 'credentials' ? checkIn.defaultMemoryConsent : false);
     const [submitting, setSubmitting] = useState(false);
 
     async function submit(event: FormEvent<HTMLFormElement>) {
@@ -92,9 +94,18 @@ function CheckInFields({
         onError('');
         setSubmitting(true);
         try {
-            const organizer = await checkIn.submit({ displayName, email, accessCode, memoryConsent });
+            if (checkIn.kind === 'email-code' && !challengeId) {
+                const challenge = await checkIn.requestCode({ displayName, email });
+                setChallengeId(challenge.challengeId);
+                return;
+            }
+            const organizer = checkIn.kind === 'email-code'
+                ? await checkIn.verifyCode({ challengeId: challengeId ?? '', verificationCode })
+                : await checkIn.submit({ displayName, email, accessCode, memoryConsent });
             setEmail('');
             setAccessCode('');
+            setVerificationCode('');
+            setChallengeId(null);
             onAuthenticated(organizer.displayName);
         } catch (caught) {
             onError(caught instanceof Error ? caught.message : `${adapter.agent.name} check-in could not be completed`);
@@ -108,17 +119,23 @@ function CheckInFields({
         <form className={styles.verifyPanel} onSubmit={submit}>
             <p className={styles.sectionTitle}>{adapter.copy.checkInTitle}</p>
             <p className={styles.sectionCopy}>{adapter.copy.checkInDescription}</p>
-            <div className={styles.fieldGridTwo}>
-                <label><span><UserRound size={14} /> Name</span><input required value={displayName} onChange={event => setDisplayName(event.target.value)} autoComplete="name" /></label>
-                <label><span><Mail size={14} /> Email</span><input required type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" /></label>
-            </div>
-            <label><span><LockKeyhole size={14} /> Access code</span><input required type="password" value={accessCode} onChange={event => setAccessCode(event.target.value)} autoComplete="current-password" /></label>
-            <label className={styles.memoryChoice}>
-                <input type="checkbox" checked={memoryConsent} onChange={event => setMemoryConsent(event.target.checked)} />
-                <span><strong>Remember this email</strong><small>{adapter.agent.name} may find reviewed notes on a future visit. Leave this off to start fresh.</small></span>
-            </label>
-            <button type="submit" className={styles.verifyButton} disabled={submitting || displayName.trim().length < 2 || !email.includes('@') || !accessCode}>
-                {submitting ? <LoaderCircle className={styles.spinner} size={16} /> : null} Complete check-in
+            {checkIn.kind === 'email-code' && challengeId ? (
+                <label><span><LockKeyhole size={14} /> Six-digit verification code</span><input required inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={verificationCode} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, ''))} /></label>
+            ) : <>
+                <div className={styles.fieldGridTwo}>
+                    <label><span><UserRound size={14} /> Name</span><input required value={displayName} onChange={event => setDisplayName(event.target.value)} autoComplete="name" /></label>
+                    <label><span><Mail size={14} /> Email</span><input required type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" /></label>
+                </div>
+                {checkIn.kind === 'credentials' ? <>
+                    <label><span><LockKeyhole size={14} /> Access code</span><input required type="password" value={accessCode} onChange={event => setAccessCode(event.target.value)} autoComplete="current-password" /></label>
+                    <label className={styles.memoryChoice}>
+                        <input type="checkbox" checked={memoryConsent} onChange={event => setMemoryConsent(event.target.checked)} />
+                        <span><strong>Remember this email</strong><small>{adapter.agent.name} may find reviewed notes on a future visit. Leave this off to start fresh.</small></span>
+                    </label>
+                </> : null}
+            </>}
+            <button type="submit" className={styles.verifyButton} disabled={submitting || (checkIn.kind === 'email-code' && challengeId ? verificationCode.length !== 6 : displayName.trim().length < 2 || !email.includes('@') || (checkIn.kind === 'credentials' && !accessCode))}>
+                {submitting ? <LoaderCircle className={styles.spinner} size={16} /> : null} {checkIn.kind === 'email-code' ? challengeId ? 'Verify code' : 'Send verification code' : 'Complete check-in'}
             </button>
             <p className={styles.consentCopy}>{adapter.copy.consent}</p>
         </form>
