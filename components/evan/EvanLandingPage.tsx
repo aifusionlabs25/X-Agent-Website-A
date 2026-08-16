@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {
     ArrowRight,
+    CalendarPlus,
     CheckCircle2,
     Play,
     ShieldCheck,
@@ -69,17 +70,25 @@ export default function EvanLandingPage({ agent }: { agent: AgentData }) {
                             ))}
                         </div>
 
-                        <div className="mt-7 flex flex-wrap items-center gap-4">
+                        <div className="mt-7 grid max-w-[610px] gap-3 sm:grid-cols-2">
                             <Link
                                 href={agent.liveUrl}
-                                className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#ffc857] px-6 text-sm font-extrabold text-[#271041] shadow-[0_14px_40px_rgba(255,200,87,.18)] transition hover:-translate-y-0.5 hover:bg-[#ffda7f] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ffc857]"
+                                className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#ffc857] px-4 text-sm font-extrabold text-[#271041] shadow-[0_14px_40px_rgba(255,200,87,.18)] transition hover:-translate-y-0.5 hover:bg-[#ffda7f] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ffc857]"
                             >
                                 <Play size={17} fill="currentColor" />
-                                Start planning with Evan
+                                Talk with Evan now
                                 <ArrowRight size={16} className="transition group-hover:translate-x-0.5" />
                             </Link>
-                            <p className="max-w-[250px] text-xs leading-5 text-white/45">
-                                No quote or booking is created. Mullins staff confirms pricing, availability, and scheduling.
+                            <Link
+                                href="/agents/evan?meeting=google"
+                                className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#ffc857]/55 bg-white/[0.045] px-4 text-sm font-extrabold text-white transition hover:-translate-y-0.5 hover:border-[#ffc857] hover:bg-[#ffc857]/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ffc857]"
+                            >
+                                <CalendarPlus size={17} />
+                                Invite Evan to a meeting
+                                <ArrowRight size={16} className="transition group-hover:translate-x-0.5" />
+                            </Link>
+                            <p className="text-[11px] leading-4 text-white/45 sm:col-span-2">
+                                Planning only—Mullins staff confirms pricing, availability, and scheduling.
                             </p>
                         </div>
                     </div>

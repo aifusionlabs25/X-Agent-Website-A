@@ -38,11 +38,17 @@ const daniFiles = [
   'components/dani/DaniMeetingScheduler.tsx',
   'components/dani/DaniMeetingScheduler.module.css',
 ];
+const evanFiles = [
+  'lib/meeting-concierge/v1/adapters/evan-client.ts',
+  'app/api/anam/evan/meetings/route.ts',
+  'components/evan/EvanMeetingScheduler.tsx',
+  'components/evan/EvanMeetingScheduler.module.css',
+];
 
 test('v1 shared core stays agent-neutral', () => {
   for (const path of sharedFiles) {
     const source = read(path);
-    assert.doesNotMatch(source, /\bAmy\b|\bDani\b|\/amy(?:\/|['"?])|\/dani(?:\/|['"?])|DANI_|AMY_/i, `${path} must not contain agent-specific behavior`);
+    assert.doesNotMatch(source, /\bAmy\b|\bDani\b|\bEvan\b|\/amy(?:\/|['"?])|\/dani(?:\/|['"?])|\/evan(?:\/|['"?])|DANI_|AMY_|EVAN_/i, `${path} must not contain agent-specific behavior`);
   }
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /MEETING_CONCIERGE_VERSION\s*=\s*['"]v1['"]/);
   assert.match(read('components/meeting-concierge/v1/MeetingConcierge.tsx'), /data-meeting-concierge-version=\{MEETING_CONCIERGE_VERSION\}/);
@@ -100,15 +106,42 @@ test('Dani adapter uses only Dani identity, consent, persona, and routes', () =>
   assert.doesNotMatch(route, /sendEmail|resend/i, 'Meeting Concierge must not alter email delivery');
 });
 
-test('two-agent adapters remain isolated while sharing one versioned core', () => {
+test('Evan adapter uses only Evan identity, consent, persona, and routes', () => {
+  const combined = evanFiles.map(read).join('\n');
+  assert.doesNotMatch(combined, /\bDani\b|DANI_|\/amy(?:\/|['"?])|\/dani(?:\/|['"?])|amy_follow_up|dani_follow_up/i);
+
+  const client = read(evanFiles[0]);
+  assert.match(client, /meetingApiPath:\s*['"]\/api\/anam\/evan\/meetings['"]/);
+  assert.match(client, /returnHref:\s*['"]\/agents\/evan['"]/);
+  assert.match(client, /kind:\s*['"]contact['"]/);
+  assert.match(client, /fetch\(['"]\/api\/anam\/evan\/access['"]/);
+  assert.match(client, /followUpConsent:\s*true/);
+  assert.match(client, /Meeting transcripts, recap emails, and returning memory are not included in Meeting Concierge v1/);
+
+  const route = read(evanFiles[1]);
+  assert.match(route, /expectedPersonaId:\s*EVAN_PERSONA_ID/);
+  assert.match(route, /contact\?\.purpose\s*!==\s*['"]evan_follow_up['"]/);
+  assert.match(route, /removeToolNames:\s*\[[\s\S]*['"]end_mullins_session['"][\s\S]*['"]send_mullins_follow_up_email['"][\s\S]*['"]show_move_planner['"]/);
+  assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);
+  assert.match(route, /Call end_call once with confirmed true/i);
+  assert.match(route, /export const DELETE = evanMeetingConcierge\.DELETE/);
+  assert.doesNotMatch(route, /personaId:\s*['"][0-9a-f-]{36}['"]/i, 'persona IDs must be imported, never hardcoded');
+  assert.doesNotMatch(route, /agentmail|resend|sendEmail/i, 'Meeting Concierge must not alter email delivery');
+});
+
+test('three-agent adapters remain isolated while sharing one versioned core', () => {
   const amy = amyFiles.map(read).join('\n');
   const dani = daniFiles.map(read).join('\n');
+  const evan = evanFiles.map(read).join('\n');
   assert.doesNotMatch(amy, /Dani|DANI_|\/dani(?:\/|['"?])|dani_follow_up/i);
   assert.doesNotMatch(dani, /\bAmy\b|AMY_|\/amy(?:\/|['"?])|amy_follow_up/i);
+  assert.doesNotMatch(evan, /\bDani\b|DANI_|\/amy(?:\/|['"?])|\/dani(?:\/|['"?])|amy_follow_up|dani_follow_up/i);
   assert.match(read('components/amy/AmyMeetingScheduler.tsx'), /<MeetingConcierge/);
   assert.match(read('components/dani/DaniMeetingScheduler.tsx'), /<MeetingConcierge/);
+  assert.match(read('components/evan/EvanMeetingScheduler.tsx'), /<MeetingConcierge/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]credentials['"]/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]email-code['"]/);
+  assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]contact['"]/);
 });
 
 test('status tickets are signed and bound to the agent and organizer', () => {
@@ -254,6 +287,35 @@ test('Amy brand shell implements the full shared style contract', () => {
   assert.doesNotMatch(logoRule, /left:|box-shadow|border-radius/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.match(css, /@media \(max-width:\s*760px\)/);
+});
+
+test('Evan entry preserves the regular session and adds a Mullins-branded meeting scheduler', () => {
+  const route = read('app/agents/[slug]/page.tsx');
+  const landing = read('components/evan/EvanLandingPage.tsx');
+  const component = read('components/evan/EvanMeetingScheduler.tsx');
+  const css = read('components/evan/EvanMeetingScheduler.module.css');
+  assert.match(route, /agent\.slug === ['"]evan['"][\s\S]*rawMeetingProvider[\s\S]*<EvanMeetingScheduler/);
+  assert.match(route, /if \(meetingProvider\) return <EvanMeetingScheduler initialProvider=\{meetingProvider\}/);
+  assert.match(route, /return <EvanLandingPage agent=\{agent\} \/>/);
+  assert.match(landing, /href=['"]\/agents\/evan\?meeting=google['"]/);
+  assert.match(landing, /Invite Evan to a meeting/);
+  assert.match(component, /Evan Mullins Moving\.png/);
+  assert.match(component, /Evan Mullins Moving logo\.png/);
+  assert.match(component, /data-evan-surface=['"]meeting-concierge['"]/);
+  const required = [
+    'scheduler', 'backLink', 'topline', 'headingRow', 'eyebrow', 'title', 'steps',
+    'formStack', 'providerGrid', 'timingGrid', 'fieldGrid', 'joinNowNote', 'roleGrid',
+    'optional', 'note', 'reviewCard', 'purposeReview', 'verifiedCard', 'verifyPanel',
+    'sectionTitle', 'sectionCopy', 'fieldGridTwo', 'memoryChoice', 'verifyButton',
+    'spinner', 'consentCopy', 'error', 'actions', 'secondaryButton', 'primaryButton',
+    'platformMark', 'googleMark', 'zoomMark', 'teamsMark', 'confirmIcon', 'intro',
+    'liveStatus', 'confirmFacts', 'durationGrid', 'dangerButton', 'dangerPanel', 'restoredNote',
+  ];
+  for (const className of required) assert.match(css, new RegExp(`\\.${className}(?:\\s|,|\\{|:)`), `missing .${className}`);
+  assert.match(css, /--purple:\s*#5720bd/);
+  assert.match(css, /--gold:\s*#f5b93f/);
+  assert.match(css, /@media \(max-width:\s*760px\)/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce/);
 });
 
 test('installation guide exists and defines the next-agent isolation checklist', () => {
