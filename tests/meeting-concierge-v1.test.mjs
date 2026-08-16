@@ -32,6 +32,12 @@ const amyFiles = [
   'components/amy/AmyMeetingScheduler.tsx',
   'components/amy/AmyMeetingScheduler.module.css',
 ];
+const daniFiles = [
+  'lib/meeting-concierge/v1/adapters/dani-client.ts',
+  'app/api/anam/dani/meetings/route.ts',
+  'components/dani/DaniMeetingScheduler.tsx',
+  'components/dani/DaniMeetingScheduler.module.css',
+];
 
 test('v1 shared core stays agent-neutral', () => {
   for (const path of sharedFiles) {
@@ -51,6 +57,8 @@ test('Amy adapter uses only Amy identity, consent, persona, and routes', () => {
   assert.match(client, /returnHref:\s*['"]\/agents\/amy['"]/);
   assert.match(client, /fetch\(['"]\/api\/anam\/amy\/access['"]/);
   assert.match(client, /body:\s*JSON\.stringify\(fields\)/);
+  assert.match(client, /Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1/);
+  assert.doesNotMatch(client, /standard session follow-up/);
 
   const route = read(amyFiles[1]);
   assert.match(route, /ANAM_AMY_CARA4_PERSONA_ID/);
@@ -63,6 +71,44 @@ test('Amy adapter uses only Amy identity, consent, persona, and routes', () => {
   assert.match(route, /export const DELETE = amyMeetingConcierge\.DELETE/);
   assert.doesNotMatch(route, /personaId:\s*['"][0-9a-f-]{36}['"]/i, 'persona IDs must be resolved, never hardcoded');
   assert.doesNotMatch(route, /agentmail|resend|sendEmail/i, 'Meeting Concierge must not alter AgentMail delivery');
+});
+
+test('Dani adapter uses only Dani identity, consent, persona, and routes', () => {
+  const combined = daniFiles.map(read).join('\n');
+  assert.doesNotMatch(combined, /\bAmy\b|AMY_|\/amy(?:\/|['"?])|readAmyAnamBrowserIdentity|amy_follow_up/i);
+
+  const client = read(daniFiles[0]);
+  assert.match(client, /meetingApiPath:\s*['"]\/api\/anam\/dani\/meetings['"]/);
+  assert.match(client, /returnHref:\s*['"]\/agents\/dani['"]/);
+  assert.match(client, /kind:\s*['"]email-code['"]/);
+  assert.match(client, /fetch\(['"]\/api\/anam\/dani\/access['"]/);
+  assert.match(client, /fetch\(['"]\/api\/anam\/dani\/access\/verify['"]/);
+  assert.match(client, /followUpConsent:\s*true/);
+  assert.match(client, /memoryConsent:\s*false/);
+  assert.match(client, /Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1/);
+  assert.doesNotMatch(client, /standard meeting follow-up/);
+
+  const route = read(daniFiles[1]);
+  assert.match(route, /expectedPersonaId:\s*DANI_PERSONA_ID/);
+  assert.match(route, /storedContact\?\.purpose\s*!==\s*['"]dani_follow_up['"]/);
+  assert.match(route, /emailOwnershipVerified\s*!==\s*true/);
+  assert.match(route, /removeToolNames:\s*\[[\s\S]*['"]end_dani_session['"][\s\S]*['"]send_dani_follow_up_email['"][\s\S]*['"]confirm_dani_live_identity['"]/);
+  assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);
+  assert.match(route, /Call end_call once with confirmed true/i);
+  assert.match(route, /export const DELETE = daniMeetingConcierge\.DELETE/);
+  assert.doesNotMatch(route, /personaId:\s*['"][0-9a-f-]{36}['"]/i, 'persona IDs must be imported, never hardcoded');
+  assert.doesNotMatch(route, /sendEmail|resend/i, 'Meeting Concierge must not alter email delivery');
+});
+
+test('two-agent adapters remain isolated while sharing one versioned core', () => {
+  const amy = amyFiles.map(read).join('\n');
+  const dani = daniFiles.map(read).join('\n');
+  assert.doesNotMatch(amy, /Dani|DANI_|\/dani(?:\/|['"?])|dani_follow_up/i);
+  assert.doesNotMatch(dani, /\bAmy\b|AMY_|\/amy(?:\/|['"?])|amy_follow_up/i);
+  assert.match(read('components/amy/AmyMeetingScheduler.tsx'), /<MeetingConcierge/);
+  assert.match(read('components/dani/DaniMeetingScheduler.tsx'), /<MeetingConcierge/);
+  assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]credentials['"]/);
+  assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]email-code['"]/);
 });
 
 test('status tickets are signed and bound to the agent and organizer', () => {
@@ -80,8 +126,8 @@ test('status tickets are signed and bound to the agent and organizer', () => {
   assert.match(server, /meeting-remove:\$\{organizer\.isolationId\}/);
   assert.match(
     server,
-    /const inviteId = new URL\(request\.url\)[\s\S]*if \(!inviteId\)[\s\S]*adapter\.readOrganizer\(request\)[\s\S]*return json\([\s\S]*adapter\.platform\.consumeRateLimit/,
-    'the local organizer probe completes before provider-backed status infrastructure',
+    /adapter\.platform\.consumeRateLimit\([\s\S]*const inviteId = new URL\(request\.url\)[\s\S]*if \(!inviteId\)[\s\S]*adapter\.readOrganizer\(request\)/,
+    'status requests are rate-limited before every organizer-store lookup',
   );
 });
 
@@ -219,4 +265,6 @@ test('installation guide exists and defines the next-agent isolation checklist',
   assert.match(guide, /opaque HMAC ticket/);
   assert.match(guide, /meeting-scoped persona snapshot/i);
   assert.match(guide, /organizer removal/i);
+  assert.match(guide, /does not bind a native Google Meet, Zoom, or Teams session into the website session spine/);
+  assert.match(guide, /Do not promise a transcript, recap email, returning memory, Hermes review/);
 });
