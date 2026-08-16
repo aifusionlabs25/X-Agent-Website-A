@@ -162,6 +162,11 @@ test('status tickets are signed and bound to the agent and organizer', () => {
     /adapter\.platform\.consumeRateLimit\([\s\S]*const inviteId = new URL\(request\.url\)[\s\S]*if \(!inviteId\)[\s\S]*adapter\.readOrganizer\(request\)/,
     'status requests are rate-limited before every organizer-store lookup',
   );
+  assert.match(
+    server,
+    /const origin = request\.headers\.get\(['"]origin['"]\);[\s\S]*if \(origin && !adapter\.platform\.isTrustedBrowserOrigin\(request\)\)/,
+    'read-only status requests accept a missing Origin header while rejecting an explicitly untrusted origin',
+  );
 });
 
 test('meeting-scoped persona snapshot preserves identity and swaps only the close tool', () => {

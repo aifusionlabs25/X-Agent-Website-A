@@ -208,7 +208,8 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 6_000);
         try {
-            if (!adapter.platform.isTrustedBrowserOrigin(request)) return json({ error: 'Request origin is not allowed' }, { status: 403 });
+            const origin = request.headers.get('origin');
+            if (origin && !adapter.platform.isTrustedBrowserOrigin(request)) return json({ error: 'Request origin is not allowed' }, { status: 403 });
             const rate = await adapter.platform.consumeRateLimit({
                 fingerprint: adapter.platform.requestFingerprint(request, `${adapter.agentKey}-meeting-status-preauth`),
                 limit: 90,
