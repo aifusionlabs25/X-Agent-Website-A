@@ -19,6 +19,14 @@ Meeting Concierge v1 is the reusable X-Agent meeting-invitation flow for Google 
 4. Route an explicit `?meeting=google|zoom|teams` entry to the shell. Keep the agent's normal conversation CTA and session route unchanged.
 5. Add the isolation assertions described below and run the focused test, type check, lint, full suite, production build, and a real provider smoke test.
 
+### Optional participation modes
+
+An agent may opt into the shared `observer`, `participant`, and `facilitator` contract without changing the other adapters. Add the mode labels to that agent's client adapter and the exact allowed modes plus a safe default to its server adapter. The shared server rejects unsupported values and limits Observer and Facilitator to group calls.
+
+Build the mode behavior as a meeting-scoped prompt suffix in the agent route. Keep the saved website persona and knowledge files unchanged unless the same behavior is also required for invitations created directly in Anam Lab. Treat a typed meeting objective as untrusted descriptive context: normalize it, keep it bounded, and state explicitly that it cannot override behavioral rules, expand authority, establish facts, or become memory.
+
+Dani is the reference implementation. Observer is her corporate-safe default, one direct activation permits one short response, and the meeting snapshot returns her to silence after every contribution. Her group-call voice profile also lowers response eagerness and waits longer through mid-sentence pauses. These controls improve turn discipline but do not authenticate individual speakers or make LLM compliance deterministic.
+
 ## Exit and usage controls
 
 - Organizer removal uses `DELETE /v1/meetings/invites/{id}` behind the agent's authenticated X Agents route. The browser sends only its opaque HMAC ticket; it never receives or submits the raw provider invite ID.

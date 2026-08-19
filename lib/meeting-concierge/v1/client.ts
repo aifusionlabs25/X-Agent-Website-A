@@ -3,10 +3,15 @@ import type {
     MeetingConciergeDurationMinutes,
     MeetingConciergeInvite,
     MeetingConciergeOrganizer,
+    MeetingConciergeParticipationMode,
     MeetingConciergeProvider,
     MeetingConciergeStoredInvite,
 } from './contracts.ts';
-import { MEETING_CONCIERGE_DURATION_MINUTES, MEETING_CONCIERGE_PROVIDERS } from './contracts.ts';
+import {
+    MEETING_CONCIERGE_DURATION_MINUTES,
+    MEETING_CONCIERGE_PARTICIPATION_MODES,
+    MEETING_CONCIERGE_PROVIDERS,
+} from './contracts.ts';
 
 const STORAGE_PREFIX = 'x-agent-meeting-concierge-v1';
 const MAX_STORED_INVITE_AGE_MS = 8 * 24 * 60 * 60 * 1_000;
@@ -21,6 +26,10 @@ function isDuration(value: unknown): value is MeetingConciergeDurationMinutes {
 
 function isProvider(value: unknown): value is MeetingConciergeProvider {
     return MEETING_CONCIERGE_PROVIDERS.includes(value as MeetingConciergeProvider);
+}
+
+function isParticipationMode(value: unknown): value is MeetingConciergeParticipationMode {
+    return MEETING_CONCIERGE_PARTICIPATION_MODES.includes(value as MeetingConciergeParticipationMode);
 }
 
 function isInvite(value: unknown): value is MeetingConciergeInvite {
@@ -116,6 +125,7 @@ export function readStoredMeetingConciergeInvite(agentKey: string, storage: Stor
             || !isProvider(value.provider)
             || typeof value.groupCall !== 'boolean'
             || !isDuration(value.maxDurationMinutes)
+            || (value.participationMode !== undefined && !isParticipationMode(value.participationMode))
             || typeof value.savedAt !== 'number'
             || Date.now() - value.savedAt > MAX_STORED_INVITE_AGE_MS) {
             storage.removeItem(storageKey(agentKey));

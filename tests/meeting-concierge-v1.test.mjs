@@ -91,6 +91,8 @@ test('Dani adapter uses only Dani identity, consent, persona, and routes', () =>
   assert.match(client, /fetch\(['"]\/api\/anam\/dani\/access\/verify['"]/);
   assert.match(client, /followUpConsent:\s*true/);
   assert.match(client, /memoryConsent:\s*false/);
+  assert.match(client, /defaultMode:\s*['"]observer['"]/);
+  assert.match(client, /mode:\s*['"]observer['"][\s\S]*mode:\s*['"]participant['"][\s\S]*mode:\s*['"]facilitator['"]/);
   assert.match(client, /Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1/);
   assert.doesNotMatch(client, /standard meeting follow-up/);
 
@@ -101,6 +103,8 @@ test('Dani adapter uses only Dani identity, consent, persona, and routes', () =>
   assert.match(route, /removeToolNames:\s*\[[\s\S]*['"]end_dani_session['"][\s\S]*['"]send_dani_follow_up_email['"][\s\S]*['"]confirm_dani_live_identity['"]/);
   assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);
   assert.match(route, /Call end_call once with confirmed true/i);
+  assert.match(route, /buildDaniMeetingParticipationPrompt/);
+  assert.match(route, /applyDaniMeetingVoiceProfile/);
   assert.match(route, /export const DELETE = daniMeetingConcierge\.DELETE/);
   assert.doesNotMatch(route, /personaId:\s*['"][0-9a-f-]{36}['"]/i, 'persona IDs must be imported, never hardcoded');
   assert.doesNotMatch(route, /sendEmail|resend/i, 'Meeting Concierge must not alter email delivery');
@@ -142,6 +146,7 @@ test('three-agent adapters remain isolated while sharing one versioned core', ()
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]credentials['"]/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]email-code['"]/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]contact['"]/);
+  assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /MEETING_CONCIERGE_PARTICIPATION_MODES\s*=\s*\[['"]observer['"], ['"]participant['"], ['"]facilitator['"]\]/);
 });
 
 test('status tickets are signed and bound to the agent and organizer', () => {

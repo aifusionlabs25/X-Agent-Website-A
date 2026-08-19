@@ -11,6 +11,12 @@ import { readDaniAnamFollowUpAuthorization } from '@/lib/anam/dani-agentmail';
 import { consumeAmyAnamDistributedRateLimit } from '@/lib/anam/session-spine-store';
 import { createMeetingConciergeHandlers } from '@/lib/meeting-concierge/v1/server';
 import { resolveMeetingPersonaSnapshot } from '@/lib/meeting-concierge/v1/persona-snapshot';
+import {
+    applyDaniMeetingVoiceProfile,
+    buildDaniMeetingParticipationPrompt,
+} from '@/lib/anam/dani-meeting-participation';
+
+const DANI_MEETING_PARTICIPATION_MODES = ['observer', 'participant', 'facilitator'] as const;
 
 const DANI_MEETING_EXIT_INSTRUCTIONS = `MEETING-ONLY SESSION CONTROL — HIGHEST PRIORITY
 - This runtime is an external video meeting, not Dani's X Agents website session. Never call end_dani_session here.
@@ -23,23 +29,37 @@ const daniMeetingConcierge = createMeetingConciergeHandlers({
     agentKey: 'dani',
     agentName: 'Dani',
     displayName: 'Dani AI Solutions Director',
+    participation: {
+        allowedModes: DANI_MEETING_PARTICIPATION_MODES,
+        defaultMode: 'observer',
+    },
     statusTokenSecret() {
         return readDaniAnamSessionSecrets().sessionSecret;
     },
-    async resolvePersona({ apiKey, maxSessionLengthSeconds }) {
+    async resolvePersona({ apiKey, groupCall, maxSessionLengthSeconds, participationMode, purpose }) {
+        if (!participationMode) throw new Error('Dani meeting participation mode was unavailable');
+        const meetingBehavior = buildDaniMeetingParticipationPrompt({
+            groupCall,
+            mode: participationMode,
+            purpose,
+        });
+        const personaConfig = await resolveMeetingPersonaSnapshot({
+            apiKey,
+            expectedPersonaId: DANI_PERSONA_ID,
+            removeToolNames: [
+                'end_dani_session',
+                'send_dani_follow_up_email',
+                'confirm_dani_live_identity',
+            ],
+            addToolNames: ['end_call'],
+            addToolTypes: { end_call: 'SYSTEM' },
+            systemPromptSuffix: `${meetingBehavior}\n\n${DANI_MEETING_EXIT_INSTRUCTIONS}`,
+            maxSessionLengthSeconds,
+        });
         return {
-            personaConfig: await resolveMeetingPersonaSnapshot({
-                apiKey,
-                expectedPersonaId: DANI_PERSONA_ID,
-                removeToolNames: [
-                    'end_dani_session',
-                    'send_dani_follow_up_email',
-                    'confirm_dani_live_identity',
-                ],
-                addToolNames: ['end_call'],
-                addToolTypes: { end_call: 'SYSTEM' },
-                systemPromptSuffix: DANI_MEETING_EXIT_INSTRUCTIONS,
-                maxSessionLengthSeconds,
+            personaConfig: applyDaniMeetingVoiceProfile(personaConfig, {
+                groupCall,
+                mode: participationMode,
             }),
         };
     },

@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import type { MeetingConciergeInvite, MeetingConciergeOrganizer } from './contracts';
+import type {
+    MeetingConciergeInvite,
+    MeetingConciergeOrganizer,
+    MeetingConciergeParticipationMode,
+} from './contracts';
 import {
     issueMeetingConciergeStatusTicket,
     MeetingConciergeStatusTicketError,
@@ -21,7 +25,13 @@ export type MeetingConciergeServerAdapter = {
         apiKey: string;
         groupCall: boolean;
         maxSessionLengthSeconds: number;
+        participationMode: MeetingConciergeParticipationMode | null;
+        purpose: string;
     }): Promise<{ personaId: string } | { personaConfig: Record<string, unknown> }>;
+    participation?: {
+        allowedModes: readonly MeetingConciergeParticipationMode[];
+        defaultMode: MeetingConciergeParticipationMode;
+    };
     statusTokenSecret(): string;
     readOrganizer(request: Request): Promise<MeetingConciergeOrganizer & { isolationId: string } | null>;
     platform: {
@@ -92,6 +102,35 @@ function parseDurationMinutes(raw: unknown) {
     return Number(raw);
 }
 
+function parsePurpose(raw: unknown) {
+    if (raw === undefined) return '';
+    if (typeof raw !== 'string' || raw.length > 500) {
+        throw new MeetingConciergeRequestError('Meeting purpose was too long', 400);
+    }
+    return raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function parseParticipationMode(
+    raw: unknown,
+    groupCall: boolean,
+    config: MeetingConciergeServerAdapter['participation'],
+): MeetingConciergeParticipationMode | null {
+    if (!config) {
+        if (raw !== undefined) throw new MeetingConciergeRequestError('Meeting participation mode is not supported for this agent', 400);
+        return null;
+    }
+    const mode = raw === undefined
+        ? (groupCall ? config.defaultMode : 'participant')
+        : raw;
+    if (typeof mode !== 'string' || !config.allowedModes.includes(mode as MeetingConciergeParticipationMode)) {
+        throw new MeetingConciergeRequestError('Choose a supported meeting participation mode', 400);
+    }
+    if (!groupCall && mode !== 'participant') {
+        throw new MeetingConciergeRequestError('Observer and facilitator modes require a group meeting', 400);
+    }
+    return mode as MeetingConciergeParticipationMode;
+}
+
 function parseInvite(payload: unknown): MeetingConciergeInvite {
     if (!payload || typeof payload !== 'object') throw new Error('Anam returned an invalid meeting invitation');
     const value = payload as Record<string, unknown>;
@@ -152,18 +191,28 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
             });
             if (!organizerRate.allowed) return json({ error: `This organizer has reached the daily ${adapter.agentName} meeting limit` }, { status: 429, headers: { 'Retry-After': String(organizerRate.retryAfterSeconds) } });
             const body = await adapter.platform.readBoundedJsonObject(request, 5 * 1024);
-            const allowedFields = new Set(['meetingUrl', 'joinAt', 'groupCall', 'purpose', 'maxDurationMinutes']);
+            const allowedFields = new Set([
+                'meetingUrl',
+                'joinAt',
+                'groupCall',
+                'purpose',
+                'maxDurationMinutes',
+                ...(adapter.participation ? ['participationMode'] : []),
+            ]);
             if (Object.keys(body).some(key => !allowedFields.has(key))) return json({ error: 'Meeting request contained unsupported fields' }, { status: 400 });
             const meeting = parseMeetingUrl(body.meetingUrl);
             const joinAt = parseJoinAt(body.joinAt, adapter.agentName);
             if (typeof body.groupCall !== 'boolean') throw new MeetingConciergeRequestError('Choose a group or 1:1 meeting', 400);
-            if (body.purpose !== undefined && (typeof body.purpose !== 'string' || body.purpose.length > 500)) throw new MeetingConciergeRequestError('Meeting purpose was too long', 400);
+            const purpose = parsePurpose(body.purpose);
+            const participationMode = parseParticipationMode(body.participationMode, body.groupCall, adapter.participation);
             const maxDurationMinutes = parseDurationMinutes(body.maxDurationMinutes);
             const apiKey = readApiKey();
             const persona = await adapter.resolvePersona({
                 apiKey,
                 groupCall: body.groupCall,
                 maxSessionLengthSeconds: maxDurationMinutes * 60,
+                participationMode,
+                purpose,
             });
             const response = await fetch(ANAM_MEETINGS_URL, {
                 method: 'POST',

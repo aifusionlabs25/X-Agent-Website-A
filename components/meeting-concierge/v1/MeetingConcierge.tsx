@@ -8,10 +8,13 @@ import {
     CalendarDays,
     Check,
     Clock3,
+    Ear,
+    ListChecks,
     LoaderCircle,
     LogOut,
     LockKeyhole,
     Mail,
+    MessageCircle,
     ShieldCheck,
     TriangleAlert,
     UserRound,
@@ -35,6 +38,7 @@ import type {
     MeetingConciergeDurationMinutes,
     MeetingConciergeInvite,
     MeetingConciergeJoinTiming,
+    MeetingConciergeParticipationMode,
     MeetingConciergeProvider,
 } from '@/lib/meeting-concierge/v1/contracts';
 import { MEETING_CONCIERGE_DURATION_MINUTES, MEETING_CONCIERGE_VERSION } from '@/lib/meeting-concierge/v1/contracts';
@@ -66,6 +70,12 @@ const PROVIDER_COPY: Record<MeetingConciergeProvider, { name: string; hint: stri
 function platformMark(provider: MeetingConciergeProvider, styles: MeetingConciergeStyleContract) {
     const className = provider === 'google' ? styles.googleMark : provider === 'zoom' ? styles.zoomMark : styles.teamsMark;
     return <span aria-hidden="true" className={`${styles.platformMark} ${className}`}>{provider === 'teams' ? 'T' : <Video size={17} />}</span>;
+}
+
+function participationIcon(mode: MeetingConciergeParticipationMode) {
+    if (mode === 'observer') return <Ear size={21} />;
+    if (mode === 'facilitator') return <ListChecks size={21} />;
+    return <MessageCircle size={21} />;
 }
 
 function CheckInFields({
@@ -165,6 +175,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
     const [time, setTime] = useState('10:30');
     const [timezone, setTimezone] = useState('America/Phoenix');
     const [groupCall, setGroupCall] = useState(true);
+    const [participationMode, setParticipationMode] = useState<MeetingConciergeParticipationMode>(adapter.participation?.defaultMode ?? 'participant');
     const [maxDurationMinutes, setMaxDurationMinutes] = useState<MeetingConciergeDurationMinutes>(30);
     const [purpose, setPurpose] = useState('');
     const [displayName, setDisplayName] = useState('');
@@ -190,6 +201,9 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 setInvite(stored.invite);
                 setProvider(stored.provider);
                 setGroupCall(stored.groupCall);
+                if (stored.participationMode && adapter.participation?.options.some(option => option.mode === stored.participationMode)) {
+                    setParticipationMode(stored.participationMode);
+                }
                 setMaxDurationMinutes(stored.maxDurationMinutes);
                 setStep(3);
                 setRestoredInvite(true);
@@ -203,7 +217,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
             })
             .catch(() => undefined);
         return () => { disposed = true; };
-    }, [adapter.agent.key, meetingApiPath]);
+    }, [adapter.agent.key, adapter.participation, meetingApiPath]);
 
     const inviteId = invite?.id ?? null;
     useEffect(() => {
@@ -224,20 +238,24 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
 
     useEffect(() => {
         if (!invite) return;
+        const effectiveParticipationMode = groupCall ? participationMode : 'participant';
         storeMeetingConciergeInvite(adapter.agent.key, {
             invite,
             provider,
             groupCall,
             maxDurationMinutes,
+            ...(adapter.participation ? { participationMode: effectiveParticipationMode } : {}),
             savedAt: Date.now(),
         });
-    }, [adapter.agent.key, groupCall, invite, maxDurationMinutes, provider]);
+    }, [adapter.agent.key, adapter.participation, groupCall, invite, maxDurationMinutes, participationMode, provider]);
 
     const scheduledJoinAt = (() => {
         const value = new Date(`${date}T${time}:00`);
         return Number.isNaN(value.getTime()) ? null : value.toISOString();
     })();
     const joinAt = joinTiming === 'scheduled' ? scheduledJoinAt : null;
+    const effectiveParticipationMode: MeetingConciergeParticipationMode = groupCall ? participationMode : 'participant';
+    const participationLabel = adapter.participation?.options.find(option => option.mode === effectiveParticipationMode)?.title ?? null;
 
     async function createInvite() {
         if (joinTiming === 'scheduled' && !joinAt) return;
@@ -250,6 +268,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 groupCall,
                 purpose,
                 maxDurationMinutes,
+                ...(adapter.participation ? { participationMode: effectiveParticipationMode } : {}),
             });
             setInvite(created);
             setRestoredInvite(false);
@@ -309,7 +328,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                     <div><dt>Platform</dt><dd>{PROVIDER_COPY[provider].name}</dd></div>
                     <div><dt>Status</dt><dd>{invite.status.replaceAll('_', ' ')}</dd></div>
                     <div><dt>Joins</dt><dd>{invite.joinAt ? new Date(invite.joinAt).toLocaleString() : 'Now'}</dd></div>
-                    <div><dt>Mode</dt><dd>{groupCall ? 'Group meeting · name gated' : '1:1 conversation'}</dd></div>
+                    <div><dt>Mode</dt><dd>{groupCall ? `Group meeting${participationLabel ? ` · ${participationLabel}` : ' · name gated'}` : '1:1 conversation'}</dd></div>
                     <div><dt>Safety limit</dt><dd>{maxDurationMinutes} minutes</dd></div>
                 </dl>
                 {invite.statusReason ? <p className={styles.error}>{invite.statusReason}</p> : null}
@@ -358,9 +377,14 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
             ) : step === 2 ? (
                 <div className={styles.formStack}>
                     <fieldset><legend>How should {adapter.agent.name} participate?</legend><div className={styles.roleGrid}>
-                        <button type="button" aria-pressed={groupCall} data-selected={groupCall} onClick={() => setGroupCall(true)}><UsersRound size={22} /><span><strong>Group meeting</strong><small>Joins quietly and responds when someone says “{adapter.agent.groupWakeName}.”</small></span>{groupCall ? <Check size={17} /> : null}</button>
+                        <button type="button" aria-pressed={groupCall} data-selected={groupCall} onClick={() => setGroupCall(true)}><UsersRound size={22} /><span><strong>Group meeting</strong><small>{adapter.participation ? `Choose how ${adapter.agent.name} contributes below.` : `Joins quietly and responds when someone says “${adapter.agent.groupWakeName}.”`}</small></span>{groupCall ? <Check size={17} /> : null}</button>
                         <button type="button" aria-pressed={!groupCall} data-selected={!groupCall} onClick={() => setGroupCall(false)}><UserRound size={22} /><span><strong>1:1 conversation</strong><small>Greets the participant and responds naturally.</small></span>{!groupCall ? <Check size={17} /> : null}</button>
                     </div></fieldset>
+                    {adapter.participation && groupCall ? <fieldset><legend>{adapter.agent.name}&apos;s role in the room</legend><div className={styles.roleGrid} data-options={adapter.participation.options.length}>
+                        {adapter.participation.options.map(option => <button key={option.mode} type="button" aria-pressed={participationMode === option.mode} data-selected={participationMode === option.mode} onClick={() => setParticipationMode(option.mode)}>
+                            {participationIcon(option.mode)}<span><strong>{option.title}</strong><small>{option.description}</small></span>{participationMode === option.mode ? <Check size={17} /> : null}
+                        </button>)}
+                    </div></fieldset> : null}
                     <fieldset><legend>Automatic safety limit</legend><div className={styles.durationGrid}>{MEETING_CONCIERGE_DURATION_MINUTES.map(minutes => (
                         <button key={minutes} type="button" aria-pressed={maxDurationMinutes === minutes} data-selected={maxDurationMinutes === minutes} onClick={() => setMaxDurationMinutes(minutes)}><Clock3 size={18} /><span><strong>{minutes} minutes</strong><small>The meeting session ends at this limit.</small></span>{maxDurationMinutes === minutes ? <Check size={16} /> : null}</button>
                     ))}</div></fieldset>
@@ -369,7 +393,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 </div>
             ) : (
                 <div className={styles.formStack}>
-                    <div className={styles.reviewCard}><div>{platformMark(provider, styles)}<span><strong>{PROVIDER_COPY[provider].name}</strong><small>{joinAt ? new Date(joinAt).toLocaleString() : 'Join now'} · {groupCall ? 'Group meeting' : '1:1 conversation'} · {maxDurationMinutes} minute limit</small></span></div><button type="button" onClick={() => setStep(1)}>Edit</button></div>
+                    <div className={styles.reviewCard}><div>{platformMark(provider, styles)}<span><strong>{PROVIDER_COPY[provider].name}</strong><small>{joinAt ? new Date(joinAt).toLocaleString() : 'Join now'} · {groupCall ? `Group meeting${participationLabel ? ` · ${participationLabel}` : ''}` : '1:1 conversation'} · {maxDurationMinutes} minute limit</small></span></div><button type="button" onClick={() => setStep(1)}>Edit</button></div>
                     {purpose.trim() ? <p className={styles.purposeReview}><strong>Working objective:</strong> {purpose.trim()}</p> : null}
                     {authenticated ? <div className={styles.verifiedCard}><ShieldCheck size={21} /><div><strong>{adapter.copy.authenticatedLabel}</strong><span>{displayName || 'Verified organizer'} · existing consent and follow-up settings remain unchanged.</span></div></div> : <CheckInFields adapter={adapter} styles={styles} onAuthenticated={name => { setAuthenticated(true); setDisplayName(name ?? 'Organizer'); }} onError={setError} />}
                     <div className={styles.note}><Mail size={18} /><p>{adapter.copy.contactBoundary}</p></div>
