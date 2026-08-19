@@ -2,16 +2,15 @@ import HeroBillboard from '@/components/home/HeroBillboard';
 import AgentCarouselRow from '@/components/home/AgentCarouselRow';
 import TechSpecsSection from '@/components/home/TechSpecsSection';
 import HowItWorksSection from '@/components/home/HowItWorksSection';
-import PricingSection from '@/components/home/PricingSection';
 import TestimonialsSection from '@/components/home/TestimonialsSection';
 import FAQSection from '@/components/home/FAQSection';
 import BetaSignupSection from '@/components/home/BetaSignupSection';
-import { ALL_AGENTS, SALES_AGENTS, SERVICE_AGENTS } from '@/lib/agents';
+import { ALL_AGENTS, SALES_AGENTS, SERVICE_AGENTS, type AgentData } from '@/lib/agents';
 
 export default function HomePage() {
   const hideAmy = process.env.NEXT_PUBLIC_HIDE_AMY === 'true';
 
-  const filterAgents = (agents: any[]) => hideAmy ? agents.filter(a => a.slug !== 'amy') : agents;
+  const filterAgents = (agents: AgentData[]) => hideAmy ? agents.filter(a => a.slug !== 'amy') : agents;
 
   const displaySales = filterAgents(SALES_AGENTS);
   const displayService = filterAgents(SERVICE_AGENTS);
@@ -39,7 +38,7 @@ export default function HomePage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pb-12">
             <p className="text-zinc-600 text-[10px] leading-relaxed max-w-2xl italic">
-                * Taylor and other "Generic" designated agents represent fictional demo scenarios for Canyon Ridge Solutions. These experiences are built to demonstrate cross-industry automation capabilities and do not represent actual client affiliations.
+                * Taylor and other &quot;Generic&quot; designated agents represent fictional demo scenarios for Canyon Ridge Solutions. These experiences are built to demonstrate cross-industry automation capabilities and do not represent actual client affiliations.
             </p>
         </div>
       </div>

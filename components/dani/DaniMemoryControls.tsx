@@ -140,6 +140,7 @@ export default function DaniMemoryControls({ placement = 'dock' }: DaniMemoryCon
                 // Memory may already be present in the active provider context. A full
                 // navigation unmounts Anam and ends this call before the visitor can
                 // continue under the mistaken impression that its live context changed.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a client-side route transition would leave the live provider context mounted.
                 window.location.assign('/agents/dani?memory=cleared');
                 return;
             }
