@@ -15,7 +15,7 @@ Implementation status:
 | V2 prompt, identity, and thirteen-file KB | Managed source of truth | Live in Anam; immediate and delayed read-backs passed |
 | Website contact gate and three-email pipeline | Implemented and covered by Dani tests | Requires site deployment, open production gates, and an end-to-end provider test |
 | Dedicated returning-memory boundary | Dani-specific session/contact secrets, verified identity, consent, encrypted records, and operator promotion are implemented | Keep closed until the staged backend, Anam tool/prompt, manual-publish, and verification runbook passes |
-| Anam group-call participation | V2 prompt and KB define silent, name-invoked advisory behavior | Anam supplies meeting transport and name gating |
+| Anam group-call participation | Meeting Concierge creates a meeting-scoped prompt and voice profile with Observer as the default, plus explicit Participant and Facilitator options | Anam supplies meeting transport and name gating; no saved-persona republish is required for these website-created invitations |
 | Native Anam meeting follow-up email | Explicitly excluded from the website client tool | Not implemented; no verified recipient-and-consent bridge or native meeting handler |
 | Cara 3 rollback | Protected by the updater | Verified unchanged after v2 apply |
 
@@ -72,6 +72,10 @@ Dani's memory is isolated from Amy's cookies, secrets, identity tool, consent st
 ## Native Anam meeting boundary
 
 Anam's meeting feature is responsible for joining Google Meet, Zoom, or Teams and for group-call name gating. The v2 prompt tells Dani to listen broadly, answer narrowly when directly invoked, protect private context, and avoid unauthenticated actions.
+
+For invitations created through X Agents Meeting Concierge, the server copies the published Dani persona into an ephemeral meeting snapshot and appends a compact, higher-priority participation contract. Observer is the default: a direct introduction receives at most one natural greeting, one direct activation permits one short response, and Dani then returns to silence. Participant and Facilitator must be selected explicitly. The optional typed objective is normalized and labeled as untrusted descriptive context; it cannot create authority, evidence, promises, or memory. Group-call voice detection uses a more conservative response threshold to reduce overlap. This meeting snapshot does not alter Dani's published website system prompt or knowledge bundle.
+
+Invitations created directly in Anam Lab do not pass through the X Agents selector or receive this meeting-scoped contract. Anam name gating does not identify which human is the organizer, so no mode claims that only a particular person's voice can activate Dani.
 
 The website contact gate, browser session binding, and `send_dani_follow_up_email` client handler do not run inside a native Anam meeting invite. A meeting invitation address or an address spoken on the call is not the website's verified recipient or consent. Dani therefore cannot schedule or promise the three-email bundle from a native Anam meeting until a separate recipient, consent, session-binding, and delivery integration is implemented and verified.
 

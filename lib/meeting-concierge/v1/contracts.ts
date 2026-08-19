@@ -7,6 +7,9 @@ export type MeetingConciergeJoinTiming = 'now' | 'scheduled';
 export const MEETING_CONCIERGE_DURATION_MINUTES = [15, 30, 45, 60] as const;
 export type MeetingConciergeDurationMinutes = (typeof MEETING_CONCIERGE_DURATION_MINUTES)[number];
 
+export const MEETING_CONCIERGE_PARTICIPATION_MODES = ['observer', 'participant', 'facilitator'] as const;
+export type MeetingConciergeParticipationMode = (typeof MEETING_CONCIERGE_PARTICIPATION_MODES)[number];
+
 export type MeetingConciergeInvite = {
     id: string;
     provider: string;
@@ -28,6 +31,7 @@ export type MeetingConciergeCreateInput = {
     groupCall: boolean;
     purpose: string;
     maxDurationMinutes: MeetingConciergeDurationMinutes;
+    participationMode?: MeetingConciergeParticipationMode;
 };
 
 export type MeetingConciergeStoredInvite = {
@@ -35,7 +39,14 @@ export type MeetingConciergeStoredInvite = {
     provider: MeetingConciergeProvider;
     groupCall: boolean;
     maxDurationMinutes: MeetingConciergeDurationMinutes;
+    participationMode?: MeetingConciergeParticipationMode;
     savedAt: number;
+};
+
+export type MeetingConciergeParticipationOption = {
+    mode: MeetingConciergeParticipationMode;
+    title: string;
+    description: string;
 };
 
 export type MeetingConciergeCheckInFields = {
@@ -72,6 +83,10 @@ export type MeetingConciergeClientAdapter = {
         checkInTitle: string;
         checkInDescription: string;
         consent: string;
+    };
+    participation?: {
+        defaultMode: MeetingConciergeParticipationMode;
+        options: MeetingConciergeParticipationOption[];
     };
     checkIn?:
         | {
