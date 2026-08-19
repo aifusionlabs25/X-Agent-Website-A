@@ -247,7 +247,7 @@ test('Evan pages use the simplified, contained presentation', async () => {
 
     assert.doesNotMatch(landing, /Private pilot preview|Prepared for Mullins Moving|Mullins trained|Voice \+ video|AI Fusion Labs|pilot discussion|What to test/);
     assert.match(landing, /Planning a move\?/);
-    assert.match(landing, /Start planning with Evan/);
+    assert.match(landing, /Talk with Evan now/);
     assert.match(landing, /Your Mullins Moving concierge/);
     assert.match(landing, /lg:h-\[100svh\]/);
     assert.match(landing, /lg:h-\[min\(58vh,520px\)\]/);
@@ -255,7 +255,7 @@ test('Evan pages use the simplified, contained presentation', async () => {
     assert.doesNotMatch(landing, /CUSTOMER_STEPS|Ask your moving questions|Build your move plan live/);
     assert.match(landing, /Evan is ready/);
     assert.match(landing, /className="object-contain"/);
-    assert.match(landing, /\sStart\s/);
+    assert.match(landing, /Start with Evan\./);
     assert.match(header, /pathname === '\/agents\/evan'/);
     assert.match(header, /pathname === '\/demo\/evan'/);
     assert.match(footer, /pathname === '\/agents\/evan'/);
