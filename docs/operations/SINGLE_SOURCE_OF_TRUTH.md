@@ -8,7 +8,7 @@
 | Production branch | main |
 | Hosting | Vercel project x-agent-website-a |
 | Public site | https://xagent.aifusionlabs.app |
-| Amy experience | app/demo/amy and the Amy Anam API routes in this repository |
+| Amy experience | `app/agents/[slug]` public entry, `app/demo/[slug]` private check-in/session, and the Amy Anam API routes in this repository |
 | Amy prompt upgrades | config/anam |
 | Amy knowledge archive | knowledge/amy |
 | Operational guidance | docs/operations |

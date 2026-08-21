@@ -58,7 +58,9 @@ Dani is the reference implementation. Observer is her corporate-safe default, on
 - Server: `app/api/anam/amy/meetings/route.ts`
 - Brand shell: `components/amy/AmyMeetingScheduler.tsx`
 - Entry point: `/agents/amy?meeting=google`
-- Existing private session (unchanged): `/demo/amy?variant=cara4&audioBridge=voicemeeter`
+- Existing private session (unchanged): `/demo/amy?variant=cara4`
+
+`audioBridge=voicemeeter` is machine-local QA only and is honored solely in localhost/Next development. It is never part of a public or production visitor link.
 
 ## Dani reference adapter
 

@@ -52,6 +52,21 @@
     }
   },
   {
+    "name": "show_amy_intelligence",
+    "description": "Open Amy Intelligence to its capability overview when the visitor asks what Amy does or can do, how Amy works, asks Amy to describe herself, says they are evaluating or interviewing Amy, asks to see Amy Intelligence or the Insight Intelligence Layer, asks about features or capabilities, or requests a capability demonstration. Call silently with exactly {} and at most once per request. This opens a product-capability overview, not a customer Visual Brief, assessment, proof point, or authenticated executive view. Wait for the receipt, then confirm in one short sentence that the overview is open.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
+  },
+  {
     "name": "show_visual_brief",
     "description": "Visual Brief: use for a requested visual, update, refresh, rebuild, or regenerate request. For updates, call this tool again. Require a meaningful business objective plus at least two grounding signals. contentChanged, appliedChanges, and visibleFacts are the only source of truth. Confirm in one short sentence. If the requested delta is absent from both appliedChanges and visibleFacts, say the requested change did not land and ask one precise clarification. Keep funding, contracts, workstreams, and concurrent timelines separate and named. Label planning assumptions explicitly. Preserve scope expansion, not a generic guardrail. Customer examples/case studies/references/proof points/prior outcomes are evidence requests; never call solely for customer proof or present the view as a case study. Never infer jurisdiction or a contract. In healthcare or EHR conversations, never infer a root cause, internal workflow stage, or chart design. Use {}. Working view only; not an approved design or production plan.",
     "type": "CLIENT",
@@ -68,7 +83,7 @@
   },
   {
     "name": "show_solution_catalog",
-    "description": "Open Amy's directional solution-category catalog when the visitor explicitly asks to see a catalog, product categories, device categories, or solution categories. This client display does not return live inventory, pricing, availability, lead time, or contract eligibility. Include a concise query based only on the visitor's stated interest. Call silently and never during a farewell.",
+    "description": "Open Amy's directional solution-category catalog only when the visitor asks for general catalog, product-category, device-category, or solution-category guidance. Never call this tool if the same request asks for a live SKU, part number, inventory, price, availability, lead time, contract eligibility, or product-data search—even when it says to open or show the catalog. In that case call no display tool and give the polite no-live-connection boundary. This display is not live commerce data. Include only a concise confirmed category interest and never call during a farewell.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {
@@ -89,8 +104,23 @@
     }
   },
   {
+    "name": "close_amy_intelligence",
+    "description": "Close only the open Amy Intelligence panel when the visitor asks to close, hide, dismiss, or minimize the Visual Brief, Live Brief, notes, roadmap, catalog, panel, view, or window Amy opened. Call silently with exactly {}. This tool never ends the conversation. Never use end_amy_session for a display or window request, and never use this tool for goodbye, hang-up, or session-ending intent.",
+    "type": "CLIENT",
+    "disableInterruptions": false,
+    "config": {
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "awaitResult": true,
+      "toolTimeoutSeconds": 10
+    }
+  },
+  {
     "name": "end_amy_session",
-    "description": "Handle unmistakable visitor closing intent in Amy's one-to-one website session. Soft close language such as 'let's wrap up,' 'wrap it here,' 'we're all set,' or 'that's all' returns closing_motion_required so Amy can give one concise SDR outcome recap, state that the check-in-authorized session follow-up will arrive, ask no question, and call again for the farewell. Hard close language such as 'goodbye,' 'take care,' 'end the call,' or 'I have to go' ends immediately; never ask for confirmation. Call silently with exactly {} and at most once for the terminal close. After farewell_required, say exactly: 'Thanks for talking this through with me. Take care.' Never emit tool syntax as dialogue.",
+    "description": "End Amy's one-to-one website conversation only for unmistakable session-ending intent. Never use this tool when the visitor asks to close, hide, or dismiss a visual, brief, panel, view, or window; use close_amy_intelligence instead. For a soft close such as 'let's wrap up,' 'we're all set,' or 'that's all,' call once and follow the receipt's compact closing-motion instruction. For a hard close such as 'goodbye,' 'end the call,' or 'I have to go,' call once and give the exact farewell. Call silently with exactly {} and at most once per visitor turn. Every accepted receipt has retryAllowed false: never call again, and never claim the browser already ended while sessionEnded is false.",
     "type": "CLIENT",
     "disableInterruptions": false,
     "config": {

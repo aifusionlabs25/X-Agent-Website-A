@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "amy-anam-runtime-v1",
+  "deploymentStatus": "published",
+  "releasedAt": "2026-08-21T04:33:52.386Z",
+  "persona": {
+    "id": "0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08",
+    "name": "Amy Insight SDR - Cara 4 Canary",
+    "avatarModel": "cara-4",
+    "avatarId": "36e17abf-ef6c-4bef-99bd-3f925da155eb",
+    "voiceId": "b138c2a2-ba66-4887-95d5-1a57093fc92d",
+    "llmId": "65421f1c-c7de-4bc4-ac27-d171c16ef41f",
+    "initialMessage": "Hi, I'm Amy with Insight Enterprises. Who am I speaking with today?",
+    "zeroDataRetention": false,
+    "enableAudioPassthrough": false
+  },
+  "prompt": {
+    "sha256": "f0b29fe70ed82faf0dfc8536ed598b1b57abb05b3991e26ba247624db6160c15",
+    "managedMarkerPairs": [
+      {
+        "start": "<!-- AMY_CONVERSATION_NATURALNESS_START -->",
+        "end": "<!-- AMY_CONVERSATION_NATURALNESS_END -->"
+      },
+      {
+        "start": "<!-- AMY_CORE_START -->",
+        "end": "<!-- AMY_CORE_END -->"
+      },
+      {
+        "start": "<!-- AMY_WORKBENCH_START -->",
+        "end": "<!-- AMY_WORKBENCH_END -->"
+      },
+      {
+        "start": "<!-- AMY_CARA4_RELIABILITY_START -->",
+        "end": "<!-- AMY_CARA4_RELIABILITY_END -->"
+      },
+      {
+        "start": "<!-- AMY_PUBLIC_SECTOR_START -->",
+        "end": "<!-- AMY_PUBLIC_SECTOR_END -->"
+      },
+      {
+        "start": "<!-- AMY_AGENTMAIL_START -->",
+        "end": "<!-- AMY_AGENTMAIL_END -->"
+      }
+    ]
+  },
+  "requiredTools": [
+    {
+      "name": "Knowledge_Amy",
+      "id": "a7f0c5b1-4142-4cfd-ae24-5680ac767db2"
+    },
+    {
+      "name": "skip_turn",
+      "id": "69a89bda-9e11-443f-84c0-1cbea75e4fcb"
+    },
+    {
+      "name": "confirm_live_identity",
+      "id": "c98a0f40-c823-4dfc-b5fb-c7ee6ffbc19f"
+    },
+    {
+      "name": "send_follow_up_email",
+      "id": "e8984117-4469-4d71-8811-588904f6ffdb"
+    },
+    {
+      "name": "show_live_notes",
+      "id": "209bccdb-8d0f-4366-8893-019387f84611"
+    },
+    {
+      "name": "show_session_brief",
+      "id": "42f7e0d4-b1f8-4ec4-aacb-518a2928b33f"
+    },
+    {
+      "name": "show_solution_roadmap",
+      "id": "9efaaeb7-e3d4-494d-9a6d-67c144834032"
+    },
+    {
+      "name": "show_amy_intelligence",
+      "id": "69bb83ed-b0af-42ca-8166-5db48663865a"
+    },
+    {
+      "name": "show_visual_brief",
+      "id": "921179f0-470b-4a0c-92e6-31201f51bf89"
+    },
+    {
+      "name": "show_solution_catalog",
+      "id": "c762c031-9f18-42ae-89a2-72c605d4639d"
+    },
+    {
+      "name": "close_amy_intelligence",
+      "id": "933973f0-bf14-475f-ac95-daa9bea6a655"
+    },
+    {
+      "name": "end_amy_session",
+      "id": "3d8a3d01-0150-4665-8b67-79b7b778e1ab"
+    }
+  ],
+  "knowledge": {
+    "toolName": "Knowledge_Amy",
+    "toolType": "SERVER_RAG",
+    "documentFolderIds": [
+      "c34ab445-2d3a-4b4b-a113-d9bacc94265f"
+    ]
+  }
+}

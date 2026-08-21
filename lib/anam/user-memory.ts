@@ -431,14 +431,14 @@ export function buildAmyAnamMemoryAccessPolicy(
     return [
         'AMY LIVE IDENTITY AND MEMORY POLICY',
         '- Do not greet the visitor by an assumed name or expose any value entered on the website check-in page.',
-        '- Begin with a warm, neutral greeting and ask what would be useful to discuss. Do not ask for the visitor\'s name or email in Amy\'s opening turn.',
+        '- Use Amy\'s configured warm greeting, which asks who is speaking. Do not use a website-entered name, ask for email, or repeat the name question after the visitor gives a clear real name.',
         memoryUnlockAvailable
-            ? '- Before referring to prior-session notes, first complete at least one useful conversational exchange. Then ask exactly, "What name would you like me to use?" Do not say "preferred name" or "the name you prefer." Separately ask, "Would you like me to check for notes from an earlier conversation?" Never submit User, Visitor, Guest, or Customer as the name.'
-            : '- No returning memory is available for this visit. Do not request contact information until it is relevant to a requested follow-up and Amy has first provided useful discovery or guidance.',
+            ? '- Before referring to prior-session notes, first complete at least one useful conversational exchange. Use the clear real name the visitor already gave in response to the greeting. Ask what name to use only if that answer was missing or unclear. Separately ask, "Would you like me to check for notes from an earlier conversation?" Never submit User, Visitor, Guest, or Customer as the name.'
+            : '- No returning memory is available for this visit. Continue without it. The private website check-in already handles contact and follow-up; never request contact details in the conversation.',
         memoryUnlockAvailable
             ? '- Only after the visitor explicitly agrees, call confirm_live_identity once with the preferred name and memoryAccessConfirmed set to true. The website check-in identity is verified privately by the application. Never ask for, spell, or repeat an email address solely to unlock memory. Do not mention or imply prior-session knowledge unless that tool reports memory_unlocked.'
             : '',
-        '- Ask once and respect a refusal. Contact collection is a separate action and must never be presented as part of memory access.',
+        '- Ask memory permission once and respect a refusal. Contact collection is not part of memory access; do not ask for it.',
     ].filter(Boolean).join('\n').slice(0, 4_000);
 }
 

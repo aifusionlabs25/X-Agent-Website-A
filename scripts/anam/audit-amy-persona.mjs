@@ -1,8 +1,15 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
+import {
+    AMY_RUNTIME_RELEASE_MANIFEST,
+    readAmyRuntimeReleaseState,
+} from '../../lib/anam/amy-runtime-release-contract.mjs';
 
-const API_BASE = 'https://api.anam.ai/v1';
-const EXPECTED_PERSONA_ID = '0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08';
+const EXPECTED_PERSONA_ID = AMY_RUNTIME_RELEASE_MANIFEST.persona.id;
+const EXPECTED_LLM = Object.freeze({
+    id: AMY_RUNTIME_RELEASE_MANIFEST.persona.llmId,
+    name: 'Qwen 3.8 27b',
+    releaseStage: 'Beta',
+});
 
 const localEnv = await fs.readFile(new URL('../../.env.local', import.meta.url), 'utf8').catch(() => '');
 const env = Object.fromEntries(
@@ -21,53 +28,102 @@ const personaId = process.env.ANAM_AMY_CARA4_PERSONA_ID?.trim()
 
 if (!apiKey) throw new Error('ANAM_API_KEY is required and is never printed.');
 if (personaId !== EXPECTED_PERSONA_ID) {
-    throw new Error('Refusing audit: configured Amy persona ID is not the pinned Cara 4 identity.');
+    throw new Error('Refusing audit: configured Amy persona ID is not the pinned runtime-release identity.');
 }
 
-const response = await fetch(`${API_BASE}/personas/${personaId}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(20_000),
-});
-if (!response.ok) {
-    throw new Error(`Anam persona audit failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
-}
-
-const persona = await response.json();
-const prompt = String(persona.brain?.systemPrompt ?? '');
-const knowledgeTool = (persona.tools ?? []).find(tool => tool.name === 'Knowledge_Amy');
-const markers = [...prompt.matchAll(/<!--\s*([^>]+?)\s*-->/g)].map(match => match[1]);
+const {
+    persona,
+    knowledgeTool,
+    knowledgeGroup,
+    readiness,
+} = await readAmyRuntimeReleaseState(personaId, { apiKey });
+const prompt = String(persona.brain?.systemPrompt ?? '').replace(/\r\n?/g, '\n');
 const managedSections = [...prompt.matchAll(/<!--\s*([^>]+?)\s*-->/g)].map(match => ({
     marker: match[1],
     characterOffset: match.index,
 }));
-const sha256 = value => crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+const llmCheckpointMatches = readiness.llmIdMatches;
+const attachedTools = Array.isArray(persona.tools) ? persona.tools : [];
+const knowledgeToolId = knowledgeTool?._toolId ?? knowledgeTool?.id ?? null;
 
 console.log(JSON.stringify({
-    personaId: persona.id,
-    name: persona.name,
-    avatarModel: persona.avatarModel,
-    avatarId: persona.avatar?.id ?? null,
-    voiceId: persona.voice?.id ?? null,
-    llmId: persona.llmId ?? null,
+    result: readiness.ready ? 'PASS' : 'FAIL',
+    runtimeRelease: {
+        releaseId: readiness.releaseId,
+        deploymentStatus: readiness.deploymentStatus,
+        manifestValid: readiness.releaseManifestValid,
+        manifestPublished: readiness.releaseManifestPublished,
+        manifestComplete: readiness.releaseManifestComplete,
+        knowledgeManifestCrossPinMatches: readiness.knowledgeManifestCrossPinMatches,
+    },
+    personaId: persona.id ?? null,
+    name: persona.name ?? null,
+    avatarModel: persona.avatarModel ?? null,
+    avatarId: persona.avatar?.id ?? persona.avatarId ?? null,
+    voiceId: persona.voice?.id ?? persona.voiceId ?? null,
+    llmId: persona.llmId ?? persona.brain?.llmId ?? persona.brain?.llm?.id ?? null,
+    llmCheckpoint: {
+        expectedId: EXPECTED_LLM.id,
+        expectedName: EXPECTED_LLM.name,
+        releaseStage: EXPECTED_LLM.releaseStage,
+        matchesExpected: llmCheckpointMatches,
+    },
     promptChars: prompt.length,
     promptWords: prompt.trim() ? prompt.trim().split(/\s+/).length : 0,
-    promptSha256: sha256(prompt),
-    managedPromptMarkers: markers,
+    promptSha256: readiness.promptSha256,
+    expectedPromptSha256: readiness.expectedPromptSha256,
+    promptHashPinned: readiness.promptHashPinned,
+    promptHashMatches: readiness.promptHashMatches,
     managedSections,
-    legacyBehaviorHeaderOffset: prompt.indexOf('# Amy Cara 4 behavior upgrade'),
-    legacyThreeFactRulePresent: /at least three confirmed facts/i.test(prompt),
-    toolNames: (persona.tools ?? []).map(tool => tool.name).sort(),
-    customCloseToolAttached: (persona.tools ?? []).some(tool => tool.name === 'end_amy_session'),
-    legacyEndCallAttached: (persona.tools ?? []).some(tool => tool.name === 'end_call'),
-    forbiddenSalesHandoffAttached: (persona.tools ?? []).some(tool => tool.name === 'capture_sales_handoff'),
-    knowledgeTool: knowledgeTool ? {
-        id: knowledgeTool._toolId ?? knowledgeTool.id ?? null,
-        type: knowledgeTool.type ?? null,
-        documentFolderIds: knowledgeTool.config?.documentFolderIds ?? [],
-    } : null,
+    promptMarkerContract: {
+        matches: readiness.promptMarkerContractMatches,
+        missing: readiness.missingPromptMarkers,
+        duplicate: readiness.duplicatePromptMarkers,
+        misorderedPairs: readiness.misorderedPromptMarkerPairs,
+        overlappingPairs: readiness.overlappingPromptMarkerPairs,
+    },
+    toolCount: attachedTools.length,
+    toolNames: attachedTools.map(tool => tool?.name ?? null),
+    toolAttachmentContract: {
+        matches: readiness.toolAttachmentMatches,
+        missing: readiness.missingToolNames,
+        unexpected: readiness.unexpectedToolNames,
+        mismatchedIds: readiness.mismatchedToolNames,
+        duplicateNames: readiness.duplicateToolNames,
+        duplicateIds: readiness.duplicateToolIds,
+    },
+    knowledgeTool: {
+        id: knowledgeToolId,
+        name: knowledgeTool?.name ?? null,
+        type: knowledgeTool?.type ?? null,
+        documentFolderIds: knowledgeTool?.config?.documentFolderIds ?? null,
+        matches: readiness.knowledgeToolMatches,
+        idMatches: readiness.knowledgeToolIdMatches,
+        nameMatches: readiness.knowledgeToolNameMatches,
+        typeMatches: readiness.knowledgeToolTypeMatches,
+        documentFolderIdsMatch: readiness.knowledgeDocumentFolderIdsMatch,
+    },
+    knowledgeGroup: {
+        id: knowledgeGroup?.id ?? null,
+        name: knowledgeGroup?.name ?? null,
+        description: knowledgeGroup?.description ?? null,
+        matches: readiness.knowledgeGroupMatches,
+        idMatches: readiness.knowledgeGroupIdMatches,
+        nameMatches: readiness.knowledgeGroupNameMatches,
+        descriptionMatches: readiness.knowledgeGroupDescriptionMatches,
+    },
     initialMessage: persona.initialMessage ?? null,
-    voiceDetectionOptions: persona.voiceDetectionOptions ?? null,
     zeroDataRetention: persona.zeroDataRetention ?? null,
     enableAudioPassthrough: persona.enableAudioPassthrough ?? null,
+    manifestFailures: readiness.manifestFailures,
+    failedInvariants: readiness.failedInvariants,
 }, null, 2));
+
+if (!readiness.ready) {
+    const llmFailure = llmCheckpointMatches
+        ? ''
+        : ` Amy LLM checkpoint mismatch: expected ${EXPECTED_LLM.name} (${EXPECTED_LLM.id}).`;
+    throw new Error(
+        `Amy runtime release audit failed: ${readiness.failedInvariants.join(', ') || 'unknown invariant'}.${llmFailure}`,
+    );
+}

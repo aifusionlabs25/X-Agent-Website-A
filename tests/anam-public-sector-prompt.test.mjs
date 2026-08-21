@@ -7,7 +7,7 @@ const guidance = await readFile(
     'utf8',
 );
 const updater = await readFile(
-    new URL('../scripts/anam/update-amy-cara4-reliability.mjs', import.meta.url),
+    new URL('../scripts/anam/update-amy-workbench.mjs', import.meta.url),
     'utf8',
 );
 
@@ -45,5 +45,6 @@ test('the live updater manages and verifies the Public Sector block idempotently
     assert.match(updater, /PUBLIC_SECTOR_START/);
     assert.match(updater, /PUBLIC_SECTOR_END/);
     assert.match(updater, /replaceManagedBlock/);
-    assert.match(updater, /publicSectorConfigured/);
+    assert.match(updater, /assertManagedPrompt\(expectedPrompt\)/);
+    assert.match(updater, /sha256\(normalize\(afterTarget\.brain\?\.systemPrompt\)\)/);
 });

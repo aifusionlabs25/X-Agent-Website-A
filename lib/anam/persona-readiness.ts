@@ -1,33 +1,31 @@
 import { createHash } from 'node:crypto';
+import {
+    AMY_RUNTIME_MANAGED_PROMPT_MARKER_PAIRS,
+    AMY_RUNTIME_RELEASE_MANIFEST,
+    AMY_RUNTIME_REQUIRED_TOOL_NAMES,
+    inspectAmyRuntimeRelease,
+    readAmyRuntimeReleaseState,
+} from './amy-runtime-release-contract.mjs';
+import type {
+    AmyRuntimeReleaseManifest,
+    AmyRuntimeReleaseReadiness,
+} from './amy-runtime-release-contract.mjs';
 import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from './persona-ids.ts';
 
 export { DANI_PERSONA_ID, EVAN_PERSONA_ID } from './persona-ids.ts';
 
 const ANAM_API_BASE = 'https://api.anam.ai/v1';
 
-export const AMY_CARA4_REQUIRED_TOOL_NAMES = [
-    'Knowledge_Amy',
-    'confirm_live_identity',
-    'end_amy_session',
-    'search_insight_catalog',
-    'show_live_notes',
-    'show_session_brief',
-    'show_solution_catalog',
-    'show_solution_roadmap',
-    'show_visual_brief',
-    'skip_turn',
-] as const;
+export const AMY_CARA4_EXPECTED_LLM_ID = AMY_RUNTIME_RELEASE_MANIFEST.persona.llmId;
+export const AMY_CARA4_EXPECTED_NAME = AMY_RUNTIME_RELEASE_MANIFEST.persona.name;
+export const AMY_CARA4_EXPECTED_AVATAR_ID = AMY_RUNTIME_RELEASE_MANIFEST.persona.avatarId;
+export const AMY_CARA4_EXPECTED_VOICE_ID = AMY_RUNTIME_RELEASE_MANIFEST.persona.voiceId;
+export const AMY_CARA4_EXPECTED_INITIAL_MESSAGE = AMY_RUNTIME_RELEASE_MANIFEST.persona.initialMessage;
 
-export const AMY_CARA4_REQUIRED_PROMPT_MARKERS = [
-    '<!-- AMY_CONVERSATION_NATURALNESS_START -->',
-    '<!-- AMY_CONVERSATION_NATURALNESS_END -->',
-    '<!-- AMY_CARA4_RELIABILITY_START -->',
-    '<!-- AMY_CARA4_RELIABILITY_END -->',
-    '<!-- AMY_PUBLIC_SECTOR_START -->',
-    '<!-- AMY_PUBLIC_SECTOR_END -->',
-    '<!-- AMY_WORKBENCH_START -->',
-    '<!-- AMY_WORKBENCH_END -->',
-] as const;
+export const AMY_CARA4_REQUIRED_TOOL_NAMES = AMY_RUNTIME_REQUIRED_TOOL_NAMES;
+
+export const AMY_CARA4_REQUIRED_PROMPT_MARKERS = AMY_RUNTIME_MANAGED_PROMPT_MARKER_PAIRS
+    .flatMap(pair => [pair.start, pair.end]);
 
 export const EVAN_REQUIRED_TOOL_NAMES = [
     'Knowledge_Evan_Mullins_Moving',
@@ -47,6 +45,7 @@ export const EVAN_REQUIRED_PROMPT_MARKERS = [
 export const AMY_CARA4_FORBIDDEN_TOOL_NAMES = [
     'capture_sales_handoff',
     'end_call',
+    'search_insight_catalog',
 ] as const;
 
 export const DANI_EXPECTED_NAME = 'Dani AI Solutions Director';
@@ -134,16 +133,7 @@ type PersonaPayload = {
     } | null;
 };
 
-export type AmyCara4PersonaReadiness = {
-    ready: boolean;
-    personaIdMatches: boolean;
-    cara4AvatarConfigured: boolean;
-    sessionDataRetentionConfigured: boolean;
-    anamTranscriptionPipelineConfigured: boolean;
-    missingToolNames: string[];
-    forbiddenToolNames: string[];
-    missingPromptMarkers: string[];
-};
+export type AmyCara4PersonaReadiness = AmyRuntimeReleaseReadiness;
 
 export type EvanPersonaReadiness = {
     ready: boolean;
@@ -177,6 +167,8 @@ export type DaniPersonaReadiness = {
 type ReadinessOptions = {
     apiKey: string;
     fetchImpl?: typeof fetch;
+    manifest?: AmyRuntimeReleaseManifest | unknown;
+    knowledgeManifest?: unknown;
 };
 
 function toolNamesFromPersona(persona: PersonaPayload): Set<string> {
@@ -237,63 +229,34 @@ function managedPromptSha256(value: string): string {
 export function inspectAmyCara4PersonaReadiness(
     persona: PersonaPayload,
     expectedPersonaId: string,
+    options: {
+        knowledgeTool?: Record<string, unknown> | null;
+        knowledgeGroup?: Record<string, unknown> | null;
+        manifest?: AmyRuntimeReleaseManifest | unknown;
+        knowledgeManifest?: unknown;
+    } = {},
 ): AmyCara4PersonaReadiness {
-    const toolNames = toolNamesFromPersona(persona);
-    const prompt = typeof persona.brain?.systemPrompt === 'string'
-        ? persona.brain.systemPrompt
-        : '';
-    const personaIdMatches = persona.id === expectedPersonaId;
-    const cara4AvatarConfigured = persona.avatarModel === 'cara-4';
-    const sessionDataRetentionConfigured = persona.zeroDataRetention === false;
-    const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
-    const missingToolNames = AMY_CARA4_REQUIRED_TOOL_NAMES
-        .filter(name => !toolNames.has(name));
-    const forbiddenToolNames = AMY_CARA4_FORBIDDEN_TOOL_NAMES
-        .filter(name => toolNames.has(name));
-    const missingPromptMarkers = AMY_CARA4_REQUIRED_PROMPT_MARKERS
-        .filter(marker => !prompt.includes(marker));
-
-    return {
-        ready: personaIdMatches
-            && cara4AvatarConfigured
-            && sessionDataRetentionConfigured
-            && anamTranscriptionPipelineConfigured
-            && missingToolNames.length === 0
-            && forbiddenToolNames.length === 0
-            && missingPromptMarkers.length === 0,
-        personaIdMatches,
-        cara4AvatarConfigured,
-        sessionDataRetentionConfigured,
-        anamTranscriptionPipelineConfigured,
-        missingToolNames,
-        forbiddenToolNames,
-        missingPromptMarkers,
-    };
+    return inspectAmyRuntimeRelease({
+        persona,
+        requestedPersonaId: expectedPersonaId,
+        knowledgeTool: options.knowledgeTool ?? null,
+        knowledgeGroup: options.knowledgeGroup ?? null,
+        manifest: options.manifest ?? AMY_RUNTIME_RELEASE_MANIFEST,
+        knowledgeManifest: options.knowledgeManifest,
+    });
 }
 
 export async function readAmyCara4PersonaReadiness(
     personaId: string,
     options: ReadinessOptions,
 ): Promise<AmyCara4PersonaReadiness> {
-    const apiKey = options.apiKey.trim();
-    if (!apiKey) throw new Error('Anam API key is unavailable');
-    const fetchImpl = options.fetchImpl ?? fetch;
-    const response = await fetchImpl(
-        `${ANAM_API_BASE}/personas/${encodeURIComponent(personaId)}`,
-        {
-            headers: { Authorization: `Bearer ${apiKey}` },
-            signal: AbortSignal.timeout(5_000),
-            cache: 'no-store',
-        },
-    );
-    if (!response.ok) {
-        throw new Error(`Anam persona readiness request failed (${response.status})`);
-    }
-    const persona = await response.json().catch(() => null) as PersonaPayload | null;
-    if (!persona || typeof persona !== 'object') {
-        throw new Error('Anam persona readiness response was invalid');
-    }
-    return inspectAmyCara4PersonaReadiness(persona, personaId);
+    const state = await readAmyRuntimeReleaseState(personaId, {
+        apiKey: options.apiKey,
+        fetchImpl: options.fetchImpl,
+        manifest: options.manifest ?? AMY_RUNTIME_RELEASE_MANIFEST,
+        knowledgeManifest: options.knowledgeManifest,
+    });
+    return state.readiness;
 }
 
 export function inspectEvanPersonaReadiness(

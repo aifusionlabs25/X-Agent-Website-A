@@ -449,29 +449,34 @@ test('Visual brief is a six-slide deterministic microdeck', () => {
     assert.ok(model.visualBrief.slides.every((slide) => /conversation so far/i.test(slide.boundary)));
 });
 
-test('Anam client tools use the current API shape and route five named views plus deterministic close', async () => {
+test('Anam client tools route bounded views, capability overview, and distinct deterministic closes', async () => {
     const tools = (await import('../config/anam/amy-workbench-client-tools.json', { with: { type: 'json' } })).default;
     assert.deepEqual(tools.map((tool) => tool.name), [
         'show_live_notes',
         'show_session_brief',
         'show_solution_roadmap',
+        'show_amy_intelligence',
         'show_visual_brief',
         'show_solution_catalog',
+        'close_amy_intelligence',
         'end_amy_session',
     ]);
     assert.ok(tools.every((tool) => tool.type === 'CLIENT'));
     assert.ok(tools.every((tool) => tool.config?.awaitResult === true));
     assert.ok(tools.every((tool) => tool.config?.parameters?.type === 'object'));
     assert.ok(tools.every((tool) => tool.description.length >= 1 && tool.description.length <= 1_024));
-    assert.match(tools[4].description, /does not return live inventory, pricing, availability/i);
-    assert.match(tools[2].description, /asks to see what a plan would look like/i);
-    assert.match(tools[2].description, /before speaking a step-by-step plan/i);
-    assert.match(tools[3].description, /meaningful business objective plus at least two/i);
-    assert.match(tools[3].description, /not an approved design.*production plan/i);
-    assert.match(tools[3].description, /healthcare or EHR conversations.*never infer a root cause.*internal workflow stage.*chart design/is);
-    assert.match(tools[5].description, /unmistakable visitor closing intent/i);
-    assert.match(tools[5].description, /never ask for confirmation/i);
-    assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist/i);
+    const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+    assert.match(byName.show_solution_catalog.description, /Never call this tool if the same request asks for a live SKU, part number, inventory, price, availability/i);
+    assert.match(byName.show_solution_roadmap.description, /asks to see what a plan would look like/i);
+    assert.match(byName.show_solution_roadmap.description, /before speaking a step-by-step plan/i);
+    assert.match(byName.show_visual_brief.description, /meaningful business objective plus at least two/i);
+    assert.match(byName.show_visual_brief.description, /not an approved design.*production plan/i);
+    assert.match(byName.show_visual_brief.description, /healthcare or EHR conversations.*never infer a root cause.*internal workflow stage.*chart design/is);
+    assert.match(byName.show_amy_intelligence.description, /not a customer Visual Brief/i);
+    assert.match(byName.close_amy_intelligence.description, /never ends the conversation/i);
+    assert.match(byName.end_amy_session.description, /unmistakable session-ending intent/i);
+    assert.match(byName.end_amy_session.description, /at most once per visitor turn/i);
+    assert.doesNotMatch(JSON.stringify(tools), /Tavus|end_call|response_to_user|search_assist|search_insight_catalog/i);
 });
 
 test('Amy public-sector visual replay preserves stakeholders and updates funding without inventing a contract', () => {
@@ -564,13 +569,15 @@ test('Amy visual brief preserves the planned cloud track and latest staffing ref
 });
 
 test('Amy feature tabs and content use readable production typography', async () => {
-    const workbench = await import('node:fs/promises').then((fs) => fs.readFile(
-        new URL('../components/amy/AmyAnamWorkbenchV2.tsx', import.meta.url),
-        'utf8',
-    ));
+    const fs = await import('node:fs/promises');
+    const [workbench, player] = await Promise.all([
+        fs.readFile(new URL('../components/amy/AmyAnamWorkbenchV2.tsx', import.meta.url), 'utf8'),
+        fs.readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8'),
+    ]);
     assert.match(workbench, /Open full screen/);
     assert.match(workbench, /Exit full screen/);
     assert.match(workbench, /data-expanded=\{isExpanded\}/);
+    assert.match(player, /key=\{workbenchOpen \? 'amy-workbench-open' : 'amy-workbench-closed'\}/);
     assert.match(workbench, /lg:w-\[min\(62vw,980px\)\]/);
     assert.match(workbench, /event\.key === 'Escape'/);
     assert.match(workbench, /event\.key === 'ArrowLeft'/);

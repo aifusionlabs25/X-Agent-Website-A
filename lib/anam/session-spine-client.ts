@@ -17,6 +17,10 @@ type ConfirmIdentityInput = BindInput & {
     memoryAccessConfirmed: true;
 };
 
+export const AMY_ANAM_COMPLETION_UI_TIMEOUT_MS = 2_500;
+
+export type AmyAnamCompletionUiOutcome = 'completed' | 'failed' | 'timed_out';
+
 export type AmyAnamCompletionResult = {
     accepted: boolean;
     status: string;
@@ -33,6 +37,30 @@ export type AmyAnamLiveIdentityResult = {
 
 async function defaultSleep(milliseconds: number): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+export async function waitForAmyAnamCompletionUiWindow(
+    completion: Promise<unknown>,
+    timeoutMs = AMY_ANAM_COMPLETION_UI_TIMEOUT_MS,
+): Promise<AmyAnamCompletionUiOutcome> {
+    // This bounds only the visitor-facing wait. The supplied keepalive request
+    // is deliberately observed, not aborted, so durable finalization can finish
+    // after the Amy player has closed.
+    const boundedTimeoutMs = Number.isFinite(timeoutMs)
+        ? Math.max(0, Math.min(10_000, Math.floor(timeoutMs)))
+        : AMY_ANAM_COMPLETION_UI_TIMEOUT_MS;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<'timed_out'>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve('timed_out'), boundedTimeoutMs);
+    });
+    const observedCompletion = completion.then(
+        () => 'completed' as const,
+        () => 'failed' as const,
+    );
+
+    const outcome = await Promise.race([observedCompletion, timeout]);
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+    return outcome;
 }
 
 export async function bindAmyAnamClientSession({

@@ -52,8 +52,8 @@ Never paste secret values into Git, tickets, transcripts, screenshots, or chat.
 
 Use a designated test identity with Remember me enabled.
 
-1. Open /demo/amy from the production domain.
-2. Complete check-in and verify Previous conversation found.
+1. Open `/agents/amy` on the production domain and select **Meet with Amy**.
+2. Complete the private `/demo/amy?variant=cara4` check-in and verify Previous conversation found.
 3. Confirm Amy does not speak the email address or infer a name from the login form.
 4. Start a session and confirm audio input, transcript capture, and explicit end-call behavior.
 5. Open Notes, Brief, Roadmap, Visual, and Catalog and confirm the side panel updates.

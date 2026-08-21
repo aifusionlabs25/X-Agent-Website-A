@@ -61,7 +61,10 @@ const {
     fetchCompletedAnamTranscript,
     verifyAnamSessionMetadata,
 } = sessionApiModule.exports;
-const { completeAmyAnamClientSession } = sessionClientModule.exports;
+const {
+    completeAmyAnamClientSession,
+    waitForAmyAnamCompletionUiWindow,
+} = sessionClientModule.exports;
 
 const SECRET = 'phase-1-test-signing-secret-with-more-than-32-characters';
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
@@ -1087,6 +1090,27 @@ test('client completion sends only session identifiers and reason with keepalive
     });
     assert.equal(Object.hasOwn(body, 'transcript'), false);
     assert.equal(JSON.stringify(body).includes('server-only-test-key'), false);
+});
+
+test('Amy UI completion window exits while an unresolved durable completion remains live', async () => {
+    let resolveCompletion;
+    let completionFinished = false;
+    const durableCompletion = new Promise((resolve) => {
+        resolveCompletion = resolve;
+    }).then(() => {
+        completionFinished = true;
+    });
+    const startedAt = Date.now();
+
+    const outcome = await waitForAmyAnamCompletionUiWindow(durableCompletion, 10);
+
+    assert.equal(outcome, 'timed_out');
+    assert.equal(completionFinished, false);
+    assert.ok(Date.now() - startedAt < 500, 'the visitor UI wait exceeded its short test bound');
+
+    resolveCompletion();
+    await durableCompletion;
+    assert.equal(completionFinished, true, 'the durable completion was cancelled with the UI wait');
 });
 
 test('client completion retries an awaiting transcript without expanding its request body', async () => {

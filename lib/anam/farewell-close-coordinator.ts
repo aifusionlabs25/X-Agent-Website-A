@@ -40,7 +40,7 @@ export function createFarewellCloseCoordinator(input: {
 
     return {
         arm: () => {
-            if (disposed || stopRequested || armed) return false;
+            if (disposed || stopRequested || armed || audioDrainTimer !== null) return false;
             armed = true;
             fallbackTimer = schedule(stopOnce, fallbackMs);
             return true;

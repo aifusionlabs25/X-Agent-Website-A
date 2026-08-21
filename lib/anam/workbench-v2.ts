@@ -1,4 +1,4 @@
-export type AmyWorkbenchView = 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
+export type AmyWorkbenchView = 'capabilities' | 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 
 export interface AmyWorkbenchTurn {
     role: 'user' | 'agent';
@@ -215,6 +215,7 @@ function stakeholderWasCleared(values: string[]): boolean {
 function requestedOutputFrom(values: string[], trackCount: number, requestedView?: AmyWorkbenchView): string {
     if (requestedView) {
         return ({
+            capabilities: 'Amy Intelligence capability overview',
             notes: 'Live notes',
             brief: 'Live brief',
             roadmap: trackCount === 2 ? 'Two-track roadmap' : trackCount > 2 ? `${trackCount}-track roadmap` : 'Roadmap',

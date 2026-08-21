@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
     AlertTriangle,
     BookOpenText,
+    BrainCircuit,
     Check,
     ChevronLeft,
     ChevronRight,
@@ -43,12 +44,32 @@ interface AmyAnamWorkbenchProps {
 }
 
 const TABS: Array<{ id: AmyWorkbenchView; label: string; icon: typeof FileText }> = [
+    { id: 'capabilities', label: 'Overview', icon: BrainCircuit },
     { id: 'notes', label: 'Notes', icon: BookOpenText },
     { id: 'brief', label: 'Brief', icon: FileText },
     { id: 'roadmap', label: 'Roadmap', icon: GitBranch },
     { id: 'visual', label: 'Visual', icon: Network },
     { id: 'catalog', label: 'Catalog', icon: PackageSearch },
 ];
+
+const AMY_CAPABILITIES = [
+    {
+        title: 'Clarify the opportunity',
+        detail: 'Listen for the business outcome, urgency, impact, stakeholders, constraints, and decision path without turning the conversation into a questionnaire.',
+    },
+    {
+        title: 'Build working context',
+        detail: 'Organize confirmed current-session facts into Live Notes, a Live Brief, a directional Roadmap, a Visual Brief, or solution categories when requested.',
+    },
+    {
+        title: 'Hold the specialist boundary',
+        detail: 'Translate technical signals into business meaning, identify what still needs validation, and stop before architecture, product selection, pricing, compliance judgment, or commitments.',
+    },
+    {
+        title: 'Complete the session package',
+        detail: 'After the session closes, support the authorized visitor recap, working visual, admin copy, and internal Insight intake workflow without exposing the private check-in address.',
+    },
+] as const;
 
 const NOTE_SECTIONS = ['Organization', 'Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Identity', 'Requested outputs', 'Decisions'] as const;
 
@@ -183,7 +204,7 @@ export default function AmyAnamWorkbenchV2({
                     </div>
                 </div>
 
-                <div className={`relative grid grid-cols-5 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10 ${isVisualView ? 'mt-3' : 'mt-5'}`} role="tablist" aria-label="Amy Intelligence views">
+                <div className={`relative grid grid-cols-6 gap-px overflow-hidden rounded-sm border border-white/10 bg-white/10 ${isVisualView ? 'mt-3' : 'mt-5'}`} role="tablist" aria-label="Amy Intelligence views">
                     {TABS.map((tab) => {
                         const Icon = tab.icon;
                         const selected = view === tab.id;
@@ -205,7 +226,7 @@ export default function AmyAnamWorkbenchV2({
             </header>
 
             <div className={`min-h-0 flex-1 px-5 sm:px-7 ${isVisualView ? 'flex flex-col overflow-y-auto py-3 md:overflow-hidden' : 'overflow-y-auto py-6'}`}>
-                {revision > 0 && (
+                {revision > 0 && view !== 'capabilities' && (
                     <section
                         className={`${isVisualView ? 'mb-2 px-3 py-2' : 'mb-5 px-4 py-3'} border ${appliedChanges.length > 0 ? 'border-emerald-300/20 bg-emerald-300/[0.055]' : 'border-amber-300/20 bg-amber-300/[0.055]'}`}
                     >
@@ -239,18 +260,38 @@ export default function AmyAnamWorkbenchV2({
                 <div className={`flex flex-wrap items-center justify-between gap-3 ${isVisualView ? 'mb-2' : 'mb-5'}`}>
                     <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Active lane</p>
-                        <p className={`${isVisualView ? 'mt-0 text-xs' : 'mt-1 text-sm'} font-semibold text-zinc-100`}>{model.lane}</p>
+                        <p className={`${isVisualView ? 'mt-0 text-xs' : 'mt-1 text-sm'} font-semibold text-zinc-100`}>{view === 'capabilities' ? 'Capability overview' : model.lane}</p>
                     </div>
                     <div
                         className={`inline-flex items-center gap-2 border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] ${model.status === 'live' && model.quality.level === 'grounded' ? 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300' : 'border-amber-300/20 bg-amber-300/[0.06] text-amber-200'}`}
                         aria-live="polite"
                     >
                         <span className={`h-1.5 w-1.5 rounded-full ${model.status === 'live' && model.quality.level === 'grounded' ? 'bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]' : 'bg-amber-300'}`} />
-                        {model.status === 'live' ? `${model.quality.label} · ${model.signalCount} signals` : 'Listening'}
+                        {view === 'capabilities' ? 'Product tour' : model.status === 'live' ? `${model.quality.label} · ${model.signalCount} signals` : 'Listening'}
                     </div>
                 </div>
 
-                {model.status === 'listening' && view !== 'catalog' ? (
+                {view === 'capabilities' ? (
+                    <section aria-labelledby="amy-capabilities-heading">
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff68a9]">What Amy does</p>
+                        <h3 id="amy-capabilities-heading" className="mt-2 text-3xl font-semibold tracking-[-0.035em]">Turn a first conversation into a useful next step</h3>
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">This is a product-capability overview. It is not a customer assessment, authenticated executive view, solution design, or completed handoff.</p>
+                        <div className="mt-7 grid gap-4 sm:grid-cols-2">
+                            {AMY_CAPABILITIES.map((capability, index) => (
+                                <article key={capability.title} className="relative overflow-hidden border border-white/10 bg-white/[0.025] p-5">
+                                    <span className="absolute right-4 top-4 text-xs font-bold text-zinc-600">0{index + 1}</span>
+                                    <BrainCircuit size={18} className="text-[#ff68a9]" />
+                                    <h4 className="mt-4 text-base font-semibold text-white">{capability.title}</h4>
+                                    <p className="mt-2 text-sm leading-6 text-zinc-400">{capability.detail}</p>
+                                </article>
+                            ))}
+                        </div>
+                        <div className="mt-6 flex items-start gap-3 border border-emerald-300/20 bg-emerald-300/[0.045] p-4 text-sm leading-6 text-emerald-100/80">
+                            <ShieldCheck size={16} className="mt-0.5 flex-none text-emerald-300" />
+                            <span>Amy accelerates qualification and context capture. Insight specialists and responsible customer owners validate architecture, product fit, procurement, compliance, pricing, availability, and delivery.</span>
+                        </div>
+                    </section>
+                ) : model.status === 'listening' && view !== 'catalog' ? (
                     <EmptySignal />
                 ) : view === 'notes' ? (
                     <section aria-labelledby="amy-notes-heading">

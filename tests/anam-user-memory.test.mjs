@@ -171,12 +171,19 @@ test('two visits with one email share approved memory while another email stays 
 test('website check-in identity never becomes Amy conversational identity', () => {
     const context = buildAmyAnamMemoryAccessPolicy(true);
     assert.match(context, /Do not greet the visitor by an assumed name/i);
-    assert.match(context, /Do not ask.*opening turn/i);
+    assert.match(context, /configured warm greeting, which asks who is speaking/i);
+    assert.match(context, /Do not use a website-entered name/i);
+    assert.match(context, /Ask what name to use only if that answer was missing or unclear/i);
     assert.match(context, /one useful conversational exchange/i);
     assert.match(context, /confirm_live_identity/i);
     assert.match(context, /memoryAccessConfirmed/i);
     assert.match(context, /Never ask for, spell, or repeat an email address solely/i);
+    assert.match(context, /Contact collection is not part of memory access; do not ask for it/i);
     assert.doesNotMatch(context, /\bRob\b|rob@example\.com/i);
+
+    const withoutMemory = buildAmyAnamMemoryAccessPolicy(false);
+    assert.match(withoutMemory, /private website check-in already handles contact and follow-up/i);
+    assert.match(withoutMemory, /never request contact details in the conversation/i);
 });
 
 test('approved promotion is idempotent and a rejected decision cannot later be approved', async () => {

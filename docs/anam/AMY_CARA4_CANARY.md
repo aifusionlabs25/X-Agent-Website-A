@@ -1,4 +1,18 @@
-# Amy stable Cara 4 canary
+# Amy production operations and historical Cara 4 canary notes
+
+## Current production checkpoint — 2026-08-20
+
+- Canonical public entry: `https://xagent.aifusionlabs.app/agents/amy`.
+- The black-blazer Insight landing page's **Meet with Amy** action resolves to `/demo/amy?variant=cara4`, shows the private name/email/access-code check-in, and then starts the same production Cara 4 persona.
+- Production persona: `Amy Insight SDR - Cara 4 Canary`, ID `0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08`.
+- Pinned provider checkpoint: Qwen 3.8 27b (Beta), model ID `65421f1c-c7de-4bc4-ac27-d171c16ef41f`; Cara 4 avatar ID `36e17abf-ef6c-4bef-99bd-3f925da155eb`; voice ID `b138c2a2-ba66-4887-95d5-1a57093fc92d`.
+- The production session spine, private check-in, AgentMail three-message post-session workflow, Visual Brief delivery, and Meeting Concierge are active. Runtime readiness fails closed when the pinned greeting, prompt blocks, tools, provider, avatar, voice, or session settings drift.
+- Public visitors use an ordinary physical browser microphone. VoiceMeeter is not required; production ignores `audioBridge=voicemeeter` even in an old or manually edited URL, while local `next dev` retains it for controlled QA.
+- Release target: the isolated Amy-only v1 public-safe knowledge bundle in `config/anam/amy/v1/`. Its guarded migration and exact live attachment audit must pass before this checkpoint is marked complete.
+
+## Historical rollout notes — July 2026
+
+The sections below preserve the original canary rollout record. References to a Cara 3 public persona, preview-only AgentMail, July tool counts, or preview-only routes describe that earlier phase and are not current production instructions.
 
 ## Plain-English purpose
 
@@ -37,7 +51,7 @@ Snapshot checked on 2026-07-14 before canary creation:
 - Avatar supports: `cara-3`, `cara-4`, `cara-4-latest`
 - Stable canary model: `cara-4`
 - Source prompt SHA-256: `4f3a64542c79fee42896d513a9cc85c3a37d9b289fe9e86dd75e3eece5fff75e`
-- LLM: GPT OSS 120B
+- Current production-canary LLM: Qwen 3.8 27b (Beta), model ID `65421f1c-c7de-4bc4-ac27-d171c16ef41f`
 - Attached tools: three, including the existing Insight knowledge tool
 
 The canary creation script fetches Amy's current live prompt and configuration, appends the provider-neutral behavior upgrade in `config/anam/amy-cara4-behavior-upgrade.md`, creates a separate persona, and verifies the avatar, voice, LLM, tools, settings, and prompt hash. It will not overwrite a mismatched existing canary.
@@ -47,7 +61,11 @@ Canary created and verified on 2026-07-14:
 - Canary persona ID: `0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08`
 - Avatar model: stable `cara-4`
 - Upgraded prompt SHA-256: `adddfbcad0aeba5d66dbeb18f7b4db0f6a01317a063b84720aa6b49cdbaa1b4b`
-- Same source avatar, voice, GPT OSS 120B LLM, and all three tool attachments: verified
+- Same source avatar and voice, with the current Qwen 3.8 27b LLM and all required tool attachments: verified
+
+### Qwen checkpoint boundary
+
+The live Amy Cara 4 identity is pinned to Qwen 3.8 27b while the production canary is evaluated. `npm run anam:audit:amy` fails if the live persona drifts to another model. The single guarded Workbench sync writer installs every managed prompt layer plus Amy's complete tool surface in one transaction. The retired conversation and AgentMail writers fail closed. The active writer refuses a mismatched model before writing, submits no `llmId` in its payload, and verifies that provider configuration remains unchanged after an authorized apply. Model changes remain dashboard-owned and must be followed by a fresh audit, controlled smoke test, and an explicit repository checkpoint update.
 
 ## Safety boundaries
 

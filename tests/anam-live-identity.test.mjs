@@ -71,13 +71,14 @@ test('memory remains locked without live permission or a consented check-in iden
 
 test('pre-unlock policy warms up and asks permission without requesting spoken email', () => {
     const policy = buildAmyAnamMemoryAccessPolicy(true);
-    assert.match(policy, /warm, neutral greeting/i);
-    assert.match(policy, /Do not ask.*opening turn/i);
+    assert.match(policy, /configured warm greeting/i);
+    assert.match(policy, /do not.*repeat the name question.*clear real name/i);
     assert.match(policy, /at least one useful conversational exchange/i);
     assert.match(policy, /check for notes from an earlier conversation/i);
     assert.match(policy, /memoryAccessConfirmed set to true/i);
-    assert.match(policy, /What name would you like me to use\?/i);
-    assert.doesNotMatch(policy, /ask naturally for the visitor's preferred name/i);
+    assert.match(policy, /Use the clear real name the visitor already gave/i);
+    assert.match(policy, /Ask what name to use only if that answer was missing or unclear/i);
+    assert.doesNotMatch(policy, /What name would you like me to use\?/i);
     assert.match(policy, /Never ask for, spell, or repeat an email address solely to unlock memory/i);
     assert.doesNotMatch(policy, /rvicks|Website Alias|ERP migration/i);
 });
@@ -104,7 +105,7 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     const verifier = await readFile(new URL('../lib/anam/live-identity.ts', import.meta.url), 'utf8');
     const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
     const reliabilityPrompt = await readFile(new URL('../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url), 'utf8');
-    const reliabilityUpdater = await readFile(new URL('../scripts/anam/update-amy-cara4-reliability.mjs', import.meta.url), 'utf8');
+    const deprecatedUpdater = await readFile(new URL('../scripts/anam/update-amy-cara4-reliability.mjs', import.meta.url), 'utf8');
     const identityToolRaw = await readFile(new URL('../config/anam/amy-live-identity-client-tool.json', import.meta.url), 'utf8');
     const identityTool = JSON.parse(identityToolRaw);
 
@@ -128,6 +129,9 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
             < player.indexOf("streamToVideoElement('persona-video')"),
     );
     assert.match(player, /payload\.arguments\.memoryAccessConfirmed === true/);
+    assert.match(player, /if \(!preferredName \|\| \/\^\(\?:user\|visitor\|guest\|customer\)\$\/i\.test\(preferredName\)\)/);
+    assert.match(player, /if \(!memoryAccessConfirmed\)/);
+    assert.match(player, /Do not ask for the name again/);
     assert.match(player, /confirmedMemoryName = result\.preferredName/);
     assert.doesNotMatch(player, /payload\.arguments\.email|normalizedEmail|confirmedContact/);
     assert.match(sessionClient, /JSON\.stringify\(\{ launchId, sessionId, preferredName, memoryAccessConfirmed \}\)/);
@@ -135,6 +139,9 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     assert.match(player, /two or three distinctive earlier-session facts/);
     assert.match(player, /result\.memoryCount > 0/);
     assert.match(reliabilityPrompt, /Never ask for, spell, repeat, or submit an email address to unlock memory/i);
+    assert.match(reliabilityPrompt, /do not ask for the name a second time/i);
+    assert.match(identityTool.description, /do not ask for it again/i);
+    assert.match(identityTool.config.parameters.properties.preferredName.description, /in response to Amy's greeting/i);
     assert.match(reliabilityPrompt, /contact collection as a separate action/i);
     assert.match(reliabilityPrompt, /never present current-call statements as proof of memory/i);
     assert.match(reliabilityPrompt, /action-capable tool explicitly reports success/i);
@@ -142,7 +149,7 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     assert.match(reliabilityPrompt, /"Thanks," "okay," "sounds good," "got it,"/i);
     assert.match(reliabilityPrompt, /Call `end_amy_session` silently with exactly an empty object, before speaking, and at most once/i);
     assert.match(reliabilityPrompt, /Do not ask for confirmation/i);
-    assert.match(reliabilityPrompt, /When `end_amy_session` returns `farewell_required`/i);
+    assert.match(reliabilityPrompt, /When a hard close returns `farewell_required`/i);
     assert.match(reliabilityPrompt, /Leave a brief natural beat after the visitor stops speaking/i);
     assert.match(reliabilityPrompt, /Treat "hang on," "give me a moment," "let me review,"/i);
     assert.match(reliabilityPrompt, /preserve it as an open item/i);
@@ -152,8 +159,9 @@ test('server and client enforce delayed, session-owned, email-free memory unlock
     assert.match(reliabilityPrompt, /call skip_turn and remain silent/i);
     assert.match(reliabilityPrompt, /Never use "before we wrap up/i);
     assert.match(player, /voiceDetection: \{ endOfSpeechSensitivity: 0\.05 \}/);
-    assert.match(reliabilityUpdater, /endOfSpeechSensitivity: 0\.05/);
-    assert.match(reliabilityUpdater, /silenceBeforeAutoEndTurnSeconds: 3/);
+    assert.match(deprecatedUpdater, /Deprecated unsafe Amy updater/);
+    assert.match(deprecatedUpdater, /anam:update-amy-workbench/);
+    assert.doesNotMatch(deprecatedUpdater, /fetch\(|method:\s*['"](?:PUT|POST)['"]/);
     assert.match(reliabilityPrompt, /say exactly one calm farewell: "Thanks for talking this through with me\. Take care\."/i);
     assert.deepEqual(identityTool.config.parameters.required, ['preferredName', 'memoryAccessConfirmed']);
     assert.equal(identityTool.config.parameters.properties.memoryAccessConfirmed.type, 'boolean');

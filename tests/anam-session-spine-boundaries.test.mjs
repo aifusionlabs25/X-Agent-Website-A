@@ -95,6 +95,24 @@ test('the client completion transport is keepalive-safe and never includes a tra
     assert.doesNotMatch(clientSpine, /JSON\.stringify\([^)]*transcript/s);
 });
 
+test('Amy connection close has a UI-only bound without aborting durable completion', () => {
+    assert.match(clientSpine, /AMY_ANAM_COMPLETION_UI_TIMEOUT_MS = 2_500/);
+    assert.match(clientSpine, /Promise\.race\(\[observedCompletion, timeout\]\)/);
+    assert.doesNotMatch(clientSpine, /AbortController|signal:/);
+
+    const handlerStart = player.indexOf('const handleConnectionClosed = async');
+    const handlerEnd = player.indexOf('removeCloseToolHandler = anamClient.registerToolCallHandler', handlerStart);
+    const handler = player.slice(handlerStart, handlerEnd);
+    const completionStart = handler.indexOf('const completion = completeOnce');
+    const boundedWait = handler.indexOf('waitForAmyAnamCompletionUiWindow(completion)');
+    const uiClose = handler.indexOf('onCloseRef.current?.()');
+
+    assert.ok(completionStart >= 0, 'completion did not start on provider close');
+    assert.ok(boundedWait > completionStart, 'Amy UI did not wait through the bounded completion window');
+    assert.ok(uiClose > boundedWait, 'the visitor UI did not exit after its bounded completion window');
+    assert.match(handler, /Session completion continues after bounded UI exit/);
+});
+
 test('completion is durably verification-pending before provider verification begins', () => {
     const recordCall = completionRoute.indexOf('recordAmyAnamCompletion({');
     const finalizerCall = completionRoute.indexOf('await finalizeAfterClose(sessionId)');

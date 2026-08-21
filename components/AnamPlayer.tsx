@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     createClient,
     AnamClient,
@@ -21,6 +21,7 @@ import {
     confirmAmyAnamLiveIdentity,
     confirmDaniAnamLiveIdentity,
     completeAmyAnamClientSession,
+    waitForAmyAnamCompletionUiWindow,
 } from '@/lib/anam/session-spine-client';
 import {
     buildAmyWorkbenchModel,
@@ -44,9 +45,15 @@ import {
     createAmyFarewellCloseCoordinator,
     hasAmySoftCloseIntent,
     hasExplicitAmyCloseIntent,
+    hasAmyWorkbenchCloseIntent,
 } from '@/lib/anam/amy-session-close';
 import { hasAmySpokenEmailAttempt, inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
 import type { AmyUnsafeSpokenOutputReason } from '@/lib/anam/amy-live-output-guard';
+import { assessPublicAudioInputStream } from '@/lib/anam/public-audio-safety';
+import {
+    hasAmyCapabilityOverviewIntent,
+    normalizeAmyCapabilityTurn,
+} from '@/lib/anam/amy-capability-intent';
 
 interface AnamPlayerProps {
     personaId: string;
@@ -66,7 +73,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [isConnecting, setIsConnecting] = useState(true);
     const [isFinalizing, setIsFinalizing] = useState(false);
     const [workbenchOpen, setWorkbenchOpen] = useState(false);
-    const [workbenchView, setWorkbenchView] = useState<AmyWorkbenchView>('notes');
+    const workbenchOpenRef = useRef(false);
+    const workbenchOpenGenerationRef = useRef(0);
+    const [workbenchView, setWorkbenchView] = useState<AmyWorkbenchView>('capabilities');
+    const workbenchViewRef = useRef<AmyWorkbenchView>('capabilities');
     const [workbenchTurns, setWorkbenchTurns] = useState<AmyWorkbenchTurn[]>([]);
     const [roadmapTopic, setRoadmapTopic] = useState('');
     const [catalogQuery, setCatalogQuery] = useState('');
@@ -81,6 +91,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
     const evanPlannerEnabled = personaId === EVAN_PERSONA_ID
         && process.env.NEXT_PUBLIC_EVAN_MOVE_PLANNER_ENABLED !== 'false';
+    const setAmyWorkbenchOpen = useCallback((nextOpen: boolean) => {
+        if (nextOpen && !workbenchOpenRef.current) {
+            workbenchOpenGenerationRef.current += 1;
+        }
+        workbenchOpenRef.current = nextOpen;
+        setWorkbenchOpen(nextOpen);
+    }, []);
+    const setAmyWorkbenchView = useCallback((nextView: AmyWorkbenchView) => {
+        workbenchViewRef.current = nextView;
+        setWorkbenchView(nextView);
+    }, []);
 
     const onCloseRef = useRef(onClose);
     useEffect(() => {
@@ -145,10 +166,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let amyUnsafeOutputRecoveryTimer: number | null = null;
         let pendingAmyUnsafeOutputReason: AmyUnsafeSpokenOutputReason | null = null;
         let pendingAmyHardCloseIntent = false;
-        let amyClosingMotionActive = false;
         let completedUserTurns = 0;
         let confirmedMemoryName: string | null = null;
         let requestedCloseFallbackTimer: number | null = null;
+        let publicAudioBlocked = false;
+        let nextWorkbenchControlReceipt = 1;
+        let lastWorkbenchCloseReceipt: { request: string; receiptId: string; generation: number } | null = null;
+        let amyIntelligenceOverviewReceiptId: string | null = null;
+        let lastAmyCapabilityIntentTurn = '';
+        let amyTerminalCloseReceiptId: string | null = null;
         const videoElement = videoRef.current;
 
         transcriptRef.current = [];
@@ -157,8 +183,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setError(null);
         setIsConnecting(true);
         setIsFinalizing(false);
-        setWorkbenchOpen(false);
-        setWorkbenchView('notes');
+        setAmyWorkbenchOpen(false);
+        setAmyWorkbenchView('capabilities');
         setWorkbenchTurns([]);
         setRoadmapTopic('');
         setCatalogQuery('');
@@ -281,18 +307,20 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 return;
             }
 
-            void activeClient.stopStreaming().catch(() => undefined).finally(() => {
-                requestedCloseFallbackTimer = window.setTimeout(() => {
-                    if (closeHandled || !isMounted) return;
-                    closeHandled = true;
-                    void completeOnce('user_requested_end')
-                        .catch(() => undefined)
-                        .finally(() => {
-                            if (!isMounted) return;
-                            setIsFinalizing(false);
-                            onCloseRef.current?.();
-                        });
-                }, 1_500);
+            // Start the UI escape hatch before asking the SDK to stop. If the
+            // provider promise hangs, waiting for finally() would leave the
+            // visitor trapped in a live, billable session.
+            requestedCloseFallbackTimer = window.setTimeout(() => {
+                if (closeHandled || !isMounted) return;
+                closeHandled = true;
+                void completeOnce('user_requested_end').catch(() => {
+                    console.error('[Amy Anam Spine] Fallback completion receipt was not confirmed');
+                });
+                setIsFinalizing(false);
+                onCloseRef.current?.();
+            }, 1_500);
+            void activeClient.stopStreaming().catch(() => {
+                console.error('[Amy Anam] Provider stop was not confirmed before the UI fallback');
             });
         };
 
@@ -339,6 +367,52 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 }
             }
             return [...synchronizedTurns].reverse().find((turn) => turn.role === 'user')?.content ?? '';
+        };
+
+        const closeAmyWorkbenchFromRequest = (latestUserTurn: string) => {
+            const normalizedRequest = latestUserTurn.replace(/\s+/g, ' ').trim().toLowerCase();
+            const duplicateRequest = Boolean(
+                normalizedRequest
+                && lastWorkbenchCloseReceipt?.request === normalizedRequest
+                && lastWorkbenchCloseReceipt?.generation === workbenchOpenGenerationRef.current,
+            );
+            const requested = hasAmyWorkbenchCloseIntent(
+                latestUserTurn,
+                workbenchOpenRef.current || duplicateRequest,
+            );
+            if (!requested) {
+                return {
+                    accepted: false,
+                    status: 'view_close_not_requested',
+                    viewClosed: false,
+                    sessionEnded: false,
+                    retryAllowed: false,
+                    instruction: 'The visitor did not ask to close an Amy Intelligence view. Do not claim a view or the session was closed, and do not retry this tool for the same turn.',
+                } as const;
+            }
+
+            const receiptId = duplicateRequest && lastWorkbenchCloseReceipt
+                ? lastWorkbenchCloseReceipt.receiptId
+                : `amy-view-close-${nextWorkbenchControlReceipt++}`;
+            const viewWasOpen = workbenchOpenRef.current;
+            if (viewWasOpen) setAmyWorkbenchOpen(false);
+            lastWorkbenchCloseReceipt = {
+                request: normalizedRequest,
+                receiptId,
+                generation: workbenchOpenGenerationRef.current,
+            };
+            return {
+                accepted: true,
+                status: viewWasOpen ? 'workbench_view_closed' : 'workbench_view_already_closed',
+                receiptId,
+                viewClosed: true,
+                sessionEnded: false,
+                duplicate: !viewWasOpen,
+                retryAllowed: false,
+                instruction: viewWasOpen
+                    ? 'The Amy Intelligence view is closed and the conversation remains active. Confirm that briefly. Do not call end_amy_session and do not say the session ended.'
+                    : 'The Amy Intelligence view was already closed and the conversation remains active. Do not retry, call end_amy_session, or claim the session ended.',
+            } as const;
         };
         window.addEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
 
@@ -462,8 +536,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     } else if (view === 'catalog') {
                                         setCatalogQuery(query);
                                     }
-                                    setWorkbenchView(view);
-                                    setWorkbenchOpen(true);
+                                    setAmyWorkbenchView(view);
+                                    setAmyWorkbenchOpen(true);
                                     await new Promise<void>((resolve) => {
                                         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
                                     });
@@ -490,6 +564,52 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     registerView('show_solution_roadmap', 'roadmap', "Opened Amy's illustrative Roadmap for the current conversation.");
                     registerView('show_visual_brief', 'visual', "Opened Amy's Visual Brief for the current conversation.");
                     registerView('show_solution_catalog', 'catalog', "Opened Amy's directional solution categories. Live pricing and inventory are not shown.");
+                    cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler('show_amy_intelligence', {
+                        onStart: async () => {
+                            const alreadyOpen = Boolean(
+                                amyIntelligenceOverviewReceiptId
+                                && workbenchOpenRef.current
+                                && workbenchViewRef.current === 'capabilities',
+                            );
+                            if (!alreadyOpen) {
+                                amyIntelligenceOverviewReceiptId = `amy-intelligence-${nextWorkbenchControlReceipt++}`;
+                            }
+                            if (isMounted) {
+                                setWorkbenchRequestedView(undefined);
+                                setAmyWorkbenchView('capabilities');
+                                setAmyWorkbenchOpen(true);
+                                await new Promise<void>((resolve) => {
+                                    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                                });
+                            }
+                            return JSON.stringify({
+                                accepted: true,
+                                status: alreadyOpen ? 'amy_intelligence_already_open' : 'amy_intelligence_opened',
+                                receiptId: amyIntelligenceOverviewReceiptId,
+                                view: 'capabilities',
+                                customerArtifact: false,
+                                sessionEnded: false,
+                                duplicate: alreadyOpen,
+                                retryAllowed: false,
+                                instruction: alreadyOpen
+                                    ? 'The capability overview is already open. Do not call this tool again for the same request or claim a customer artifact was created.'
+                                    : 'The Amy Intelligence capability overview is open. Confirm that in one short sentence. Do not call it a customer Visual Brief, assessment, proof point, or authenticated executive view, and do not ask a generic discovery question.',
+                            });
+                        },
+                    }));
+                    cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler('close_amy_intelligence', {
+                        onStart: async () => {
+                            const latestUserTurn = await latestSynchronizedUserTurn();
+                            const receipt = closeAmyWorkbenchFromRequest(latestUserTurn);
+                            console.info('[Amy Anam Workbench] Close-view request handled', {
+                                status: receipt.status,
+                                accepted: receipt.accepted,
+                                sessionEnded: false,
+                                contentLogged: false,
+                            });
+                            return JSON.stringify(receipt);
+                        },
+                    }));
                 }
                 if (evanPlannerEnabled) {
                     cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler('show_move_planner', {
@@ -608,10 +728,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 };
 
                 const handleMicPermissionDenied = (permissionError: string) => {
-                    if (audioBridge && isMounted) {
+                    if (!isMounted) return;
+                    if (audioBridge) {
                         setError(`VoiceMeeter bridge could not start: ${permissionError}`);
-                        setIsConnecting(false);
+                    } else if (isAmyCara4) {
+                        setError('Microphone access is blocked. Allow microphone access for this site in your browser, then restart the Amy session.');
+                    } else {
+                        return;
                     }
+                    setIsConnecting(false);
                 };
 
                 const handleSessionReady = (sessionId: string) => {
@@ -627,6 +752,31 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             console.error('[Amy Anam Spine] Session binding was not confirmed');
                         });
                     }
+                };
+
+                const handleInputAudioStreamStarted = (inputStream: MediaStream) => {
+                    if (!isAmyCara4 || audioBridge || publicAudioBlocked) return;
+                    const assessment = assessPublicAudioInputStream(inputStream);
+                    if (assessment.disposition !== 'block') return;
+
+                    publicAudioBlocked = true;
+                    requestedCloseReason = 'unsafe_public_audio_input';
+                    try {
+                        anamClient.muteInputAudio();
+                    } catch {
+                        console.error('[Amy Anam Audio] Unsafe public input could not be muted');
+                    }
+                    if (isMounted) {
+                        setError(assessment.message);
+                        setIsConnecting(false);
+                    }
+                    console.warn('[Amy Anam Audio] Public loopback input blocked', {
+                        kind: assessment.kind,
+                        labelContentLogged: false,
+                    });
+                    void anamClient.stopStreaming().catch(() => {
+                        console.error('[Amy Anam Audio] Unsafe public session stop was not confirmed');
+                    });
                 };
 
                 // Capture live conversation chunks
@@ -647,7 +797,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         const softCloseRequested = hasAmySoftCloseIntent(latestUserTurn);
                         if (reason !== 'contact_privacy' && (hardCloseRequested || softCloseRequested)) {
                             requestedCloseReason = 'user_requested_end';
-                            amyClosingMotionActive = false;
                             amyCloseCoordinator?.arm();
                             const recoveryFarewell = softCloseRequested
                                 ? 'Your session follow-up will arrive at your private check-in address. Thanks for talking this through with me. Take care.'
@@ -757,17 +906,38 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     if (messageEvent.endOfSpeech) {
                         if (currentMessageRef.current) {
                             recordTurn(messageEvent.role, currentMessageRef.current);
-                            if (messageEvent.role === 'user') {
+                            if (transcriptRole(messageEvent.role) === 'user') {
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
                                 const completedUserTurn = currentMessageRef.current.trim();
+                                const capabilityIntentTurn = normalizeAmyCapabilityTurn(completedUserTurn);
+                                if (
+                                    isAmyCara4
+                                    && workbenchEnabled
+                                    && hasAmyCapabilityOverviewIntent(completedUserTurn)
+                                    && capabilityIntentTurn !== lastAmyCapabilityIntentTurn
+                                ) {
+                                    lastAmyCapabilityIntentTurn = capabilityIntentTurn;
+                                    amyIntelligenceOverviewReceiptId ??= `amy-intelligence-${nextWorkbenchControlReceipt++}`;
+                                    if (isMounted) {
+                                        setWorkbenchRequestedView(undefined);
+                                        setAmyWorkbenchView('capabilities');
+                                        setAmyWorkbenchOpen(true);
+                                    }
+                                    try {
+                                        anamClient.addContext('The browser has opened Amy Intelligence to the non-customer capability Overview for this explicit request. Acknowledge it in one short sentence. Do not call it a customer artifact or ask a generic discovery question.');
+                                    } catch {
+                                        console.error('[Amy Anam Workbench] Automatic capability Overview context was not confirmed');
+                                    }
+                                } else if (!hasAmyCapabilityOverviewIntent(completedUserTurn)) {
+                                    lastAmyCapabilityIntentTurn = '';
+                                }
                                 if (hasExplicitAmyCloseIntent(completedUserTurn)) {
                                     pendingAmyHardCloseIntent = true;
                                     requestedCloseReason = 'user_requested_end';
                                 }
                                 if (hasAmySoftCloseIntent(completedUserTurn)) {
-                                    amyClosingMotionActive = true;
                                     try {
-                                        anamClient.addContext('Closing motion is active. In no more than two short sentences, recap the visitor\'s priority, the confirmed boundary, and the next human validation. State that the session follow-up will arrive at the private check-in address. Ask no question, do not request contact details, and then silently call end_amy_session for the farewell.');
+                                        anamClient.addContext('The visitor expressed a soft close. Call end_amy_session silently exactly once. Follow its authoritative receipt: give one compact closing motion that ends with the exact farewell, ask no question, and never call the tool a second time.');
                                     } catch {
                                         console.error('[Amy Anam] Closing motion context was not confirmed');
                                     }
@@ -802,7 +972,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     if (sessionSpineActive) {
                         if (isMounted) setIsFinalizing(true);
                         try {
-                            await completeOnce(requestedCloseReason ?? String(reason));
+                            const completion = completeOnce(requestedCloseReason ?? String(reason));
+                            if (isAmyCara4) {
+                                const outcome = await waitForAmyAnamCompletionUiWindow(completion);
+                                if (outcome === 'failed') {
+                                    console.error('[Amy Anam Spine] Session completion was not confirmed');
+                                } else if (outcome === 'timed_out') {
+                                    console.warn('[Amy Anam Spine] Session completion continues after bounded UI exit');
+                                }
+                            } else {
+                                await completion;
+                            }
                         } catch {
                             console.error('[Amy Anam Spine] Session completion was not confirmed');
                         } finally {
@@ -828,7 +1008,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         }).catch(console.error);
                     }
 
-                    if (isMounted) onCloseRef.current?.();
+                    if (isMounted && !publicAudioBlocked) onCloseRef.current?.();
                 };
 
                 if (isAmyCara4) {
@@ -838,32 +1018,67 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             onStart: async () => {
                                 const latestUserTurn = await latestSynchronizedUserTurn();
                                 const hardCloseRequested = hasExplicitAmyCloseIntent(latestUserTurn);
-                                if (!hardCloseRequested && hasAmySoftCloseIntent(latestUserTurn)) {
-                                    amyClosingMotionActive = true;
-                                    return JSON.stringify({
-                                        status: 'closing_motion_required',
-                                        instruction: 'Do not say goodbye yet. In no more than two short sentences, recap the visitor\'s priority, the confirmed boundary, and the next human validation. State that the session follow-up will arrive at the private check-in address. Ask no question, request no contact details, and then silently call end_amy_session again for the farewell.',
-                                    });
+                                if (!hardCloseRequested) {
+                                    const viewCloseReceipt = closeAmyWorkbenchFromRequest(latestUserTurn);
+                                    if (viewCloseReceipt.accepted) {
+                                        console.info('[Amy Anam] Misrouted session-close call safely closed the view', {
+                                            status: viewCloseReceipt.status,
+                                            sessionEnded: false,
+                                            contentLogged: false,
+                                        });
+                                        return JSON.stringify(viewCloseReceipt);
+                                    }
                                 }
-                                if (!hardCloseRequested && !amyClosingMotionActive) {
+                                const softCloseRequested = !hardCloseRequested
+                                    && hasAmySoftCloseIntent(latestUserTurn);
+                                if (!hardCloseRequested && !softCloseRequested) {
                                     console.warn('[Amy Anam] Premature close tool call refused', {
                                         contentLogged: false,
                                     });
                                     return JSON.stringify({
                                         status: 'close_not_requested',
+                                        accepted: false,
+                                        sessionEnded: false,
+                                        retryAllowed: false,
                                         instruction: 'The visitor has not explicitly asked to end the session. Do not say goodbye, do not expose tool syntax, and do not claim the session is closing. Wait silently for the visitor to continue.',
                                     });
                                 }
+                                if (amyTerminalCloseReceiptId) {
+                                    pendingAmyHardCloseIntent = false;
+                                    return JSON.stringify({
+                                        status: 'close_in_progress',
+                                        accepted: true,
+                                        receiptId: amyTerminalCloseReceiptId,
+                                        sessionEnded: false,
+                                        retryAllowed: false,
+                                        instruction: 'Do not speak again and do not call this tool again. The accepted close receipt is already in progress and the browser will close the session.',
+                                    });
+                                }
                                 pendingAmyHardCloseIntent = false;
-                                amyClosingMotionActive = false;
                                 requestedCloseReason = 'user_requested_end';
                                 const armed = amyCloseCoordinator?.arm() === true;
-                                console.info('[Amy Anam] Farewell close armed', { armed });
+                                if (armed && !amyTerminalCloseReceiptId) {
+                                    amyTerminalCloseReceiptId = `amy-session-close-${nextWorkbenchControlReceipt++}`;
+                                }
+                                console.info('[Amy Anam] Farewell close armed', {
+                                    armed,
+                                    receiptPresent: Boolean(amyTerminalCloseReceiptId),
+                                });
                                 return JSON.stringify({
-                                    status: armed ? 'farewell_required' : 'farewell_already_armed',
+                                    status: armed
+                                        ? softCloseRequested
+                                            ? 'closing_motion_and_farewell_required'
+                                            : 'farewell_required'
+                                        : 'close_in_progress',
+                                    accepted: true,
+                                    receiptId: amyTerminalCloseReceiptId,
+                                    sessionEnded: false,
+                                    retryAllowed: false,
                                     instruction: armed
-                                        ? 'Say exactly: "Thanks for talking this through with me. Take care." Ask no question, add no recap, and introduce no new topic. The browser will close after the farewell finishes.'
-                                        : 'Do not speak again. The farewell close is already armed and the browser will close the session.',
+                                        ? softCloseRequested
+                                            ? 'In no more than two short sentences, recap the visitor\'s priority and next human validation, state that the session follow-up will arrive at the private check-in address, and end with exactly: "Thanks for talking this through with me. Take care." Ask no question, request no contact details, add no new topic, and do not call this tool again. The browser will close after this speech finishes.'
+                                            : 'Say exactly: "Thanks for talking this through with me. Take care." Ask no question, add no recap, introduce no new topic, and do not call this tool again. The browser will close after the farewell finishes.'
+                                        : 'Do not speak again and do not call this tool again. The accepted close receipt is already in progress and the browser will close the session.',
                                 });
                             },
                         },
@@ -886,8 +1101,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     ? payload.arguments.preferredName.trim()
                                     : '';
                                 const memoryAccessConfirmed = payload.arguments.memoryAccessConfirmed === true;
-                                if (!preferredName || /^(?:user|visitor|guest|customer)$/i.test(preferredName) || !memoryAccessConfirmed) {
-                                    throw new Error('Ask "What name would you like me to use?" and separately ask permission to check previous notes.');
+                                if (!preferredName || /^(?:user|visitor|guest|customer)$/i.test(preferredName)) {
+                                    throw new Error('Use the clear name already given in response to the greeting; only if it was missing or unclear, ask once what name to use.');
+                                }
+                                if (!memoryAccessConfirmed) {
+                                    throw new Error('Ask only whether the visitor would like you to check for notes from an earlier conversation. Do not ask for the name again.');
                                 }
                                 if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
                                     throw new Error('The private session is not ready. Continue the conversation and try once more.');
@@ -971,9 +1189,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     sent: false,
                                     duplicate: result.duplicate,
                                     receiptId: result.receiptId,
-                                    instruction: amyClosingMotionActive
-                                        ? 'Confirm briefly that the volunteered callback preference is included without repeating the number. Then silently call end_amy_session and give the required farewell.'
-                                        : 'Confirm the volunteered callback preference once without repeating the number, then continue naturally. Do not discuss or reconfirm the email address.',
+                                    instruction: 'Confirm the volunteered callback preference once without repeating the number, then continue naturally. Do not discuss or reconfirm the email address.',
                                 });
                             },
                         },
@@ -1015,7 +1231,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     : '';
                                 const memoryAccessConfirmed = payload.arguments.memoryAccessConfirmed === true;
                                 if (!preferredName || /^(?:user|visitor|guest|customer)$/i.test(preferredName) || !memoryAccessConfirmed) {
-                                    throw new Error('Ask "What name would you like me to use?" and separately ask permission to check previous notes.');
+                                    throw new Error('Use the clear name already given in response to the greeting; only if it was missing or unclear, ask once what name to use. Separately ask permission to check previous notes.');
                                 }
                                 if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
                                     throw new Error('The private Dani session is not ready. Continue the conversation and try once more.');
@@ -1155,6 +1371,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 };
 
                 anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
+                anamClient.addListener(AnamEvent.INPUT_AUDIO_STREAM_STARTED, handleInputAudioStreamStarted);
                 anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
                 anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                 anamClient.addListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
@@ -1162,6 +1379,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 removeClientListeners = () => {
                     anamClient.removeListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
                     anamClient.removeListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
+                    anamClient.removeListener(AnamEvent.INPUT_AUDIO_STREAM_STARTED, handleInputAudioStreamStarted);
                     anamClient.removeListener(AnamEvent.SESSION_READY, handleSessionReady);
                     anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                     anamClient.removeListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
@@ -1212,7 +1430,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 videoElement.srcObject = null;
             }
         };
-    }, [personaId, sessionVariant, audioBridge, workbenchEnabled, evanPlannerEnabled]);
+    }, [personaId, sessionVariant, audioBridge, workbenchEnabled, evanPlannerEnabled, setAmyWorkbenchOpen, setAmyWorkbenchView]);
 
     return (
         <div className={`relative flex h-full w-full flex-col items-center justify-center ${evanPlannerEnabled ? 'bg-[#100718]' : personaId === DANI_PERSONA_ID ? 'bg-[#101713]' : 'bg-zinc-950'}`}>
@@ -1261,7 +1479,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             {workbenchEnabled && !workbenchOpen && !error && !isConnecting && (
                 <button
                     type="button"
-                    onClick={() => setWorkbenchOpen(true)}
+                    onClick={() => {
+                        setAmyWorkbenchView('capabilities');
+                        setAmyWorkbenchOpen(true);
+                    }}
                     className="absolute right-5 top-5 z-30 inline-flex items-center gap-2 border border-white/15 bg-black/65 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-[#ff2f8a]/60 hover:bg-black/80"
                 >
                     <BrainCircuit size={16} className="text-[#ff68a9]" />
@@ -1271,6 +1492,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
             {workbenchEnabled && (
                 <AmyAnamWorkbenchV2
+                    key={workbenchOpen ? 'amy-workbench-open' : 'amy-workbench-closed'}
                     isOpen={workbenchOpen}
                     view={workbenchView}
                     turns={workbenchTurns}
@@ -1281,8 +1503,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     appliedChanges={workbenchAppliedChanges}
                     visualSlideIndex={workbenchVisualSlideIndex}
                     onVisualSlideIndexChange={setWorkbenchVisualSlideIndex}
-                    onViewChange={setWorkbenchView}
-                    onClose={() => setWorkbenchOpen(false)}
+                    onViewChange={setAmyWorkbenchView}
+                    onClose={() => setAmyWorkbenchOpen(false)}
                 />
             )}
 

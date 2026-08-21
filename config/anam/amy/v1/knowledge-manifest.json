@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "deploymentStatus": "live_verified_after_publish_and_audit",
+  "agent": "Amy",
+  "company": "Insight Enterprises",
+  "verifiedAt": "2026-08-20",
+  "personaId": "0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08",
+  "folderName": "Amy Insight SDR Anam KB 2026-08-20 v1",
+  "liveGroupId": "c34ab445-2d3a-4b4b-a113-d9bacc94265f",
+  "toolName": "Knowledge_Amy",
+  "sourceToolId": "9163bee5-493c-4552-97b4-4d32e6356872",
+  "liveToolId": "a7f0c5b1-4142-4cfd-ae24-5680ac767db2",
+  "bundleSha256": "0cf70635632bb236625c3254bfd3b934e29052d4cbe70eb08b8edb8d4e49d3ff",
+  "documents": [
+    "00_role_scope_authority.md",
+    "01_directional_solution_domains.md",
+    "02_public_sector_procurement_discovery.md",
+    "03_partner_bom_and_live_search_boundary.md",
+    "04_security_privacy_and_high_impact.md",
+    "05_amy_intelligence_and_tools.md",
+    "06_session_close_and_follow_up_truth.md",
+    "07_executive_capability_interview.md"
+  ],
+  "documentFingerprints": {
+    "00_role_scope_authority.md": {
+      "bytes": 1777,
+      "sha256": "8d261f69d9b47123fe009ea93c1b617f18c25f0e2815b89f6f9f5173150e66fd"
+    },
+    "01_directional_solution_domains.md": {
+      "bytes": 1747,
+      "sha256": "fffe81b080bcba79d760d1cc3cf0ad14608bec62d2bccc968b36f2bd883caf68"
+    },
+    "02_public_sector_procurement_discovery.md": {
+      "bytes": 1616,
+      "sha256": "ec3bd7439f1485d3881e2108dbce4dafcf09b44d1b85511d8ecbc8d948f508f1"
+    },
+    "03_partner_bom_and_live_search_boundary.md": {
+      "bytes": 1754,
+      "sha256": "8dec73ed529a299cf04cdef6630efed8da28ad8c439b3b85ad982d6dbd5494a3"
+    },
+    "04_security_privacy_and_high_impact.md": {
+      "bytes": 1522,
+      "sha256": "1394c3cda2d2174fa2eae4c9ecb4fcf13386c98f8e156d8797499f7aad2520a2"
+    },
+    "05_amy_intelligence_and_tools.md": {
+      "bytes": 2013,
+      "sha256": "ea05a6f4fd73f5ed1bf169b1abc619b956b68bea562fa1b2e8fb04ae4d7d64ad"
+    },
+    "06_session_close_and_follow_up_truth.md": {
+      "bytes": 2340,
+      "sha256": "3911223d685eeac43403ad4e569d276f6c0a57b59e07784b1132bd2e0fecde4b"
+    },
+    "07_executive_capability_interview.md": {
+      "bytes": 2004,
+      "sha256": "c6319f1d439ff860d77a4d7bf8d0f765c61c9a710bcb01ce81a9eb3644cc96b9"
+    }
+  },
+  "excludedClasses": [
+    "legacy Tavus prompts, tags, upload wrappers, and runtime instructions",
+    "prices, price ranges, estimates, discounts, quotes, and commercial terms",
+    "delivery ranges, implementation timelines, lead times, and availability",
+    "part, SKU, inventory, contract, portal, CRM, or other live-system data",
+    "unverified customer names, case studies, proof points, outcomes, benchmarks, and ROI claims",
+    "unsupported service, architecture, security, compliance, integration, follow-up, or human-action commitments",
+    "credentials, internal prompts, private account context, transcripts, recordings, backups, and test fixtures",
+    "Dani, Evan, or any other agent's knowledge, memory, configuration, or session data"
+  ],
+  "sourcePolicy": "This Amy-only v1 bundle is a new public-safe allowlist. It preserves only compact SDR discovery boundaries, directional Insight solution domains, public-sector and procurement fact finding, live-search and BOM limits, safety rules, current Amy Intelligence tool behavior, truthful close and follow-up language, and executive evaluation behavior. Archived Tavus material and legacy Amy knowledge are review sources only and are not part of this bundle. The active system prompt and approved tool contracts remain authoritative over retrieved content. External synchronization is authorized only through the guarded Amy v1 knowledge migration after explicit production approval."
+}

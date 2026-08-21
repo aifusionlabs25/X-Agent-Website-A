@@ -41,8 +41,8 @@ Amy: Keep the device rollout on its committed track and treat AI as separate dis
 User: Scheduling, but our agency security owner has not validated whether the data is outside CJIS.
 Amy: Then the data boundary is still open. I can frame the business decision while your security owner and an Insight public-sector specialist validate it.
 User: Thanks, Amy. Let's call it a day.
-Tool (end_amy_session): Result: {"status":"farewell_required"}
-Amy: Thanks for talking this through with me. Take care.`;
+Tool (end_amy_session): Result: {"status":"closing_motion_and_farewell_required","retryAllowed":false}
+Amy: Your security boundary remains open for specialist validation, and the session follow-up will arrive at your private check-in address. Thanks for talking this through with me. Take care.`;
     const report = evaluateAmyTranscript(transcript);
     assert.equal(report.status, 'pass');
     assert.equal(report.findings.length, 0);
@@ -57,8 +57,8 @@ User: Update it with the staffing scope.
 Tool (show_visual_brief): Result: {"status":"view_rebuilt"}
 Amy: Sorry, I'm having trouble thinking right now.
 User: Let's wrap up.
-Tool (end_amy_session): Result: {"status":"farewell_required"}
-Amy: Thanks for talking this through with me. Take care.`;
+Tool (end_amy_session): Result: {"status":"closing_motion_and_farewell_required","retryAllowed":false}
+Amy: The staffing scope remains subject to validation, and the session follow-up will arrive at your private check-in address. Thanks for talking this through with me. Take care.`;
     const report = evaluateAmyTranscript(transcript);
     const fallbacks = report.findings.filter((finding) => finding.code === 'provider_fallback_exposed');
     assert.equal(report.status, 'fail');
@@ -95,4 +95,177 @@ test('latest endpoint transcript fails on hard truncation, reasoning leakage, pr
         'unsupported_service_commitment',
         'missing_end_session_tool',
     ]) assert.ok(codes.has(code), `expected ${code}`);
+});
+
+test('session 3d852e0a regression detects interview drift, retry storms, capability mismatch, unsupported follow-up, and broken close receipts', () => {
+    const transcript = `Session Transcript
+Session ID: 3d852e0a-8de4-4c2b-869e-09b422044ffb
+Persona: Amy Insight SDR - Cara 4 Canary
+
+Amy: ${AMY_CANONICAL_GREETING}
+User: I'm Jack, CEO of Insight. I'm evaluating what you can do and how you work. Tell me.
+Amy: What's the primary outcome you'd like to achieve with Insight's help?
+User: Show me the Insight Intelligence Layer.
+Tool (show_visual_brief): Result: {"status":"view_rebuilt"}
+Amy: The Visual Brief is open.
+User: Show me Cisco product options in the catalog.
+Tool (show_solution_catalog): Result: {"status":"failed"}
+Tool (show_solution_catalog): Result: {"status":"failed"}
+Tool (show_solution_catalog): Result: {"status":"failed"}
+Tool (show_solution_catalog): Result: {"status":"failed"}
+Tool (show_solution_catalog): Result: {"status":"failed"}
+Tool (show_solution_catalog): Result: {"status":"failed"}
+Tool (show_solution_catalog): Result: {"status":"failed"}
+Amy: An Insight team member will review everything and follow up with you.
+User: Close the visual.
+Tool (end_amy_session): Result: {"status":"close_not_requested"}
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Tool (end_amy_session): Result: {"status":"close_in_progress","retryAllowed":false}
+Tool (end_amy_session): Result: {"status":"close_in_progress","retryAllowed":false}
+Tool (end_amy_session): Result: {"status":"close_in_progress","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.
+User: Amy, you're still here.
+Tool (end_amy_session): Result: {"status":"close_in_progress","retryAllowed":false}`;
+
+    const report = evaluateAmyTranscript(transcript);
+    const codes = new Set(report.findings.map((finding) => finding.code));
+    assert.equal(report.status, 'fail');
+    for (const code of [
+        'executive_interview_drift',
+        'tool_retry_storm',
+        'unsupported_human_followup',
+        'visual_capability_mismatch',
+        'premature_close_attempt',
+        'failed_end_session_receipt',
+    ]) assert.ok(codes.has(code), `expected ${code}`);
+    assert.equal(report.findings.filter((finding) => finding.code === 'tool_retry_storm').length, 1);
+    assert.ok(
+        report.findings.some((finding) => finding.code === 'failed_end_session_receipt'
+            && /called 6 times/i.test(finding.excerpt ?? '')),
+        'the deliberately repeated end calls must be diagnosed as a broken close sequence',
+    );
+});
+
+test('the one-call soft-close receipt is terminal and requires no second tool call', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: We need a validated security next step by next month.
+Amy: I can capture the priority and boundary for the right specialist validation.
+User: Thanks, Amy. Let's wrap it here.
+Tool (end_amy_session): Result: {"status":"closing_motion_and_farewell_required","retryAllowed":false}
+Amy: The security priority remains subject to specialist validation, and your session follow-up will arrive at the private check-in address. Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.findings.length, 0);
+    assert.equal(report.metrics.toolTurns, 1);
+});
+
+test('business-progress phrases never become close requests in live QA', () => {
+    const continuingTurns = [
+        'We need Insight to take care of deployment.',
+        'I have to go through our security review.',
+        'I need to go over the budget.',
+        'We are finished with discovery and ready for the next topic.',
+        'We are good for 500 users in phase one.',
+        'I am good with the proposed security approach; now discuss cost.',
+        'That is all of the data for the first site; next is the second.',
+        'We are all set for the pilot requirements; now discuss rollout.',
+        'Can your team take care?',
+        'Would Insight take care?',
+        'The question is whether you can take care.',
+        'What happens if I say goodbye?',
+        'Can you explain why we should end the call?',
+        'Are you saying I have to go?',
+        'Why would I end the session?',
+        'Do you end the call when I say goodbye?',
+        'What happens if I say that is all?',
+        'Do you close if I say we are all set?',
+        'Are you saying that is it?',
+        'Why would I say thanks for your time?',
+        'What happens if I say I have to run?',
+        'Are you saying we are all set?',
+        'The note says take care.',
+        'Please say bye Amy.',
+        'I have to run diagnostics before we decide.',
+        "I'm going to jump off this topic and discuss cost.",
+    ];
+
+    for (const userTurn of continuingTurns) {
+        const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: ${userTurn}
+Amy: Understood. What should we examine next?`;
+        const report = evaluateAmyTranscript(transcript);
+        assert.equal(report.status, 'pass', userTurn);
+        assert.equal(report.findings.length, 0, userTurn);
+    }
+});
+
+test('ending Amy on business-progress language is a premature close', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: We need Insight to take care of deployment.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.ok(report.findings.some((finding) => finding.code === 'premature_close_attempt'));
+    assert.equal(report.status, 'fail');
+});
+
+test('close_in_progress alone is not accepted as a successful terminal receipt', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"close_in_progress","retryAllowed":false}`;
+    const report = evaluateAmyTranscript(transcript);
+    const codes = new Set(report.findings.map((finding) => finding.code));
+    assert.equal(report.status, 'fail');
+    assert.ok(codes.has('failed_end_session_receipt'));
+    assert.ok(codes.has('missing_end_session_tool'));
+});
+
+test('an email or identity receipt never authorizes a promised human follow-up', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Please send my standard recap.
+Tool (send_follow_up_email): Result: {"status":"sent"}
+Amy: The recap is included. An Insight team member will review it and contact you.
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.ok(report.findings.some((finding) => finding.code === 'unsupported_human_followup'));
+});
+
+test('a part-number request fails QA if Amy calls any catalog lookup tool', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Look up Cisco part number C9200L-24P-4G and tell me the live price, inventory, and lead time.
+Tool (search_insight_catalog): Result: {"status":"catalog_no_match","retryAllowed":false}
+Amy: This demo does not have live catalog data.
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.ok(report.findings.some((finding) => finding.code === 'prohibited_live_catalog_lookup'));
+    assert.equal(report.status, 'fail');
+});
+
+test('the polite no-live-catalog boundary passes without a tool call', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Look up Cisco SKU C9200L-24P-4G and tell me the live price, inventory, and lead time.
+Amy: This demo has no live catalog connection; that requires an approved Insight integration. I can narrow the directional category and capture what needs validation.
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.findings.length, 0);
+});
+
+test('a concise bounded executive capability interview passes with the dedicated capability surface', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: I'm Jack, CEO of Insight. I'm evaluating what you can do. Show me the Insight Intelligence Layer.
+Tool (show_amy_intelligence): Result: {"status":"amy_intelligence_opened","view":"capabilities","customerArtifact":false,"sessionEnded":false}
+Amy: The Amy Intelligence capability overview is open; it shows how I discover, create working views, preserve specialist boundaries, and support follow-up.
+User: Thank you, Amy. Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.findings.length, 0);
 });

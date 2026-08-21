@@ -5,10 +5,19 @@ import {
     AMY_CONVERSATION_END_MARKER,
     AMY_CONVERSATION_START_MARKER,
     installAmyConversationBlock,
+    removeDeprecatedAmyBehaviorBlock,
 } from '../scripts/anam/amy-conversation-prompt.mjs';
+import {
+    buildExpectedAmyPrompt,
+    installAmyCoreBlock,
+} from '../scripts/anam/update-amy-workbench.mjs';
 
 const prompt = await readFile(
     new URL('../config/anam/amy-conversation-naturalness-upgrade.md', import.meta.url),
+    'utf8',
+);
+const corePrompt = await readFile(
+    new URL('../config/anam/amy-core-system-prompt.md', import.meta.url),
     'utf8',
 );
 const workbenchPrompt = await readFile(
@@ -23,17 +32,26 @@ const reliabilityPrompt = await readFile(
     new URL('../config/anam/amy-cara4-reliability-upgrade.md', import.meta.url),
     'utf8',
 );
+const agentMailPrompt = await readFile(
+    new URL('../config/anam/amy-agentmail-prompt-upgrade.md', import.meta.url),
+    'utf8',
+);
 const clientTools = JSON.parse(await readFile(
     new URL('../config/anam/amy-workbench-client-tools.json', import.meta.url),
     'utf8',
 ));
 const visualBriefTool = clientTools.find((tool) => tool.name === 'show_visual_brief');
+const amyIntelligenceTool = clientTools.find((tool) => tool.name === 'show_amy_intelligence');
 const baseBehavior = await readFile(
     new URL('../config/anam/amy-cara4-behavior-upgrade.md', import.meta.url),
     'utf8',
 );
 const updater = await readFile(
     new URL('../scripts/anam/update-amy-conversation.mjs', import.meta.url),
+    'utf8',
+);
+const agentMailUpdater = await readFile(
+    new URL('../scripts/anam/update-amy-agentmail.mjs', import.meta.url),
     'utf8',
 );
 const workbenchUpdater = await readFile(
@@ -48,6 +66,10 @@ const websocketSmoke = await readFile(
     new URL('../scripts/anam/smoke-amy-websocket.mjs', import.meta.url),
     'utf8',
 );
+const packageManifest = JSON.parse(await readFile(
+    new URL('../package.json', import.meta.url),
+    'utf8',
+));
 
 test('Amy uses human conversational rhythm without exposing qualification mechanics', () => {
     assert.match(prompt, /connect, listen, acknowledge/i);
@@ -64,11 +86,53 @@ test('Amy recognizes executive altitude and preserves her SDR mental model', () 
     assert.match(prompt, /CIO, CTO, COO, CEO, CFO, VP, SVP/i);
     assert.match(prompt, /Start one altitude higher/i);
     assert.match(prompt, /AI-powered Inside Sales Development Representative/i);
-    assert.match(prompt, /don't replace an architect or account executive/i);
-    assert.match(prompt, /don't start from zero/i);
+    assert.match(prompt, /does not replace an architect or account executive/i);
     assert.match(prompt, /First establish the outcome/i);
     assert.match(prompt, /Then learn the relevant context/i);
     assert.match(prompt, /Then clarify the constraint/i);
+});
+
+test('session 3d852e0a regression: Amy stays in a bounded executive capability interview', () => {
+    const compilerIndex = prompt.indexOf('Front-loaded mode and response compiler');
+    const deliveryIndex = prompt.indexOf('Conversation delivery');
+    assert.ok(compilerIndex >= 0 && compilerIndex < deliveryIndex, 'mode routing must precede delivery rules');
+    assert.ok(prompt.trim().split(/\s+/).length <= 2700, 'managed delivery layer must stay compact');
+
+    assert.match(prompt, /evaluating, interviewing, reviewing, or testing Amy or an X Agent/i);
+    assert.match(prompt, /claimed Insight role or executive title.*context only.*not authentication, permission, or access/is);
+    assert.match(prompt, /Keep capability interview mode active until.*real customer opportunity.*role-play/is);
+    assert.match(prompt, /same turn also declares an evaluation, interview, or capability request.*answer that request instead/is);
+    assert.match(prompt, /Do not redirect.*tell me what you do.*show me.*What outcome are you trying to achieve.*generic discovery loop/is);
+    assert.match(prompt, /Do not qualify the interviewer as a prospect/i);
+
+    assert.match(prompt, /explicitly hypothetical three-beat walkthrough.*customer signal.*capture or visualize.*Insight human.*validate/is);
+    assert.match(prompt, /asks what Amy can do.*show_amy_intelligence.*once if attached/is);
+    assert.match(prompt, /non-customer capability overview/i);
+    assert.match(prompt, /amy_intelligence_opened.*one short sentence.*no generic discovery question/is);
+    assert.match(prompt, /If unavailable.*never substitute `show_visual_brief`/is);
+    assert.ok(amyIntelligenceTool, 'show_amy_intelligence tool must exist');
+    assert.match(amyIntelligenceTool.description, /Insight Intelligence Layer/i);
+    assert.match(amyIntelligenceTool.description, /not a customer Visual Brief/i);
+    assert.match(prompt, /Use at most one tool call per visitor turn/i);
+    assert.match(prompt, /Never retry a failed tool automatically/i);
+
+    assert.match(prompt, /standard post-session bundle.*private website check-in address/is);
+    assert.match(prompt, /internal intake copy gives the Insight team material to review/i);
+    assert.match(prompt, /Never promise that a person will review it, contact the visitor, accept a handoff, or take a next step/is);
+    assert.match(prompt, /fifteen to thirty words.*never more than roughly sixty words/is);
+    assert.match(prompt, /Finish the sentence and thought/i);
+});
+
+test('Amy politely refuses live product-data lookup in the current demo', () => {
+    assert.match(prompt, /SKU, part number, live inventory, price, availability, lead-time, or contract-eligibility lookup.*call no tool/is);
+    assert.match(prompt, /even if asked to open, show, or search the catalog/is);
+    assert.match(prompt, /demo lacks a live catalog connection/i);
+    assert.match(prompt, /requires an approved Insight integration/i);
+    assert.match(prompt, /Offer verbal directional categories or capture needs/i);
+    assert.match(prompt, /Never imply live product data is available/i);
+    assert.match(prompt, /Except for the live product-data boundary above.*directional catalog/is);
+    assert.match(clientTools.find((tool) => tool.name === 'show_solution_catalog')?.description ?? '', /Never call this tool if the same request asks for a live SKU, part number, inventory, price, availability, lead time, contract eligibility, or product-data search/i);
+    assert.match(workbenchPrompt, /If the request also asks for a live SKU, part number, inventory, price, availability, lead time, contract eligibility, or product-data search, call no display tool/is);
 });
 
 test('Amy enforces an SDR depth ceiling even when a visitor requests technical detail', () => {
@@ -167,16 +231,17 @@ test('Amy separates active incidents from compressed executive AI deliverables',
     assert.match(prompt, /Do not let the deadline convert a presentation request into an implementation promise/i);
 });
 
-test('Amy live updater is dry-run first, identity-pinned, backed up, and drift-checked', () => {
-    assert.match(updater, /mode: 'dry-run'/);
-    assert.match(updater, /CONFIRM_AMY_CONVERSATION_SYNC/);
-    assert.match(updater, /expected-current-sha256/);
-    assert.match(updater, /backup-dir/);
-    assert.match(updater, /flag: 'wx'/);
-    assert.match(updater, /protected provider configuration changed/i);
-    assert.match(updater, /0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08/);
-    assert.match(readiness, /AMY_CONVERSATION_NATURALNESS_START/);
-    assert.match(readiness, /AMY_CONVERSATION_NATURALNESS_END/);
+test('legacy Amy conversation and AgentMail live writers fail closed before environment or network access', () => {
+    for (const legacyUpdater of [updater, agentMailUpdater]) {
+        assert.match(legacyUpdater.trim(), /^throw new Error\(/);
+        assert.match(legacyUpdater, /Deprecated Amy live writer/i);
+        assert.match(legacyUpdater, /anam:update-amy-workbench/);
+        assert.doesNotMatch(legacyUpdater, /process\.env|fetch\s*\(|ANAM_API_KEY|node:fs/);
+    }
+    assert.equal(packageManifest.scripts['anam:update:amy-conversation'], undefined);
+    assert.equal(packageManifest.scripts['anam:update-amy-agentmail'], undefined);
+    assert.match(readiness, /AMY_RUNTIME_MANAGED_PROMPT_MARKER_PAIRS/);
+    assert.match(readiness, /inspectAmyRuntimeRelease/);
 });
 
 test('Amy Workbench updater is dry-run first, identity-pinned, backed up, and fully verified', () => {
@@ -184,13 +249,15 @@ test('Amy Workbench updater is dry-run first, identity-pinned, backed up, and fu
     assert.match(workbenchUpdater, /if \(!applying\)/);
     assert.match(workbenchUpdater, /CONFIRM_AMY_WORKBENCH_SYNC/);
     assert.match(workbenchUpdater, /expected-current-sha256/);
-    assert.match(workbenchUpdater, /freshly fetched Amy prompt/i);
+    assert.match(workbenchUpdater, /expected-persona-inventory-sha256/);
+    assert.match(workbenchUpdater, /expected-tool-inventory-sha256/);
+    assert.match(workbenchUpdater, /freshly fetched dry-run hash/i);
     assert.match(workbenchUpdater, /path\.isAbsolute\(rawBackupDir\)/);
     assert.match(workbenchUpdater, /backup-dir must be outside the repository/i);
     assert.match(workbenchUpdater, /description must contain 1 to 1024 characters/i);
-    assert.match(workbenchUpdater, /const promptUpgrade = normalize\(await fs\.readFile/);
-    assert.match(workbenchUpdater, /persona: before/);
-    assert.match(workbenchUpdater, /matchingWorkbenchTools/);
+    assert.match(workbenchUpdater, /amy-live-identity-client-tool\.json/);
+    assert.match(workbenchUpdater, /completePersonaInventory/);
+    assert.match(workbenchUpdater, /completeToolInventory/);
     assert.match(workbenchUpdater, /flag: 'wx'/);
 
     assert.match(workbenchUpdater, /0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08/);
@@ -198,31 +265,67 @@ test('Amy Workbench updater is dry-run first, identity-pinned, backed up, and fu
     assert.match(workbenchUpdater, /36e17abf-ef6c-4bef-99bd-3f925da155eb/);
     assert.match(workbenchUpdater, /avatarModel: 'cara-4'/);
     assert.match(workbenchUpdater, /b138c2a2-ba66-4887-95d5-1a57093fc92d/);
-    assert.match(workbenchUpdater, /a7cf662c-2ace-4de1-a21e-ef0fbf144bb7/);
+    assert.match(workbenchUpdater, /65421f1c-c7de-4bc4-ac27-d171c16ef41f/);
     assert.match(workbenchUpdater, /AMY_CONVERSATION_NATURALNESS_START/);
     assert.match(workbenchUpdater, /AMY_CARA4_RELIABILITY_START/);
     assert.match(workbenchUpdater, /AMY_PUBLIC_SECTOR_START/);
     assert.match(workbenchUpdater, /AMY_WORKBENCH_START/);
     assert.match(workbenchUpdater, /AMY_AGENTMAIL_START/);
     assert.match(workbenchUpdater, /required managed prompt markers are malformed or missing/i);
+    assert.match(workbenchUpdater, /amy-conversation-naturalness-upgrade\.md/);
+    assert.match(workbenchUpdater, /amy-core-system-prompt\.md/);
+    assert.match(workbenchUpdater, /amy-cara4-behavior-upgrade\.md/);
+    assert.match(workbenchUpdater, /removeDeprecatedAmyBehaviorBlock/);
+    assert.match(workbenchUpdater, /installAmyConversationBlock/);
+    assert.match(workbenchUpdater, /deprecatedLegacyBehaviorRemoved/);
+    assert.match(workbenchUpdater, /legacyCoreReplaced/);
+    assert.match(workbenchUpdater, /naturalness block is not front-loaded/i);
+    assert.match(workbenchUpdater, /assertNoDeprecatedAmyPromptInstructions/);
+    assert.match(workbenchUpdater, /deprecated Amy prompt instructions remain/i);
 
-    assert.match(workbenchUpdater, /function normalizedToolDefinition[\s\S]*description:[\s\S]*type:[\s\S]*config:/);
-    assert.match(workbenchUpdater, /JSON\.stringify\(verifiedToolIds\) !== JSON\.stringify\(nextToolIds\)/);
-    assert.match(workbenchUpdater, /FORBIDDEN_TOOL_NAMES = new Set\(\['capture_sales_handoff', 'end_call'\]\)/);
-    assert.match(workbenchUpdater, /legacyEndCallAttached: false/);
+    assert.match(workbenchUpdater, /function toolDefinitionView[\s\S]*name:[\s\S]*description:[\s\S]*type:[\s\S]*disableInterruptions:[\s\S]*config:/);
+    assert.match(workbenchUpdater, /clone-and-swap-production-only/);
+    assert.match(workbenchUpdater, /reuse-shared-unchanged/);
+    assert.match(workbenchUpdater, /detach-production-only/);
+    assert.match(workbenchUpdater, /assertOtherPersonasUnchanged/);
+    assert.match(workbenchUpdater, /FORBIDDEN_TOOL_NAMES = new Set\(\[[^\]]*'capture_sales_handoff'[^\]]*'end_call'[^\]]*'search_insight_catalog'[^\]]*\]\)/s);
     assert.match(workbenchUpdater, /reliabilityUpgrade/);
     assert.match(workbenchUpdater, /publicSectorUpgrade/);
-    assert.match(workbenchUpdater, /descriptionTypeConfig/);
-    assert.match(workbenchUpdater, /protectedPersonaProviderStateUnchanged: true/);
-    assert.match(workbenchUpdater, /workbenchToolDefinitionsVerified: true/);
+    assert.match(workbenchUpdater, /protectedPersonaStateVerifiedUnchanged: true/);
+    assert.match(workbenchUpdater, /unrelatedAndSharedToolsVerifiedUnchanged: true/);
+    assert.match(workbenchUpdater, /knowledgeToolIdIsDynamicallyPreserved: true/);
+    assert.doesNotMatch(workbenchUpdater, /method:\s*['"]DELETE['"]/);
 
     const backupIndex = workbenchUpdater.indexOf('await fs.writeFile(backupPath');
     const firstPutIndex = workbenchUpdater.indexOf("method: 'PUT'", backupIndex);
-    const firstPostIndex = workbenchUpdater.indexOf("method: 'POST'", backupIndex);
+    const firstCreateIndex = workbenchUpdater.indexOf('await createToolWithInventoryRecovery(', backupIndex);
     assert.ok(backupIndex >= 0, 'Workbench backup must be written');
     assert.ok(firstPutIndex > backupIndex, 'Workbench backup must precede the first PUT');
-    assert.ok(firstPostIndex > backupIndex, 'Workbench backup must precede the first POST');
+    assert.ok(firstCreateIndex > backupIndex, 'Workbench backup must precede the first tool creation');
     assert.doesNotMatch(workbenchUpdater, /console\.log\([^)]*(apiKey|ANAM_API_KEY|Authorization)/s);
+    const personaPayloads = [...workbenchUpdater.matchAll(/body:\s*JSON\.stringify\(\{([\s\S]*?)\}\)/g)]
+        .map(match => match[1])
+        .filter(body => /systemPrompt:\s*expectedPrompt/.test(body));
+    assert.equal(personaPayloads.length, 1, 'Workbench must make one atomic managed persona payload');
+    assert.match(personaPayloads[0], /initialMessage:\s*AMY_INITIAL_MESSAGE/);
+    assert.match(personaPayloads[0], /toolIds:\s*nextToolIds/);
+
+    const anamWiring = packageManifest.scripts['test:anam'];
+    const daniWiring = packageManifest.scripts['test:anam:dani'];
+    assert.match(anamWiring, /tests\/amy-workbench-sync-isolation\.test\.mjs/);
+    for (const expected of [
+        'tests/dani-anam-config.test.mjs',
+        'tests/dani-live-qa.test.mjs',
+        'tests/dani-session-close.test.mjs',
+        'tests/dani-meeting-participation.test.mjs',
+    ]) assert.match(anamWiring, new RegExp(expected.replaceAll('.', '\\.')));
+    for (const expected of [
+        'tests/dani-session.test.mjs',
+        'tests/dani-editorial-ui.test.mjs',
+        'tests/dani-user-memory.test.mjs',
+        'tests/dani-memory-candidate.test.mjs',
+        'tests/dani-memory-pipeline.test.mjs',
+    ]) assert.match(daniWiring, new RegExp(expected.replaceAll('.', '\\.')));
 });
 
 test('Amy conversation block installation is front-loaded, replaceable, and idempotent', () => {
@@ -240,20 +343,166 @@ test('Amy conversation block installation is front-loaded, replaceable, and idem
     assert.match(replaced, /BASE\nPROMPT\n$/);
 });
 
+test('Amy conversation sync removes the exact deprecated contact-solicitation layer only once', () => {
+    const legacy = `${baseBehavior.trim()}\n`;
+    const source = `Base prompt.\n\n${legacy}\n<!-- AMY_CARA4_RELIABILITY_START -->\nCurrent reliability\n<!-- AMY_CARA4_RELIABILITY_END -->\n`;
+    const first = removeDeprecatedAmyBehaviorBlock(source, legacy);
+    assert.equal(first.removed, true);
+    assert.doesNotMatch(first.prompt, /Earn the right to ask for contact information/i);
+    assert.match(first.prompt, /Current reliability/);
+    const second = removeDeprecatedAmyBehaviorBlock(first.prompt, legacy);
+    assert.equal(second.removed, false);
+    assert.equal(second.prompt, first.prompt);
+    assert.throws(
+        () => removeDeprecatedAmyBehaviorBlock(`${source}\n${legacy}`, legacy),
+        /malformed or differs from the reviewed source/i,
+    );
+});
+
+test('the single Workbench prompt build front-loads naturalness and removes only the reviewed legacy layer', () => {
+    const replacements = [
+        ['reliability', reliabilityPrompt.trim(), '<!-- AMY_CARA4_RELIABILITY_START -->', '<!-- AMY_CARA4_RELIABILITY_END -->'],
+        ['public-sector', publicSectorPrompt.trim(), '<!-- AMY_PUBLIC_SECTOR_START -->', '<!-- AMY_PUBLIC_SECTOR_END -->'],
+        ['Workbench', workbenchPrompt.trim(), '<!-- AMY_WORKBENCH_START -->', '<!-- AMY_WORKBENCH_END -->'],
+        ['AgentMail', agentMailPrompt.trim(), '<!-- AMY_AGENTMAIL_START -->', '<!-- AMY_AGENTMAIL_END -->'],
+    ];
+    const beforePrompt = [
+        prompt.trim(),
+        'AMY — INSIGHT ENTERPRISE SDR\nANAM SYSTEM PROMPT\nVERSION: AMY_ANAM_V2_2026_07_15\n\nLEGACY CORE CONTENT',
+        workbenchPrompt.trim(),
+        reliabilityPrompt.trim(),
+        publicSectorPrompt.trim(),
+        agentMailPrompt.trim(),
+        baseBehavior.trim(),
+    ].join('\n\n');
+    const first = buildExpectedAmyPrompt({
+        beforePrompt,
+        naturalnessUpgrade: prompt,
+        corePrompt,
+        deprecatedBehavior: baseBehavior,
+        replacements,
+    });
+    assert.equal(first.deprecatedLegacyBehaviorRemoved, true);
+    assert.ok(first.expectedPrompt.startsWith(prompt.trim()));
+    assert.doesNotMatch(first.expectedPrompt, /# Amy Cara 4 behavior upgrade/);
+    assert.match(first.expectedPrompt, /CORE ROLE AND OPERATING MODEL/);
+    assert.doesNotMatch(first.expectedPrompt, /AMY_ANAM_V2_2026_07_15|LEGACY CORE CONTENT/);
+    assert.equal(first.legacyCoreReplaced, true);
+    for (const marker of [
+        AMY_CONVERSATION_START_MARKER,
+        AMY_CONVERSATION_END_MARKER,
+        '<!-- AMY_CORE_START -->',
+        '<!-- AMY_CORE_END -->',
+        '<!-- AMY_CARA4_RELIABILITY_START -->',
+        '<!-- AMY_CARA4_RELIABILITY_END -->',
+        '<!-- AMY_PUBLIC_SECTOR_START -->',
+        '<!-- AMY_PUBLIC_SECTOR_END -->',
+        '<!-- AMY_WORKBENCH_START -->',
+        '<!-- AMY_WORKBENCH_END -->',
+        '<!-- AMY_AGENTMAIL_START -->',
+        '<!-- AMY_AGENTMAIL_END -->',
+    ]) assert.equal(first.expectedPrompt.split(marker).length - 1, 1, `${marker} must occur once`);
+
+    const second = buildExpectedAmyPrompt({
+        beforePrompt: first.expectedPrompt,
+        naturalnessUpgrade: prompt,
+        corePrompt,
+        deprecatedBehavior: baseBehavior,
+        replacements,
+    });
+    assert.equal(second.deprecatedLegacyBehaviorRemoved, false);
+    assert.equal(second.legacyCoreReplaced, false);
+    assert.equal(second.expectedPrompt, first.expectedPrompt);
+
+    const installedFromMissing = buildExpectedAmyPrompt({
+        beforePrompt: beforePrompt.replace(prompt.trim(), ''),
+        naturalnessUpgrade: prompt,
+        corePrompt,
+        deprecatedBehavior: baseBehavior,
+        replacements,
+    });
+    assert.ok(installedFromMissing.expectedPrompt.startsWith(prompt.trim()));
+    assert.equal(
+        installedFromMissing.expectedPrompt.split(AMY_CONVERSATION_START_MARKER).length - 1,
+        1,
+    );
+});
+
 test('Amy conversation block installer refuses malformed managed markers', () => {
     assert.throws(
         () => installAmyConversationBlock(`${AMY_CONVERSATION_START_MARKER}\nbroken`, prompt),
         /markers are malformed/i,
     );
+    assert.throws(
+        () => installAmyConversationBlock(
+            `${AMY_CONVERSATION_START_MARKER}\none\n${AMY_CONVERSATION_END_MARKER}\n${AMY_CONVERSATION_START_MARKER}\ntwo\n${AMY_CONVERSATION_END_MARKER}`,
+            prompt,
+        ),
+        /markers are malformed/i,
+    );
+    assert.throws(
+        () => installAmyConversationBlock('BASE PROMPT', 'replacement without managed markers'),
+        /markers are malformed/i,
+    );
+    assert.throws(
+        () => installAmyConversationBlock(
+            'BASE PROMPT',
+            `${AMY_CONVERSATION_END_MARKER}\nmisordered\n${AMY_CONVERSATION_START_MARKER}`,
+        ),
+        /markers are malformed/i,
+    );
+    assert.throws(
+        () => installAmyConversationBlock('BASE PROMPT', `${prompt}\n${AMY_CONVERSATION_START_MARKER}\nduplicate\n${AMY_CONVERSATION_END_MARKER}`),
+        /markers are malformed/i,
+    );
+});
+
+test('Amy core installer fails closed on malformed or ambiguous prompt boundaries', () => {
+    assert.throws(
+        () => installAmyCoreBlock('BASE PROMPT', 'replacement without core markers'),
+        /local Amy core prompt markers are malformed or missing/i,
+    );
+    assert.throws(
+        () => installAmyCoreBlock(
+            `${corePrompt}\n${corePrompt}`,
+            corePrompt,
+        ),
+        /live Amy core prompt markers are malformed/i,
+    );
+    assert.throws(
+        () => installAmyCoreBlock(
+            'AMY — INSIGHT ENTERPRISE SDR\nANAM SYSTEM PROMPT\nVERSION: AMY_ANAM_V2_2026_07_15\nlegacy without a Workbench boundary',
+            corePrompt,
+        ),
+        /legacy core boundary is malformed/i,
+    );
+    assert.throws(
+        () => installAmyCoreBlock(
+            [
+                'AMY — INSIGHT ENTERPRISE SDR',
+                'ANAM SYSTEM PROMPT',
+                'VERSION: AMY_ANAM_V2_2026_07_15',
+                'legacy one',
+                'AMY — INSIGHT ENTERPRISE SDR',
+                'ANAM SYSTEM PROMPT',
+                'VERSION: AMY_ANAM_V2_2026_07_15',
+                '<!-- AMY_WORKBENCH_START -->',
+            ].join('\n'),
+            corePrompt,
+        ),
+        /legacy core anchor is missing or duplicated/i,
+    );
 });
 
 test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. Who am I speaking with today\?/);
-    assert.match(prompt, /After the visitor gives a name.*What would be most useful to work through today/s);
+    assert.match(prompt, /After the visitor gives only a name.*What would be most useful to work through today/s);
     assert.match(prompt, /Never stack the name question and the discovery question/i);
-    assert.match(prompt, /finish the current sentence and complete the thought/i);
-    assert.match(prompt, /up to roughly sixty words/i);
+    assert.match(prompt, /Finish the sentence and thought/i);
+    assert.match(prompt, /never more than roughly sixty words/i);
     assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
+    assert.match(reliabilityPrompt, /do not ask for the name a second time/i);
+    assert.doesNotMatch(reliabilityPrompt, /ask exactly, "What name would you like me to use\?"/i);
     assert.match(workbenchUpdater, /AMY_INITIAL_MESSAGE/);
     assert.match(workbenchUpdater, /initialMessage: AMY_INITIAL_MESSAGE/);
     assert.match(reliabilityPrompt, /website check-in already authorizes the standard follow-up bundle/i);
@@ -277,9 +526,14 @@ test('Amy closes with an outcome motion and relies on check-in-authorized follow
     const emailPrompt = await readFile(new URL('../config/anam/amy-agentmail-prompt-upgrade.md', import.meta.url), 'utf8');
     const emailTool = JSON.parse(await readFile(new URL('../config/anam/amy-agentmail-client-tool.json', import.meta.url), 'utf8'));
     assert.match(reliabilityPrompt, /soft close.*wrap it here.*closing motion/is);
-    assert.match(reliabilityPrompt, /soft close.*Call `end_amy_session` silently.*closing_motion_required/is);
+    assert.match(reliabilityPrompt, /soft close.*Call `end_amy_session` silently.*only once.*closing_motion_and_farewell_required/is);
     assert.match(reliabilityPrompt, /priority, the confirmed boundary, and the next human validation/i);
     assert.match(reliabilityPrompt, /session follow-up will arrive at the private check-in address/i);
+    assert.match(reliabilityPrompt, /closing_motion_and_farewell_required.*end with exactly.*Thanks for talking this through with me\. Take care\./is);
+    assert.match(reliabilityPrompt, /close_in_progress.*say nothing and never call the tool again/is);
+    assert.match(reliabilityPrompt, /soft close never requires a second call/i);
+    assert.doesNotMatch(reliabilityPrompt, /closing_motion_required\b/i);
+    assert.doesNotMatch(reliabilityPrompt, /then silently call `end_amy_session` again/i);
     assert.match(reliabilityPrompt, /Never offer email, ask email permission.*solicit a phone number/is);
     assert.match(reliabilityPrompt, /hard close.*goodbye.*skips the closing motion/is);
     assert.match(emailPrompt, /authorizes the standard post-session email bundle at website check-in/i);
@@ -288,6 +542,12 @@ test('Amy closes with an outcome motion and relies on check-in-authorized follow
     assert.match(emailPrompt, /Spoken words such as "at," "at symbol," or "dot".*never update/is);
     assert.match(emailPrompt, /Do not call send_follow_up_email for the standard email bundle/i);
     assert.match(emailPrompt, /Do not pause for confirmation and do not ask for a phone number/i);
+    assert.match(emailPrompt, /call `end_amy_session` exactly once before speaking.*closing_motion_and_farewell_required/is);
+    for (const source of [reliabilityPrompt, emailPrompt]) {
+        assert.doesNotMatch(source, /closing_motion_required\b/i);
+        assert.doesNotMatch(source, /call `?end_amy_session`? after the concise outcome recap/i);
+        assert.doesNotMatch(source, /then silently call `end_amy_session` again/i);
+    }
     assert.match(workbenchUpdater, /amy-agentmail-client-tool\.json/);
     assert.match(workbenchUpdater, /amy-agentmail-prompt-upgrade\.md/);
     assert.match(workbenchUpdater, /AMY_AGENTMAIL_START/);

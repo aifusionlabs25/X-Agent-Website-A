@@ -8,7 +8,7 @@ This repository is the single source of truth for the public X Agent website and
 - Canonical production branch: `main`
 - Vercel project: `x-agent-website-a`
 - Production site: [xagent.aifusionlabs.app](https://xagent.aifusionlabs.app)
-- Amy route: `/demo/amy`
+- Amy public route: `/agents/amy`; **Meet with Amy** continues through the private `/demo/amy?variant=cara4` check-in and session flow.
 
 Do not deploy production from the archived Tavus repository or the old Insight Amy working repository. They remain reference sources until their useful material has been migrated and verified here.
 
