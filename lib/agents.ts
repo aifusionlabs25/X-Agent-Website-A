@@ -96,7 +96,7 @@ export const ALL_AGENTS: AgentData[] = [
     personaId: "8c7d5b42-b17e-4321-8bfa-381c8d93820f",
     thumbnailSrc: "/agents/thumbnails/amy-insight-sdr-2026.png",
     accentColor: "#ec4899",
-    liveUrl: "/demo/amy?variant=cara4&audioBridge=voicemeeter",
+    liveUrl: "/demo/amy?variant=cara4",
     tenant: "Insight Enterprises",
   },
   {

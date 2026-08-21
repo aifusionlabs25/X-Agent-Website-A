@@ -270,7 +270,7 @@ test('Amy entry preserves the regular session and adds explicit concierge routin
   assert.match(route, /return <AmyInsightLanding \/>/);
   assert.match(landing, /href=['"]\/agents\/amy\?meeting=google['"]/);
   assert.match(landing, /Invite Amy to a meeting/);
-  assert.match(agents, /slug:\s*['"]amy['"][\s\S]*liveUrl:\s*['"]\/demo\/amy\?variant=cara4&audioBridge=voicemeeter['"]/);
+  assert.match(agents, /slug:\s*['"]amy['"][\s\S]*liveUrl:\s*['"]\/demo\/amy\?variant=cara4['"]/);
 });
 
 test('Amy brand shell implements the full shared style contract', () => {

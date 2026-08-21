@@ -9,13 +9,22 @@ import {
 } from '../lib/anam/audio-bridge.ts';
 import { ALL_AGENTS } from '../lib/agents.ts';
 
-test('Amy launches the Cara 4 persona with the VoiceMeeter bridge from the public site', () => {
+test('public agent launches never require a machine-local audio bridge', () => {
     const amy = ALL_AGENTS.find(agent => agent.slug === 'amy');
     const launchUrl = new URL(amy.liveUrl, 'https://xagent.aifusionlabs.app');
 
     assert.equal(launchUrl.pathname, '/demo/amy');
     assert.equal(launchUrl.searchParams.get('variant'), 'cara4');
-    assert.equal(launchUrl.searchParams.get('audioBridge'), VOICEMEETER_AUDIO_BRIDGE);
+    assert.equal(launchUrl.searchParams.has('audioBridge'), false);
+
+    for (const agent of ALL_AGENTS) {
+        const publicUrl = new URL(agent.liveUrl, 'https://xagent.aifusionlabs.app');
+        assert.equal(
+            publicUrl.searchParams.has('audioBridge'),
+            false,
+            `${agent.slug} must not require a local audio bridge from its public launch URL`,
+        );
+    }
 });
 
 test('the bridge is enabled only for Amy Cara 4 voice sessions', () => {

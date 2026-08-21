@@ -33,8 +33,8 @@ assert.match(
 );
 assert.match(
   amyConfig,
-  /liveUrl:\s*['"]\/demo\/amy\?variant=cara4&audioBridge=voicemeeter['"]/,
-  'Amy retains the production Cara-4 conversation route',
+  /liveUrl:\s*['"]\/demo\/amy\?variant=cara4['"]/,
+  'Amy retains the production Cara-4 conversation route without a machine-local audio bridge',
 );
 
 assert.match(
