@@ -27,26 +27,39 @@ test('public agent launches never require a machine-local audio bridge', () => {
     }
 });
 
-test('the bridge is enabled only for Amy Cara 4 voice sessions', () => {
+test('the bridge is enabled only for local Amy Cara 4 voice sessions', () => {
     const enabled = resolveAnamAudioBridge({
         agentSlug: 'amy',
         isAmyCara4Canary: true,
         isQaMode: false,
         requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE,
+        runtimeEnvironment: 'development',
     });
 
     assert.equal(enabled, VOICEMEETER_AUDIO_BRIDGE);
 
     const disabledCases = [
-        { agentSlug: 'amy', isAmyCara4Canary: false, isQaMode: false, requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE },
-        { agentSlug: 'taylor', isAmyCara4Canary: true, isQaMode: false, requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE },
-        { agentSlug: 'amy', isAmyCara4Canary: true, isQaMode: true, requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE },
-        { agentSlug: 'amy', isAmyCara4Canary: true, isQaMode: false, requestedAudioBridge: 'unknown' },
-        { agentSlug: 'amy', isAmyCara4Canary: true, isQaMode: false, requestedAudioBridge: undefined },
+        { agentSlug: 'amy', isAmyCara4Canary: false, isQaMode: false, requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE, runtimeEnvironment: 'development' },
+        { agentSlug: 'taylor', isAmyCara4Canary: true, isQaMode: false, requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE, runtimeEnvironment: 'development' },
+        { agentSlug: 'amy', isAmyCara4Canary: true, isQaMode: true, requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE, runtimeEnvironment: 'development' },
+        { agentSlug: 'amy', isAmyCara4Canary: true, isQaMode: false, requestedAudioBridge: 'unknown', runtimeEnvironment: 'development' },
+        { agentSlug: 'amy', isAmyCara4Canary: true, isQaMode: false, requestedAudioBridge: undefined, runtimeEnvironment: 'development' },
     ];
 
     for (const input of disabledCases) {
         assert.equal(resolveAnamAudioBridge(input), undefined);
+    }
+});
+
+test('production and preview builds ignore stale VoiceMeeter URLs', () => {
+    for (const runtimeEnvironment of ['production', 'test', undefined]) {
+        assert.equal(resolveAnamAudioBridge({
+            agentSlug: 'amy',
+            isAmyCara4Canary: true,
+            isQaMode: false,
+            requestedAudioBridge: VOICEMEETER_AUDIO_BRIDGE,
+            runtimeEnvironment,
+        }), undefined);
     }
 });
 

@@ -8,13 +8,13 @@ The website keeps the normal public route:
 
 - Public/control: `/demo/amy?qa=1`
 - Cara 4 canary: `/demo/amy?qa=1&variant=cara4`
-- Cara 4 voice bridge: `/demo/amy?variant=cara4&audioBridge=voicemeeter`
+- Local-only Cara 4 voice bridge: `http://localhost:3000/demo/amy?variant=cara4&audioBridge=voicemeeter`
 
 The `variant=cara4` request is resolved on the server. It works only for Amy and only when `ANAM_AMY_CARA4_PERSONA_ID` is configured. Unknown personas and variants fail closed.
 
 ## Edge-to-Amy audio bridge
 
-The voice bridge is an explicit Amy Cara 4 test mode. It does not affect public Amy, other agents, or QA mode.
+The voice bridge is an explicit, machine-local Amy Cara 4 test mode. It is enabled only by `next dev`; preview and production builds ignore the parameter even when it appears in a stale or manually edited URL. It does not affect public Amy, other agents, or QA mode.
 
 Signal path:
 

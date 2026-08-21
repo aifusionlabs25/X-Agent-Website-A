@@ -7,6 +7,7 @@ type ResolveAnamAudioBridgeOptions = {
     isAmyCara4Canary: boolean;
     isQaMode: boolean;
     requestedAudioBridge?: string;
+    runtimeEnvironment?: string;
 };
 
 type AudioInputDevice = Pick<MediaDeviceInfo, 'deviceId' | 'kind' | 'label'>;
@@ -17,7 +18,12 @@ export function resolveAnamAudioBridge({
     isAmyCara4Canary,
     isQaMode,
     requestedAudioBridge,
+    runtimeEnvironment = process.env.NODE_ENV,
 }: ResolveAnamAudioBridgeOptions): AnamAudioBridge | undefined {
+    // VoiceMeeter is a machine-local QA bridge. Never honor its query parameter
+    // in a preview or production build, including from a stale shared URL.
+    if (runtimeEnvironment !== 'development') return undefined;
+
     const isAmyCara4VoiceSession = agentSlug === 'amy' && isAmyCara4Canary && !isQaMode;
 
     return isAmyCara4VoiceSession && requestedAudioBridge === VOICEMEETER_AUDIO_BRIDGE
