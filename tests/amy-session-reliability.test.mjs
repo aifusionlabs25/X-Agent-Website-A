@@ -242,3 +242,16 @@ test('Amy player registers deterministic close and interrupts unsafe provider ou
     assert.match(player, /Do not speak again and do not call this tool again/);
     assert.doesNotMatch(player, /silently call end_amy_session again/i);
 });
+
+test('Amy waits for a complete terminal farewell before draining the browser session', async () => {
+    const player = await readFile(new URL('../components/AnamPlayer.tsx', import.meta.url), 'utf8');
+    const endOfSpeechIndex = player.indexOf('if (messageEvent.endOfSpeech)');
+    const fallbackIndex = player.indexOf('&& pendingAmyHardCloseIntent', endOfSpeechIndex);
+    assert.ok(endOfSpeechIndex > 0 && fallbackIndex > endOfSpeechIndex);
+    assert.match(player, /AMY_EXACT_TERMINAL_FAREWELL_PATTERN\.test\(completedTurn\)/);
+    assert.match(player, /amyFarewellRecovery = AMY_EXACT_TERMINAL_FAREWELL/);
+    assert.match(player, /if \(!amyFarewellRecovery\) amyCloseCoordinator\?\.completeFarewell\(\)/);
+    assert.match(player, /anamClient\.talk\(amyFarewellRecovery\)/);
+    assert.match(player, /explicitly ended the session.*Call end_amy_session silently exactly once before speaking/is);
+    assert.doesNotMatch(player, /if \(pendingAmyHardCloseIntent\) \{\s*pendingAmyHardCloseIntent = false;\s*requestedCloseReason = 'user_requested_end';\s*amyCloseCoordinator\?\.arm\(\);/);
+});

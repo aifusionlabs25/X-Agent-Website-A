@@ -269,3 +269,41 @@ Amy: Thanks for talking this through with me. Take care.`;
     assert.equal(report.status, 'pass');
     assert.equal(report.findings.length, 0);
 });
+
+test('latest CEO-demo regressions detect meeting denial, deployment overclaim, unsupported intake claims, and a skipped question', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: I'm Jack, CEO of Insight. How do you work, and can you join a live client meeting?
+Amy: At Insight, I'm used for one-to-one website interactions. I can't join live client calls or monitor conversations in real time.
+User: What happens with the session afterward?
+Amy: Insight gets a record, and the appropriate team can review it and follow up.
+User: Is there anything else you'd like to share?
+Tool (skip_turn): Result: {"status":"skipped"}
+User: I asked whether there is anything else you want to share.
+Amy: I can also create conversation-grounded working views.
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    const codes = new Set(report.findings.map((finding) => finding.code));
+    for (const code of [
+        'meeting_concierge_capability_denial',
+        'demo_deployment_overclaim',
+        'unsupported_internal_record',
+        'clear_question_skipped',
+    ]) assert.ok(codes.has(code), `expected ${code}`);
+    assert.equal(report.status, 'fail');
+});
+
+test('a truthful Meeting Concierge and follow-up explanation passes', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: I'm evaluating you. Can you join one of our Teams meetings, and what happens afterward?
+Amy: This independent demo includes Meeting Concierge, so an organizer can invite me to Teams after private check-in. The standard follow-up goes to your check-in address with configured demo copies; it does not promise human action.
+User: Is there anything else you'd like to share?
+Amy: I can also organize confirmed conversation facts into working views while keeping architecture, pricing, and commitments with qualified humans.
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.findings.length, 0);
+});

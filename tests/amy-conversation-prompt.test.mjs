@@ -102,13 +102,12 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /claimed Insight role or executive title.*context only.*not authentication, permission, or access/is);
     assert.match(prompt, /Keep capability interview mode active until.*real customer opportunity.*role-play/is);
     assert.match(prompt, /same turn also declares an evaluation, interview, or capability request.*answer that request instead/is);
-    assert.match(prompt, /Do not redirect.*tell me what you do.*show me.*What outcome are you trying to achieve.*generic discovery loop/is);
-    assert.match(prompt, /Do not qualify the interviewer as a prospect/i);
+    assert.match(prompt, /Never redirect.*tell me what you do.*show me.*generic discovery.*prospect qualification/is);
 
-    assert.match(prompt, /explicitly hypothetical three-beat walkthrough.*customer signal.*capture or visualize.*Insight human.*validate/is);
-    assert.match(prompt, /asks what Amy can do.*show_amy_intelligence.*once if attached/is);
-    assert.match(prompt, /non-customer capability overview/i);
-    assert.match(prompt, /amy_intelligence_opened.*one short sentence.*no generic discovery question/is);
+    assert.match(prompt, /explicitly hypothetical three-beat walkthrough.*customer signal.*working view.*Insight validation/is);
+    assert.match(prompt, /Insight Intelligence.*features, capabilities.*show_amy_intelligence.*once if attached/is);
+    assert.match(prompt, /non-customer overview/i);
+    assert.match(prompt, /amy_intelligence_opened.*one short sentence.*without generic discovery/is);
     assert.match(prompt, /If unavailable.*never substitute `show_visual_brief`/is);
     assert.ok(amyIntelligenceTool, 'show_amy_intelligence tool must exist');
     assert.match(amyIntelligenceTool.description, /Insight Intelligence Layer/i);
@@ -116,9 +115,9 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /Use at most one tool call per visitor turn/i);
     assert.match(prompt, /Never retry a failed tool automatically/i);
 
-    assert.match(prompt, /standard post-session bundle.*private website check-in address/is);
-    assert.match(prompt, /internal intake copy gives the Insight team material to review/i);
-    assert.match(prompt, /Never promise that a person will review it, contact the visitor, accept a handoff, or take a next step/is);
+    assert.match(prompt, /post-session bundle.*visitor delivery.*configured demo admin and intake copies/is);
+    assert.match(prompt, /not an Insight CRM record or proof of human action/i);
+    assert.match(prompt, /Never promise review, contact, handoff, or next steps without an exact action receipt/i);
     assert.match(prompt, /fifteen to thirty words.*never more than roughly sixty words/is);
     assert.match(prompt, /Finish the sentence and thought/i);
 });
@@ -162,6 +161,17 @@ test('Amy never exposes provider-thinking or internal-status failures', () => {
     assert.match(prompt, /Never say "I'm having trouble thinking right now," "I can't think,"/i);
     assert.match(prompt, /If evidence is missing, name the exact missing fact/i);
     assert.match(prompt, /clarify briefly or use skip_turn/i);
+    assert.match(prompt, /Never use `skip_turn` on a completed direct question or request/i);
+    assert.match(reliabilityPrompt, /never overrides a clear direct question or actionable request/i);
+});
+
+test('Amy describes Meeting Concierge and demo follow-up truthfully', () => {
+    assert.match(prompt, /independent AI Fusion Labs demonstration.*not an official Insight deployment/is);
+    assert.match(prompt, /Meeting Concierge.*Google Meet, Zoom, or Microsoft Teams/is);
+    assert.match(prompt, /joins under the same SDR boundaries and leaves when asked/i);
+    assert.match(prompt, /Never deny this capability.*uninvited access.*secret monitoring.*independent recording/is);
+    assert.match(agentMailPrompt, /configured admin and intake copies/i);
+    assert.match(agentMailPrompt, /Never call them an official Insight record, CRM entry, accepted lead/i);
 });
 
 test('Amy keeps claim, handoff, and artifact guardrails intact', () => {
@@ -383,7 +393,7 @@ test('the single Workbench prompt build front-loads naturalness and removes only
         replacements,
     });
     assert.equal(first.deprecatedLegacyBehaviorRemoved, true);
-    assert.ok(first.expectedPrompt.startsWith(prompt.trim()));
+    assert.ok(first.expectedPrompt.startsWith(prompt.trim().replace(/\r\n?/g, '\n')));
     assert.doesNotMatch(first.expectedPrompt, /# Amy Cara 4 behavior upgrade/);
     assert.match(first.expectedPrompt, /CORE ROLE AND OPERATING MODEL/);
     assert.doesNotMatch(first.expectedPrompt, /AMY_ANAM_V2_2026_07_15|LEGACY CORE CONTENT/);
@@ -421,7 +431,7 @@ test('the single Workbench prompt build front-loads naturalness and removes only
         deprecatedBehavior: baseBehavior,
         replacements,
     });
-    assert.ok(installedFromMissing.expectedPrompt.startsWith(prompt.trim()));
+    assert.ok(installedFromMissing.expectedPrompt.startsWith(prompt.trim().replace(/\r\n?/g, '\n')));
     assert.equal(
         installedFromMissing.expectedPrompt.split(AMY_CONVERSATION_START_MARKER).length - 1,
         1,

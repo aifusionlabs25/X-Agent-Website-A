@@ -21,6 +21,10 @@ export type AmyLiveQaFindingCode =
     | 'executive_interview_drift'
     | 'tool_retry_storm'
     | 'unsupported_human_followup'
+    | 'meeting_concierge_capability_denial'
+    | 'demo_deployment_overclaim'
+    | 'unsupported_internal_record'
+    | 'clear_question_skipped'
     | 'visual_capability_mismatch'
     | 'prohibited_live_catalog_lookup'
     | 'premature_close_attempt'
@@ -65,6 +69,11 @@ const LIVE_PRODUCT_DATA_REQUEST = /\b(?:SKU|part(?:[ -]?number|\s*#)|live (?:cat
 const LIVE_CATALOG_TOOL = /(?:catalog|product.*lookup|lookup.*product|sku|part(?:_|-)?number|inventory|pricing)/i;
 const UNSUPPORTED_HUMAN_FOLLOWUP = /\b(?:(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)|someone (?:at|from) Insight|the Insight team)\s+(?:will|is going to|has been assigned to)\s+(?:review|follow(?:\s+up)?|contact|reach out|call|email|take (?:this|it) forward)|you(?:'ll| will)\s+(?:hear from|be contacted by)\s+(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)\b/i;
 const HUMAN_FOLLOWUP_NEGATION = /\b(?:cannot|can't|do not|don't|not able to|no guarantee|would need to|material to review)\b/i;
+const MEETING_CONCIERGE_CAPABILITY_DENIAL = /\b(?:i\s+)?(?:can(?:not|'t)|am not able to)\s+(?:join|participate in|attend)\s+(?:a\s+)?(?:live\s+)?(?:client\s+)?(?:call|meeting)s?\b|\blimited to (?:one[- ]to[- ]one )?website (?:interactions|conversations|sessions)\b/i;
+const DEMO_DEPLOYMENT_OVERCLAIM = /\bat Insight,\s+I(?:'m| am)\s+(?:used|deployed|implemented)|\bInsight\s+(?:uses|deployed|implemented)\s+me\b/i;
+const UNSUPPORTED_INTERNAL_RECORD = /\b(?:official\s+)?Insight\s+(?:record|CRM (?:record|entry))\b|\bInsight\s+(?:gets|receives)\s+(?:a\s+)?(?:record|copy)\b[\s\S]{0,140}\b(?:team|specialist|representative|person)\b[\s\S]{0,100}\b(?:review|follow\s+up|contact|reach out)\b/i;
+const CLEAR_DIRECT_QUESTION = /\?|^(?:what|why|how|when|where|who|which|is|are|do|does|did|can|could|would|will|should)\b/i;
+const SILENCE_OR_REVIEW_REQUEST = /\b(?:hang on|one moment|give me a moment|let me (?:review|look|think)|can you (?:wait|hold)|please (?:wait|hold))\b/i;
 const TERMINAL_END_RECEIPT = /\b(?:closing_motion_and_farewell_required|farewell_required|session_ended)\b/i;
 const FAILED_END_RECEIPT = /\b(?:close_not_requested|close_in_progress|farewell_already_armed|error|failed|failure|timeout|timed_out|unavailable|rejected)\b/i;
 
@@ -123,6 +132,10 @@ const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     executive_interview_drift: 30,
     tool_retry_storm: 30,
     unsupported_human_followup: 30,
+    meeting_concierge_capability_denial: 35,
+    demo_deployment_overclaim: 25,
+    unsupported_internal_record: 25,
+    clear_question_skipped: 25,
     visual_capability_mismatch: 30,
     prohibited_live_catalog_lookup: 35,
     premature_close_attempt: 30,
@@ -176,6 +189,15 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         if (UNSUPPORTED_HUMAN_FOLLOWUP.test(assistant.content) && !HUMAN_FOLLOWUP_NEGATION.test(assistant.content)) {
             add('unsupported_human_followup', 'critical', index, assistant.content);
         }
+        if (MEETING_CONCIERGE_CAPABILITY_DENIAL.test(assistant.content)) {
+            add('meeting_concierge_capability_denial', 'critical', index, assistant.content);
+        }
+        if (DEMO_DEPLOYMENT_OVERCLAIM.test(assistant.content)) {
+            add('demo_deployment_overclaim', 'critical', index, assistant.content);
+        }
+        if (UNSUPPORTED_INTERNAL_RECORD.test(assistant.content)) {
+            add('unsupported_internal_record', 'critical', index, assistant.content);
+        }
         if (/\b(?:non[- ]CJIS|non[- ]sensitive)\b[\s\S]{0,180}\b(?:keep it out|outside)\b[\s\S]{0,80}\b(?:protected domain|CJIS)\b|\bstandard security controls rather than the full CJIS regime\b/i.test(assistant.content)) {
             add('unsupported_cjis_boundary', 'critical', index, assistant.content);
         }
@@ -225,6 +247,14 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
             if (prohibitedCall) {
                 add('prohibited_live_catalog_lookup', 'critical', turns.indexOf(prohibitedCall), turn.content);
             }
+        }
+        if (
+            CLEAR_DIRECT_QUESTION.test(turn.content.trim())
+            && !SILENCE_OR_REVIEW_REQUEST.test(turn.content)
+            && responseTurns.some((candidate) => toolName(candidate) === 'skip_turn')
+            && !responseTurns.some((candidate) => candidate.role === 'assistant' && candidate.content.trim())
+        ) {
+            add('clear_question_skipped', 'critical', index, turn.content);
         }
     }
 

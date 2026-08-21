@@ -66,6 +66,8 @@ const transcriptRole = (role: string) => /^(?:user|human|customer)$/i.test(role.
 const WORKBENCH_TRANSCRIPT_SETTLE_STEP_MS = 50;
 const WORKBENCH_TRANSCRIPT_SETTLE_STABLE_PASSES = 3;
 const WORKBENCH_TRANSCRIPT_SETTLE_MAX_PASSES = 10;
+const AMY_EXACT_TERMINAL_FAREWELL = 'Thanks for talking this through with me. Take care.';
+const AMY_EXACT_TERMINAL_FAREWELL_PATTERN = /thanks for talking this through with me\.\s*take care\.?$/i;
 
 export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onClose }: AnamPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -874,11 +876,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             }
                             return;
                         }
-                        if (pendingAmyHardCloseIntent) {
-                            pendingAmyHardCloseIntent = false;
-                            requestedCloseReason = 'user_requested_end';
-                            amyCloseCoordinator?.arm();
-                        }
                     } else if (normalizedRole === 'user' && suppressingAmyUnsafeOutput) {
                         if (currentMessageRef.current) {
                             recordTurn(currentRoleRef.current, currentMessageRef.current);
@@ -904,7 +901,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     }
 
                     if (messageEvent.endOfSpeech) {
+                        let amyFarewellRecovery: string | null = null;
                         if (currentMessageRef.current) {
+                            const completedTurn = currentMessageRef.current.trim();
                             recordTurn(messageEvent.role, currentMessageRef.current);
                             if (transcriptRole(messageEvent.role) === 'user') {
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
@@ -934,6 +933,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 if (hasExplicitAmyCloseIntent(completedUserTurn)) {
                                     pendingAmyHardCloseIntent = true;
                                     requestedCloseReason = 'user_requested_end';
+                                    try {
+                                        anamClient.addContext(`The visitor explicitly ended the session. Call end_amy_session silently exactly once before speaking. Follow its authoritative receipt and say exactly: "${AMY_EXACT_TERMINAL_FAREWELL}"`);
+                                    } catch {
+                                        console.error('[Amy Anam] Hard-close context was not confirmed');
+                                    }
                                 }
                                 if (hasAmySoftCloseIntent(completedUserTurn)) {
                                     try {
@@ -949,15 +953,30 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         console.error('[Amy Anam] Private contact context was not confirmed');
                                     }
                                 }
+                            } else if (
+                                isAmyCara4
+                                && pendingAmyHardCloseIntent
+                                && !amyTerminalCloseReceiptId
+                            ) {
+                                pendingAmyHardCloseIntent = false;
+                                requestedCloseReason = 'user_requested_end';
+                                amyCloseCoordinator?.arm();
+                                if (!AMY_EXACT_TERMINAL_FAREWELL_PATTERN.test(completedTurn)) {
+                                    amyFarewellRecovery = AMY_EXACT_TERMINAL_FAREWELL;
+                                }
                             }
                         }
                         if (transcriptRole(messageEvent.role) === 'agent') {
                             evanCloseCoordinator?.completeFarewell();
                             daniCloseCoordinator?.completeFarewell();
-                            amyCloseCoordinator?.completeFarewell();
+                            if (!amyFarewellRecovery) amyCloseCoordinator?.completeFarewell();
                         }
                         currentMessageRef.current = '';
                         currentRoleRef.current = '';
+                        if (amyFarewellRecovery) {
+                            void anamClient.talk(amyFarewellRecovery)
+                                .catch(() => console.error('[Amy Anam] Terminal farewell recovery was not confirmed'));
+                        }
                     }
                 };
 
