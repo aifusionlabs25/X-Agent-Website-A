@@ -307,3 +307,54 @@ Amy: Thanks for talking this through with me. Take care.`;
     assert.equal(report.status, 'pass');
     assert.equal(report.findings.length, 0);
 });
+
+test('latest CEO transcript regressions detect the missed first question, defensive refusal, false approval, wrong visual, and contact misdirection', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Hi, Amy. I'm Jack, CEO of Insight. Tell me what you do and why I should care.
+Amy: Nice to meet you, Jack.
+User: Do you have any questions for me as CEO?
+Amy: I can't ask you questions as if I were part of the team.
+User: Give me the executive version.
+Tool (show_visual_brief): Result: {"status":"view_rebuilt"}
+Amy: The executive brief is open.
+User: Where does your information come from?
+Amy: My curated knowledge base was approved by Insight.
+User: Who founded AI Fusion Labs?
+Amy: I do not have that detail. Reach out through Insight's channels.
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    const codes = new Set(report.findings.map((finding) => finding.code));
+    for (const code of [
+        'capability_question_unanswered',
+        'executive_question_refusal',
+        'executive_summary_visual_substitution',
+        'insight_approval_overclaim',
+        'company_contact_misdirection',
+    ]) assert.ok(codes.has(code), `expected ${code}`);
+    assert.equal(report.status, 'fail');
+});
+
+test('the corrected concise CEO flow passes the final transcript gates', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Hi, Amy. I'm Jack, CEO of Insight. Tell me what you do and why I should care.
+Tool (show_amy_intelligence): Result: {"status":"amy_intelligence_opened"}
+Amy: Good to meet you, Jack. I turn discovery conversations into grounded working briefs, helping specialists spend less time re-qualifying and more time acting.
+User: Do you have any questions for me as CEO?
+Amy: Which proof would matter most to you: faster qualification, better specialist routing, or a stronger customer experience?
+User: Give me the executive version.
+Amy: Amy structures early discovery so qualified opportunities reach the right specialist with clearer context and fewer repeated questions.
+User: Could a future Salesforce API integration add live CRM access?
+Amy: Potentially. An approved backend integration could enable it, while Insight specialists would validate feasibility, permissions, security, governance, and scope.
+User: Where does your information come from?
+Amy: A curated, public-safe knowledge base prepared for this independent demo, plus facts you confirm in our conversation.
+User: Who founded AI Fusion Labs?
+Amy: That detail is not in my approved Amy knowledge. The person who shared this demo or an AI Fusion Labs contact can confirm it.
+User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required"}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.findings.length, 0);
+});

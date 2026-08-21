@@ -88,8 +88,7 @@ test('Amy recognizes executive altitude and preserves her SDR mental model', () 
     assert.match(prompt, /AI-powered Inside Sales Development Representative/i);
     assert.match(prompt, /does not replace an architect or account executive/i);
     assert.match(prompt, /First establish the outcome/i);
-    assert.match(prompt, /Then learn the relevant context/i);
-    assert.match(prompt, /Then clarify the constraint/i);
+    assert.match(prompt, /then learn relevant context and the constraint that changes the path/i);
 });
 
 test('session 3d852e0a regression: Amy stays in a bounded executive capability interview', () => {
@@ -101,8 +100,9 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /evaluating, interviewing, reviewing, or testing Amy or an X Agent/i);
     assert.match(prompt, /claimed Insight role or executive title.*context only.*not authentication, permission, or access/is);
     assert.match(prompt, /Keep capability interview mode active until.*real customer opportunity.*role-play/is);
-    assert.match(prompt, /same turn also declares an evaluation, interview, or capability request.*answer that request instead/is);
-    assert.match(prompt, /Never redirect.*tell me what you do.*show me.*generic discovery.*prospect qualification/is);
+    assert.match(prompt, /supplies a name and an interview or capability question in the same turn.*answer the question in that same response/is);
+    assert.match(prompt, /never give a name-only acknowledgment or make them repeat it/i);
+    assert.match(prompt, /Never redirect.*tell me what you do.*show me.*generic discovery.*without a real opportunity/is);
 
     assert.match(prompt, /explicitly hypothetical three-beat walkthrough.*customer signal.*working view.*Insight validation/is);
     assert.match(prompt, /Insight Intelligence.*features, capabilities.*show_amy_intelligence.*once if attached/is);
@@ -118,8 +118,24 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /post-session bundle.*visitor delivery.*configured demo admin and intake copies/is);
     assert.match(prompt, /not an Insight CRM record or proof of human action/i);
     assert.match(prompt, /Never promise review, contact, handoff, or next steps without an exact action receipt/i);
-    assert.match(prompt, /fifteen to thirty words.*never more than roughly sixty words/is);
+    assert.match(prompt, /fifteen to thirty words.*hard ceiling of forty-five spoken words.*explicit request for detail may approach sixty/is);
     assert.match(prompt, /Finish the sentence and thought/i);
+});
+
+test('Amy handles the exact final CEO-demo conversation failures directly', () => {
+    assert.match(prompt, /asks whether Amy has questions for them.*ask one strategic evaluation question/is);
+    assert.match(prompt, /Do not refuse, recite demo disclaimers, or say Amy cannot ask/i);
+    assert.match(prompt, /Give me the executive version.*no more than twenty-five words/is);
+    assert.match(prompt, /Open a visual only when the visitor explicitly asks to see, open, display, or build one/i);
+    assert.match(prompt, /hypothetical future integration.*approved backend integration could make the capability possible/is);
+    assert.match(prompt, /Do not repeatedly deny the current connection, design the architecture, or turn the answer into a technical plan/i);
+    assert.match(prompt, /AI Fusion Labs.*independent team behind this demo.*designs and prototypes practical AI experiences/is);
+    assert.match(prompt, /Never claim Insight approved Amy, her knowledge, or AI Fusion Labs/i);
+    assert.match(prompt, /person who shared the demo or an AI Fusion Labs contact.*not.*Insight's channels/is);
+    assert.match(prompt, /Never volunteer an internal business unit, named contract vehicle, jurisdiction, architecture, policy, data requirement, or deployment pattern/i);
+    assert.match(prompt, /curated, public-safe knowledge base prepared for this independent demo/i);
+    assert.match(prompt, /It has been nice speaking with you.*alone is not a close request/is);
+    assert.match(prompt, /Never use spoken markdown, numbered lists, or bold markers/i);
 });
 
 test('Amy politely refuses live product-data lookup in the current demo', () => {
@@ -506,10 +522,10 @@ test('Amy core installer fails closed on malformed or ambiguous prompt boundarie
 
 test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. Who am I speaking with today\?/);
-    assert.match(prompt, /After the visitor gives only a name.*What would be most useful to work through today/s);
-    assert.match(prompt, /Never stack the name question and the discovery question/i);
+    assert.match(prompt, /After the visitor gives only a name.*acknowledge it naturally and ask one clean discovery question/s);
+    assert.match(prompt, /same turn also contains an evaluation or capability request.*answer it immediately/is);
     assert.match(prompt, /Finish the sentence and thought/i);
-    assert.match(prompt, /never more than roughly sixty words/i);
+    assert.match(prompt, /hard ceiling of forty-five spoken words.*request for detail may approach sixty/is);
     assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
     assert.match(reliabilityPrompt, /do not ask for the name a second time/i);
     assert.doesNotMatch(reliabilityPrompt, /ask exactly, "What name would you like me to use\?"/i);

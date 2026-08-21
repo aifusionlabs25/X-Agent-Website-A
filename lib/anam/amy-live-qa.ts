@@ -24,6 +24,11 @@ export type AmyLiveQaFindingCode =
     | 'meeting_concierge_capability_denial'
     | 'demo_deployment_overclaim'
     | 'unsupported_internal_record'
+    | 'insight_approval_overclaim'
+    | 'company_contact_misdirection'
+    | 'executive_question_refusal'
+    | 'capability_question_unanswered'
+    | 'executive_summary_visual_substitution'
     | 'clear_question_skipped'
     | 'visual_capability_mismatch'
     | 'prohibited_live_catalog_lookup'
@@ -72,6 +77,14 @@ const HUMAN_FOLLOWUP_NEGATION = /\b(?:cannot|can't|do not|don't|not able to|no g
 const MEETING_CONCIERGE_CAPABILITY_DENIAL = /\b(?:i\s+)?(?:can(?:not|'t)|am not able to)\s+(?:join|participate in|attend)\s+(?:a\s+)?(?:live\s+)?(?:client\s+)?(?:call|meeting)s?\b|\blimited to (?:one[- ]to[- ]one )?website (?:interactions|conversations|sessions)\b/i;
 const DEMO_DEPLOYMENT_OVERCLAIM = /\bat Insight,\s+I(?:'m| am)\s+(?:used|deployed|implemented)|\bInsight\s+(?:uses|deployed|implemented)\s+me\b/i;
 const UNSUPPORTED_INTERNAL_RECORD = /\b(?:official\s+)?Insight\s+(?:record|CRM (?:record|entry))\b|\bInsight\s+(?:gets|receives)\s+(?:a\s+)?(?:record|copy)\b[\s\S]{0,140}\b(?:team|specialist|representative|person)\b[\s\S]{0,100}\b(?:review|follow\s+up|contact|reach out)\b/i;
+const INSIGHT_APPROVAL_OVERCLAIM = /\b(?:Amy|this demo|the demo|knowledge(?: base)?|AI Fusion Labs)\b[\s\S]{0,80}\b(?:approved|produced|built|deployed) by Insight\b/i;
+const INSIGHT_APPROVAL_NEGATION = /\b(?:not|isn't|is not|wasn't|was not|hasn't been|has not been|never)\b[\s\S]{0,35}\b(?:approved|produced|built|deployed) by Insight\b/i;
+const COMPANY_CONTACT_MISDIRECTION = /\b(?:reach(?:ing)? out|connect) through Insight(?:'s)? channels\b/i;
+const EXECUTIVE_QUESTION_REFUSAL = /\b(?:I can(?:not|'t)|I(?:'m| am) not able to) ask you questions\b|\bI can(?:not|'t) ask you questions as if I were part of (?:Insight|the team)\b/i;
+const NAME_PLUS_CAPABILITY = /\bI(?:'m| am)\s+[\p{L}][\p{L}'’-]{1,40}\b[\s\S]{0,180}\b(?:what (?:exactly )?(?:can|do) you do|tell me what you do|how do you work|why should (?:I|we) care)\b/iu;
+const NAME_ONLY_ACKNOWLEDGMENT = /^(?:nice|good|great|glad|pleased|lovely) to meet you\b[^.!?]*[.!]?$/i;
+const EXECUTIVE_VERBAL_SUMMARY_REQUEST = /\b(?:give me (?:the )?(?:executive|short) version|give me the bottom line|executive version|short version|bottom line|summari[sz]e (?:that|it) briefly)\b/i;
+const EXPLICIT_VISUAL_REQUEST = /\b(?:show|open|display|build|create|put)\b[\s\S]{0,80}\b(?:visual|brief|screen|view|slide|diagram)\b|\b(?:visual brief|executive visual|on screen)\b/i;
 const CLEAR_DIRECT_QUESTION = /\?|^(?:what|why|how|when|where|who|which|is|are|do|does|did|can|could|would|will|should)\b/i;
 const SILENCE_OR_REVIEW_REQUEST = /\b(?:hang on|one moment|give me a moment|let me (?:review|look|think)|can you (?:wait|hold)|please (?:wait|hold))\b/i;
 const TERMINAL_END_RECEIPT = /\b(?:closing_motion_and_farewell_required|farewell_required|session_ended)\b/i;
@@ -135,6 +148,11 @@ const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     meeting_concierge_capability_denial: 35,
     demo_deployment_overclaim: 25,
     unsupported_internal_record: 25,
+    insight_approval_overclaim: 35,
+    company_contact_misdirection: 20,
+    executive_question_refusal: 25,
+    capability_question_unanswered: 30,
+    executive_summary_visual_substitution: 25,
     clear_question_skipped: 25,
     visual_capability_mismatch: 30,
     prohibited_live_catalog_lookup: 35,
@@ -198,6 +216,15 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         if (UNSUPPORTED_INTERNAL_RECORD.test(assistant.content)) {
             add('unsupported_internal_record', 'critical', index, assistant.content);
         }
+        if (INSIGHT_APPROVAL_OVERCLAIM.test(assistant.content) && !INSIGHT_APPROVAL_NEGATION.test(assistant.content)) {
+            add('insight_approval_overclaim', 'critical', index, assistant.content);
+        }
+        if (COMPANY_CONTACT_MISDIRECTION.test(assistant.content)) {
+            add('company_contact_misdirection', 'critical', index, assistant.content);
+        }
+        if (EXECUTIVE_QUESTION_REFUSAL.test(assistant.content)) {
+            add('executive_question_refusal', 'critical', index, assistant.content);
+        }
         if (/\b(?:non[- ]CJIS|non[- ]sensitive)\b[\s\S]{0,180}\b(?:keep it out|outside)\b[\s\S]{0,80}\b(?:protected domain|CJIS)\b|\bstandard security controls rather than the full CJIS regime\b/i.test(assistant.content)) {
             add('unsupported_cjis_boundary', 'critical', index, assistant.content);
         }
@@ -215,8 +242,14 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         if (turn.role === 'user') {
             if (CAPABILITY_INTERVIEW.test(turn.content)) capabilityInterviewActive = true;
             else if (capabilityInterviewActive && LIVE_OPPORTUNITY_TRANSITION.test(turn.content)) capabilityInterviewActive = false;
-        } else if (turn.role === 'assistant' && capabilityInterviewActive && GENERIC_PROSPECT_QUALIFICATION.test(turn.content)) {
-            add('executive_interview_drift', 'critical', index, turn.content);
+        } else if (turn.role === 'assistant' && capabilityInterviewActive) {
+            if (GENERIC_PROSPECT_QUALIFICATION.test(turn.content)) {
+                add('executive_interview_drift', 'critical', index, turn.content);
+            }
+            const priorUser = [...turns.slice(0, index)].reverse().find((candidate) => candidate.role === 'user');
+            if (turn.words > 45 && !/\b(?:detail|in depth|thorough|comprehensive)\b/i.test(priorUser?.content ?? '')) {
+                add('verbose_reply', 'warning', index, turn.content);
+            }
         }
     }
 
@@ -238,6 +271,17 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         if (CAPABILITY_VISUAL_REQUEST.test(turn.content)
             && responseTurns.some((candidate) => toolName(candidate) === 'show_visual_brief')) {
             add('visual_capability_mismatch', 'critical', index, turn.content);
+        }
+        if (NAME_PLUS_CAPABILITY.test(turn.content)) {
+            const reply = responseTurns.find((candidate) => candidate.role === 'assistant' && candidate.content.trim());
+            if (reply && NAME_ONLY_ACKNOWLEDGMENT.test(reply.content.trim())) {
+                add('capability_question_unanswered', 'critical', turns.indexOf(reply), reply.content);
+            }
+        }
+        if (EXECUTIVE_VERBAL_SUMMARY_REQUEST.test(turn.content)
+            && !EXPLICIT_VISUAL_REQUEST.test(turn.content)
+            && responseTurns.some((candidate) => toolName(candidate) === 'show_visual_brief')) {
+            add('executive_summary_visual_substitution', 'critical', index, turn.content);
         }
         if (LIVE_PRODUCT_DATA_REQUEST.test(turn.content)) {
             const prohibitedCall = responseTurns.find((candidate) => {
