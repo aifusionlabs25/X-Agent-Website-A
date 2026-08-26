@@ -3,6 +3,10 @@ import {
     readAmyAgentMailProviderConfig,
     sendAmyEmailWithAgentMail,
 } from '../email/amy-email-provider.ts';
+import {
+    readAmyResendProviderConfig,
+    sendAmyEmailWithResend,
+} from '../email/amy-resend-provider.ts';
 import { buildAmyEmailBundle } from './agentmail-templates.ts';
 import { createAmyAnamContactToken, readAmyAnamContactToken } from './contact-token.ts';
 import type { AmyTranscriptTurn } from './session-spine.ts';
@@ -39,6 +43,8 @@ export type AmyAnamAgentMailConfig = {
     effectiveGateOpen: boolean;
     inboxAddressConfigured: boolean;
     apiKeyConfigured: boolean;
+    visitorProvider: 'agentmail' | 'resend' | 'unsupported';
+    visitorProviderConfigured: boolean;
     redisUrl: string;
     redisToken: string;
 };
@@ -49,6 +55,7 @@ type AmyAnamEmailAttemptRecord = {
     status: 'pending' | 'sent' | 'failed';
     receiptId: string;
     provider: 'agentmail';
+    visitorProvider: 'agentmail' | 'resend';
     attemptedAt: string;
     completedAt: string | null;
     messageId: string | null;
@@ -95,6 +102,7 @@ export type AmyAnamFollowUpResult = {
     duplicate: boolean;
     receiptId: string;
     provider: 'agentmail';
+    visitorProvider: 'agentmail' | 'resend';
     deliveryCount: number;
     visitorSent: boolean;
     internalNotificationsSent: boolean;
@@ -122,6 +130,18 @@ export function readAmyAnamAgentMailConfig(
             ? 'off'
             : 'unsupported';
     const providerConfig = readAmyAgentMailProviderConfig(source);
+    const resendConfig = readAmyResendProviderConfig(source);
+    const visitorProviderName = value(source, 'AMY_VISITOR_EMAIL_PROVIDER').toLowerCase() || 'agentmail';
+    const visitorProvider: AmyAnamAgentMailConfig['visitorProvider'] = visitorProviderName === 'agentmail'
+        ? 'agentmail'
+        : visitorProviderName === 'resend'
+            ? 'resend'
+            : 'unsupported';
+    const visitorProviderConfigured = visitorProvider === 'agentmail'
+        ? providerConfig.configured
+        : visitorProvider === 'resend'
+            ? resendConfig.configured
+            : false;
     const enabled = value(source, 'AMY_ANAM_AGENTMAIL_ENABLED') === 'true';
     const killSwitchActive = value(source, 'AMY_ANAM_AGENTMAIL_KILL_SWITCH') !== 'false';
     const toolsEnabled = value(source, 'AMY_ANAM_TOOLS_ENABLED') === 'true';
@@ -130,6 +150,7 @@ export function readAmyAnamAgentMailConfig(
     const outboundKillSwitchActive = value(source, 'AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH') !== 'false';
     const configured = provider === 'agentmail'
         && providerConfig.configured
+        && visitorProviderConfigured
         && spine.configured;
     const requestedGateOpen = enabled
         && !killSwitchActive
@@ -152,6 +173,8 @@ export function readAmyAnamAgentMailConfig(
         effectiveGateOpen: configured && requestedGateOpen && spine.gatesOpen,
         inboxAddressConfigured: Boolean(providerConfig.inboxAddress),
         apiKeyConfigured: providerConfig.apiKey.length >= 16,
+        visitorProvider,
+        visitorProviderConfigured,
         redisUrl: spine.redisUrl,
         redisToken: spine.redisToken,
     };
@@ -403,6 +426,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
         status: 'pending',
         receiptId,
         provider: 'agentmail',
+        visitorProvider: config.visitorProvider === 'resend' ? 'resend' : 'agentmail',
         attemptedAt: now,
         completedAt: null,
         messageId: null,
@@ -438,6 +462,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
                 duplicate: true,
                 receiptId: existing.receiptId,
                 provider: 'agentmail',
+                visitorProvider: config.visitorProvider === 'resend' ? 'resend' : 'agentmail',
                 deliveryCount: existing.deliveryStatus
                     ? Object.values(existing.deliveryStatus).filter(Boolean).length
                     : existing.status === 'sent' ? 1 : 0,
@@ -473,8 +498,9 @@ export async function sendAmyAnamConversationFollowUp(input: {
             turns: safeTurns,
             model: buildAmyWorkbenchModel(safeTurns),
         });
+        const visitorProvider = config.visitorProvider === 'resend' ? 'resend' : 'agentmail';
         const [visitorResult, adminResult, intakeResult] = await Promise.allSettled([
-            sendAmyEmailWithAgentMail(
+            (visitorProvider === 'resend' ? sendAmyEmailWithResend : sendAmyEmailWithAgentMail)(
                 { to: input.email, ...bundle.visitor },
                 { ...options, idempotencyKey: `amy.${receiptId}.visitor.v1` },
             ),
@@ -521,6 +547,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
             duplicate: false,
             receiptId,
             provider: 'agentmail',
+            visitorProvider,
             deliveryCount: Object.values(deliveryStatus).filter(Boolean).length,
             visitorSent: true,
             internalNotificationsSent: deliveryStatus.admin && deliveryStatus.intake,

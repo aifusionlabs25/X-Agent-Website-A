@@ -11,6 +11,7 @@ import {
     readAmyAnamContactToken,
 } from '../lib/anam/contact-token.ts';
 import { sendAmyEmailWithAgentMail } from '../lib/email/amy-email-provider.ts';
+import { sendAmyEmailWithResend } from '../lib/email/amy-resend-provider.ts';
 import { buildAmyEmailBundle } from '../lib/anam/agentmail-templates.ts';
 import { buildAmyWorkbenchModel } from '../lib/anam/workbench-v2.ts';
 
@@ -121,6 +122,19 @@ test('all AgentMail, tool, outbound, provider, and spine gates must be open', ()
     ]) {
         assert.equal(readAmyAnamAgentMailConfig({ ...ENV, ...override }).effectiveGateOpen, false);
     }
+    const resendVisitor = readAmyAnamAgentMailConfig({
+        ...ENV,
+        AMY_VISITOR_EMAIL_PROVIDER: 'resend',
+        RESEND_API_KEY: 're_amy_visitor_test_secret',
+    });
+    assert.equal(resendVisitor.effectiveGateOpen, true);
+    assert.equal(resendVisitor.visitorProvider, 'resend');
+    assert.equal(resendVisitor.visitorProviderConfigured, true);
+    assert.equal(readAmyAnamAgentMailConfig({
+        ...ENV,
+        AMY_VISITOR_EMAIL_PROVIDER: 'resend',
+        RESEND_API_KEY: '',
+    }).effectiveGateOpen, false);
 });
 
 test('AgentMail adapter sends through Amy inbox and returns a bounded receipt', async () => {
@@ -276,6 +290,133 @@ test('email permission queues without sending, then finalization sends the compl
     assert.doesNotMatch(storedReceipts, /rvicks@gmail\.com|Azure|ERP migration/i);
     assert.match(storedReceipts, /"rawEmailStored":false/);
     assert.match(storedReceipts, /"messageContentStored":false/);
+});
+
+test('Resend visitor adapter preserves Amy HTML and the Visual Brief attachment', async () => {
+    let request;
+    const result = await sendAmyEmailWithResend({
+        to: 'RVicks@Gmail.com',
+        subject: 'Security readiness | A follow-up from Amy',
+        text: 'Here is the recap I promised.',
+        html: '<div><h1>Here is the recap I promised.</h1></div>',
+        attachments: [{
+            filename: 'amy-visual-brief.html',
+            contentType: 'text/html; charset=utf-8',
+            content: '<html><body>Visual Brief</body></html>',
+        }],
+    }, {
+        env: {
+            ...ENV,
+            RESEND_API_KEY: 're_amy_visitor_test_secret',
+            AMY_RESEND_FROM_ADDRESS: 'Amy from X Agents <hello@aifusionlabs.app>',
+        },
+        fetchImpl: async (url, init) => {
+            request = { url, init };
+            return new Response(JSON.stringify({ id: 'resend_msg_1' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        },
+        idempotencyKey: 'amy.receipt.visitor.v1',
+    });
+    assert.equal(request.url, 'https://api.resend.com/emails');
+    assert.equal(new Headers(request.init.headers).get('Authorization'), 'Bearer re_amy_visitor_test_secret');
+    assert.equal(new Headers(request.init.headers).get('Idempotency-Key'), 'amy.receipt.visitor.v1');
+    const body = JSON.parse(request.init.body);
+    assert.equal(body.from, 'Amy from X Agents <hello@aifusionlabs.app>');
+    assert.deepEqual(body.to, ['rvicks@gmail.com']);
+    assert.match(body.html, /recap I promised/i);
+    assert.equal(body.attachments[0].filename, 'amy-visual-brief.html');
+    assert.equal(body.attachments[0].content_type, 'text/html; charset=utf-8');
+    assert.match(Buffer.from(body.attachments[0].content, 'base64').toString('utf8'), /Visual Brief/);
+    assert.deepEqual(result, {
+        provider: 'resend',
+        sent: true,
+        messageId: 'resend_msg_1',
+        threadId: null,
+    });
+});
+
+test('Amy can isolate visitor delivery on Resend while internal records stay on AgentMail', async () => {
+    const store = new Map();
+    const requests = [];
+    const env = {
+        ...ENV,
+        AMY_VISITOR_EMAIL_PROVIDER: 'resend',
+        RESEND_API_KEY: 're_amy_visitor_test_secret',
+    };
+    const fetchImpl = async (url, init) => {
+        if (String(url).startsWith('https://redis.agentmail.test/')) {
+            const commands = JSON.parse(init.body);
+            const results = commands.map(command => {
+                const [operation, key, storedValue, condition] = command;
+                if (operation === 'GET') return { result: store.get(key) ?? null };
+                if (operation === 'DEL') return { result: store.delete(key) ? 1 : 0 };
+                if (operation === 'SET' && condition === 'NX') {
+                    if (store.has(key)) return { result: null };
+                    store.set(key, storedValue);
+                    return { result: 'OK' };
+                }
+                if (operation === 'SET' && condition === 'XX') {
+                    if (!store.has(key)) return { result: null };
+                    store.set(key, storedValue);
+                    return { result: 'OK' };
+                }
+                throw new Error(`Unexpected Redis command: ${operation}`);
+            });
+            return new Response(JSON.stringify(results), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        const provider = String(url).startsWith('https://api.resend.com/') ? 'resend' : 'agentmail';
+        const body = JSON.parse(init.body);
+        requests.push({ provider, body });
+        return new Response(JSON.stringify(provider === 'resend'
+            ? { id: 'resend_visitor_1' }
+            : { message_id: `agentmail_${requests.length}`, thread_id: `thread_${requests.length}` }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    };
+    await queueAmyAnamConversationFollowUp({
+        externalSessionId: SESSION_ID,
+        browserSessionId: BROWSER_ID,
+        displayName: 'Rob',
+        email: 'rvicks@gmail.com',
+        contactSecret: SECRET,
+    }, { env, fetchImpl });
+    const result = await dispatchAmyAnamPostSessionFollowUp({
+        session: {
+            schemaVersion: 'amy_anam_session_v1', browserSessionId: BROWSER_ID,
+            launchId: '99999999-8888-4777-8666-555555555555', externalSessionId: SESSION_ID,
+            clientLabel: 'xagent-amy:test', resolvedPersonaId: '77777777-6666-4555-8444-333333333333',
+            provider: 'anam', agentSlug: 'amy', variant: 'amy-cara4', state: 'completed',
+            createdAt: '2026-07-18T15:59:55.000Z', boundAt: '2026-07-18T16:00:00.000Z',
+            closeReceivedAt: '2026-07-18T16:05:00.000Z', closeReason: 'user_ended',
+            completedAt: '2026-07-18T16:05:10.000Z',
+        },
+        receipt: {
+            schemaVersion: 'amy_anam_session_receipt_v1', receiptId: 'receipt-final', provider: 'anam',
+            externalSessionId: SESSION_ID, variant: 'amy-cara4', status: 'completed',
+            completedAt: '2026-07-18T16:05:10.000Z', closeReason: 'user_ended',
+            transcript: { source: 'anam_api', messageCount: 2, contentSha256: 'a'.repeat(64), rawTranscriptPersisted: false },
+            actions: { hermes: false, memory: false, email: false, sheets: false },
+        },
+        turns: [
+            { role: 'user', content: 'We need a security readiness plan.' },
+            { role: 'agent', content: 'I will organize the evidence and next decision.' },
+        ],
+    }, { env, fetchImpl });
+    assert.equal(result.status, 'email_sent');
+    assert.equal(result.visitorProvider, 'resend');
+    assert.deepEqual(requests.map(request => request.provider), ['resend', 'agentmail', 'agentmail']);
+    assert.deepEqual(requests.map(request => request.body.to), [
+        ['rvicks@gmail.com'], ['aifusionlabs@gmail.com'], ['aifusionlabs@gmail.com'],
+    ]);
+    assert.match(requests[0].body.html, /Here&#039;s the recap I promised/i);
+    assert.match(requests[1].body.subject, /AMY SESSION/i);
+    assert.match(requests[2].body.subject, /INSIGHT INTAKE/i);
 });
 
 test('failed Amy email bundle retries with stable per-lane idempotency keys', async () => {

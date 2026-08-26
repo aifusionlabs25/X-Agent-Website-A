@@ -506,6 +506,9 @@ export async function finalizeAmyAnamSession(
             console.info('[Anam AgentMail] Post-session dispatch finished', {
                 status: emailResult.status,
                 sent: emailResult.sent,
+                visitorProvider: 'visitorProvider' in emailResult
+                    ? emailResult.visitorProvider
+                    : null,
                 afterSessionClose: true,
                 finalTranscriptAvailable: transcript.status === 'ready',
                 contentIncludedInLog: false,
