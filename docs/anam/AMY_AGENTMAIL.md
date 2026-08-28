@@ -4,6 +4,12 @@ Amy's Anam follow-up email path is server-only. Internal operations and Insight 
 
 ## Safety contract
 
+### Visitor presentation (A+C, August 27, 2026)
+
+The visitor email uses the approved cream-and-magenta executive/visual recap: a personal thank-you, a compact conversation summary, and a suggested next step. It does not promise a booked meeting, specialist outreach, or a complete session export. Its HTML and plain-text versions use the existing redacted transcript-derived model; no live-screen capture, new storage, or new email provider is introduced.
+
+The existing `amy-visual-brief.html` attachment is unchanged and remains conditional on the existing Visual Brief request detection. It is a six-section working brief rebuilt from transcript facts, not an archive of every session feature. The new visitor copy makes no unconditional attachment promise and does not repeat the entire six-section brief inline. Both internal messages are unchanged. Regression tests pin their complete content and the attachment to the previous production checkpoint.
+
 - The recipient comes only from the website check-in form.
 - The normalized address is encrypted into a short-lived HttpOnly, same-site contact token bound to the signed browser session.
 - The raw address is never returned to Amy, placed in an Anam tool argument, reconstructed from speech, written to returning memory, or stored in the Redis receipt.

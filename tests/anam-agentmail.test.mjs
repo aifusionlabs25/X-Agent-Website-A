@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
+import { renderAmyVisitorRecap } from '../lib/anam/amy-visitor-email.ts';
 import {
     buildAmyConversationFollowUp,
     readAmyAnamAgentMailConfig,
@@ -181,12 +183,12 @@ test('follow-up content is deterministic, redacts contact data, and escapes HTML
     assert.doesNotMatch(message.text, /R V I C K S|gmail dot com/i);
     assert.doesNotMatch(message.html, /<script>/i);
     assert.match(message.html, /AI-powered conversational agent/i);
-    assert.match(message.html, /Insight · Follow-up from Amy/i);
-    assert.match(message.html, />Hi Rob,</i);
-    assert.doesNotMatch(message.html, />Hi Rob Vicks,</i);
+    assert.match(message.html, /A FOLLOW-UP FROM AMY/i);
+    assert.match(message.html, /Thank you, Rob\.<br>/i);
+    assert.doesNotMatch(message.html, /Thank you, Rob Vicks/i);
     assert.match(message.text, /speaking with me/i);
-    assert.match(message.text, /appropriate specialists will review it and follow up/i);
-    assert.match(message.html, /Reconnect with Amy/i);
+    assert.doesNotMatch(message.text, /appropriate specialists will review it and follow up/i);
+    assert.match(message.html, /Continue with Amy/i);
     assert.match(message.html, /https:\/\/xagent\.aifusionlabs\.app\/demo\/amy\?variant=cara4/i);
     assert.doesNotMatch(message.text, /Thank you for speaking with Amy|Reply to this email if/i);
     assert.doesNotMatch(message.text, /Timing:\s*Before we close|Pulse Session/i);
@@ -276,7 +278,7 @@ test('email permission queues without sending, then finalization sends the compl
     ]);
     assert.equal(new Set(agentMailRequests.map(request => request.idempotencyKey)).size, 3);
     assert.ok(agentMailRequests.every(request => /^amy\.[a-f0-9]{32}\.(?:visitor|admin|intake)\.v1$/.test(request.idempotencyKey)));
-    assert.match(agentMailRequests[0].body.html, /Here&#039;s the recap I promised/i);
+    assert.match(agentMailRequests[0].body.html, /Here’s what we took away/i);
     assert.match(agentMailRequests[1].body.subject, /AMY SESSION/i);
     assert.match(agentMailRequests[1].body.html, /Final call duration/i);
     assert.match(agentMailRequests[1].body.html, />5m 0s</i);
@@ -414,7 +416,7 @@ test('Amy can isolate visitor delivery on Resend while internal records stay on 
     assert.deepEqual(requests.map(request => request.body.to), [
         ['rvicks@gmail.com'], ['aifusionlabs@gmail.com'], ['aifusionlabs@gmail.com'],
     ]);
-    assert.match(requests[0].body.html, /Here&#039;s the recap I promised/i);
+    assert.match(requests[0].body.html, /Here’s what we took away/i);
     assert.match(requests[1].body.subject, /AMY SESSION/i);
     assert.match(requests[2].body.subject, /INSIGHT INTAKE/i);
 });
@@ -522,7 +524,7 @@ test('failed Amy email bundle retries with stable per-lane idempotency keys', as
     }
 });
 
-test('visitor follow-up embeds and attaches the final conversation-grounded Visual Brief', () => {
+test('visitor follow-up preserves the conditional Visual Brief attachment without promising a session export', () => {
     const message = buildAmyConversationFollowUp({
         displayName: 'Rob',
         turns: [
@@ -531,15 +533,76 @@ test('visitor follow-up embeds and attaches the final conversation-grounded Visu
             { role: 'user', content: 'Show me the visual brief and include it in the follow-up.' },
         ],
     });
-    assert.match(message.html, /Your final Visual Brief/i);
-    assert.match(message.html, /Two tracks.*one planned.*exploratory/is);
-    assert.match(message.text, /FINAL VISUAL BRIEF/i);
+    assert.match(message.html, /Your conversation at a glance/i);
+    assert.doesNotMatch(message.html, /Your final Visual Brief|complete session|is attached/i);
+    assert.doesNotMatch(message.text, /FINAL VISUAL BRIEF|complete session|is attached/i);
     assert.equal(message.attachments?.length, 1);
     assert.equal(message.attachments?.[0]?.filename, 'amy-visual-brief.html');
     assert.equal(message.attachments?.[0]?.contentType, 'text/html; charset=utf-8');
     assert.match(message.attachments?.[0]?.content ?? '', /01 \/ Executive snapshot/i);
     assert.match(message.attachments?.[0]?.content ?? '', /06 \/ Next decision/i);
+    assert.match(message.attachments?.[0]?.content ?? '', /Two tracks.*one planned.*exploratory/is);
     assert.doesNotMatch(message.attachments?.[0]?.content ?? '', /device refresh|funded device|call recordings|ticket logs|Insight Public Sector/i);
+});
+
+test('A+C visitor presentation leaves both internal messages and the existing attachment byte-identical', () => {
+    const turns = [
+        { role: 'user', content: 'We need a StateRAMP cloud modernization brief by year-end.' },
+        { role: 'user', content: 'Show me the Visual Brief and email it after the session.' },
+    ];
+    const bundle = buildAmyEmailBundle({
+        displayName: 'Sample Visitor', verifiedEmail: 'sample@example.com',
+        externalSessionId: 'sample-session', sessionStartedAt: '2026-08-27T12:00:00Z',
+        sessionEndedAt: '2026-08-27T12:05:00Z', generatedAt: '2026-08-27T12:06:00Z',
+        turns, model: buildAmyWorkbenchModel(turns),
+    });
+    const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    // Captured from the verified production checkpoint 2e667a1 before this template change.
+    assert.equal(digest(bundle.admin), '8b071356837b271742f61dafc16e33539ad39a50dedd2e49862a08869b8e4623');
+    assert.equal(digest(bundle.intake), 'a81e5d33331366934c104bfab0e3bb6a67cc6086bf35cc0cc771a3350e2c4fa7');
+    assert.equal(digest(bundle.visitor.attachments), '489f36180394514dab34a6b9fa3c7145a61205238db123b3f0204ca260e8e8bd');
+});
+
+test('normal and empty conversations do not promise or add an attachment', () => {
+    for (const turns of [[], [{ role: 'user', content: 'We want to discuss cloud planning.' }]]) {
+        const message = buildAmyConversationFollowUp({ displayName: 'Alex', turns });
+        assert.equal(message.attachments, undefined);
+        assert.match(message.html, /CONVERSATION SUMMARY · KEY TAKEAWAYS/);
+        assert.doesNotMatch(message.html + message.text, /attached|complete.*brief|download|01 OF 06/i);
+        assert.doesNotMatch(message.html + message.text, /60 days|Alex, your AI pilot|pilot.*approved/i);
+    }
+});
+
+test('visitor recap is email-safe, accessible, and escapes every displayed dynamic field', () => {
+    const hostile = '<img src=x onerror=alert(1)> & "test"';
+    const message = renderAmyVisitorRecap({
+        firstName: hostile, lane: hostile, objective: hostile,
+        details: [{ label: hostile, value: hostile }], nextStep: hostile,
+        openQuestions: [hostile], rejoinUrl: 'https://xagent.aifusionlabs.app/demo/amy?variant=cara4',
+    });
+    assert.doesNotMatch(message.html, /<img src=x|<script|<iframe/);
+    assert.match(message.html, /&lt;img src=x onerror=alert\(1\)&gt; &amp; &quot;test&quot;/);
+    assert.match(message.html, /<html lang="en">/);
+    assert.match(message.html, /alt="Insight"/);
+    assert.match(message.html, /@media only screen and \(max-width:480px\)/);
+    assert.match(message.html, /\[if mso\]/);
+    assert.match(message.text, /Suggested next step:/);
+    assert.match(message.text, /not a booking confirmation/);
+    assert.equal((message.html.match(/<h1 /g) ?? []).length, 1);
+});
+
+test('visitor-only sparse and question-based wording stays readable without changing the model', () => {
+    const empty = buildAmyConversationFollowUp({ displayName: 'Alex', turns: [] });
+    assert.match(empty.text, /No detailed conversation context was available/);
+    assert.doesNotMatch(empty.text, /Waiting for the conversation|Clarify outcome/);
+    const question = 'Which environment is in scope?';
+    const rendered = renderAmyVisitorRecap({
+        firstName: 'Alex', lane: 'Discovery', objective: 'Explore the priority', details: [],
+        nextStep: 'Clarify environment is in scope.', openQuestions: [question],
+        rejoinUrl: 'https://xagent.aifusionlabs.app/demo/amy?variant=cara4',
+    });
+    assert.match(rendered.text, /Clarify the next decision: Which environment is in scope\?/);
+    assert.equal(rendered.text.split(question).length - 1, 1);
 });
 
 test('Amy intake email includes the same Visual Brief and confirmed callback', () => {

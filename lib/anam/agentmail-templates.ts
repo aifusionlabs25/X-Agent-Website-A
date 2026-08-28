@@ -1,5 +1,6 @@
 import type { AmyTranscriptTurn } from './session-spine.ts';
 import type { AmyWorkbenchFact, AmyWorkbenchModel } from './workbench-v2.ts';
+import { renderAmyVisitorRecap } from './amy-visitor-email.ts';
 
 export type AmyEmailContent = {
     subject: string;
@@ -259,36 +260,20 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         timing ? `Anchor the pursuit plan and decision gates to the stated timing: ${timing}` : '',
     ], 5);
 
-    const visitorBody = `
-<p style="margin:0;color:#172033;font-size:16px;line-height:25px;">Hi ${escapeHtml(firstName)},</p>
-<p style="margin:14px 0 0;color:#435166;font-size:15px;line-height:24px;">Thanks again for speaking with me. I organized the key points we discussed so you and the Insight team can continue from the same context.</p>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:24px;background:#f7f8fa;border-left:4px solid ${INSIGHT_MAGENTA};"><tr><td style="padding:18px 20px;">
-<div style="font-size:11px;line-height:15px;letter-spacing:.12em;text-transform:uppercase;color:${INSIGHT_MAGENTA};font-weight:700;">Conversation objective</div>
-<div style="margin-top:8px;color:#263548;font-size:15px;line-height:24px;">${escapeHtml(objective)}</div>
-</td></tr></table>
-${highlights.length ? `<div style="margin-top:28px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">What we heard</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:9px;">${bulletRows(highlights)}</table>` : ''}
-${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Your final Visual Brief</div><p style="margin:7px 0 0;color:#657184;font-size:13px;line-height:20px;">This is the finalized conversation-grounded revision. A standalone HTML copy is attached for easier review and printing.</p>${visualBriefCards(input.model)}` : ''}
-<div style="margin-top:28px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Suggested next step</div>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:11px;background:#fff7fa;border:1px solid #f2cedc;"><tr><td style="padding:17px 19px;color:#5f2340;font-size:14px;line-height:22px;font-weight:600;">${escapeHtml(nextStep)}</td></tr></table>
-<p style="margin:28px 0 0;color:#435166;font-size:14px;line-height:22px;">I shared this working recap with the Insight team. The appropriate specialists will review it and follow up with you from here.</p>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:22px;background:#f7f8fa;"><tr><td style="padding:18px 20px;">
-<div style="color:#263548;font-size:14px;line-height:22px;">Have an update, or want to share Amy with a colleague? Use the link below. Each person should check in with their own email so conversations stay organized.</div>
-<div style="margin-top:14px;"><a href="${AMY_REJOIN_URL}" style="display:inline-block;background:${INSIGHT_NAVY};color:#ffffff;text-decoration:none;padding:11px 17px;font-size:14px;line-height:18px;font-weight:700;">Reconnect with Amy</a></div>
-</td></tr></table>
-<p style="margin:22px 0 0;color:#435166;font-size:14px;line-height:22px;">Talk soon,<br><strong style="color:#172033;">Amy</strong><br>Insight Enterprise SDR</p>`;
-    const visitorText = [
-        `Hi ${firstName},`, '',
-        'Thanks again for speaking with me. I organized the key points we discussed so you and the Insight team can continue from the same context.', '',
-        `Conversation objective: ${objective}`, '',
-        ...textSection('What we heard', highlights),
-        ...(includeVisualBrief ? visualBriefText(input.model) : []),
-        `Suggested next step: ${nextStep}`, '',
-        'I shared this working recap with the Insight team. The appropriate specialists will review it and follow up with you from here.', '',
-        'Have an update, or want to share Amy with a colleague? Each person should check in with their own email so conversations stay organized.',
-        `Reconnect with me: ${AMY_REJOIN_URL}`, '',
-        'Talk soon,', 'Amy', 'Insight Enterprise SDR', '',
-        "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination.",
-    ].join('\n');
+    const visitorRecap = renderAmyVisitorRecap({
+        firstName,
+        lane: clean(input.model.lane, 150) || 'Technology planning',
+        objective: input.turns.length ? objective : 'No detailed conversation context was available for this recap.',
+        details: [
+            { label: 'Technology context', value: environment },
+            { label: 'Critical workloads', value: workloads },
+            { label: 'Your guardrail', value: guardrail },
+            { label: 'Your timing', value: timing },
+        ],
+        nextStep: input.turns.length ? nextStep : 'Start a new conversation with Amy when you are ready to discuss your priorities.',
+        openQuestions: input.turns.length ? openQuestions : [],
+        rejoinUrl: AMY_REJOIN_URL,
+    });
 
     const adminDetails = [
         detailRow('Session ID', input.externalSessionId),
@@ -383,15 +368,7 @@ ${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:2
     return {
         visitor: {
             subject: `${subjectContext} | A follow-up from Amy`,
-            text: visitorText,
-            html: shell({
-                preview: `My recap of our ${subjectContext.toLowerCase()} conversation and the practical next step.`,
-                eyebrow: 'Insight · Follow-up from Amy',
-                title: "Here's the recap I promised.",
-                subtitle: 'The key points we discussed and a practical path forward.',
-                body: visitorBody,
-                footer: "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination.",
-            }),
+            ...visitorRecap,
             ...(visualAttachment ? { attachments: [visualAttachment] } : {}),
         },
         admin: {
