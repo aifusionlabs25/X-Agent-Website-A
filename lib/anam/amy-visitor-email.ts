@@ -1,4 +1,7 @@
 /** Presentation only. The caller owns transcript extraction and attachment policy. */
+import { renderAmyEmailRoadmap } from './amy-roadmap-email.ts';
+import type { AmyEmailRoadmap } from './amy-roadmap-email.ts';
+
 type VisitorRecap = {
     firstName: string;
     lane: string;
@@ -7,6 +10,7 @@ type VisitorRecap = {
     nextStep: string;
     openQuestions: string[];
     rejoinUrl: string;
+    roadmap?: AmyEmailRoadmap;
 };
 
 function escapeHtml(value: string): string {
@@ -18,7 +22,10 @@ const INTRO = 'Thanks again for speaking with me. I’ve summarized the key poin
 const FOOTER = "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination. Specialist review and scheduling require separate confirmation.";
 
 export function renderAmyVisitorRecap(input: VisitorRecap): { html: string; text: string } {
-    const details = input.details.filter(item => item.value).slice(0, 12);
+    const roadmap = renderAmyEmailRoadmap(input.roadmap);
+    // The caller's bounded schema includes security and AI discovery together.
+    // Keep late-listed timing/workload facts instead of truncating them at 12.
+    const details = input.details.filter(item => item.value).slice(0, 24);
     const detailRows: string[] = [];
     for (let index = 0; index < details.length; index += 2) {
         const pair = details.slice(index, index + 2);
@@ -62,6 +69,7 @@ export function renderAmyVisitorRecap(input: VisitorRecap): { html: string; text
 ${detailRows.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;table-layout:fixed;border-collapse:collapse;">${detailRows.join('')}</table>` : ''}
 <p style="margin:14px 0 0;color:#796b66;font-size:10px;line-height:17px;">Conversation-based working view · Specialist validation still required</p>
 </td></tr></table>
+${roadmap.html}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:23px;table-layout:fixed;"><tr><td style="padding:20px 22px;background:#fbf0f5;border-left:3px solid #cf0065;">
 <h2 style="margin:0;color:#b90059;font-size:10px;line-height:17px;letter-spacing:1.2px;font-weight:700;text-transform:uppercase;">Suggested next step</h2>
 <p style="margin:10px 0 0;color:#44313a;font-size:15px;line-height:24px;font-weight:600;">${escapeHtml(nextStep)}</p>
@@ -80,6 +88,7 @@ ${questionHtml}
         'YOUR CONVERSATION AT A GLANCE', input.lane,
         `Conversation focus: ${input.objective}`, '',
         ...details.map(item => `${item.label}: ${item.value}`), '',
+        ...(roadmap.text ? [roadmap.text] : []),
         `Suggested next step: ${nextStep}`, '',
         ...(questions.length ? ['Still to clarify', ...questions.map(item => `- ${item}`), ''] : []),
         'For review—not a booking confirmation.', '',

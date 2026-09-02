@@ -1,4 +1,5 @@
 import { isQualificationOpenItem, readAmyQualificationFacts } from './amy-qualification-facts.ts';
+import { readAmySecurityFacts } from './amy-security-facts.ts';
 
 export type AmyWorkbenchView = 'capabilities' | 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 
@@ -176,7 +177,8 @@ function statementsFrom(values: string[]): string[] {
 }
 
 function isWorkbenchRequest(value: string): boolean {
-    return /\b(?:please\s+)?(?:show|open|display|leave|keep|pull up|build and show|capture)\b.*\b(?:notes?|brief|roadmap|visual|catalog|status)\b/i.test(value)
+    return /\b(?:please\s+)?(?:show|open|display|leave|keep|pull up|build and show|capture)\b.*\b(?:notes?|brief|road\s?map|visual|catalog|status)\b/i.test(value)
+        || /^(?:yes|sure|please|a|an)\b.*\b(?:road\s?map|brief|visual|catalog|notes)\b.*\b(?:would help|would be (?:helpful|useful)|please)\b/i.test(value)
         || /\bdo you have a visual\b/i.test(value)
         || /\bvisuali[sz]e\b/i.test(value);
 }
@@ -225,17 +227,22 @@ function requestedOutputFrom(values: string[], trackCount: number, requestedView
             catalog: 'Solution catalog',
         } satisfies Record<AmyWorkbenchView, string>)[requestedView];
     }
-    for (const value of [...values].reverse()) {
-        if (!isWorkbenchRequest(value) && !/\b(?:outline|sketch|picture|presentation|deck)\b/i.test(value) && !/\bshow me\b.*\bplan\b/i.test(value)) continue;
-        if (/\b(?:visual(?:i[sz]e|i[sz]ation)?|diagram|workflow|presentation|executive visual|quick picture|picture|deck|slides?)\b/i.test(value)) return 'Visual brief';
-        if (/\b(?:catalog|product categories|device categories|solution categories)\b/i.test(value)) return 'Solution catalog';
-        if (/\b(?:roadmap|phased plan|implementation path|rollout sequence|plan would look like)\b/i.test(value)) {
-            return trackCount === 2 ? 'Two-track roadmap' : trackCount > 2 ? `${trackCount}-track roadmap` : 'Roadmap';
+    let output = '';
+    for (const value of values) {
+        if (isFollowUpDeliveryRequest(value) && !isWorkbenchRequest(value) || /["“][^"”]*(?:road\s?map|brief|visual|catalog|notes)[^"”]*["”]|\b(?:word|phrase|called|hypothetically|if I say)\b/i.test(value)) continue;
+        const candidate = /\b(?:visual(?:i[sz]e|i[sz]ation)?|diagram|workflow|presentation|executive visual|quick picture|picture|deck|slides?)\b/i.test(value) ? 'Visual brief'
+            : /\b(?:catalog|product categories|device categories|solution categories)\b/i.test(value) ? 'Solution catalog'
+            : /\b(?:road\s?map|phased plan|implementation path|rollout sequence|plan would look like)\b/i.test(value) ? trackCount === 2 ? 'Two-track roadmap' : trackCount > 2 ? `${trackCount}-track roadmap` : 'Roadmap'
+            : /\b(?:live brief|brief)\b/i.test(value) ? 'Live brief'
+            : /\b(?:live notes?|notes?)\b/i.test(value) ? 'Live notes' : '';
+        if (!candidate) continue;
+        if (/\b(?:do not|don't|no need to|not yet|cancel|skip|no longer need|no longer want)\b/i.test(value)) {
+            if (candidate === output) output = '';
+            continue;
         }
-        if (/\b(?:live brief|brief)\b/i.test(value)) return 'Live brief';
-        if (/\b(?:live notes?|notes?)\b/i.test(value)) return 'Live notes';
+        if (isWorkbenchRequest(value) || /\b(?:outline|sketch)\b|\bshow me\b.*\bplan\b/i.test(value)) output = candidate;
     }
-    return '';
+    return output;
 }
 
 function isPrivateContactExchange(value: string): boolean {
@@ -618,6 +625,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         .filter((value) => value && value !== CONTACT_OMITTED);
     const statements = statementsFrom(userTurns);
     const qualification = readAmyQualificationFacts(userTurns);
+    const security = readAmySecurityFacts(userTurns);
+    const hasSecurityDiscovery = Boolean(security.findings);
     const corrections = readCorrections(userTurns);
     const rejected = new Set(corrections.map((item) => canonical(item.from).toLowerCase()));
     const certainStatements = statements.filter((value) => !isUncertain(value));
@@ -807,7 +816,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : bestObjectiveFrom(substantiveStatements)
         || (certainStatements.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
     const explicitTiming = explicitTimingFrom(userTurns);
-    const timing = explicitTiming
+    const timing = (security.auditTimingPending ? 'Audit timing requires reconfirmation with the audit owner; earlier timing is not a planning commitment' : security.auditDeadline) || explicitTiming
         || (workshopTiming ? [projectTiming ? `Project target: ${projectTiming}` : '', `Workshop target: ${workshopTiming}`].filter(Boolean).join('; ') : '')
         || (hasYearEndCloudDeadline ? 'Core cloud workloads by year-end' : '')
         || (hasModernizationPortfolio && hasCurrentFiscalYearPressure
@@ -820,7 +829,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const constraintStatements = substantiveStatements.filter((statement) => !isDiscoveryAgenda(statement) && !isQualificationOpenItem(statement)
         && !/^it(?:'s| is) scoped as\b/i.test(statement)
         && !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
-    const constraint = hasCloudAndStaffingAi
+    const constraint = hasSecurityDiscovery
+        ? lastSentence(constraintStatements.filter(value => !/\bencryption|privileged[ -]access\b/i.test(value)), /\b(?:cannot|can't|must not|no downtime|no disruption|maintenance window|rollback)\b/i)
+        : hasCloudAndStaffingAi
         ? `${hasNoApprovedAiPilot ? 'No AI pilot is approved; ' : ''}${hasExcludedCjisData ? 'the visitor placed CJIS data outside the requested working scope, but the authorized data owner and security specialists must validate that boundary; ' : ''}do not infer a public-safety environment, approved access, model design, or pilot plan from the discovery conversation.`
         : hasPublicSectorAuditPriorities
         ? `${hasAccessControlEvidence ? 'Leadership requires proof that access-control gaps were addressed within the fixed audit window' : 'The fixed compliance audit is the immediate priority'}; the legacy refresh and AI feasibility must not weaken audit readiness or be treated as approved work.`
@@ -884,7 +895,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /\bSIS\b|student information system/i.test(allText) ? 'Student information system data' : '',
     ], 5);
     const compliance = unique([
-        /\bNIST\b/i.test(allText) ? 'NIST' : '',
+        ...security.governanceDrivers,
+        !hasSecurityDiscovery && /\bNIST\b/i.test(allText) ? 'NIST' : '',
         /\bHIPAA\b/i.test(allText) ? 'HIPAA' : '',
         /\bCJIS\b/i.test(allText) && (!hasExcludedCjisData || hasPublicSafetyAi) ? 'CJIS' : '',
         qualification.criminalJusticeData && /\bCJS\b/i.test(allText) ? 'Criminal justice information (visitor said CJS; confirm CJIS applicability with the agency security owner)' : '',
@@ -892,7 +904,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /FedRAMP/i.test(allText) ? 'FedRAMP' : '',
         /StateRAMP/i.test(allText) ? 'StateRAMP' : '',
     ], 5);
-    const requestedOutput = requestedOutputFrom(userTurns, currentTracks.length, requestedView);
+    const requestedOutput = requestedOutputFrom(userTurns, security.hasTwoWorkstreams ? 2 : currentTracks.length, requestedView);
     const decision = lastSentence(substantiveStatements, /we decided|we selected|we will proceed|the decision is/i);
     const aiDiscovery = hasStaffingOptimization
         ? `Explore whether AI could support staffing-schedule optimization using ${hasShiftCalendarData || hasPayrollLogData ? 'visitor-identified operational sources' : 'authorized operational evidence'}; no pilot, data access, model, or implementation path is approved.`
@@ -945,6 +957,12 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : '';
 
     const facts = [
+        makeFact('Environment', 'Security findings', security.findings),
+        makeFact('Scale', 'Affected scope', security.affectedScope),
+        makeFact('Constraints', 'Reported audit requirement', security.requirement),
+        makeFact('Organization', 'Accountable team', security.accountableTeam),
+        makeFact('Decisions', 'Ownership status', security.ownershipStatus),
+        makeFact('Environment', 'Evidence source', security.evidenceSource),
         makeFact('Priorities', 'Infrastructure status', qualification.infrastructureStatus),
         makeFact('Procurement', 'AI funding', qualification.funding),
         makeFact('Constraints', 'AI data-flow review', qualification.dataReview),
@@ -988,6 +1006,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ].filter((fact): fact is AmyWorkbenchFact => Boolean(fact));
 
     const openQuestions = unique([
+        hasSecurityDiscovery && !security.encryptionScope && !security.accessScope ? 'Which systems and accounts are affected by the reported security findings?' : '',
+        hasSecurityDiscovery ? 'What infrastructure modernization is already planned, and where could it overlap with the reported audit findings?' : '',
+        hasSecurityDiscovery && !/leads assigned/i.test(security.ownershipStatus) ? security.accountableTeam ? 'Which individual leads will the accountable team assign to validate the separate workstreams?' : 'Which team owns the security findings and the next decision?' : '',
+        hasSecurityDiscovery ? 'What evidence, dependencies, and operating windows must the security and infrastructure specialists validate before sequencing work?' : '',
         qualification.fundingOpen ? 'Who owns confirming the AI funding source and approval path?' : '',
         qualification.dataReview && isQualificationOpenItem(qualification.dataReview) ? 'Who will validate the proposed AI data flows and applicable security and privacy requirements before an AI decision?' : '',
         hasCloudAndStaffingAi ? 'Who owns authorization and field validation for the shift-calendar and payroll evidence?' : '',
@@ -1027,15 +1049,17 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         hasPublicSafetyAi ? 'Which agency AI policy and human-review requirements apply before feasibility work begins?' : '',
         hasArizonaSvar ? 'Who will purchase through SVAR-the agency, the prime contractor, or another eligible entity?' : '',
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'What outcome would make this initiative successful?' : '',
-        !terms.length && !workloads.length && !dataSources.length && !infrastructureComponents.length
+        !hasSecurityDiscovery && !terms.length && !workloads.length && !dataSources.length && !infrastructureComponents.length
             ? 'Which environment, workload, or platform is in scope?'
             : '',
-        !constraint ? 'What constraint or risk should shape the approach?' : '',
+        !constraint && !hasSecurityDiscovery ? 'What constraint or risk should shape the approach?' : '',
         !timing ? 'What timing or operating window matters?' : '',
-        !stakeholder ? 'Who should be involved in the next decision?' : '',
+        !stakeholder && !security.accountableTeam ? 'Who should be involved in the next decision?' : '',
         ...uncertainItems.map((item) => `Please clarify: ${item}`),
     ], 4);
     const priorities = unique([
+        hasSecurityDiscovery ? 'Preserve visitor-reported findings and audit timing without turning them into validated control mappings or an approved implementation schedule.' : '',
+        security.hasTwoWorkstreams ? 'Review encryption and privileged access as separate proposed workstreams; dependencies, effort, and any parallel execution require owner and specialist validation.' : '',
         hasCloudAndStaffingAi ? 'Keep the planned cloud migration and unapproved AI staffing exploration as separate workstreams.' : '',
         hasCloudAndStaffingAi ? 'Treat shift calendars and payroll logs as visitor-identified sources, not authorized or technically usable evidence.' : '',
         hasCloudAndStaffingAi && hasExcludedCjisData ? 'Record the requested CJIS exclusion without inferring the organization, policy applicability, or a validated security boundary.' : '',
@@ -1064,7 +1088,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         compliance.length ? `Account for ${compliance.join(', ')}.` : '',
         terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : '',
     ], 5);
-    const nextStep = qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
+    const nextStep = hasSecurityDiscovery
+        ? `Bring ${security.accountableTeam ? 'the reported accountable team' : 'the security owner'} and the infrastructure owner together with the appropriate Insight security specialists to validate the gap assessment, confirm individual leads, and compare remediation dependencies with the planned modernization before agreeing on sequencing or an implementation schedule.`
+        : qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
         ? 'Bring the infrastructure, business, and security owners together with the appropriate Insight specialists to validate AI data flows, funding, and dependencies before deciding whether the initiatives should proceed together or separately. Infrastructure timing remains subject to owner confirmation.'
         : hasCloudAndStaffingAi
         ? 'Have the authorized data owner and appropriate Insight data, AI, privacy, and security specialists validate the staffing decision, usable operational fields, CJIS exclusion, and feasibility boundary before defining any pilot, model, or implementation plan.'
@@ -1088,9 +1114,20 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? `Next question to resolve: ${openQuestions[0]}`
         : 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';
     const roadmapFacts = facts
-        .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Decisions', 'Requested outputs'].includes(fact.section))
+        .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Decisions', 'Requested outputs'].includes(fact.section) || fact.section === 'Organization' && fact.label === 'Accountable team')
         .map((fact) => ({ label: fact.label, value: fact.value }));
-    const phases = qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
+    const phases = hasSecurityDiscovery
+        ? [
+            { number: '01', title: 'Confirm audit evidence and ownership', detail: [security.evidenceSource, security.accountableTeam, security.ownershipStatus || 'Individual lead assignments require confirmation'].filter(Boolean).join('. ') },
+            security.encryptionFinding
+                ? { number: '02', title: 'Encryption workstream — scope review', detail: [security.encryptionScope || 'Confirm the systems affected by the reported encryption finding', security.requirement || 'Have specialists validate the applicable audit requirement', 'Scope review only; no rollout is approved'].join('. ') }
+                : { number: '02', title: 'Privileged-access workstream — scope review', detail: [security.accessScope || 'Confirm the accounts and systems affected by the reported privileged-access finding', 'Have specialists validate required evidence, scope, and dependencies before proposing remediation'].join('. ') },
+            security.hasTwoWorkstreams
+                ? { number: '03', title: 'Privileged-access workstream — scope review', detail: [security.accessScope || 'Confirm the accounts and systems affected by the reported privileged-access finding', 'Validate required evidence and dependencies; smaller scope does not establish lower effort or faster remediation'].join('. ') }
+                : { number: '03', title: 'Review modernization overlap', detail: 'Clarify the infrastructure changes already planned and have the responsible owners validate overlap with the reported security finding. Do not infer a separate second finding.' },
+            { number: '04', title: 'Validate dependencies before sequencing', detail: `Compare ${security.hasTwoWorkstreams ? 'both proposed workstreams' : 'the proposed workstream'} with the planned modernization. ${security.auditDeadline || 'Confirm the audit deadline separately from delivery feasibility'}. Owners and specialists must validate effort, operating windows, and whether parallel work is feasible before agreeing on a schedule.` },
+        ]
+        : qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
         ? [
             { number: '01', title: 'Confirm the reported workstreams', detail: qualification.infrastructureStatus },
             { number: '02', title: 'Validate the AI boundary', detail: qualification.dataReview + '. The responsible security and privacy owners must validate permissible use before any AI design decision.' },
@@ -1153,7 +1190,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             { number: '04', title: 'Agree on the next decision', detail: 'Confirm participants and scheduling for the proposed next step. Keep the workshop target separate from the project deadline; neither proves feasibility or approval.' },
         ]
         : buildPhases(laneId, { scale, terms, constraint, timing, workloads, dataSources, dualTrack, activeIncident: hasActiveIncident });
-    const roadmapOutcome = qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
+    const roadmapOutcome = hasSecurityDiscovery
+        ? 'Organize reported security findings into a specialist-reviewed decision on scope, ownership, modernization dependencies, and audit readiness—not an approved remediation plan.'
+        : qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
         ? 'Frame a specialist-reviewed decision on infrastructure and AI sequencing, with funding, data-flow validation, ownership, and timing kept distinct.'
         : hasCloudAndStaffingAi
         ? 'Give leadership two independently gated paths: a planned cloud migration and a fact-based AI staffing feasibility decision, without turning exploration into an approved pilot.'
@@ -1183,9 +1222,11 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         general: 'Turn the confirmed objective and constraints into a practical next decision.',
     } satisfies Record<LaneId, string>)[laneId];
 
-    const environmentItems = unique([...modernizationWorkstreams, ...terms, ...infrastructureComponents, ...dataSources, ...workloads], 10);
+    const environmentItems = unique([security.encryptionScope, security.accessScope, security.evidenceSource, ...modernizationWorkstreams, ...terms, ...infrastructureComponents, ...dataSources, ...workloads], 10);
     const discussionPoints = unique(facts.map((fact) => `${fact.label}: ${fact.value}`), 12);
     const qualityMissing = unique([
+        hasSecurityDiscovery ? 'specialist validation of findings, dependencies, and delivery feasibility' : '',
+        hasSecurityDiscovery && !/leads assigned/i.test(security.ownershipStatus) ? 'individual workstream leads' : '',
         qualification.fundingOpen ? 'AI funding source and approval' : '',
         qualification.dataReview && isQualificationOpenItem(qualification.dataReview) ? 'AI data-flow validation' : '',
         qualification.timingPending ? 'aligned decision timing' : '',
@@ -1210,7 +1251,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         label: qualityMissing.length === 0 ? 'Conversation grounded' : 'Needs clarification',
         missing: qualityMissing,
     };
-    const slideBoundary = hasCloudAndStaffingAi
+    const slideBoundary = hasSecurityDiscovery
+        ? 'Visitor-reported security discovery only. Control mapping, requirement applicability, affected scope, effort, dependencies, parallel execution, and any implementation schedule require owner and Insight specialist validation.'
+        : hasCloudAndStaffingAi
         ? 'Working discovery view only. Cloud migration is planned; AI staffing remains unapproved exploration. Data authorization, usable fields, CJIS exclusion, privacy and security boundaries, feasibility, and any model or pilot require owner and Insight specialist validation.'
         : hasModernizationPortfolio
         ? 'Working procurement-discovery view only. Jurisdiction, purchasing entity, funding requirements, category coverage, bidding obligations, eligibility, and the appropriate sourcing route require procurement-owner and Insight Public Sector specialist validation.'
@@ -1260,7 +1303,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : hasAiCustomerExperience
         ? 'A credible AI-CX story—without adding outage risk'
         : lane;
-    const evidenceAndConstraints = hasCloudAndStaffingAi
+    const evidenceAndConstraints = hasSecurityDiscovery
+        ? unique([security.findings, security.encryptionScope, security.accessScope, security.requirement, security.evidenceSource, ...security.governanceDrivers], 7)
+        : hasCloudAndStaffingAi
         ? unique([
             'Confirmed: A cloud migration is planned.',
             'Confirmed: The COO is sponsoring exploration of AI for staffing-schedule optimization; no pilot is approved.',
@@ -1305,7 +1350,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             constraint,
             ...compliance,
         ], 6);
-    const executiveBullets = hasCloudAndStaffingAi
+    const executiveBullets = hasSecurityDiscovery
+        ? unique([security.findings, security.encryptionScope, security.accessScope, timing], 4)
+        : hasCloudAndStaffingAi
         ? unique([
             'Planned track: Cloud migration',
             'Exploratory track: AI staffing optimization; no approved pilot',
@@ -1341,7 +1388,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : hasPublicSafetyAi
         ? unique([businessOutcome, hasFundedDeviceRefresh ? 'Device rollout: Next quarter' : timing, 'AI status: Interest only; no approved or scheduled pilot'], 3)
         : unique([businessOutcome, timing, constraint], 3);
-    const decisionBullets = hasCloudAndStaffingAi
+    const decisionBullets = hasSecurityDiscovery
+        ? unique([security.accountableTeam, security.ownershipStatus, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', 'Open: Specialist-reviewed dependencies and implementation feasibility'], 4)
+        : hasCloudAndStaffingAi
         ? unique([
             stakeholder ? `Sponsor and participants: ${stakeholder}` : '',
             requestedOutput ? `Requested artifact: ${requestedOutput}` : '',
@@ -1374,7 +1423,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             'Open: CJIS/data boundary and agency AI policy',
         ], 4)
         : unique([stakeholder, requestedOutput ? `Requested artifact: ${requestedOutput}` : '', timing], 4);
-    const evidenceSummary = hasCloudAndStaffingAi
+    const evidenceSummary = hasSecurityDiscovery
+        ? 'Keep the visitor-reported gap assessment, affected scope, and requirement mapping separate from specialist validation and implementation approval.'
+        : hasCloudAndStaffingAi
         ? 'Separate confirmed business intent, visitor-identified evidence, stated exclusions, and specialist-validation requirements without inferring a public-safety environment or solution design.'
         : hasModernizationPortfolio
         ? 'Keep reported workstreams, funding, contract-path status, stakeholders, and timing separate; leave jurisdiction and eligibility unconfirmed until the responsible specialists validate them.'
@@ -1403,7 +1454,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         corrections,
         uncertainItems,
         brief: { objective, environment: environmentItems, priorities, discussionPoints, nextStep, openQuestions },
-        roadmap: { title: currentTracks.length > 2 ? currentTracks.join(' + ') : dualTrack ? 'ERP cutover + municipal pre-scoping' : `${lane} path`, outcome: roadmapOutcome, facts: roadmapFacts, phases },
+        roadmap: { title: security.hasTwoWorkstreams ? 'Encryption + privileged access — proposed workstreams' : currentTracks.length > 2 ? currentTracks.join(' + ') : dualTrack ? 'ERP cutover + municipal pre-scoping' : `${lane} path`, outcome: roadmapOutcome, facts: roadmapFacts, phases },
         visualBrief: { title: `${lane} working brief`, slides: visualSlides },
         catalog: {
             title: `${lane} solution categories`,

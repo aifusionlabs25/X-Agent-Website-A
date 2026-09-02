@@ -1,6 +1,7 @@
 import type { AmyTranscriptTurn } from './session-spine.ts';
 import type { AmyWorkbenchFact, AmyWorkbenchModel } from './workbench-v2.ts';
 import { renderAmyVisitorRecap } from './amy-visitor-email.ts';
+import { renderAmyEmailRoadmap } from './amy-roadmap-email.ts';
 
 export type AmyEmailContent = {
     subject: string;
@@ -217,7 +218,9 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const objective = objectiveCandidate && !EMAIL_ACTION_PATTERN.test(objectiveCandidate)
         ? objectiveCandidate
         : `${clean(input.model.lane, 120) || 'Technology planning'} discussion with Amy.`;
-    const environment = factValue(facts, 'Technology context') || clean(input.model.brief.environment.join(' / '));
+    const representedSecurityContext = [factValue(facts, 'Affected scope'), factValue(facts, 'Evidence source')].filter(Boolean).join(' / ');
+    const environment = factValue(facts, 'Technology context') || clean(input.model.brief.environment
+        .filter(item => !representedSecurityContext.includes(item)).join(' / '));
     const workloads = factValue(facts, 'Critical workloads');
     const guardrail = factValue(facts, 'Primary guardrail');
     const timing = factValue(facts, 'Timing');
@@ -228,11 +231,15 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const requirementsStatus = factValue(facts, 'Requirements status');
     const discoveryAgenda = factValue(facts, 'Workshop agenda to clarify');
     const dataSources = factValue(facts, 'Available data') || factValue(facts, 'Evidence source');
-    const qualificationDetails = ['Infrastructure status', 'AI funding', 'AI data-flow review', 'Reported data category']
+    const qualificationDetails = ['Infrastructure status', 'AI funding', 'AI data-flow review', 'Reported data category',
+        'Security findings', 'Affected scope', 'Reported audit requirement', 'Accountable team', 'Ownership status', 'Evidence source', 'Governance drivers']
         .map(label => ({ label, value: factValue(facts, label) })).filter(item => item.value);
-    if (qualificationDetails.length && factValue(facts, 'Governance drivers')) {
-        qualificationDetails.push({ label: 'Governance drivers', value: factValue(facts, 'Governance drivers') });
-    }
+    const roadmap = /\broad\s?map\b/i.test(requestedOutput) && input.model.signalCount > 1 ? {
+        title: clean(input.model.roadmap.title, 180),
+        outcome: clean(input.model.roadmap.outcome, 600),
+        phases: input.model.roadmap.phases.map(phase => ({ title: clean(phase.title, 180), detail: clean(phase.detail, 700) })),
+    } : undefined;
+    const roadmapRecap = renderAmyEmailRoadmap(roadmap);
     const includeVisualBrief = /visual brief/i.test(requestedOutput)
         || input.turns.some((turn) => turn.role === 'user' && /\bvisual brief\b/i.test(turn.content));
     const nextStep = clean(input.model.brief.nextStep, 600)
@@ -252,14 +259,17 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         decisionOwner ? `Reported decision ownership: ${decisionOwner}` : '',
         requirementsStatus ? `Requirements status: ${requirementsStatus}` : '',
         discoveryAgenda ? `Workshop agenda to clarify: ${discoveryAgenda}` : '',
-        dataSources ? `Visitor-identified data: ${dataSources}` : '',
-    ], 15);
+        dataSources && dataSources !== factValue(facts, 'Evidence source') ? `Visitor-identified data: ${dataSources}` : '',
+    ], 22);
     const duration = formatElapsed(input.sessionStartedAt, input.sessionEndedAt);
     const elapsed = duration;
     const started = formatPhoenixDate(input.sessionStartedAt);
     const ended = formatPhoenixDate(input.sessionEndedAt);
     const generated = formatPhoenixDate(generatedAt);
     const transcript = transcriptSnapshot(input.turns);
+    const transcriptTitle = input.turns.length > transcript.length
+        ? `Sanitized conversation excerpt (last ${transcript.length} of ${input.turns.length} turns; entries may be shortened)`
+        : 'Sanitized conversation timeline';
     const customerValue = unique([
         objective,
         guardrail ? `Protect the stated operating guardrail: ${guardrail}` : '',
@@ -291,6 +301,7 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         nextStep: input.turns.length ? nextStep : 'Start a new conversation with Amy when you are ready to discuss your priorities.',
         openQuestions: input.turns.length ? openQuestions : [],
         rejoinUrl: AMY_REJOIN_URL,
+        roadmap,
     });
 
     const adminDetails = [
@@ -311,7 +322,8 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
 <div style="margin-top:26px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Conversation summary</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:10px;background:#f7f8fa;border-left:4px solid ${INSIGHT_MAGENTA};"><tr><td style="padding:18px 20px;color:#263548;font-size:14px;line-height:22px;">${escapeHtml(objective)}</td></tr></table>
 ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Key captured facts</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(highlights)}</table>` : ''}
-<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Sanitized conversation timeline</div>
+${roadmapRecap.html}
+<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">${escapeHtml(transcriptTitle)}</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(transcript.length ? transcript : ['No transcript turns were available at email time.'])}</table>`;
     const adminText = [
         'AMY SESSION OPERATIONS RECORD', '',
@@ -326,7 +338,8 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
         `Transcript turns captured: ${input.turns.length}`, '',
         `Conversation summary: ${objective}`, '',
         ...textSection('Key captured facts', highlights),
-        ...textSection('Sanitized conversation timeline', transcript),
+        ...(roadmapRecap.text ? [roadmapRecap.text] : []),
+        ...textSection(transcriptTitle, transcript),
         'Internal AI Fusion Labs operational record. Contact details came from the secure website check-in, not speech recognition.',
     ].join('\n');
 
@@ -334,7 +347,7 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
         organization ? `Organization context: ${organization}` : '',
         scale ? `Environment scale: ${scale}` : '',
         ...highlights,
-    ], 17);
+    ], 24);
     const intakeBody = `
 <p style="margin:0 0 22px;color:#435166;font-size:14px;line-height:22px;">I completed a conversation with ${escapeHtml(name)} and organized the verified context below for Sales and Operations. Use it to prepare a focused follow-up without introducing unsupported assumptions.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e1e6ec;border-collapse:collapse;">
@@ -349,6 +362,7 @@ ${customerValue.length ? `<div style="margin-top:25px;font-size:18px;line-height
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:10px;background:#fff7fa;border:1px solid #f2cedc;"><tr><td style="padding:17px 19px;color:#5f2340;font-size:14px;line-height:22px;font-weight:600;">${escapeHtml(nextStep)}</td></tr></table>
 ${pursuitPlan.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Recommended pursuit plan</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(pursuitPlan)}</table>` : ''}
 ${openQuestions.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Qualification gaps for the team</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(openQuestions)}</table>` : ''}
+${roadmapRecap.html}
 ${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Final Visual Brief</div><p style="margin:7px 0 0;color:#657184;font-size:13px;line-height:20px;">The same finalized, conversation-grounded view sent to the visitor is included here for sales preparation.</p>${visualBriefCards(input.model)}` : ''}
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:27px;background:#fff8e7;border:1px solid #efd79b;"><tr><td style="padding:16px 18px;color:#6b4b09;font-size:13px;line-height:21px;">Internal planning input only. Validate scope, ownership, contract eligibility, compliance, pricing, availability, and timing before making a customer commitment.</td></tr></table>`;
     const intakeText = [
@@ -366,6 +380,7 @@ ${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:2
         `Recommended next-meeting objective: ${nextStep}`, '',
         ...textSection('Recommended pursuit plan', pursuitPlan),
         ...textSection('Qualification gaps for the team', openQuestions),
+        ...(roadmapRecap.text ? [roadmapRecap.text] : []),
         ...(includeVisualBrief ? visualBriefText(input.model) : []),
         'Internal planning input only. Validate scope, ownership, contract eligibility, compliance, pricing, availability, and timing before making a customer commitment.',
     ].join('\n');

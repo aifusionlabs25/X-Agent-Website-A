@@ -545,7 +545,7 @@ test('visitor follow-up preserves the conditional Visual Brief attachment withou
     assert.doesNotMatch(message.attachments?.[0]?.content ?? '', /device refresh|funded device|call recordings|ticket logs|Insight Public Sector/i);
 });
 
-test('A+C visitor presentation leaves both internal messages and the existing attachment byte-identical', () => {
+test('A+C presentation preserves the existing attachment and reviewed internal governance snapshots', () => {
     const turns = [
         { role: 'user', content: 'We need a StateRAMP cloud modernization brief by year-end.' },
         { role: 'user', content: 'Show me the Visual Brief and email it after the session.' },
@@ -565,9 +565,12 @@ test('A+C visitor presentation leaves both internal messages and the existing at
         turns, model: pinnedModel,
     });
     const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-    // Captured from the verified production checkpoint 2e667a1 before this template change.
-    assert.equal(digest(bundle.admin), '8b071356837b271742f61dafc16e33539ad39a50dedd2e49862a08869b8e4623');
-    assert.equal(digest(bundle.intake), 'a81e5d33331366934c104bfab0e3bb6a67cc6086bf35cc0cc771a3350e2c4fa7');
+    // Internal snapshots now retain the reported StateRAMP governance driver.
+    // Attachment bytes still match production checkpoint 2e667a1 exactly.
+    assert.match(bundle.admin.text, /Governance drivers: StateRAMP/);
+    assert.match(bundle.intake.text, /Governance drivers: StateRAMP/);
+    assert.equal(digest(bundle.admin), 'dedc1d31bc0d32f6b1732a390be70614393c2580a8635db3fdd56feed5a55828');
+    assert.equal(digest(bundle.intake), '4696be9906dcb72389619b366fd45fd679543e370fca92c3a8812557cd64b16b');
     assert.equal(digest(bundle.visitor.attachments), '489f36180394514dab34a6b9fa3c7145a61205238db123b3f0204ca260e8e8bd');
 });
 

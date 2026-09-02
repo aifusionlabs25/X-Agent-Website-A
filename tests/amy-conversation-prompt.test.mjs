@@ -163,6 +163,41 @@ test('Amy enforces an SDR depth ceiling even when a visitor requests technical d
     assert.match(prompt, /roughly fifteen seconds/i);
 });
 
+test('session f00c3743: Amy keeps technical fluency without prescribing security remediation', () => {
+    assert.match(prompt, /Explain technical terms when asked.*approved knowledge.*without environment-specific prescriptions/i);
+    assert.match(prompt, /Visitor-reported control mappings and technical minimums are not Amy-validated/i);
+    assert.match(prompt, /Scope and criticality do not establish effort, parallel execution, or feasibility/i);
+    assert.match(prompt, /Identify one business-level validation decision and stop/i);
+    assert.doesNotMatch(prompt, /Give one business-level sequencing recommendation/i);
+
+    assert.match(reliabilityPrompt, /Explain general technical meaning when asked.*does not authorize a recommendation/is);
+    assert.match(reliabilityPrompt, /What requirement did your review document\?/i);
+    assert.match(reliabilityPrompt, /Never introduce a TLS version or other minimum for the visitor to confirm/i);
+    assert.match(reliabilityPrompt, /Attribute reported standards and control mappings to their review/i);
+    assert.match(reliabilityPrompt, /do not endorse them as "the right families" or independently sufficient/i);
+    assert.match(reliabilityPrompt, /smaller scope does not mean a faster fix/i);
+    assert.match(reliabilityPrompt, /reported encryption minimum does not establish rollout readiness or parallel execution/i);
+    assert.match(reliabilityPrompt, /leave feasibility, dependencies, sequencing, and effort to the security owner and Insight specialists/i);
+    assert.match(reliabilityPrompt, /What modernization work is already planned, and where might it overlap with those findings\?/i);
+});
+
+test('session f00c3743: display narration is a single application-grounded receipt sentence', () => {
+    for (const source of [prompt, reliabilityPrompt, workbenchPrompt]) {
+        assert.match(source, /speak (?:the receipt's )?spokenConfirmation verbatim once/i);
+    }
+    assert.match(prompt, /one short sentence, then stop/i);
+    assert.match(prompt, /Tool arguments are not evidence/i);
+    assert.match(workbenchPrompt, /never repeat it or append an explanation or question/i);
+    assert.match(workbenchPrompt, /Without spokenConfirmation, confirm only the view is open/i);
+    assert.match(workbenchPrompt, /Tool arguments and earlier dialogue are not proof of the rendered content/i);
+    assert.match(workbenchPrompt, /later asks what the roadmap shows, use only the returned visibleRoadmap fields/i);
+    assert.match(workbenchPrompt, /Do not narrate a requested two-track plan over a generic roadmap/i);
+    assert.match(workbenchPrompt, /not.*infer parallel execution, effort, owners, or marked assumptions not present in that receipt/i);
+    assert.match(workbenchPrompt, /addition or replacement only when its exact detail appears in both appliedChanges and visibleFacts/i);
+    assert.match(workbenchPrompt, /removal only when appliedChanges marks it removed and visibleFacts omits it/i);
+    assert.doesNotMatch(workbenchPrompt, /fact was actually stated in the current conversation/i);
+});
+
 test('Amy treats healthcare operations and EHR data as specialist-governed discovery', () => {
     assert.match(prompt, /patient intake, clinical workflow, EHR or EMR/i);
     assert.match(prompt, /patient-level health information or PHI/i);
