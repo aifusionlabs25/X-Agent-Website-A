@@ -483,8 +483,16 @@ export async function recordAmyAnamCompletion(input: {
     browserSessionId: string;
     externalSessionId: string;
     closeReason: string;
+    displayedArtifact?: AmyAnamSessionRecord['displayedArtifact'];
     now?: number;
 }, options: StoreOptions = {}): Promise<AmyAnamCompletionRecordStatus> {
+    if (input.displayedArtifact && (
+        resolveAnamSessionAgentSlug(input.launch.resolvedPersonaId, input.launch.agentSlug) !== 'amy'
+        || !['notes', 'brief', 'roadmap', 'visual', 'catalog'].includes(input.displayedArtifact.view)
+        || !Number.isSafeInteger(input.displayedArtifact.revision)
+        || input.displayedArtifact.revision < 1 || input.displayedArtifact.revision > 10_000
+        || Object.keys(input.displayedArtifact).some(key => key !== 'view' && key !== 'revision')
+    )) return 'owner_mismatch';
     const now = input.now ?? Date.now();
     const receivedAt = new Date(now).toISOString();
     const finalization: AmyAnamFinalizationRecord = {
@@ -494,6 +502,7 @@ export async function recordAmyAnamCompletion(input: {
         externalSessionId: input.externalSessionId,
         state: 'verification_pending',
         closeReason: input.closeReason,
+        ...(input.displayedArtifact ? { displayedArtifact: input.displayedArtifact } : {}),
         receivedAt,
         updatedAt: receivedAt,
         attempts: 0,
@@ -528,6 +537,7 @@ export async function recordAmyAnamCompletion(input: {
         "  session.state = 'close_received'",
         '  session.closeReceivedAt = session.closeReceivedAt or ARGV[4]',
         '  session.closeReason = session.closeReason or ARGV[5]',
+        "  if ARGV[9] ~= '' then session.displayedArtifact = cjson.decode(ARGV[9]) end",
         "  redis.call('SET', KEYS[2], cjson.encode(session), 'EX', ARGV[8])",
         'end',
         "redis.call('SET', KEYS[3], ARGV[6], 'EX', ARGV[8])",
@@ -554,6 +564,7 @@ export async function recordAmyAnamCompletion(input: {
         JSON.stringify(finalization),
         now,
         AMY_ANAM_RECORD_TTL_SECONDS,
+        input.displayedArtifact ? JSON.stringify(input.displayedArtifact) : '',
     ], options);
     return String(result) as AmyAnamCompletionRecordStatus;
 }

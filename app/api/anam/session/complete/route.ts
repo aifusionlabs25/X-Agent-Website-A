@@ -79,7 +79,7 @@ export async function POST(request: Request) {
         }
 
         const body = await readBoundedJsonObject(request, 2 * 1024);
-        const allowedFields = new Set(['launchId', 'sessionId', 'closeReason']);
+        const allowedFields = new Set(['launchId', 'sessionId', 'closeReason', 'artifactView', 'artifactRevision']);
         if (Object.keys(body).some(key => !allowedFields.has(key))) {
             return noStoreJson({ error: 'Completion request contains unsupported fields' }, { status: 400 });
         }
@@ -87,6 +87,13 @@ export async function POST(request: Request) {
         const launchId = boundedString(body.launchId, 64);
         const sessionId = boundedString(body.sessionId, 64);
         const requestedCloseReason = boundedString(body.closeReason, 100);
+        const artifactView = boundedString(body.artifactView, 20);
+        const artifactRevision = Number(body.artifactRevision);
+        const allowedArtifactViews = new Set(['notes', 'brief', 'roadmap', 'visual', 'catalog']);
+        const hasArtifactMetadata = body.artifactView !== undefined || body.artifactRevision !== undefined;
+        if (hasArtifactMetadata && (!allowedArtifactViews.has(artifactView) || typeof body.artifactRevision !== 'number' || !Number.isSafeInteger(artifactRevision) || artifactRevision < 1 || artifactRevision > 10_000)) {
+            return noStoreJson({ error: 'Displayed artifact metadata was invalid' }, { status: 400 });
+        }
         const closeReason = ALLOWED_CLOSE_REASONS.has(requestedCloseReason)
             ? requestedCloseReason
             : 'unknown';
@@ -114,6 +121,9 @@ export async function POST(request: Request) {
             launch.resolvedPersonaId,
             launch.agentSlug,
         );
+        if (hasArtifactMetadata && launchAgentSlug !== 'amy') {
+            return noStoreJson({ error: 'Displayed artifact metadata did not match this agent' }, { status: 400 });
+        }
         const daniSessionSecrets = readDaniAnamSessionSecrets();
         if (launchAgentSlug === 'dani' && !daniSessionSecrets.configured) {
             return noStoreJson({ error: 'Dani session access is temporarily unavailable' }, { status: 503 });
@@ -145,6 +155,12 @@ export async function POST(request: Request) {
             browserSessionId: browserSession.id,
             externalSessionId: sessionId,
             closeReason,
+            ...(hasArtifactMetadata ? {
+                displayedArtifact: {
+                    view: artifactView as 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog',
+                    revision: artifactRevision,
+                },
+            } : {}),
         });
         if (completionStatus === 'terminal') {
             const existingReceipt = await readAmyAnamReceipt(sessionId);

@@ -179,6 +179,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let amyIntelligenceOverviewReceiptId: string | null = null;
         let lastAmyCapabilityIntentTurn = '';
         let amyTerminalCloseReceiptId: string | null = null;
+        let displayedAmyArtifact: { view: 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog'; revision: number } | null = null;
         const videoElement = videoRef.current;
 
         transcriptRef.current = [];
@@ -240,6 +241,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     launchId: launchId as string,
                     sessionId: providerSessionId as string,
                     closeReason,
+                    ...(displayedAmyArtifact ? {
+                        artifactView: displayedAmyArtifact.view,
+                        artifactRevision: displayedAmyArtifact.revision,
+                    } : {}),
                 });
                 console.info('[Amy Anam Spine] Session completion accepted', {
                     status: receipt.status,
@@ -260,6 +265,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 sessionId: providerSessionId,
                 closeReason: 'pagehide',
                 maxAttempts: 1,
+                ...(displayedAmyArtifact ? {
+                    artifactView: displayedAmyArtifact.view,
+                    artifactRevision: displayedAmyArtifact.revision,
+                } : {}),
             }).catch(() => undefined);
         };
         window.addEventListener('pagehide', handlePageHide);
@@ -546,6 +555,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
                                     });
                                 }
+                                if (isMounted && view !== 'capabilities') displayedAmyArtifact = { view, revision: nextRevision };
                                 return JSON.stringify({
                                 status: 'view_rebuilt',
                                 view,

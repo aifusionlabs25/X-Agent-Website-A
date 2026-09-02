@@ -30,6 +30,7 @@ type TemplateInput = {
     generatedAt?: string;
     turns: AmyTranscriptTurn[];
     model: AmyWorkbenchModel;
+    displayedArtifactView?: 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 };
 
 const INSIGHT_NAVY = '#071425';
@@ -232,7 +233,8 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const discoveryAgenda = factValue(facts, 'Workshop agenda to clarify');
     const dataSources = factValue(facts, 'Available data') || factValue(facts, 'Evidence source');
     const qualificationDetails = ['Infrastructure status', 'AI funding', 'AI data-flow review', 'Reported data category',
-        'Security findings', 'Affected scope', 'Reported audit requirement', 'Accountable team', 'Ownership status', 'Evidence source', 'Governance drivers']
+        'Security findings', 'Affected scope', 'Reported audit requirement', 'Accountable team', 'Ownership status', 'Evidence source', 'Governance drivers',
+        'Business drivers', 'Security concern', 'Leadership preference', 'Delivery concern', 'Decision requirement', 'Decision status']
         .map(label => ({ label, value: factValue(facts, label) })).filter(item => item.value);
     const roadmap = /\broad\s?map\b/i.test(requestedOutput) && input.model.signalCount > 1 ? {
         title: clean(input.model.roadmap.title, 180),
@@ -240,7 +242,8 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         phases: input.model.roadmap.phases.map(phase => ({ title: clean(phase.title, 180), detail: clean(phase.detail, 700) })),
     } : undefined;
     const roadmapRecap = renderAmyEmailRoadmap(roadmap);
-    const includeVisualBrief = /visual brief/i.test(requestedOutput)
+    const includeVisualBrief = input.displayedArtifactView === 'visual'
+        || /visual brief/i.test(requestedOutput)
         || input.turns.some((turn) => turn.role === 'user' && /\bvisual brief\b/i.test(turn.content));
     const nextStep = clean(input.model.brief.nextStep, 600)
         || 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';

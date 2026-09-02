@@ -8,6 +8,8 @@ type BindInput = {
 
 type CompleteInput = BindInput & {
     closeReason: string;
+    artifactView?: 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
+    artifactRevision?: number;
     maxAttempts?: number;
     sleep?: (milliseconds: number) => Promise<void>;
 };
@@ -150,6 +152,8 @@ export async function completeAmyAnamClientSession({
     launchId,
     sessionId,
     closeReason,
+    artifactView,
+    artifactRevision,
     fetchImpl = fetch,
     maxAttempts = 2,
     sleep = defaultSleep,
@@ -160,7 +164,12 @@ export async function completeAmyAnamClientSession({
         const response = await fetchImpl('/api/anam/session/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ launchId, sessionId, closeReason }),
+            body: JSON.stringify({
+                launchId,
+                sessionId,
+                closeReason,
+                ...(artifactView && artifactRevision ? { artifactView, artifactRevision } : {}),
+            }),
             cache: 'no-store',
             credentials: 'same-origin',
             keepalive: true,

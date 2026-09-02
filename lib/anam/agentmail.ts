@@ -411,6 +411,7 @@ export async function sendAmyAnamConversationFollowUp(input: {
     sessionStartedAt: string;
     sessionEndedAt: string;
     turns: AmyTranscriptTurn[] | unknown;
+    displayedArtifactView?: 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 }, options: AgentMailStoreOptions = {}): Promise<AmyAnamFollowUpResult> {
     const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) throw new Error('Amy AgentMail is unavailable');
@@ -496,7 +497,8 @@ export async function sendAmyAnamConversationFollowUp(input: {
             sessionStartedAt: input.sessionStartedAt,
             sessionEndedAt: input.sessionEndedAt,
             turns: safeTurns,
-            model: buildAmyWorkbenchModel(safeTurns),
+            model: buildAmyWorkbenchModel(safeTurns, '', '', input.displayedArtifactView),
+            displayedArtifactView: input.displayedArtifactView,
         });
         const visitorProvider = config.visitorProvider === 'resend' ? 'resend' : 'agentmail';
         const [visitorResult, adminResult, intakeResult] = await Promise.allSettled([
@@ -603,6 +605,7 @@ export async function dispatchAmyAnamPostSessionFollowUp(input: {
         sessionStartedAt: input.session.boundAt,
         sessionEndedAt: input.session.closeReceivedAt || input.receipt.completedAt,
         turns: input.turns,
+        displayedArtifactView: input.session.displayedArtifact?.view,
     }, options);
     if (result.sent) {
         await redisCommand(['DEL', intentKey(input.session.externalSessionId)], options)

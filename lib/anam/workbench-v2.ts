@@ -1,5 +1,6 @@
 import { isQualificationOpenItem, readAmyQualificationFacts } from './amy-qualification-facts.ts';
 import { readAmySecurityFacts } from './amy-security-facts.ts';
+import { applyAmyPlanningComparison } from './amy-planning-comparison.ts';
 
 export type AmyWorkbenchView = 'capabilities' | 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 
@@ -1445,7 +1446,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         { id: 'decisions_and_next_steps', eyebrow: '06 / Next decision', title: 'Leave with one credible next move', summary: nextStep, bullets: unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5).length ? unique([decision, ...openQuestions.map((item) => `Clarify: ${item}`)], 5) : ['Confirm owners and the next decision gate.'], boundary: slideBoundary },
     ];
 
-    return {
+    return applyAmyPlanningComparison({
         status: userTurns.length ? 'live' : 'listening',
         lane,
         signalCount: facts.length,
@@ -1463,5 +1464,5 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             categories: CATALOG[laneId],
             boundary: 'General solution categories only. Live Insight inventory, pricing, availability, lead time, and contract eligibility are not verified here.',
         },
-    };
+    }, userTurns);
 }

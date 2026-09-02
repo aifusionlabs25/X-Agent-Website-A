@@ -65,6 +65,10 @@ export type AmyAnamSessionRecord = {
     boundAt: string;
     closeReceivedAt?: string;
     closeReason?: string;
+    displayedArtifact?: {
+        view: 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
+        revision: number;
+    };
     completedAt?: string;
 };
 
@@ -75,6 +79,7 @@ export type AmyAnamFinalizationRecord = {
     externalSessionId: string;
     state: 'verification_pending' | 'queued' | 'awaiting_transcript' | 'completed' | 'transcript_unavailable' | 'failed';
     closeReason: string;
+    displayedArtifact?: AmyAnamSessionRecord['displayedArtifact'];
     receivedAt: string;
     updatedAt: string;
     attempts: number;

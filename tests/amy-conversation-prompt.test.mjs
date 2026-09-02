@@ -74,7 +74,8 @@ const packageManifest = JSON.parse(await readFile(
 test('Amy uses human conversational rhythm without exposing qualification mechanics', () => {
     assert.match(prompt, /connect, listen, acknowledge/i);
     assert.match(prompt, /small useful observation/i);
-    assert.match(prompt, /Answer a direct question meaningfully.*before asking/i);
+    assert.match(prompt, /Answer the actual decision question; never ask the visitor to repeat it/i);
+    assert.match(prompt, /integrated-versus-phased questions, offer conditional business trade-offs, not architecture or a selected path/i);
     assert.match(prompt, /Do not end every response with a question/i);
     assert.match(prompt, /end two consecutive substantive responses with questions/i);
     assert.match(prompt, /situational rapport/i);
@@ -395,10 +396,10 @@ test('Amy conversation block installation is front-loaded, replaceable, and idem
     assert.match(first, /AMY_CONVERSATION_NATURALNESS_END -->\n\nBASE\nPROMPT\n$/);
     assert.equal(installAmyConversationBlock(first, prompt), first);
 
-    const revised = prompt.replace('brief synthesis beats a full recap.', 'synthesize before continuing.');
+    const revised = prompt.replace('never ask the visitor to repeat it.', 'synthesize before continuing.');
     const replaced = installAmyConversationBlock(first, revised);
     assert.match(replaced, /synthesize before continuing/);
-    assert.doesNotMatch(replaced, /brief synthesis beats a full recap/);
+    assert.doesNotMatch(replaced, /never ask the visitor to repeat it/);
     assert.equal(replaced.split(AMY_CONVERSATION_START_MARKER).length - 1, 1);
     assert.equal(replaced.split(AMY_CONVERSATION_END_MARKER).length - 1, 1);
     assert.match(replaced, /BASE\nPROMPT\n$/);

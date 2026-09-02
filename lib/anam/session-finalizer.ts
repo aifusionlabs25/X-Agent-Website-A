@@ -391,6 +391,8 @@ export async function finalizeAmyAnamSession(
             ...session,
             agentSlug: resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug),
             variant: resolveAnamSessionVariant(session.resolvedPersonaId, session.variant),
+            ...(resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug) === 'amy' && finalization.displayedArtifact
+                ? { displayedArtifact: finalization.displayedArtifact } : {}),
         };
 
         if (newlyBound) {

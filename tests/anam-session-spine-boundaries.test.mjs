@@ -75,7 +75,7 @@ test('shared session routes rate-limit an opaque request fingerprint before untr
 test('the completion route rejects client transcript fields and returns explicit canary no-outbound receipts', () => {
     assert.match(
         completionRoute,
-        /new Set\(\[\s*'launchId',\s*'sessionId',\s*'closeReason'\s*\]\)/s,
+        /new Set\(\[\s*'launchId',\s*'sessionId',\s*'closeReason',\s*'artifactView',\s*'artifactRevision'\s*\]\)/s,
     );
     assert.match(completionRoute, /Completion request contains unsupported fields/);
     assert.match(completionRoute, /finalizeAmyAnamSession\(sessionId\)/);
@@ -90,7 +90,8 @@ test('the completion route rejects client transcript fields and returns explicit
 
 test('the client completion transport is keepalive-safe and never includes a transcript', () => {
     assert.match(clientSpine, /fetchImpl\('\/api\/anam\/session\/complete'/);
-    assert.match(clientSpine, /body:\s*JSON\.stringify\(\{\s*launchId,\s*sessionId,\s*closeReason\s*\}\)/s);
+    assert.match(clientSpine, /body:\s*JSON\.stringify\(\{\s*launchId,\s*sessionId,\s*closeReason,\s*\.\.\.\(artifactView && artifactRevision \? \{ artifactView, artifactRevision \} : \{\}\),\s*\}\)/s);
+    assert.match(completionRoute, /hasArtifactMetadata && launchAgentSlug !== 'amy'/);
     assert.match(clientSpine, /keepalive:\s*true/);
     assert.doesNotMatch(clientSpine, /JSON\.stringify\([^)]*transcript/s);
 });
