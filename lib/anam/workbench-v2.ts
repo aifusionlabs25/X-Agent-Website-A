@@ -1,3 +1,5 @@
+import { isQualificationOpenItem, readAmyQualificationFacts } from './amy-qualification-facts.ts';
+
 export type AmyWorkbenchView = 'capabilities' | 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 
 export interface AmyWorkbenchTurn {
@@ -329,6 +331,8 @@ const TERM_RULES: Array<[RegExp, string]> = [
     [/\bSCCM\b/i, 'SCCM'],
     [/\bMDM\b/i, 'MDM'],
     [/\bAzure\b/i, 'Azure'],
+    [/\bservers?\b/i, 'Servers'],
+    [/\bstorage\b/i, 'Storage'],
     [/\bhybrid (?:setup|environment|estate)\b/i, 'Hybrid environment'],
     [/\bon[ -]prem(?:ises|ise)?\b/i, 'On-premises'],
     [/\bSharePoint\b/i, 'SharePoint'],
@@ -389,7 +393,7 @@ function detectLane(text: string): LaneId {
     }
     const scores: Array<[LaneId, RegExp[]]> = [
         ['customer-experience', [/customer experience|contact cent(?:er|re)|call cent(?:er|re)|call wait|wait times?|customer satisfaction|\bCSAT\b/i, /call recordings?|ticket logs?|speech[- ]to[- ]text|sentiment|predictive routing|service interactions?/i]],
-        ['education', [/student|university|college|school district|higher education|K-?12/i, /\bSIS\b|student information system|student retention|attendance|grades?|drop(?:ping)? out/i]],
+        ['education', [/\b(?:students?|university|college|school district|higher education|K-?12)\b/i, /\b(?:SIS|student information system|student retention|attendance|grades?|dropping out|drop out)\b/i]],
         ['public-sector', [/county|municipal|city government|state agency|federal agency|public sector|higher education|K-?12|state funding|federal funding/i, /procurement|competitive bidding|contract vehicle|state contract|CJIS|FedRAMP|StateRAMP/i]],
         ['mobility', [/warehouse|distribution center|picking|outbound shipping/i, /WMS|rugged|scanner|forklift|Zebra|Honeywell|MDM/i]],
         ['endpoint', [/endpoint|Windows 11|Intune|SCCM|Copilot|device refresh|laptops?/i, /branch|workplace/i]],
@@ -397,7 +401,7 @@ function detectLane(text: string): LaneId {
         ['cloud', [/Azure|AWS|VMware|hybrid[ -]cloud|data cent(?:er|re)|ERP|SAP|cloud migration/i, /customer portal|maintenance window|on-prem/i]],
     ];
     return scores
-        .map(([lane, patterns]) => ({ lane, score: patterns.reduce((sum, pattern) => sum + (pattern.test(text) ? 1 : 0), 0) }))
+        .map(([lane, patterns]) => ({ lane, score: lane === 'education' && !patterns[0].test(text) ? 0 : patterns.reduce((sum, pattern) => sum + (pattern.test(text) ? 1 : 0), 0) }))
         .sort((a, b) => b.score - a.score)
         .find((item) => item.score > 0)?.lane ?? 'general';
 }
@@ -439,9 +443,9 @@ function buildPhases(lane: LaneId, context: { scale: string; terms: string[]; co
         { number: '04', title: 'Decision path', detail: 'Clarify owners, approvals, purchasing route, specialist support, and the next bounded decision.' },
     ];
     if (lane === 'education') return [
-        { number: '01', title: 'Board outcome and boundary', detail: 'Clarify the board decision, success measure, three-day deliverable, and the difference between a feasibility demonstration and a validated student-risk model.' },
-        { number: '02', title: 'Authorized data and governance', detail: 'Confirm the data owner, permitted SIS fields, privacy and institutional policy, de-identification or synthetic-data approach, fairness, explainability, and required human review.' },
-        { number: '03', title: 'Bounded human-reviewed demonstration', detail: 'Use the smallest approved dataset and keep every student-level interpretation with authorized humans; do not treat a demonstration as production validation.' },
+        { number: '01', title: 'Outcome and boundary', detail: 'Clarify the stated educational outcome, decision owner, success measure, and requested timing without assuming a particular use case.' },
+        { number: '02', title: 'Authorized data and governance', detail: 'Have authorized owners validate available data, permitted use, privacy, institutional policy, and human-review requirements.' },
+        { number: '03', title: 'Bounded feasibility decision', detail: 'Determine whether a limited, human-reviewed feasibility exercise is appropriate; no dataset, student-level use, or demonstration is approved by this working view.' },
         { number: '04', title: 'Validation decision gate', detail: 'Have the appropriate education, data, privacy, AI, and Insight specialists validate feasibility, safeguards, scope, and any later pilot path.' },
     ];
     if (lane === 'healthcare-operations') return [
@@ -613,6 +617,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         .map((turn) => canonical(turn.content))
         .filter((value) => value && value !== CONTACT_OMITTED);
     const statements = statementsFrom(userTurns);
+    const qualification = readAmyQualificationFacts(userTurns);
     const corrections = readCorrections(userTurns);
     const rejected = new Set(corrections.map((item) => canonical(item.from).toLowerCase()));
     const certainStatements = statements.filter((value) => !isUncertain(value));
@@ -811,8 +816,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Detailed planning may begin in a few weeks, dependent on compliance clarification from the prime contractor.'
         : hasInfrastructureRefreshDecision && hasBudgetReviewNextQuarter
         ? 'Budget review next quarter'
-        : workshopCancelled ? projectTiming : timingFrom(substantiveStatements));
-    const constraintStatements = substantiveStatements.filter((statement) => !isDiscoveryAgenda(statement)
+        : workshopCancelled ? projectTiming : timingFrom(substantiveStatements)) || qualification.timingPending;
+    const constraintStatements = substantiveStatements.filter((statement) => !isDiscoveryAgenda(statement) && !isQualificationOpenItem(statement)
+        && !/^it(?:'s| is) scoped as\b/i.test(statement)
         && !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
     const constraint = hasCloudAndStaffingAi
         ? `${hasNoApprovedAiPilot ? 'No AI pilot is approved; ' : ''}${hasExcludedCjisData ? 'the visitor placed CJIS data outside the requested working scope, but the authorized data owner and security specialists must validate that boundary; ' : ''}do not infer a public-safety environment, approved access, model design, or pilot plan from the discovery conversation.`
@@ -853,6 +859,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : lastSentence(substantiveStatements, /county|city|agency|company|our firm|the firm|hospital|health system|manufactur|distribution|university|school district/i);
     const workloads = unique([
         /\bcase[ -]management\b/i.test(allText) ? 'Case management' : '',
+        /\bcase processing\b/i.test(allText) ? 'Case processing' : '',
+        /\b(?:speeding up|faster|accelerat(?:e|ing)) approvals\b/i.test(allText) ? 'Approval workflows' : '',
         hasStaffingOptimization ? 'Staffing schedule operations' : '',
         hasHealthcareOperations ? 'Patient intake operations' : '',
         hasPublicSafetyAdminUseCases ? 'Administrative paperwork / Shift scheduling / Staffing reports' : '',
@@ -879,6 +887,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /\bNIST\b/i.test(allText) ? 'NIST' : '',
         /\bHIPAA\b/i.test(allText) ? 'HIPAA' : '',
         /\bCJIS\b/i.test(allText) && (!hasExcludedCjisData || hasPublicSafetyAi) ? 'CJIS' : '',
+        qualification.criminalJusticeData && /\bCJS\b/i.test(allText) ? 'Criminal justice information (visitor said CJS; confirm CJIS applicability with the agency security owner)' : '',
+        qualification.statePrivacy ? 'State-level data privacy rules (visitor-reported; requirements require validation)' : '',
         /FedRAMP/i.test(allText) ? 'FedRAMP' : '',
         /StateRAMP/i.test(allText) ? 'StateRAMP' : '',
     ], 5);
@@ -890,7 +900,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Explore approved historical contact-center data to understand wait-time drivers and customer-experience improvement opportunities.'
         : hasAiInterestOnly
         ? 'AI is an area of leadership interest; no pilot is approved, funded, or scheduled.'
-        : lastSentence(substantiveStatements, /\bAI\b|artificial intelligence|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out|runbooks?|technical document|telemetry|internal (?:IT )?assistant/i);
+        : lastSentence(substantiveStatements.filter(value => !isQualificationOpenItem(value)), /\bAI\b|artificial intelligence|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out|runbooks?|technical document|telemetry|internal (?:IT )?assistant/i);
     const healthcareOperationalChange = hasHealthcareOperations && hasNorthside && hasPreScreening
         ? `Northside clinic added a pre-screening step${/last month/i.test(sessionText) ? ' last month' : ''}.`
         : hasHealthcareOperations && hasWorkflowChange
@@ -935,6 +945,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         : '';
 
     const facts = [
+        makeFact('Priorities', 'Infrastructure status', qualification.infrastructureStatus),
+        makeFact('Procurement', 'AI funding', qualification.funding),
+        makeFact('Constraints', 'AI data-flow review', qualification.dataReview),
+        makeFact('Environment', 'Reported data category', qualification.criminalJusticeData ? 'Criminal justice information reported; access, permissible use, and AI scope remain unvalidated.' : ''),
         makeFact('Organization', 'Context', organization),
         makeFact('Scale', 'Environment scale', scale),
         makeFact('Environment', 'Technology context', unique([hasAzureAd ? 'Azure AD access management' : '', ...terms.filter(term => !(hasAzureAd && term === 'Azure')), ...infrastructureComponents], 10).join(' / ')),
@@ -974,6 +988,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     ].filter((fact): fact is AmyWorkbenchFact => Boolean(fact));
 
     const openQuestions = unique([
+        qualification.fundingOpen ? 'Who owns confirming the AI funding source and approval path?' : '',
+        qualification.dataReview && isQualificationOpenItem(qualification.dataReview) ? 'Who will validate the proposed AI data flows and applicable security and privacy requirements before an AI decision?' : '',
         hasCloudAndStaffingAi ? 'Who owns authorization and field validation for the shift-calendar and payroll evidence?' : '',
         hasCloudAndStaffingAi ? 'What staffing decision and measurable outcome would justify a bounded feasibility review?' : '',
         hasCloudAndStaffingAi ? 'What privacy, security, retention, and human-review boundaries apply to the proposed operational evidence?' : '',
@@ -1048,7 +1064,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         compliance.length ? `Account for ${compliance.join(', ')}.` : '',
         terms.length ? `Work with the existing ${terms.slice(0, 4).join(', ')} environment.` : '',
     ], 5);
-    const nextStep = hasCloudAndStaffingAi
+    const nextStep = qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
+        ? 'Bring the infrastructure, business, and security owners together with the appropriate Insight specialists to validate AI data flows, funding, and dependencies before deciding whether the initiatives should proceed together or separately. Infrastructure timing remains subject to owner confirmation.'
+        : hasCloudAndStaffingAi
         ? 'Have the authorized data owner and appropriate Insight data, AI, privacy, and security specialists validate the staffing decision, usable operational fields, CJIS exclusion, and feasibility boundary before defining any pilot, model, or implementation plan.'
         : hasModernizationPortfolio
         ? 'Complete the jurisdiction, purchasing-entity, funding, contract-path, timing, and owner facts, then have the procurement owner and an Insight Public Sector specialist validate the appropriate sourcing route without treating Amy\'s working brief as a contract confirmation.'
@@ -1072,7 +1090,14 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const roadmapFacts = facts
         .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Decisions', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
-    const phases = hasCloudAndStaffingAi
+    const phases = qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
+        ? [
+            { number: '01', title: 'Confirm the reported workstreams', detail: qualification.infrastructureStatus },
+            { number: '02', title: 'Validate the AI boundary', detail: qualification.dataReview + '. The responsible security and privacy owners must validate permissible use before any AI design decision.' },
+            { number: '03', title: 'Resolve funding and ownership', detail: qualification.funding || 'Identify the AI funding source, approval owner, and required decision evidence.' },
+            { number: '04', title: 'Decide sequencing and timing', detail: 'Have the responsible owners validate dependencies and timing before deciding on shared or separate implementation. No schedule or go-ahead is implied.' },
+        ]
+        : hasCloudAndStaffingAi
         ? [
             { number: '01', title: 'Protect the planned track', detail: 'Keep cloud-migration scope, ownership, dependencies, and timing separate from AI exploration.' },
             { number: '02', title: 'Frame the staffing decision', detail: 'Confirm the COO-sponsored outcome, baseline, users, decision owner, and evidence needed without prescribing a model or pilot.' },
@@ -1128,7 +1153,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
             { number: '04', title: 'Agree on the next decision', detail: 'Confirm participants and scheduling for the proposed next step. Keep the workshop target separate from the project deadline; neither proves feasibility or approval.' },
         ]
         : buildPhases(laneId, { scale, terms, constraint, timing, workloads, dataSources, dualTrack, activeIncident: hasActiveIncident });
-    const roadmapOutcome = hasCloudAndStaffingAi
+    const roadmapOutcome = qualification.infrastructureStatus && qualification.dataReview && hasAiDiscovery
+        ? 'Frame a specialist-reviewed decision on infrastructure and AI sequencing, with funding, data-flow validation, ownership, and timing kept distinct.'
+        : hasCloudAndStaffingAi
         ? 'Give leadership two independently gated paths: a planned cloud migration and a fact-based AI staffing feasibility decision, without turning exploration into an approved pilot.'
         : currentTracks.length > 2
         ? `Develop ${currentTracks.length} coordinated but independently gated tracks: ${currentTracks.join(', ')}.`
@@ -1149,7 +1176,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         cloud: 'Shape a phased modernization path that protects critical workloads and validates continuity requirements.',
         security: 'Turn the stated risks and control gaps into a validated and sequenced remediation plan.',
         mobility: 'Modernize warehouse mobility while protecting picking, shipping, and peak-season throughput.',
-        education: 'Create a board-ready, human-reviewed education AI feasibility path without treating a demonstration as a validated student-risk model.',
+        education: 'Frame the stated educational outcome and a human-reviewed feasibility decision without assuming data access, timing, or a particular AI use case.',
         'healthcare-operations': 'Frame a healthcare-operations decision using confirmed facts, explicit unknowns, and specialist-validated evidence.',
         'customer-experience': 'Give leadership a credible AI-CX decision brief now, while keeping incident response and any later production pilot independently gated.',
         'public-sector': 'Connect the mission outcome, technical sequence, governance, and an appropriate purchasing path.',
@@ -1159,6 +1186,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const environmentItems = unique([...modernizationWorkstreams, ...terms, ...infrastructureComponents, ...dataSources, ...workloads], 10);
     const discussionPoints = unique(facts.map((fact) => `${fact.label}: ${fact.value}`), 12);
     const qualityMissing = unique([
+        qualification.fundingOpen ? 'AI funding source and approval' : '',
+        qualification.dataReview && isQualificationOpenItem(qualification.dataReview) ? 'AI data-flow validation' : '',
+        qualification.timingPending ? 'aligned decision timing' : '',
         objective.includes('still being clarified') || objective.startsWith('Waiting') ? 'business objective' : '',
         !timing ? 'decision timing' : '',
         !environmentItems.length ? 'environment or evidence source' : '',

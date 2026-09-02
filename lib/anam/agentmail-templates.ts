@@ -228,6 +228,11 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const requirementsStatus = factValue(facts, 'Requirements status');
     const discoveryAgenda = factValue(facts, 'Workshop agenda to clarify');
     const dataSources = factValue(facts, 'Available data') || factValue(facts, 'Evidence source');
+    const qualificationDetails = ['Infrastructure status', 'AI funding', 'AI data-flow review', 'Reported data category']
+        .map(label => ({ label, value: factValue(facts, label) })).filter(item => item.value);
+    if (qualificationDetails.length && factValue(facts, 'Governance drivers')) {
+        qualificationDetails.push({ label: 'Governance drivers', value: factValue(facts, 'Governance drivers') });
+    }
     const includeVisualBrief = /visual brief/i.test(requestedOutput)
         || input.turns.some((turn) => turn.role === 'user' && /\bvisual brief\b/i.test(turn.content));
     const nextStep = clean(input.model.brief.nextStep, 600)
@@ -238,6 +243,7 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     );
     const openQuestions = unique(input.model.brief.openQuestions, 6);
     const highlights = unique([
+        ...qualificationDetails.map(item => `${item.label}: ${item.value}`),
         environment ? `Technology context: ${environment}` : '',
         workloads ? `Critical workloads: ${workloads}` : '',
         guardrail ? `Primary guardrail: ${guardrail}` : '',
@@ -247,7 +253,7 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         requirementsStatus ? `Requirements status: ${requirementsStatus}` : '',
         discoveryAgenda ? `Workshop agenda to clarify: ${discoveryAgenda}` : '',
         dataSources ? `Visitor-identified data: ${dataSources}` : '',
-    ], 10);
+    ], 15);
     const duration = formatElapsed(input.sessionStartedAt, input.sessionEndedAt);
     const elapsed = duration;
     const started = formatPhoenixDate(input.sessionStartedAt);
@@ -273,6 +279,7 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         lane: clean(input.model.lane, 150) || 'Technology planning',
         objective: input.turns.length ? objective : 'No detailed conversation context was available for this recap.',
         details: [
+            ...qualificationDetails,
             { label: 'Technology context', value: environment },
             { label: 'Critical workloads', value: workloads },
             { label: 'Your guardrail', value: guardrail },
@@ -327,7 +334,7 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
         organization ? `Organization context: ${organization}` : '',
         scale ? `Environment scale: ${scale}` : '',
         ...highlights,
-    ], 12);
+    ], 17);
     const intakeBody = `
 <p style="margin:0 0 22px;color:#435166;font-size:14px;line-height:22px;">I completed a conversation with ${escapeHtml(name)} and organized the verified context below for Sales and Operations. Use it to prepare a focused follow-up without introducing unsupported assumptions.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e1e6ec;border-collapse:collapse;">

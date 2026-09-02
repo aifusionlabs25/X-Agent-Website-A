@@ -22,5 +22,5 @@ export function amyDiscoveryTurnGuidance(input: {
     if (!input.isOpen || input.view === 'capabilities' || !input.lastReceipt) return null;
     const next = buildAmyWorkbenchModel(input.turns, '', '', input.view);
     if (!diffAmyWorkbenchFacts(input.lastReceipt, next).length) return null;
-    return `The visitor supplied new supported context while a working view is open. Before claiming anything was added or updated, call ${VIEW_TOOL[input.view]} once and check its appliedChanges and visibleFacts. Acknowledge only the exact confirmed delta in one sentence. A target date is not a booking or validated feasibility; requirements to clarify are not confirmed constraints. If the tool does not confirm the change, do not claim it landed.`;
+    return `The visitor supplied new supported context while a working view is open. Before claiming anything was added or updated, call ${VIEW_TOOL[input.view]} once and check its appliedChanges and visibleFacts. Acknowledge only the exact confirmed delta in one sentence. Recording an unresolved funding or compliance question is permitted discovery, not approval or specialist advice. A target date is not a booking or validated feasibility; requirements to clarify are not confirmed constraints. If the tool does not confirm the change, do not claim it landed.`;
 }

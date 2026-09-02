@@ -1,0 +1,15 @@
+export const countyTurns = [
+    "I'm trying to sort out whether our infrastructure upgrade and the AI initiative our leadership wants should be planned together or separately.",
+    'They want to reduce manual workload, things like automating case processing and speeding up approvals.',
+    "It's partly capacity. Some servers and storage are aging out and partly risk. Security leaders are concerned about staying confined.",
+    "Yes, we're a government agency, county level, so compliance is a big deal for us.",
+    'CJS is top of mind, our data includes criminal justice information, also state level data privacy rules.',
+    "The infrastructure upgrade is funded. It's scoped as a refresh of aging systems. We just haven't fully aligned the timeline yet.",
+    "Not yet. They flagged it as something we'll need to validate, but they haven't reviewed detailed AI data flows yet.",
+    "Yes, that would help. We need to see what steps we'd have to take before leadership even greenlights AI.",
+    'This looks aligned. Can you include a note that we also need to confirm funding sources for the AI effort separately?',
+    'The funding source is still undetermined. We need to clarify whether AI would come from operational budget or something separate.',
+    'That works. The roadmap now reflects our next steps. Could you email me the summary after we wrap up?',
+    "That's everything I needed today. Thanks for your help. Have a great day.",
+    "That's a complete round. If you have another scenario in mind, let me know. Or if you'd like to debrief anything from this one, I'm ready.",
+].map(content => ({role:'user',content}));

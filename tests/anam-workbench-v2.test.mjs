@@ -22,7 +22,7 @@ test('Amy workbench v2 preserves hybrid Azure, ERP, continuity, and timing signa
     ]);
     assert.equal(model.status, 'live');
     assert.equal(model.lane, 'Hybrid infrastructure modernization');
-    assert.deepEqual(model.brief.environment, ['Azure', 'ERP']);
+    assert.deepEqual(model.brief.environment, ['Azure', 'Servers', 'ERP']);
     assert.match(model.facts.find((fact) => fact.label === 'Primary guardrail')?.value ?? '', /continuity|maintenance window/i);
     assert.match(model.facts.find((fact) => fact.label === 'Timing')?.value ?? '', /early next year/i);
     assert.match(model.roadmap.title, /Hybrid infrastructure/i);
@@ -253,9 +253,9 @@ test('student-retention pressure test stays grounded and produces a safe board-r
     assert.ok(model.brief.openQuestions.some((item) => /privacy.*fairness.*explainability.*human-review/i.test(item)));
     assert.match(model.brief.nextStep, /institutional and Insight specialists/i);
     assert.deepEqual(model.roadmap.phases.map((phase) => phase.title), [
-        'Board outcome and boundary',
+        'Outcome and boundary',
         'Authorized data and governance',
-        'Bounded human-reviewed demonstration',
+        'Bounded feasibility decision',
         'Validation decision gate',
     ]);
     assert.doesNotMatch(serialized, /runbooks|technical-document search|telemetry analysis|internal IT assistant/i);

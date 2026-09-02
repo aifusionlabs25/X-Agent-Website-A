@@ -39,13 +39,15 @@ function finalSpokenClause(value: string): string {
     return normalized.split(/[.!?]\s+/).at(-1)?.trim() ?? '';
 }
 
+const POLITE_FAREWELL = /^(?:(?:okay|ok|thanks|thank you)[,\s]+)?(?:have (?:a |an )?(?:good|great|nice|wonderful|lovely) (?:day|evening|night|weekend)|enjoy (?:your|the) (?:day|evening|weekend))(?:[,\s]+(?:amy|thanks|thank you|too|you too))?[.!\s]*$/i;
+
 export function hasExplicitAmyCloseIntent(value: string): boolean {
     const normalized = String(value ?? '').trim();
     const finalClause = finalSpokenClause(normalized);
     if (!normalized || AMY_PENDING_REQUEST.test(normalized) || AMY_NEGATED_SESSION_CLOSE_INTENT.test(normalized)) {
         return false;
     }
-    if (EXPLICIT_AMY_CLOSE_INTENT.test(finalClause) || AMY_DIRECT_CLOSE_REQUEST.test(finalClause)) return true;
+    if (EXPLICIT_AMY_CLOSE_INTENT.test(finalClause) || AMY_DIRECT_CLOSE_REQUEST.test(finalClause) || POLITE_FAREWELL.test(finalClause)) return true;
     return !AMY_TERMINAL_CLOSE_DISCUSSION.test(finalClause)
         && AMY_TERMINAL_HARD_CLOSE_SUFFIX.test(finalClause);
 }

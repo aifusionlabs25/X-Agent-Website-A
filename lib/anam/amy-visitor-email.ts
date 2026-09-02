@@ -18,7 +18,7 @@ const INTRO = 'Thanks again for speaking with me. I’ve summarized the key poin
 const FOOTER = "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination. Specialist review and scheduling require separate confirmation.";
 
 export function renderAmyVisitorRecap(input: VisitorRecap): { html: string; text: string } {
-    const details = input.details.filter(item => item.value).slice(0, 7);
+    const details = input.details.filter(item => item.value).slice(0, 12);
     const detailRows: string[] = [];
     for (let index = 0; index < details.length; index += 2) {
         const pair = details.slice(index, index + 2);
