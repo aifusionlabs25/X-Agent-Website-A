@@ -224,6 +224,10 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const organization = factValue(facts, 'Context');
     const scale = factValue(facts, 'Environment scale');
     const requestedOutput = factValue(facts, 'Requested output');
+    const decisionOwner = factValue(facts, 'Decision owner') || factValue(facts, 'Stakeholder context');
+    const requirementsStatus = factValue(facts, 'Requirements status');
+    const discoveryAgenda = factValue(facts, 'Workshop agenda to clarify');
+    const dataSources = factValue(facts, 'Available data') || factValue(facts, 'Evidence source');
     const includeVisualBrief = /visual brief/i.test(requestedOutput)
         || input.turns.some((turn) => turn.role === 'user' && /\bvisual brief\b/i.test(turn.content));
     const nextStep = clean(input.model.brief.nextStep, 600)
@@ -239,7 +243,11 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         guardrail ? `Primary guardrail: ${guardrail}` : '',
         timing ? `Project timing: ${timing}` : '',
         requestedOutput ? `Requested output: ${requestedOutput}` : '',
-    ], 6);
+        decisionOwner ? `Reported decision ownership: ${decisionOwner}` : '',
+        requirementsStatus ? `Requirements status: ${requirementsStatus}` : '',
+        discoveryAgenda ? `Workshop agenda to clarify: ${discoveryAgenda}` : '',
+        dataSources ? `Visitor-identified data: ${dataSources}` : '',
+    ], 10);
     const duration = formatElapsed(input.sessionStartedAt, input.sessionEndedAt);
     const elapsed = duration;
     const started = formatPhoenixDate(input.sessionStartedAt);
@@ -269,6 +277,9 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
             { label: 'Critical workloads', value: workloads },
             { label: 'Your guardrail', value: guardrail },
             { label: 'Your timing', value: timing },
+            { label: 'Decision ownership', value: decisionOwner },
+            { label: 'Requirements status', value: requirementsStatus },
+            { label: 'To clarify together', value: discoveryAgenda },
         ],
         nextStep: input.turns.length ? nextStep : 'Start a new conversation with Amy when you are ready to discuss your priorities.',
         openQuestions: input.turns.length ? openQuestions : [],
@@ -316,7 +327,7 @@ ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24
         organization ? `Organization context: ${organization}` : '',
         scale ? `Environment scale: ${scale}` : '',
         ...highlights,
-    ], 8);
+    ], 12);
     const intakeBody = `
 <p style="margin:0 0 22px;color:#435166;font-size:14px;line-height:22px;">I completed a conversation with ${escapeHtml(name)} and organized the verified context below for Sales and Operations. Use it to prepare a focused follow-up without introducing unsupported assumptions.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e1e6ec;border-collapse:collapse;">

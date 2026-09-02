@@ -550,11 +550,19 @@ test('A+C visitor presentation leaves both internal messages and the existing at
         { role: 'user', content: 'We need a StateRAMP cloud modernization brief by year-end.' },
         { role: 'user', content: 'Show me the Visual Brief and email it after the session.' },
     ];
+    const pinnedModel = buildAmyWorkbenchModel(turns);
+    // Keep the original model input for this presentation-only isolation check.
+    // New extraction and grammatical next-step behavior are tested independently.
+    const currentNextStep = pinnedModel.brief.nextStep;
+    pinnedModel.brief.nextStep = 'Clarify environment, workload, or platform is in scope.';
+    for (const slide of pinnedModel.visualBrief.slides) {
+        if (slide.summary === currentNextStep) slide.summary = pinnedModel.brief.nextStep;
+    }
     const bundle = buildAmyEmailBundle({
         displayName: 'Sample Visitor', verifiedEmail: 'sample@example.com',
         externalSessionId: 'sample-session', sessionStartedAt: '2026-08-27T12:00:00Z',
         sessionEndedAt: '2026-08-27T12:05:00Z', generatedAt: '2026-08-27T12:06:00Z',
-        turns, model: buildAmyWorkbenchModel(turns),
+        turns, model: pinnedModel,
     });
     const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
     // Captured from the verified production checkpoint 2e667a1 before this template change.

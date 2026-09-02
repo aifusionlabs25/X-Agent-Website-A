@@ -48,6 +48,7 @@ import {
     hasAmyWorkbenchCloseIntent,
 } from '@/lib/anam/amy-session-close';
 import { hasAmySpokenEmailAttempt, inspectAmyLiveOutput } from '@/lib/anam/amy-live-output-guard';
+import { amyDiscoveryTurnGuidance } from '@/lib/anam/amy-discovery-guidance';
 import type { AmyUnsafeSpokenOutputReason } from '@/lib/anam/amy-live-output-guard';
 import { assessPublicAudioInputStream } from '@/lib/anam/public-audio-safety';
 import {
@@ -908,6 +909,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             if (transcriptRole(messageEvent.role) === 'user') {
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
                                 const completedUserTurn = currentMessageRef.current.trim();
+                                if (isAmyCara4) {
+                                    const discoveryGuidance = amyDiscoveryTurnGuidance({
+                                        userTurn: completedUserTurn,
+                                        turns: transcriptRef.current.slice(-120) as AmyWorkbenchTurn[],
+                                        isOpen: workbenchOpenRef.current,
+                                        view: workbenchViewRef.current,
+                                        lastReceipt: lastWorkbenchModelRef.current,
+                                    });
+                                    if (discoveryGuidance) {
+                                        try {
+                                            anamClient.addContext(discoveryGuidance);
+                                        } catch {
+                                            console.error('[Amy Anam] Discovery action context was not confirmed');
+                                        }
+                                    }
+                                }
                                 const capabilityIntentTurn = normalizeAmyCapabilityTurn(completedUserTurn);
                                 if (
                                     isAmyCara4

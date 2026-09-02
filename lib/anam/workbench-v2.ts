@@ -244,6 +244,15 @@ function isArtifactRequestFragment(value: string): boolean {
     return /^(?:it|that|this)\s+so\s+I\s+can\s+share\s+it\s+with\s+leadership\b/i.test(value.trim());
 }
 
+function isFollowUpDeliveryRequest(value: string): boolean {
+    return /\b(?:email|e-mail|send|forward|share)\s+(?:(?:me|us|my team|it|this|that)\s+)?(?:the\s+|a\s+|your\s+|our\s+|my\s+)?(?:summary|recap|brief|roadmap|notes|follow-up|it|this|that)\b/i.test(value);
+}
+
+function isDiscoveryAgenda(value: string): boolean {
+    return /\b(?:need to|needs to|must|should|workshop (?:will|should))\s+(?:know|identify|determine|clarify|surface|define|understand)\b/i.test(value)
+        && /\b(?:requirements?|data inputs?|outcomes?|constraints?|compliance)\b/i.test(value);
+}
+
 function isCustomerEvidenceRequest(value: string): boolean {
     return /\b(?:case stud(?:y|ies)|customer (?:example|reference|story)|similar (?:customer|client|organization|public[- ]sector environment)|what Insight has done|proof point|prior outcome)\b/i.test(value);
 }
@@ -257,8 +266,10 @@ function timingFrom(values: string[]): string {
     for (const value of [...values].reverse()) {
         if (isWorkbenchRequest(value) || isConversationControl(value) || isWorkbenchEditInstruction(value)) continue;
         if (/\bboard meeting\b/i.test(value) && /\bnext week\b/i.test(value)) return 'Board meeting next week';
-        const deadline = value.match(/\b(?:by|before|within|in)\s+((?:next|this)\s+(?:week|month|quarter|year)|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[ -]?(?:business )?(?:days?|weeks?|months?))\b/i);
+        const deadline = value.match(/\b(?:by|before|within|in)\s+(?:the\s+)?(?:(?:next|this)\s+(?:week|month|quarter|year)|(?:next\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[ -]?(?:business )?(?:days?|weeks?|months?))\b/i);
         if (deadline) return compact(`${deadline[0][0].toUpperCase()}${deadline[0].slice(1)}`, 100);
+        const fiscal = value.match(/\b(?:(?:by|before)\s+(?:the\s+)?(?:end of\s+)?)?(?:this|current|next)\s+fiscal year\b/i);
+        if (fiscal) return compact(`${fiscal[0][0].toUpperCase()}${fiscal[0].slice(1)}`, 100);
         const directionalPeriod = value.match(/\b(?:early|late)\s+(?:next|this)\s+(?:week|month|quarter|year)\b/i);
         if (directionalPeriod) return compact(`${directionalPeriod[0][0].toUpperCase()}${directionalPeriod[0].slice(1)}`, 100);
         const period = value.match(/\b(?:next|this)\s+(?:week|month|quarter|year)\b/i);
@@ -271,8 +282,10 @@ function timingFrom(values: string[]): string {
 
 function bestObjectiveFrom(values: string[]): string {
     const candidates = values
+        .filter(value => !isFollowUpDeliveryRequest(value) && !isDiscoveryAgenda(value))
         .map((value, index) => {
             let score = 0;
+            if (/\b(?:figure out|decide whether|decide how|coordinate|together or separately)\b/i.test(value)) score += 7;
             if (/\b(?:reduce|improve|increase|protect|moderni[sz]e|replace|migrate|support|prevent|stabili[sz]e|accelerate|cut(?:ting)?|boost(?:ing)?)\b/i.test(value)) score += 5;
             if (/\b(?:goal|objective|outcome|success|CEO|board|leadership)\b/i.test(value)) score += 3;
             if (/\b(?:need|want|trying|looking)\b/i.test(value)) score += 1;
@@ -316,6 +329,10 @@ const TERM_RULES: Array<[RegExp, string]> = [
     [/\bSCCM\b/i, 'SCCM'],
     [/\bMDM\b/i, 'MDM'],
     [/\bAzure\b/i, 'Azure'],
+    [/\bhybrid (?:setup|environment|estate)\b/i, 'Hybrid environment'],
+    [/\bon[ -]prem(?:ises|ise)?\b/i, 'On-premises'],
+    [/\bSharePoint\b/i, 'SharePoint'],
+    [/\bon[ -]prem(?:ises|ise)?\s+SQL\b/i, 'On-premises SQL'],
     [/\bcloud migration\b|\bworkloads?\b.{0,35}\bcloud\b/i, 'Cloud migration'],
     [/\blegacy apps?\b|\blegacy applications?\b/i, 'Legacy applications'],
     [/\bAWS\b|Amazon Web Services/i, 'AWS'],
@@ -604,9 +621,20 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         && !isWorkbenchEditInstruction(value)
         && !isPrivateContactExchange(value)
         && !isArtifactRequestFragment(value)
+        && !isFollowUpDeliveryRequest(value)
         && !isCustomerEvidenceRequest(value)
         && !isGeneralAdviceRequest(value));
-    const sourceText = canonical(`${substantiveStatements.join(' ')} ${roadmapTopic}`);
+    const discoveryAgenda = lastSentence(substantiveStatements.filter(isDiscoveryAgenda), /./);
+    const decisionOwner = lastSentence(substantiveStatements, /\b(?:owns? (?:that|the|this|our) (?:call|decision)|responsible for (?:the )?decision|decision (?:owner|is owned))\b/i);
+    const latestWorkshopStatement = lastSentence(substantiveStatements, /\b(?:workshop|requirements session|discovery session)\b/i);
+    const workshopCancelled = /\b(?:cancel(?:led|ed)?|no longer|not (?:holding|planning)|do not (?:hold|schedule)|don't (?:hold|schedule))\b/i.test(latestWorkshopStatement);
+    const workshopProposal = workshopCancelled ? '' : lastSentence(substantiveStatements, /\b(?:let'?s|we (?:want|need|plan|intend)|aim to|target|propos|set|hold|schedule)\b.{0,65}\b(?:workshop|requirements session|discovery session)\b/i);
+    const workshopTiming = workshopProposal ? timingFrom([workshopProposal]) : '';
+    const projectTiming = timingFrom(substantiveStatements.filter(value => !/\b(?:workshop|requirements session|discovery session)\b/i.test(value)));
+    const requirementsStatus = lastSentence(substantiveStatements, /\b(?:no|not|rough|unfinished|incomplete)\b.{0,100}\brequirements?\b|\brequirements?\b.{0,40}\b(?:not|unfinished|incomplete)\b/i);
+    // Tool-authored topic text is a display hint, never a source of customer facts.
+    void roadmapTopic;
+    const sourceText = canonical(substantiveStatements.join(' '));
     const sessionText = canonical(userTurns.join(' '));
     const hasHealthcareOperations = /patient intake|patient flow|clinical workflow|pre[- ]screening|\bEHR\b|\bEMR\b|electronic (?:health|medical) record/i.test(sessionText)
         && /clinics?|hospital|health system|patient|intake/i.test(sessionText);
@@ -673,8 +701,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
     const infrastructureCostFrame = hasInfrastructureCostConcern ? ' and what drives the cost' : '';
     const infrastructureEvidenceBasis = hasAgingInfrastructureClaim ? '"aging infrastructure"' : 'the refresh request';
     const infrastructureExposureLabel = hasInfrastructureSecurityConcern ? 'security severity' : 'risk and lifecycle exposure';
-    const hasErpCutover = /\bERP\b/i.test(sourceText) && /cutover|overnight outage|maintenance window/i.test(sourceText);
-    const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sourceText);
+    const hasErpCutover = (/\bERP\b/i.test(sourceText) && /cutover|overnight outage|maintenance window/i.test(sourceText))
+        || /\bERP cutover\b.{0,80}\b(?:still key|confirmed|planned)\b/i.test(sessionText);
+    // Municipal pre-scoping is explicitly an unknown-requirements track, not a compliance claim.
+    const hasMunicipalPrescoping = /municipal|government subcontract|prime(?:-contractor)? flow-down|pre-?scoping/i.test(sessionText);
     const hasArizonaSvar = /\bSVAR\b/i.test(sourceText) && /Arizona|state agency|state of Arizona/i.test(sourceText);
     const hasAiDiscovery = /\bAI\b|artificial intelligence|runbook automation|migration runbooks?|technical document(?:ation)? search|analy[sz](?:e|ing) telemetry|internal (?:IT )?assistant|student retention|at[- ]risk students?|students? at risk|drop(?:ping)? out/i.test(sourceText);
     const hasPlannedCloudMigration = /\b(?:planned|planning|prepare|preparing)\b.{0,45}\bcloud migration\b|\bcloud migration\b.{0,45}\b(?:planned|planning|prepare|preparing)\b/i.test(sessionText);
@@ -773,6 +803,7 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         || (certainStatements.length ? 'The desired outcome is still being clarified.' : 'Waiting for the conversation to begin.');
     const explicitTiming = explicitTimingFrom(userTurns);
     const timing = explicitTiming
+        || (workshopTiming ? [projectTiming ? `Project target: ${projectTiming}` : '', `Workshop target: ${workshopTiming}`].filter(Boolean).join('; ') : '')
         || (hasYearEndCloudDeadline ? 'Core cloud workloads by year-end' : '')
         || (hasModernizationPortfolio && hasCurrentFiscalYearPressure
         ? 'Current fiscal-year deadline'
@@ -780,8 +811,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Detailed planning may begin in a few weeks, dependent on compliance clarification from the prime contractor.'
         : hasInfrastructureRefreshDecision && hasBudgetReviewNextQuarter
         ? 'Budget review next quarter'
-        : timingFrom(substantiveStatements));
-    const constraintStatements = substantiveStatements.filter((statement) => !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
+        : workshopCancelled ? projectTiming : timingFrom(substantiveStatements));
+    const constraintStatements = substantiveStatements.filter((statement) => !isDiscoveryAgenda(statement)
+        && !/\b(?:student|students)\b.{0,30}\bat[- ]risk\b|\bat[- ]risk\b.{0,30}\bstudents?\b/i.test(statement));
     const constraint = hasCloudAndStaffingAi
         ? `${hasNoApprovedAiPilot ? 'No AI pilot is approved; ' : ''}${hasExcludedCjisData ? 'the visitor placed CJIS data outside the requested working scope, but the authorized data owner and security specialists must validate that boundary; ' : ''}do not infer a public-safety environment, approved access, model design, or pilot plan from the discovery conversation.`
         : hasPublicSectorAuditPriorities
@@ -815,11 +847,12 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'CEO / executive leadership'
         : hasAiCustomerExperience && /\bCEO\b/i.test(allText) && /\bboard\b/i.test(allText)
         ? 'CEO and board leadership'
-        : lastSentence(substantiveStatements, /decision[- ]maker|stakeholder|\bCEO\b|\bboard\b|CIO|CFO|CTO|director|vice president|\bVP\b|executive|(?:IT|technology|operations?) manager|procurement (?:officer|lead|director|manager|team)|finance (?:officer|lead|director|manager|team)|leadership|owner/i);
+        : decisionOwner || lastSentence(substantiveStatements, /decision[- ]maker|stakeholder|\bCEO\b|\bboard\b|CIO|CFO|CTO|director|vice president|\bVP\b|executive|(?:IT|technology|operations?) manager|procurement (?:officer|lead|director|manager|team)|finance (?:officer|lead|director|manager|team)|leadership|owner/i);
     const organization = hasArizonaSvar
         ? 'State of Arizona agency; Arizona SVAR purchasing path raised for specialist validation.'
         : lastSentence(substantiveStatements, /county|city|agency|company|our firm|the firm|hospital|health system|manufactur|distribution|university|school district/i);
     const workloads = unique([
+        /\bcase[ -]management\b/i.test(allText) ? 'Case management' : '',
         hasStaffingOptimization ? 'Staffing schedule operations' : '',
         hasHealthcareOperations ? 'Patient intake operations' : '',
         hasPublicSafetyAdminUseCases ? 'Administrative paperwork / Shift scheduling / Staffing reports' : '',
@@ -832,6 +865,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         /citizen services?|public portal/i.test(allText) ? 'Citizen services' : '',
     ], 5);
     const dataSources = unique([
+        /\bSharePoint\b/i.test(allText) ? 'SharePoint — identified by the visitor; access and permissible use not validated' : '',
+        /\bon[ -]prem(?:ises|ise)?\s+SQL\b/i.test(allText) ? 'On-premises SQL — identified by the visitor; access and permissible use not validated' : '',
         hasShiftCalendarData ? 'Shift calendars - authorization and usable fields not yet validated' : '',
         hasPayrollLogData ? 'Payroll logs - authorization, privacy boundary, and usable fields not yet validated' : '',
         hasHealthcareOperations && hasEhr ? `EHR operational data - ${needsItValidation ? 'export and usable event availability pending IT confirmation' : 'availability and permissible use not yet confirmed'}` : '',
@@ -910,7 +945,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Environment', 'Modernization workstreams', modernizationWorkstreamStatus),
         makeFact('Priorities', 'Device refresh status', hasFundedDeviceRefresh ? 'Funded; rollout is expected to start next quarter.' : ''),
         makeFact('Priorities', 'Cloud migration status', hasPlannedCloudMigration ? 'Planned workstream; keep its scope and decision gates separate from AI exploration.' : ''),
-        makeFact('Priorities', 'Cloud migration status', hasCommittedCloudMigration && !hasPlannedCloudMigration ? 'Confirmed workstream covering core workloads and selected legacy applications.' : ''),
+        makeFact('Priorities', 'Cloud migration status', hasCommittedCloudMigration && !hasPlannedCloudMigration
+            ? `Cloud migration discussed${/\bcore workloads?\b/i.test(sourceText) && /\blegacy (?:apps?|applications?)\b/i.test(sourceText) ? ' covering visitor-reported core workloads and legacy applications' : ''}; scope and dependencies require validation.` : ''),
         makeFact('Priorities', 'AI staffing status', hasStaffingOptimization ? `${hasNoApprovedAiPilot ? 'Exploration only; no pilot is approved.' : 'Early discovery; approval status remains unconfirmed.'} COO sponsorship was reported.` : ''),
         makeFact('Priorities', 'AI status', hasAiInterestOnly ? 'Leadership interest only; no pilot is approved, funded, or scheduled.' : ''),
         makeFact('Constraints', 'Data boundary', hasCloudAndStaffingAi && hasExcludedCjisData ? 'Visitor requested that CJIS data remain out of scope; authorized data and security owners must validate the usable boundary.' : ''),
@@ -918,6 +954,10 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         makeFact('Constraints', 'Planning assumption', smallerOfficePlanningAssumption),
         makeFact('Constraints', 'Scope and budget impact', expansionImpact),
         makeFact('Priorities', 'Current objective', objective.includes('still being clarified') || objective.startsWith('Waiting') ? '' : objective),
+        makeFact('Priorities', 'Requirements status', requirementsStatus),
+        makeFact('Decisions', 'Workshop agenda to clarify', discoveryAgenda),
+        makeFact('Decisions', 'Proposed workshop', workshopProposal),
+        makeFact('Decisions', 'Decision owner', decisionOwner),
         makeFact('Priorities', 'AI discovery', hasAiDiscovery ? aiDiscovery : ''),
         makeFact('Procurement', 'Arizona SVAR', hasArizonaSvar ? 'Software Value-Added Reseller purchasing contract; confirm software category, purchaser, and ordering path with an Insight Public Sector specialist.' : ''),
         makeFact('Procurement', 'Funding context', modernizationFundingStatus),
@@ -958,6 +998,8 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         hasAiDiscovery && !hasStudentRiskUseCase && !hasAiCustomerExperience && !hasCloudAndStaffingAi
             ? hasArizonaSvar
                 ? 'What data would each AI use case access, and could agency or contract-controlled information enter prompts?'
+                : dataSources.length
+                ? 'Who can validate access, permissible use, and any restrictions on the identified data sources?'
                 : 'What data would each AI use case access, and could organization- or contract-controlled information enter prompts?'
             : '',
         hasAiDiscovery && !hasStudentRiskUseCase && !hasAiCustomerExperience && !hasCloudAndStaffingAi
@@ -1022,11 +1064,13 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Keep the device rollout on its committed track; have the operations and agency security owners define the administrative use, data, users, systems, policy, and success decision for Insight Public Sector security and AI specialist validation before calling it a pilot.'
         : multiTrack
         ? `Confirm separate owners and decision gates for ${currentTracks.join(', ')}, including Insight Public Sector review of the SVAR ordering path.`
+        : workshopProposal
+        ? `Prepare the proposed workshop${workshopTiming ? ` (${workshopTiming})` : ''}${discoveryAgenda ? ` to address: ${discoveryAgenda}` : ' to clarify requirements and dependencies'}. Confirm participants and scheduling; this is a proposed next step, not a booking.`
         : openQuestions.length
-        ? `Clarify ${openQuestions[0].replace(/^What |^Which |^Who |^Please clarify:\s*/i, '').replace(/\?$/, '').toLowerCase()}.`
+        ? `Next question to resolve: ${openQuestions[0]}`
         : 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';
     const roadmapFacts = facts
-        .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Requested outputs'].includes(fact.section))
+        .filter((fact) => ['Scale', 'Environment', 'Priorities', 'Procurement', 'Constraints', 'Timing', 'Decisions', 'Requested outputs'].includes(fact.section))
         .map((fact) => ({ label: fact.label, value: fact.value }));
     const phases = hasCloudAndStaffingAi
         ? [
@@ -1076,6 +1120,13 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ]
         : currentTracks.length > 2
         ? buildMultiTrackPhases(currentTracks, aiDiscovery)
+        : discoveryAgenda || workshopProposal
+        ? [
+            { number: '01', title: 'Frame the shared decision', detail: 'Keep each initiative and its business outcome distinct; dependencies and sequencing still need validation.' },
+            { number: '02', title: 'Prepare requirements discovery', detail: discoveryAgenda || 'Clarify the required business outcomes, data inputs, and constraints with the business owners.' },
+            { number: '03', title: 'Validate ownership and boundaries', detail: 'Have the customer owners and appropriate Insight specialists validate data access, compliance requirements, and cross-workstream dependencies before any design or pilot decision.' },
+            { number: '04', title: 'Agree on the next decision', detail: 'Confirm participants and scheduling for the proposed next step. Keep the workshop target separate from the project deadline; neither proves feasibility or approval.' },
+        ]
         : buildPhases(laneId, { scale, terms, constraint, timing, workloads, dataSources, dualTrack, activeIncident: hasActiveIncident });
     const roadmapOutcome = hasCloudAndStaffingAi
         ? 'Give leadership two independently gated paths: a planned cloud migration and a fact-based AI staffing feasibility decision, without turning exploration into an approved pilot.'
@@ -1091,7 +1142,9 @@ export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic =
         ? 'Give leadership a two-track decision brief: protect the funded device rollout, and validate whether a separate administrative-AI feasibility track is responsible and permitted.'
         : laneId === 'healthcare-operations'
         ? 'Frame a credible executive comparison while keeping root cause, EHR evidence, privacy boundaries, and any dashboard design explicitly unconfirmed.'
-        : compact(roadmapTopic) || ({
+        : discoveryAgenda || workshopProposal
+        ? 'Prepare a requirements-discovery brief for the customer owners and appropriate Insight specialists to validate dependencies before deciding how the initiatives should proceed.'
+        : ({
         endpoint: 'Create a measured endpoint modernization path with representative pilots and controlled deployment waves.',
         cloud: 'Shape a phased modernization path that protects critical workloads and validates continuity requirements.',
         security: 'Turn the stated risks and control gaps into a validated and sequenced remediation plan.',

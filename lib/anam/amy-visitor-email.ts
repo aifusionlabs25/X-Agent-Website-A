@@ -18,7 +18,7 @@ const INTRO = 'Thanks again for speaking with me. I’ve summarized the key poin
 const FOOTER = "I'm an AI-powered conversational agent. This working recap is not a final design, quote, commitment, or compliance determination. Specialist review and scheduling require separate confirmation.";
 
 export function renderAmyVisitorRecap(input: VisitorRecap): { html: string; text: string } {
-    const details = input.details.filter(item => item.value).slice(0, 4);
+    const details = input.details.filter(item => item.value).slice(0, 7);
     const detailRows: string[] = [];
     for (let index = 0; index < details.length; index += 2) {
         const pair = details.slice(index, index + 2);
@@ -32,7 +32,7 @@ export function renderAmyVisitorRecap(input: VisitorRecap): { html: string; text
     const nextStep = questionAsNextStep
         ? `Clarify the next decision: ${input.openQuestions[0]}`
         : input.nextStep;
-    const questions = input.openQuestions.filter(Boolean).slice(questionAsNextStep ? 1 : 0, questionAsNextStep ? 3 : 2);
+    const questions = input.openQuestions.filter(question => question && !nextStep.includes(question)).slice(0, 2);
     const questionHtml = questions.length ? `<p style="margin:13px 0 5px;color:#685963;font-size:12px;line-height:19px;font-weight:700;">Still to clarify</p><ul style="margin:0;padding-left:18px;color:#685963;font-size:13px;line-height:21px;">${questions.map(item => `<li style="margin:4px 0;">${escapeHtml(item)}</li>`).join('')}</ul>` : '';
     const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>A follow-up from Amy</title>

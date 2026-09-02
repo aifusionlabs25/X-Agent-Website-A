@@ -429,13 +429,14 @@ test('Workbench control language never becomes organization, timing, or stakehol
     assert.doesNotMatch(serialized, /before you put that together|please remove that entirely|pasted into|show me the refreshed/i);
     assert.match(model.brief.objective, /three distinct tracks/i);
 });
-test('Roadmap topic is session-specific without becoming an approval claim', () => {
+test('Roadmap tool prose cannot invent scope; visitor-provided scope still works', () => {
     const topic = 'Modernize 1,200 Windows 11 endpoints with Intune in controlled waves before peak season.';
     const model = buildAmyWorkbenchModel([{ role: 'user', content: 'Please show me a phased endpoint roadmap.' }], topic);
-    assert.equal(model.lane, 'Endpoint modernization');
-    assert.equal(model.roadmap.outcome, topic.replace(/\.$/, ''));
-    assert.equal(model.roadmap.phases.length, 4);
-    assert.match(model.roadmap.phases[0].detail, /1,200/i);
+    assert.doesNotMatch(JSON.stringify(model.facts), /1,200|Intune|Windows 11/);
+    const grounded = buildAmyWorkbenchModel([{ role: 'user', content: topic }]);
+    assert.equal(grounded.lane, 'Endpoint modernization');
+    assert.equal(grounded.roadmap.phases.length, 4);
+    assert.match(grounded.roadmap.phases[0].detail, /1,200/i);
     assert.doesNotMatch(model.roadmap.outcome, /approved|guaranteed|completed assessment/i);
 });
 
