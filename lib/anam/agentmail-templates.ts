@@ -234,7 +234,8 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const dataSources = factValue(facts, 'Available data') || factValue(facts, 'Evidence source');
     const qualificationDetails = ['Infrastructure status', 'AI funding', 'AI data-flow review', 'Reported data category',
         'Security findings', 'Affected scope', 'Reported audit requirement', 'Accountable team', 'Ownership status', 'Evidence source', 'Governance drivers',
-        'Business drivers', 'Security concern', 'Leadership preference', 'Delivery concern', 'Decision requirement', 'Decision status']
+        'Business drivers', 'Security concern', 'Leadership preference', 'Delivery concern', 'Decision requirement', 'Decision status',
+        'Environment scale', 'Renewal window', 'AI initiative', 'AI rollout target', 'Licensing status']
         .map(label => ({ label, value: factValue(facts, label) })).filter(item => item.value);
     const roadmap = /\broad\s?map\b/i.test(requestedOutput) && input.model.signalCount > 1 ? {
         title: clean(input.model.roadmap.title, 180),

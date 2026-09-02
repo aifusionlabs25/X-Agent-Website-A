@@ -75,7 +75,7 @@ test('Amy uses human conversational rhythm without exposing qualification mechan
     assert.match(prompt, /connect, listen, acknowledge/i);
     assert.match(prompt, /small useful observation/i);
     assert.match(prompt, /Answer the actual decision question; never ask the visitor to repeat it/i);
-    assert.match(prompt, /integrated-versus-phased questions, offer conditional business trade-offs, not architecture or a selected path/i);
+    assert.match(prompt, /integrated-versus-phased or bundled-versus-separate questions, offer conditional business trade-offs—not architecture, assumed entitlements, a selected path, or schedule validation/i);
     assert.match(prompt, /Do not end every response with a question/i);
     assert.match(prompt, /end two consecutive substantive responses with questions/i);
     assert.match(prompt, /situational rapport/i);
@@ -252,8 +252,8 @@ test('Amy truthfully rebuilds visual updates and confirms only the committed del
     assert.ok(visualBriefTool, 'show_visual_brief tool must exist');
 
     for (const source of [prompt, workbenchPrompt, visualBriefTool.description]) {
-        assert.match(source, /update, refresh, rebuild, or regenerate/i);
-        assert.match(source, /call (?:the matching visual tool|show_visual_brief|this tool) again/i);
+        assert.match(source, /update, refresh, rebuild, or regenerate|displayed-visual update/i);
+        assert.match(source, /call (?:the matching visual tool|show_visual_brief|this tool) again|use the matching tool unless the browser already committed this request/i);
         assert.match(source, /contentChanged, appliedChanges, and visibleFacts/i);
         assert.match(source, /only source of truth/i);
         assert.match(source, /requested delta is absent from both appliedChanges and visibleFacts/i);
@@ -269,6 +269,9 @@ test('Amy truthfully rebuilds visual updates and confirms only the committed del
     assert.match(workbenchPrompt, /budget review next quarter.*preferred deferral until next year/i);
     assert.match(workbenchPrompt, /never infer an applied change.*revision number increased/i);
     assert.match(prompt, /Never claim the view was updated, refreshed, expanded, or now includes the detail/i);
+    assert.match(workbenchPrompt, /browser display receipt is authoritative.*do not call the display tool again/i);
+    assert.match(workbenchPrompt, /actual update is still pending.*once, then remain silent until its receipt/i);
+    assert.match(workbenchPrompt, /A failure is not a pending update/i);
 });
 
 test('Amy treats student-risk AI and compressed board timelines as high-impact discovery', () => {

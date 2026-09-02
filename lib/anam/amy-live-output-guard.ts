@@ -41,10 +41,12 @@ export function hasAmySpokenEmailAttempt(value: string): boolean {
 }
 
 export function inspectAmyLiveOutput(value: string): AmyLiveOutputInspection | null {
+    // Length-preserving normalization keeps safePrefix offsets correct for streaming chunks.
+    const normalized = value.replace(/[\u2018\u2019]/g, "'").replace(/[\u00a0\u200b\u202f]/g, ' ');
     let earliest: { reason: AmyUnsafeSpokenOutputReason; index: number } | null = null;
 
     for (const candidate of UNSAFE_SPOKEN_PATTERNS) {
-        const match = candidate.pattern.exec(value);
+        const match = candidate.pattern.exec(normalized);
         if (!match || (earliest && match.index >= earliest.index)) continue;
         earliest = { reason: candidate.reason, index: match.index };
     }

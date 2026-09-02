@@ -2,6 +2,7 @@ import {
     hasAmySoftCloseIntent,
     hasExplicitAmyCloseIntent,
 } from './amy-session-close.ts';
+import { inspectAmyLiveOutput } from './amy-live-output-guard.ts';
 
 export type AmyLiveQaFindingCode =
     | 'transcript_unreadable'
@@ -9,6 +10,7 @@ export type AmyLiveQaFindingCode =
     | 'provider_fallback_exposed'
     | 'reasoning_markup_exposed'
     | 'assistant_interrupted'
+    | 'possibly_unfinished_reply'
     | 'verbose_reply'
     | 'unsupported_cjis_boundary'
     | 'invented_ai_pilot'
@@ -133,6 +135,7 @@ const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     provider_fallback_exposed: 40,
     reasoning_markup_exposed: 40,
     assistant_interrupted: 35,
+    possibly_unfinished_reply: 15,
     verbose_reply: 8,
     unsupported_cjis_boundary: 30,
     invented_ai_pilot: 25,
@@ -186,8 +189,12 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         if (/<\/?\s*think\b/i.test(assistant.content)) {
             add('reasoning_markup_exposed', 'critical', index, assistant.content);
         }
-        if (/\b(?:sorry,?\s+)?i(?:'m| am)\s+(?:having trouble thinking|unable to think|not able to think)\b|\bsomething went wrong in my thinking\b/i.test(assistant.content)) {
+        if (inspectAmyLiveOutput(assistant.content)?.reason === 'provider_fallback'
+            || /\bi(?:['’]m| am)\s+(?:unable to think|not able to think)\b/i.test(assistant.content)) {
             add('provider_fallback_exposed', 'critical', index, assistant.content);
+        }
+        if (assistant.words >= 25 && /[\p{L}\p{N}]$/u.test(assistant.content.trim())) {
+            add('possibly_unfinished_reply', 'warning', index, assistant.content);
         }
         if (/\b(?:state|say|repeat|spell|share).{0,50}\b(?:email|e-mail|address)\b|\b(?:I heard|I have|I got|I've got|recorded).{0,120}(?:@|\bat\s+(?:gmail|outlook|hotmail|yahoo)\b|\b(?:gmail|outlook|hotmail|yahoo)\s+(?:dot|\.)\s*com\b)/i.test(assistant.content)) {
             add('spoken_email_handling', 'critical', index, assistant.content);
