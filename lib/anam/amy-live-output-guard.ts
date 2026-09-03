@@ -33,6 +33,10 @@ const UNSAFE_SPOKEN_PATTERNS: Array<{
         pattern: /\bi (?:can't|cannot) think\b|\bsomething went wrong in my thinking\b/i,
     },
     {
+        reason: 'provider_fallback',
+        pattern: /\b(?:i['’]?m sorry,?\s+(?:but\s+)?)?i\s+(?:can(?:not|'t)|am not able to)\s+(?:assist|help)\s+with\s+that\s+request\b/i,
+    },
+    {
         reason: 'tool_markup',
         pattern: /<\s*end_(?:call|amy_session)\b|\bend_(?:call|amy_session)\s*\{/i,
     },

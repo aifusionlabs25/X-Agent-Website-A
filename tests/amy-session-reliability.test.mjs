@@ -85,6 +85,10 @@ test('Amy output guard suppresses provider fallbacks and exposed close markup', 
         inspectAmyLiveOutput('Sorry, I am having trouble'),
         { reason: 'provider_fallback', safePrefix: '' },
     );
+    assert.deepEqual(
+        inspectAmyLiveOutput("I'm sorry, but I can't assist with that request."),
+        { reason: 'provider_fallback', safePrefix: '' },
+    );
     assert.equal(inspectAmyLiveOutput("I'm sorry that procurement is complicated."), null);
     assert.deepEqual(
         inspectAmyLiveOutput('I heard R-V-I-C-K-S @ gmail dot com. Is that right?'),
@@ -106,6 +110,7 @@ test('Amy separates a useful soft closing motion from an immediate hard close', 
     assert.equal(hasAmySoftCloseIntent("This was helpful. Let's wrap it here."), true);
     assert.equal(hasAmySoftCloseIntent("We're all set for now."), true);
     assert.equal(hasAmySoftCloseIntent("That's it."), true);
+    assert.equal(hasAmySoftCloseIntent('That wraps up the security and privacy pressure test.'), true);
     assert.equal(hasExplicitAmyCloseIntent("This was helpful. Let's wrap it here."), false);
     assert.equal(hasExplicitAmyCloseIntent("I'm done. End the session."), true);
     assert.equal(hasExplicitAmyCloseIntent('Goodbye. Take care.'), true);

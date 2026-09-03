@@ -18,6 +18,7 @@ export type AmyLiveQaFindingCode =
     | 'spoken_email_handling'
     | 'unsupported_email_delivery_claim'
     | 'unsupported_scheduling_claim'
+    | 'unsupported_privacy_claim'
     | 'tool_markup_exposed'
     | 'case_study_visual_substitution'
     | 'duplicate_visual_confirmation'
@@ -72,14 +73,15 @@ const TOOL_MARKUP = /<\s*end_(?:call|amy_session)\b|\bend_(?:call|amy_session)\s
 const CUSTOMER_EVIDENCE_REQUEST = /\b(?:case stud(?:y|ies)|customer (?:example|reference|story)|similar (?:customer|client|organization|public[- ]sector environment)|what Insight has done|proof point|prior outcome)\b/i;
 const CAPABILITY_INTERVIEW = /\b(?:evaluat(?:e|ing)|interview(?:ing)?|reviewing|testing)\b[\s\S]{0,120}\b(?:you|Amy|X[ -]?Agent)\b|\b(?:what (?:exactly )?(?:can|do) you do|what are you(?: here)? for|how do you work|tell me (?:what you do|about yourself)|why (?:do you|should (?:Insight|we)) (?:matter|use you))\b/i;
 const LIVE_OPPORTUNITY_TRANSITION = /\b(?:let(?:'s| us) role[ -]?play|pretend (?:I am|I'm|we are|we're)|real (?:customer|client|opportunity)|actual (?:customer|client|opportunity)|we have (?:a|an|the) (?:customer|client|opportunity)|our (?:customer|client) (?:needs|wants|has|is))\b/i;
-const GENERIC_PROSPECT_QUALIFICATION = /\b(?:what(?:'s| is) (?:the )?(?:primary )?(?:outcome|result|goal) (?:you(?:'d| would) like|you are|you're)|what (?:business )?(?:outcome|result|goal) are you (?:hoping|trying|looking) to (?:achieve|see)|what would be most useful (?:for us )?to work through|which part of (?:the )?.{0,60} are you focusing on)\b/i;
+const GENERIC_PROSPECT_QUALIFICATION = /\b(?:what(?:'s| is) (?:the )?(?:primary )?(?:outcome|result|goal) (?:you(?:'d| would) like|you are|you're)|what (?:business )?(?:outcome|result|goal) are you (?:hoping|trying|looking) to (?:achieve|see)|what would be most useful (?:for us )?to work through|which part of (?:the )?.{0,60} are you focusing on|what kind of opportunity would be most useful to test)\b/i;
 const CAPABILITY_VISUAL_REQUEST = /\bshow me\b[\s\S]{0,100}\b(?:Insight Intelligence Layer|how you work|what you can do|your capabilities|your capability)\b/i;
 const LIVE_PRODUCT_DATA_REQUEST = /\b(?:SKU|part(?:[ -]?number|\s*#)|live (?:catalog|products?|inventory)|inventory|in stock|stock status|pricing|price|lead[ -]?time|contract eligibility)\b/i;
 const LIVE_CATALOG_TOOL = /(?:catalog|product.*lookup|lookup.*product|sku|part(?:_|-)?number|inventory|pricing)/i;
-const UNSUPPORTED_HUMAN_FOLLOWUP = /\b(?:(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)|someone (?:at|from) Insight|the Insight team)\s+(?:will|is going to|has been assigned to)\s+(?:review|follow(?:\s+up)?|contact|reach out|call|email|take (?:this|it) forward)|you(?:'ll| will)\s+(?:hear from|be contacted by)\s+(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)\b/i;
+const UNSUPPORTED_HUMAN_FOLLOWUP = /\b(?:(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)|someone (?:at|from) Insight|the Insight team)\s+(?:will|is going to|has been assigned to)\s+(?:review|follow(?:\s+up)?|contact|reach out|call|email|take (?:this|it) forward)|you(?:'ll| will)\s+(?:hear from|be contacted by)\s+(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)|who else\b[^?]{0,100}\bshould i\s+(?:loop|bring|include)\s+in\b/i;
 const HUMAN_FOLLOWUP_NEGATION = /\b(?:cannot|can't|do not|don't|not able to|no guarantee|would need to|material to review)\b/i;
 const UNSUPPORTED_EMAIL_DELIVERY_CLAIM = /\bi(?:['’]ll| will| can(?: definitely)?)\s+(?:send|email)\s+(?:you\s+)?(?:a\s+|the\s+)?(?:summary|recap|follow[- ]?up|email|notes?)\b/i;
 const UNSUPPORTED_SCHEDULING_CLAIM = /\bi(?:['’]m| am)\b[^.!?]{0,160}\b(?:handle|handling|manage|managing|perform|performing)\b[^.!?]{0,80}\bschedul(?:e|es|ing)\b/i;
+const UNSUPPORTED_PRIVACY_CLAIM = /\b(?:captured\s+)?conversation data stays (?:only )?within (?:the )?session\b|\b(?:does not|doesn['’]t) (?:go|get)\b[^.!?]{0,100}\bshared externally\b|\bi (?:do not|don['’]t) store (?:credentials|personal information|sensitive (?:data|information))\b|\bi(?:['’]m| am) not designed to (?:capture|retain) (?:that kind of data|credentials|personal information|sensitive (?:data|information))\b/i;
 const SCHEDULING_CLAIM_NEGATION = /\bi(?:['’]m| am)\s+not\b[^.!?]{0,160}\bschedul(?:e|es|ing)\b|\bi\s+(?:do not|don['’]t|cannot|can['’]t)\b[^.!?]{0,120}\bschedul(?:e|es|ing)\b/i;
 const MEETING_CONCIERGE_CAPABILITY_DENIAL = /\b(?:i\s+)?(?:can(?:not|'t)|am not able to)\s+(?:join|participate in|attend)\s+(?:a\s+)?(?:live\s+)?(?:client\s+)?(?:call|meeting)s?\b|\blimited to (?:one[- ]to[- ]one )?website (?:interactions|conversations|sessions)\b/i;
 const DEMO_DEPLOYMENT_OVERCLAIM = /\bat Insight,\s+I(?:'m| am)\s+(?:used|deployed|implemented)|\bInsight\s+(?:uses|deployed|implemented)\s+me\b/i;
@@ -148,6 +150,7 @@ const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     spoken_email_handling: 35,
     unsupported_email_delivery_claim: 25,
     unsupported_scheduling_claim: 25,
+    unsupported_privacy_claim: 35,
     tool_markup_exposed: 35,
     case_study_visual_substitution: 30,
     duplicate_visual_confirmation: 8,
@@ -211,6 +214,9 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         }
         if (UNSUPPORTED_SCHEDULING_CLAIM.test(assistant.content) && !SCHEDULING_CLAIM_NEGATION.test(assistant.content)) {
             add('unsupported_scheduling_claim', 'critical', index, assistant.content);
+        }
+        if (UNSUPPORTED_PRIVACY_CLAIM.test(assistant.content)) {
+            add('unsupported_privacy_claim', 'critical', index, assistant.content);
         }
         if (TOOL_MARKUP.test(assistant.content) || inspectAmyLiveOutput(assistant.content)?.reason === 'tool_markup') {
             add('tool_markup_exposed', 'critical', index, assistant.content);

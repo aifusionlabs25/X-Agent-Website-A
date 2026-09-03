@@ -23,6 +23,7 @@ const AMY_SOFT_CLOSE_INTENT = new RegExp(
     'i',
 );
 const AMY_TERMINAL_SOFT_CLOSE_SUFFIX = /\b(?:(?:we(?:'re| are)|i(?:'m| am))\s+all\s+set(?:\s+for\s+(?:now|today))?|(?:i\s+think\s+)?that(?:'s| is)\s+(?:all|it)(?:\s+for\s+me)?)(?:\s*,?\s*(?:thanks(?:\s+amy)?|thank\s+you(?:\s+amy)?))?\s*[.!\s]*$/i;
+const AMY_NARRATED_TEST_CLOSE = /^that\s+wraps\s+up\s+(?:the\s+)?[\p{L}\p{N}'’ -]{0,100}\b(?:test|discussion|conversation|scenario)\s*[.!\s]*$/iu;
 const AMY_PENDING_REQUEST = /\bbefore\s+(?:we|i)\s+(?:wrap|finish|end|close|stop)(?:\s+(?:it|this|the\s+(?:call|conversation|session)))?\b[\s\S]{0,180}\b(?:can|could|would|will|show|tell|explain|help|what|how|why)\b/i;
 const AMY_NEGATED_SESSION_CLOSE_INTENT = /\b(?:do\s+not|don'?t|never|should\s+not|shouldn'?t|cannot|can'?t)\s+(?:please\s+)?(?:end|close|stop|finish)\s+(?:the\s+|this\s+|our\s+)?(?:call|conversation|session)\b/i;
 const AMY_NAMED_WORKBENCH_CLOSE_INTENT = /\b(?:close|hide|dismiss|minimi[sz]e|put\s+away)\b[\s\S]{0,80}\b(?:amy\s+intelligence|insight\s+intelligence(?:\s+layer)?|visual(?:\s+brief)?|live\s+brief|brief|notes?|roadmap|catalog)\b|\b(?:amy\s+intelligence|insight\s+intelligence(?:\s+layer)?|visual(?:\s+brief)?|live\s+brief|brief|notes?|roadmap|catalog)\b[\s\S]{0,80}\b(?:close|hide|dismiss|minimi[sz]e|put\s+away)\b/i;
@@ -59,7 +60,8 @@ export function hasAmySoftCloseIntent(value: string): boolean {
         return false;
     }
     return AMY_SOFT_CLOSE_INTENT.test(finalClause)
-        || AMY_TERMINAL_SOFT_CLOSE_SUFFIX.test(finalClause);
+        || AMY_TERMINAL_SOFT_CLOSE_SUFFIX.test(finalClause)
+        || AMY_NARRATED_TEST_CLOSE.test(finalClause);
 }
 
 export function hasAmyWorkbenchCloseIntent(value: string, workbenchIsOpen = false): boolean {

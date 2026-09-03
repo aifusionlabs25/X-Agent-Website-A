@@ -571,7 +571,7 @@ test('Amy core installer fails closed on malformed or ambiguous prompt boundarie
 
 test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. Who am I speaking with today\?/);
-    assert.match(prompt, /After the visitor gives only a name.*acknowledge it naturally and ask one clean discovery question/s);
+    assert.match(prompt, /After the visitor gives only a name.*acknowledge it naturally and ask one discovery question/s);
     assert.match(prompt, /same turn also contains an evaluation or capability request.*answer it immediately/is);
     assert.match(prompt, /drafting limits, never cutoffs.*finish every thought/i);
     assert.match(prompt, /normally no more than forty-five words.*requested detail may approach sixty/is);
@@ -589,6 +589,13 @@ test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(prompt, /similar customer example, case study.*evidence request/is);
     assert.match(prompt, /Never substitute a conversation-generated Workbench view for customer proof/i);
     assert.match(workbenchPrompt, /never call show_visual_brief solely for customer proof/i);
+});
+
+test('Amy describes demo data handling and evaluation without false assurances', () => {
+    assert.match(corePrompt, /supporting services.*final transcript.*visitor recap plus AI Fusion Labs admin and intake copies/is);
+    assert.match(corePrompt, /Never say data stays only in the session.*nothing is shared externally.*sensitive information cannot be stored.*deletion or retention terms/is);
+    assert.match(corePrompt, /approved fictional or non-sensitive scenarios.*agreed outcomes.*edge cases.*reviewed scoring/is);
+    assert.match(corePrompt, /Do not present this as an existing Insight program, request a real opportunity, or imply rollout approval/i);
 });
 
 test('Amy separates AI interest from a pilot and preserves the CJIS boundary', () => {
