@@ -223,9 +223,11 @@ test('Amy never exposes provider-thinking or internal-status failures', () => {
 
 test('Amy describes Meeting Concierge and demo follow-up truthfully', () => {
     assert.match(prompt, /independent AI Fusion Labs demonstration.*not an official Insight deployment/is);
-    assert.match(prompt, /Meeting Concierge.*Google Meet, Zoom, or Microsoft Teams/is);
-    assert.match(prompt, /joins under the same SDR boundaries and leaves when asked/i);
-    assert.match(prompt, /Never deny this capability.*uninvited access.*secret monitoring.*independent recording/is);
+    assert.match(prompt, /confirm an organizer can invite Amy to Google Meet, Zoom, or Microsoft Teams after private check-in/is);
+    assert.match(prompt, /Never say "X Agents Meeting Concierge" or another internal implementation name/i);
+    assert.doesNotMatch(prompt, /Through X Agents Meeting Concierge/i);
+    assert.match(prompt, /keeps her SDR boundaries and leaves when asked/i);
+    assert.match(prompt, /Never imply uninvited access.*secret monitoring.*recording/is);
     assert.match(agentMailPrompt, /configured admin and intake copies/i);
     assert.match(agentMailPrompt, /Never call them an official Insight record, CRM entry, accepted lead/i);
 });

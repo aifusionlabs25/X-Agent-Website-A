@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "releaseId": "amy-anam-runtime-v1",
   "deploymentStatus": "published",
-  "releasedAt": "2026-09-03T01:53:02.000Z",
+  "releasedAt": "2026-09-03T03:23:33.000Z",
   "persona": {
     "id": "0a2865a7-d0f0-4a5a-92b0-1c5bd49cab08",
     "name": "Amy Insight SDR - Cara 4 Canary",
@@ -15,7 +15,7 @@
     "enableAudioPassthrough": false
   },
   "prompt": {
-    "sha256": "bc822a655aa371465b81509b304d340a13ad83e4eea0e5be61394f09d057f267",
+    "sha256": "bca55f93c49233abdd0491e3d7e8404c25067b4c070688d17845e231604c07a7",
     "managedMarkerPairs": [
       {
         "start": "<!-- AMY_CONVERSATION_NATURALNESS_START -->",
