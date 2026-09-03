@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { evaluationTurns } from './fixtures/amy-evaluation-rehearsal.mjs';
-import { amyConversationMode } from '../lib/anam/amy-evaluation.ts';
+import { stateCioEvaluationTurns } from './fixtures/amy-state-cio-evaluation.mjs';
+import { amyConversationMode, diffAmyEvaluationSample } from '../lib/anam/amy-evaluation.ts';
 import { hasAmyCapabilityOverviewIntent } from '../lib/anam/amy-capability-intent.ts';
 import { requestedAmyArtifact } from '../lib/anam/amy-artifact-operation.ts';
 import { buildAmyWorkbenchModel } from '../lib/anam/workbench-v2.ts';
@@ -56,11 +57,66 @@ test('all three recap lanes describe evaluation; sample attachments and invented
 test('real discovery survives capability questions; explicit transitions work both ways', () => {
     const customer = [{ role: 'user', content: 'We need to modernize our infrastructure. We have 300 devices and an audit in 90 days.' }];
     assert.equal(amyConversationMode([...customer, { role: 'user', content: 'What can you do?' }]), 'discovery');
-    assert.equal(amyConversationMode([...evaluationTurns, ...customer]), 'discovery');
+    assert.equal(amyConversationMode([...customer, { role: 'user', content: "What's your role?" }]), 'discovery');
+    assert.equal(amyConversationMode([...customer, { role: 'user', content: 'How does this help our sales team?' }]), 'discovery');
+    assert.equal(amyConversationMode([...evaluationTurns, { role: 'user', content: 'This is our real customer opportunity.' }, ...customer]), 'discovery');
     assert.equal(amyConversationMode([...customer, { role: 'user', content: 'Back to your capabilities. I am evaluating Amy.' }]), 'evaluation');
-    assert.equal(amyConversationMode([...evaluationTurns, { role: 'user', content: "Let's role-play a county customer scenario." }]), 'discovery');
+    assert.equal(amyConversationMode([...evaluationTurns, { role: 'user', content: "Let's role-play a county customer scenario." }, ...customer]), 'evaluation');
     assert.equal(amyConversationMode([{ role: 'user', content: 'I am the CEO of Insight.' }]), 'discovery');
     assert.equal(amyConversationMode(evaluationTurns.map(turn => ({ ...turn, role: 'agent' }))), 'discovery');
+});
+
+test('a hypothetical opening is evaluation and a later return to evaluation cannot reuse earlier customer facts', () => {
+    assert.equal(amyConversationMode([{ role: 'user', content: "Let's say I'm a state CIO with a modernization deadline." }]), 'evaluation');
+    const turns = [
+        { role: 'user', content: 'This is a real customer opportunity.' },
+        { role: 'user', content: 'Our state CIO has a modernization deadline of February 2, 2027.' },
+        { role: 'user', content: 'Back to your capabilities. I am evaluating Amy.' },
+        { role: 'user', content: 'Show me a fictional example.' },
+    ];
+    const model = buildAmyWorkbenchModel(turns, '', '', 'visual');
+    assert.equal(model.conversationKind, 'evaluation');
+    assert.doesNotMatch(JSON.stringify(model.evaluationSample), /state CIO|modernization|February 2/i);
+});
+
+test('76ae1051: capability wording and every hypothetical state-CIO turn remain evaluation', () => {
+    for (let end = 1; end <= stateCioEvaluationTurns.length; end++) {
+        const model = buildAmyWorkbenchModel(stateCioEvaluationTurns.slice(0, end), 'untrusted tool topic', '', 'visual');
+        assert.equal(model.conversationKind, 'evaluation', `turn ${end}`);
+        assert.doesNotMatch(JSON.stringify(model.facts), /Public-sector modernization|By 30 days|state CIO|February|clarify a detail/i);
+    }
+    assert.ok(hasAmyCapabilityOverviewIntent(stateCioEvaluationTurns[0].content));
+});
+
+test('76ae1051: the fictional sample accepts an exact replacement date without leaking it to customer facts', () => {
+    const before = buildAmyWorkbenchModel(stateCioEvaluationTurns.slice(0, 10), '', '', 'visual');
+    const exact = buildAmyWorkbenchModel(stateCioEvaluationTurns.slice(0, 12), '', '', 'visual');
+    assert.equal(exact.evaluationSample.facts.find(fact => fact.label === 'Illustrative revised deadline').value, 'February 2, 2027');
+    assert.match(JSON.stringify(exact.visualBrief), /February 2, 2027/);
+    assert.doesNotMatch(JSON.stringify(exact.facts), /February|five months|six months|30 days/);
+    const changes = diffAmyEvaluationSample(before, exact);
+    assert.deepEqual(changes.find(change => change.label === 'Illustrative revised deadline'), {
+        kind: 'updated', section: 'Timing', label: 'Illustrative revised deadline', value: 'February 2, 2027', previousValue: 'five months out from today',
+    });
+    assert.match(buildAmyWorkbenchReceiptDetails(exact, 'visual', changes).spokenConfirmation, /now shows February 2, 2027.*not customer data/i);
+});
+
+test('76ae1051: edit commands rebuild an open view while a relative shift alone is not stored as a deadline', () => {
+    assert.equal(requestedAmyArtifact(stateCioEvaluationTurns[4].content, 'I would capture that in a working brief.'), 'visual');
+    assert.equal(requestedAmyArtifact(stateCioEvaluationTurns[8].content, '', 'visual'), 'visual');
+    assert.equal(requestedAmyArtifact(stateCioEvaluationTurns[11].content, '', 'visual'), 'visual');
+    const relativeOnly = buildAmyWorkbenchModel(stateCioEvaluationTurns.slice(0, 9));
+    assert.equal(relativeOnly.evaluationSample.facts.some(fact => /deadline/i.test(fact.label)), false);
+});
+
+test('76ae1051: every email is an evaluation recap and excludes fictional scenario state', () => {
+    const model = buildAmyWorkbenchModel(stateCioEvaluationTurns, '', '', 'visual');
+    const bundle = buildAmyEmailBundle({ model, turns: stateCioEvaluationTurns, displayName: 'Rob Vicks', verifiedEmail: 'rvicks@gmail.com', externalSessionId: '76ae1051-e0ef-4e67-8b28-ed3e836eb374', sessionStartedAt: '2026-09-03T01:07:28Z', sessionEndedAt: '2026-09-03T01:12:28Z', displayedArtifactView: 'visual' });
+    for (const email of Object.values(bundle)) {
+        assert.match(email.text, /evaluat/i);
+        assert.doesNotMatch(email.text, /Public-sector modernization|By 30 days|February 2|five months|six months|Assign an Insight opportunity owner/);
+        assert.equal(email.attachments, undefined);
+    }
 });
 
 test('known bare tool identifiers are intercepted and caught by transcript QA', () => {

@@ -103,6 +103,8 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /Keep capability interview mode active until.*real customer opportunity.*role-play/is);
     assert.match(prompt, /supplies a name and an interview or capability question in the same turn.*answer the question in that same response/is);
     assert.match(prompt, /never give a name-only acknowledgment or make them repeat it/i);
+    assert.match(prompt, /doubtful name.*such as “still”.*do not repeat it as their name/is);
+    assert.match(prompt, /fictional-scenario sandbox.*Never turn role-play into customer facts or sales intake/is);
     assert.match(prompt, /Never redirect.*tell me what you do.*show me.*generic discovery.*without a real opportunity/is);
 
     assert.match(prompt, /explicitly hypothetical three-beat walkthrough.*customer signal.*working view.*Insight validation/is);
@@ -111,6 +113,7 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /unless the browser already opened it.*Acknowledge the non-customer overview briefly/is);
     assert.match(prompt, /Sample-brief requests use the sample instead/i);
     assert.match(workbenchPrompt, /fictional example without customer discovery.*Never invent sample facts/is);
+    assert.match(workbenchPrompt, /set the deadline to February 2, 2027.*Never announce.*before completion/is);
     assert.ok(amyIntelligenceTool, 'show_amy_intelligence tool must exist');
     assert.match(amyIntelligenceTool.description, /Insight Intelligence Layer/i);
     assert.match(amyIntelligenceTool.description, /not a customer Visual Brief/i);

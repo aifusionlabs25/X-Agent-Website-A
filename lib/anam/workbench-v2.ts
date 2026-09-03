@@ -49,6 +49,10 @@ interface CatalogCategory {
 
 export interface AmyWorkbenchModel {
     conversationKind?: 'discovery' | 'evaluation';
+    evaluationSample?: {
+        title: string;
+        facts: Array<{ label: string; value: string }>;
+    };
     status: 'listening' | 'live';
     lane: string;
     signalCount: number;

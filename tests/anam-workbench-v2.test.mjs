@@ -656,7 +656,9 @@ test('Amy player registers all five visual handlers and keeps workbench local to
     assert.match(player, /status: 'view_rebuilt'/);
     assert.match(player, /currentSessionUserTurns/);
     assert.match(player, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
-    assert.match(player, /visibleFacts: receiptModel\.facts/);
+    assert.match(player, /visibleFacts: receiptModel\.conversationKind === 'evaluation'/);
+    assert.match(player, /amyEvaluationVisibleFacts\(receiptModel\)/);
+    assert.match(player, /receiptModel\.facts\.map/);
     assert.match(player, /missingGrounding: receiptModel\.quality\.missing/);
     assert.match(player, /buildAmyWorkbenchModel\(synchronizedTurns, topic, query, view\)/);
     assert.match(player, /setWorkbenchRequestedView\(view\)/);

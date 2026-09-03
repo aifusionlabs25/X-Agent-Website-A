@@ -54,9 +54,13 @@ export function buildAmyWorkbenchReceiptDetails(
         return change.kind === 'removed' ? !current : current?.value === change.value;
     });
     const subject = `The ${VIEW_NAME[view]}`;
+    const sampleDeadline = model.evaluationSample?.facts.find(fact => fact.label === 'Illustrative revised deadline')?.value;
+    const sampleDeadlineChanged = appliedChanges.some(change => change.label === 'Illustrative revised deadline');
     const spokenConfirmation = model.conversationKind === 'evaluation'
         ? view === 'visual'
-            ? 'The fictional sample brief is open. It illustrates the format, not a real customer or completed handoff.'
+            ? sampleDeadlineChanged && sampleDeadline
+                ? `The fictional sample brief now shows ${sampleDeadline} as its illustrative deadline. It is not customer data.`
+                : 'The fictional sample brief is open. It illustrates the format, not a real customer or completed handoff.'
             : 'The evaluation view is open; it describes this demo discussion, not a customer opportunity.'
         : supportedChanges.length === 0
         ? `${subject} is open; I checked it, but no supported facts changed.`

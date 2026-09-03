@@ -273,10 +273,15 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     const started = formatPhoenixDate(input.sessionStartedAt);
     const ended = formatPhoenixDate(input.sessionEndedAt);
     const generated = formatPhoenixDate(generatedAt);
-    const transcript = transcriptSnapshot(input.turns);
-    const transcriptTitle = input.turns.length > transcript.length
+    const transcript = isEvaluation ? [] : transcriptSnapshot(input.turns);
+    const transcriptTitle = isEvaluation
+        ? 'Evaluation transcript handling'
+        : input.turns.length > transcript.length
         ? `Sanitized conversation excerpt (last ${transcript.length} of ${input.turns.length} turns; entries may be shortened)`
         : 'Sanitized conversation timeline';
+    const transcriptRows = isEvaluation
+        ? ['Verbatim role-play was intentionally excluded so fictional examples cannot be mistaken for customer facts.']
+        : transcript.length ? transcript : ['No transcript turns were available at email time.'];
     const customerValue = unique([
         objective,
         guardrail ? `Protect the stated operating guardrail: ${guardrail}` : '',
@@ -333,7 +338,7 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
 ${highlights.length ? `<div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">Key captured facts</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(highlights)}</table>` : ''}
 ${roadmapRecap.html}
 <div style="margin-top:25px;font-size:18px;line-height:24px;color:#172033;font-weight:700;">${escapeHtml(transcriptTitle)}</div>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(transcript.length ? transcript : ['No transcript turns were available at email time.'])}</table>`;
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">${bulletRows(transcriptRows)}</table>`;
     const adminText = [
         'AMY SESSION OPERATIONS RECORD', '',
         `Session ID: ${input.externalSessionId}`,
@@ -348,7 +353,7 @@ ${roadmapRecap.html}
         `Conversation summary: ${objective}`, '',
         ...textSection('Key captured facts', highlights),
         ...(roadmapRecap.text ? [roadmapRecap.text] : []),
-        ...textSection(transcriptTitle, transcript),
+        ...textSection(transcriptTitle, transcriptRows),
         'Internal AI Fusion Labs operational record. Contact details came from the secure website check-in, not speech recognition.',
     ].join('\n');
 

@@ -87,7 +87,9 @@ test('player sends grounded receipt after render commitment and retains existing
     const handler = player.slice(start, end);
     assert.ok(handler.indexOf('requestAnimationFrame') < handler.indexOf('...buildAmyWorkbenchReceiptDetails'));
     assert.match(handler, /buildAmyWorkbenchReceiptDetails\(receiptModel, view, appliedChanges\)/);
-    assert.match(handler, /visibleFacts: receiptModel\.facts/);
+    assert.match(handler, /visibleFacts: receiptModel\.conversationKind === 'evaluation'/);
+    assert.match(handler, /amyEvaluationVisibleFacts\(receiptModel\)/);
+    assert.match(handler, /receiptModel\.facts\.map/);
     assert.match(handler, /Say spokenConfirmation verbatim once, then stop/);
     assert.match(handler, /Never claim that a requested addition or update was applied unless the named detail appears in both appliedChanges and visibleFacts/);
     assert.match(handler, /A phase heading is not evidence of independent parallel execution/);

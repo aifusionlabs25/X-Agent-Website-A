@@ -10,14 +10,16 @@ export function requestedAmyArtifact(userTurn: string, priorAgentTurn = '', open
     if (hasExplicitAmyCloseIntent(text) || hasAmySoftCloseIntent(text) || hasAmyWorkbenchCloseIntent(text, true)
         || /\b(?:end (?:the )?(?:call|session)|goodbye|take care)\b/i.test(text)
         || /\b(?:don't|do not|not yet|cancel|never mind|no thanks|instead|if|hypothetical)\b/i.test(text)
-        || /\b(?:email|e-mail|send|forward|part number|SKU|inventory|price|pricing|catalog|case study|customer example|capabilities)\b/i.test(text)) return null;
+        || /\b(?:email|e-mail|part number|SKU|inventory|price|pricing|catalog|case study|customer example|capabilities)\b/i.test(text)
+        || /\b(?:send|forward)\b.{0,60}\b(?:email|e-mail|recap|summary|materials?|notes?)\b/i.test(text)) return null;
     const viewFrom = (value: string): AmyArtifactView | null =>
         /\blive notes\b/i.test(value) ? 'notes'
         : /\b(?:live|session) briefs?\b/i.test(value) ? 'brief'
         : /\broad\s?map\b/i.test(value) ? 'roadmap'
         : /\b(?:visuals?|briefs?|diagrams?|presentations?)\b/i.test(value) ? 'visual' : null;
-    if (/\b(?:show|open|display|create|build|update|refresh|revise|add|include|put together)\b/i.test(text)) return viewFrom(text)
-        ?? (/\b(?:update|refresh|revise|add|include)\b/i.test(text) ? openView ?? null : null);
+    if (/\b(?:show|open|display|create|build|update|refresh|revise|add|include|put together|set|change|replace|adjust|move)\b/i.test(text)) return viewFrom(text)
+        ?? (/\b(?:update|refresh|revise|add|include|set|change|replace|adjust|move)\b/i.test(text) ? openView ?? null : null)
+        ?? (/\bshow\b.{0,100}\bwhat (?:that|the|a) .{0,45}\bwould look like\b/i.test(text) && /\bworking brief\b/i.test(priorAgentTurn) ? 'visual' : null);
     if (/^(?:yes|sure|please do|go ahead|that (?:would be|sounds) (?:perfect|great|good|helpful))\b/i.test(text)
         && /\b(?:I can|would it help|shall I|want me to)\b.{0,140}\b(?:brief|roadmap|visual|diagram|presentation|live notes)\b/i.test(priorAgentTurn)) return viewFrom(priorAgentTurn);
     return null;

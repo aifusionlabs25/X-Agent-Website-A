@@ -5,6 +5,8 @@ const CAPABILITY_OVERVIEW_REQUESTS = [
     /\b(?:see|learn|understand)\b.{0,25}\bwhat (?:we|you) can do\b/i,
     /\b(?:asked|invited|told) me to (?:check|try) (?:this|you|amy) out\b/i,
     /\bhow (?:exactly )?would (?:you|that|this) help (?:my|our|the) team\b/i,
+    /\bwhat(?:'s| is) your role\b/i,
+    /\bhow (?:exactly )?(?:would|does|can) (?:you|that|this) (?:help|improve|support) (?:my|our|the) (?:team|sellers?|sales team)\b/i,
     /\bwhat\s+(?:do|can)\s+you\s+do\b/i,
     /\bwhat\s+you\s+can\s+do\b/i,
     /\bhow\s+do\s+you\s+work\b/i,

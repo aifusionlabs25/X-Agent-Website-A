@@ -235,7 +235,9 @@ export default function AmyAnamWorkbenchV2({
                                 Revision {revision} {revision === 1 ? 'built' : appliedChanges.length > 0 ? 'updated' : 'checked'}
                             </p>
                             <p className="text-xs text-zinc-400">
-                                {revision === 1
+                                {model.conversationKind === 'evaluation' && isVisualView
+                                    ? `${appliedChanges.length} fictional sample ${appliedChanges.length === 1 ? 'detail' : 'details'} ${revision === 1 ? 'shown' : appliedChanges.length ? 'changed' : 'checked'}`
+                                    : revision === 1
                                     ? `${appliedChanges.length} supported ${appliedChanges.length === 1 ? 'fact' : 'facts'} captured`
                                     : appliedChanges.length > 0
                                     ? `${appliedChanges.length} supported ${appliedChanges.length === 1 ? 'fact' : 'facts'} changed`
