@@ -121,12 +121,14 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /Never retry a failed tool automatically/i);
 
     assert.match(prompt, /post-session bundle.*visitor delivery.*configured demo admin and intake copies/is);
+    assert.match(prompt, /seller value.*discovery preparation and cleaner qualified handoffs/is);
+    assert.match(prompt, /not scheduling, CRM work, generic busywork, or replacing seller judgment and relationships/i);
     assert.match(prompt, /not an Insight CRM record or proof of human action/i);
     assert.match(prompt, /Never promise review, contact, handoff, or next steps without an exact action receipt/i);
     assert.match(prompt, /fifteen to thirty words.*normally no more than forty-five words.*requested detail may approach sixty/is);
     assert.match(prompt, /drafting limits, never cutoffs.*finish every thought/i);
-    assert.match(prompt, /standard follow-up is already included and will arrive after we wrap up/i);
-    assert.match(prompt, /Never say "I'll send it\."/i);
+    assert.match(prompt, /If asked to email\/send a summary, reply exactly.*standard follow-up is already included and will arrive after we wrap up/is);
+    assert.match(prompt, /Never answer yes\/no or imply Amy can\/will send, email, deliver, or arrange it/i);
 });
 
 test('Amy handles the exact final CEO-demo conversation failures directly', () => {

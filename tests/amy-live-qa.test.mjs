@@ -337,6 +337,47 @@ Amy: Thanks for talking this through with me. Take care.`;
     assert.equal(report.findings.length, 0);
 });
 
+test('session 5e9dd15b catches unsupported scheduling and personal email delivery claims', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: My best sellers already have their process. Why would they want you in the mix?
+Amy: That's a fair challenge. I'm not here to replace a seller's process or judgment. I'm here to help them work faster by handling the repetitive parts, like scheduling and follow-up, so they can spend more time on the deals that actually need their expertise.
+User: Could you send me a summary after we wrap up?
+Amy: Yes, I can send you a summary after we wrap up.
+User: That's all I needed. Take care.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    const codes = new Set(report.findings.map((finding) => finding.code));
+    assert.ok(codes.has('unsupported_scheduling_claim'));
+    assert.ok(codes.has('unsupported_email_delivery_claim'));
+    assert.equal(report.status, 'fail');
+});
+
+test('a scheduling limitation is not mistaken for an unsupported scheduling capability', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Can you manage my calendar and schedule meetings?
+Amy: I cannot manage scheduling. I can capture confirmed discovery context and prepare a qualified handoff for the appropriate Insight team.
+User: That's all I needed. Take care.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.findings.some((finding) => finding.code === 'unsupported_scheduling_claim'), false);
+});
+
+test('the corrected seller-value and automatic follow-up language passes', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: My best sellers already have their process. Why would they want you in the mix?
+Amy: I prepare early discovery, capture confirmed context and open questions, and organize cleaner qualified handoffs while sellers keep ownership of their relationships and judgment.
+User: Could you send me a summary after we wrap up?
+Amy: The standard follow-up is already included and will arrive after we wrap up.
+User: That's all I needed. Take care.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.findings.length, 0);
+});
+
 test('latest CEO transcript regressions detect the missed first question, defensive refusal, false approval, wrong visual, and contact misdirection', () => {
     const transcript = `Amy: ${AMY_CANONICAL_GREETING}
 User: Hi, Amy. I'm Jack, CEO of Insight. Tell me what you do and why I should care.

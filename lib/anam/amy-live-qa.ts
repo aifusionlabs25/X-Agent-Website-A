@@ -17,6 +17,7 @@ export type AmyLiveQaFindingCode =
     | 'invented_technical_plan'
     | 'spoken_email_handling'
     | 'unsupported_email_delivery_claim'
+    | 'unsupported_scheduling_claim'
     | 'tool_markup_exposed'
     | 'case_study_visual_substitution'
     | 'duplicate_visual_confirmation'
@@ -78,6 +79,8 @@ const LIVE_CATALOG_TOOL = /(?:catalog|product.*lookup|lookup.*product|sku|part(?
 const UNSUPPORTED_HUMAN_FOLLOWUP = /\b(?:(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)|someone (?:at|from) Insight|the Insight team)\s+(?:will|is going to|has been assigned to)\s+(?:review|follow(?:\s+up)?|contact|reach out|call|email|take (?:this|it) forward)|you(?:'ll| will)\s+(?:hear from|be contacted by)\s+(?:an? )?(?:Insight )?(?:team member|specialist|representative|human|person)\b/i;
 const HUMAN_FOLLOWUP_NEGATION = /\b(?:cannot|can't|do not|don't|not able to|no guarantee|would need to|material to review)\b/i;
 const UNSUPPORTED_EMAIL_DELIVERY_CLAIM = /\bi(?:['’]ll| will| can(?: definitely)?)\s+(?:send|email)\s+(?:you\s+)?(?:a\s+|the\s+)?(?:summary|recap|follow[- ]?up|email|notes?)\b/i;
+const UNSUPPORTED_SCHEDULING_CLAIM = /\bi(?:['’]m| am)\b[^.!?]{0,160}\b(?:handle|handling|manage|managing|perform|performing)\b[^.!?]{0,80}\bschedul(?:e|es|ing)\b/i;
+const SCHEDULING_CLAIM_NEGATION = /\bi(?:['’]m| am)\s+not\b[^.!?]{0,160}\bschedul(?:e|es|ing)\b|\bi\s+(?:do not|don['’]t|cannot|can['’]t)\b[^.!?]{0,120}\bschedul(?:e|es|ing)\b/i;
 const MEETING_CONCIERGE_CAPABILITY_DENIAL = /\b(?:i\s+)?(?:can(?:not|'t)|am not able to)\s+(?:join|participate in|attend)\s+(?:a\s+)?(?:live\s+)?(?:client\s+)?(?:call|meeting)s?\b|\blimited to (?:one[- ]to[- ]one )?website (?:interactions|conversations|sessions)\b/i;
 const DEMO_DEPLOYMENT_OVERCLAIM = /\bat Insight,\s+I(?:'m| am)\s+(?:used|deployed|implemented)|\bInsight\s+(?:uses|deployed|implemented)\s+me\b/i;
 const UNSUPPORTED_INTERNAL_RECORD = /\b(?:official\s+)?Insight\s+(?:record|CRM (?:record|entry))\b|\bInsight\s+(?:gets|receives)\s+(?:a\s+)?(?:record|copy)\b[\s\S]{0,140}\b(?:team|specialist|representative|person)\b[\s\S]{0,100}\b(?:review|follow\s+up|contact|reach out)\b/i;
@@ -144,6 +147,7 @@ const DEDUCTIONS: Record<AmyLiveQaFindingCode, number> = {
     invented_technical_plan: 30,
     spoken_email_handling: 35,
     unsupported_email_delivery_claim: 25,
+    unsupported_scheduling_claim: 25,
     tool_markup_exposed: 35,
     case_study_visual_substitution: 30,
     duplicate_visual_confirmation: 8,
@@ -204,6 +208,9 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         }
         if (UNSUPPORTED_EMAIL_DELIVERY_CLAIM.test(assistant.content)) {
             add('unsupported_email_delivery_claim', 'critical', index, assistant.content);
+        }
+        if (UNSUPPORTED_SCHEDULING_CLAIM.test(assistant.content) && !SCHEDULING_CLAIM_NEGATION.test(assistant.content)) {
+            add('unsupported_scheduling_claim', 'critical', index, assistant.content);
         }
         if (TOOL_MARKUP.test(assistant.content) || inspectAmyLiveOutput(assistant.content)?.reason === 'tool_markup') {
             add('tool_markup_exposed', 'critical', index, assistant.content);
