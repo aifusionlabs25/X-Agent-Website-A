@@ -54,16 +54,48 @@ export function amyConversationMode(turns: AmyWorkbenchTurn[]): 'evaluation' | '
 const MONTH = '(?:January|February|March|April|May|June|July|August|September|October|November|December)';
 const EXACT_DATE = new RegExp(`\\b(${MONTH}\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,)?\\s+20\\d{2})\\b`, 'i');
 
+function cleanSampleValue(value: string) {
+    const cleaned = value
+        .replace(/^[\s'“”"]+|[\s'“”",;:]+$/g, '')
+        .replace(/^(?:the\s+)?client(?:'s|’s)?\s+/i, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 100);
+    return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : '';
+}
+
+function samplePriorityEdit(text: string) {
+    const replacement = text.match(/\breplace\b.{1,100}?\bwith\s+(.{3,100}?)\s+as\s+(?:the\s+)?top\s+(?:priority|requirement)\b/i)?.[1];
+    const prioritized = text.match(/\bprioriti[sz](?:e|es|ed|ing)\s+(.{3,100}?)\s+as\s+(?:their|the)\s+top\s+(?:priority|requirement)\b/i)?.[1];
+    const named = text.match(/\b(?:new|top|primary)\s+(?:priority|requirement)\s+is\s+(.{3,100}?)(?=\s+(?:and|while|with|but)\b|[.!?]|$)/i)?.[1];
+    const switched = text.match(/\bswitch(?:es|ed|ing)?\s+from\s+.{2,80}?\s+to\s+(.{2,80}?)(?=\s+(?:can|could|would|and)\b|[,.!?]|$)/i)?.[1];
+    return cleanSampleValue(replacement || prioritized || named || switched || '');
+}
+
+function sampleSecondaryEdit(text: string, priorSource: string) {
+    const match = text.match(/(?:^|[,.!?]\s*|\band\s+)(?:that\s+)?(?:the\s+)?([^,.!?]{2,80}?)\s+(?:is|becomes?)\s+now\s+secondary\b/i)?.[1];
+    let value = cleanSampleValue(match || '');
+    if (/^ELP\b/i.test(value) && /\bERP\b/i.test(priorSource)) value = value.replace(/^ELP\b/i, 'ERP');
+    return value;
+}
+
 export function readAmyEvaluationSample(turns: AmyWorkbenchTurn[]): AmyEvaluationSample {
     const classified = classifyAmyConversation(turns);
     const relevantTurns = classified.mode === 'evaluation' ? classified.evaluationTurns : turns.filter(turn => turn.role === 'user');
     const userTurns = relevantTurns.map(turn => normalize(turn.content));
     const source = userTurns.join(' ');
     const stateCio = /\bstate CIO\b/i.test(source);
+    const stateAgency = /\bstate agency\b/i.test(source);
     const modernization = /\bmodernization\b/i.test(source);
     let originalTimeline = '';
     let revisedTimeline = '';
+    let primaryPriority = '';
+    let secondaryPriority = '';
+    let priorSource = '';
     for (const text of userTurns) {
+        primaryPriority = samplePriorityEdit(text) || primaryPriority;
+        secondaryPriority = sampleSecondaryEdit(text, priorSource) || secondaryPriority;
+        priorSource = `${priorSource} ${text}`;
         if (!SCENARIO_TRANSITION.test(text) && !/\b(?:deadline|timeline)\b/i.test(text)) continue;
         const exact = text.match(EXACT_DATE)?.[1]?.replace(/(\d)(?:st|nd|rd|th)\b/i, '$1');
         const original = text.match(/\boriginal deadline (?:was|is)\s+((?:about |roughly )?\w+ months? out(?: from today)?)/i)?.[1];
@@ -74,13 +106,22 @@ export function readAmyEvaluationSample(turns: AmyWorkbenchTurn[]): AmyEvaluatio
         if (exact) revisedTimeline = exact;
     }
     const facts = [
-        stateCio ? { label: 'Illustrative stakeholder', value: 'State CIO' } : null,
-        modernization ? { label: 'Illustrative initiative', value: 'Complex modernization request' } : null,
+        stateCio ? { label: 'Illustrative stakeholder', value: 'State CIO' }
+            : stateAgency ? { label: 'Illustrative stakeholder', value: 'State agency' } : null,
+        modernization && !primaryPriority && !secondaryPriority
+            ? { label: 'Illustrative initiative', value: 'Complex modernization request' }
+            : null,
+        primaryPriority ? { label: 'Illustrative primary priority', value: primaryPriority } : null,
+        secondaryPriority ? { label: 'Illustrative secondary priority', value: secondaryPriority } : null,
         originalTimeline ? { label: 'Illustrative original timeline', value: originalTimeline } : null,
         revisedTimeline ? { label: 'Illustrative revised deadline', value: revisedTimeline } : null,
     ].filter((fact): fact is { label: string; value: string } => Boolean(fact));
     if (!facts.length) facts.push({ label: 'Illustrative initiative', value: 'Workstation refresh example' });
-    return { title: stateCio && modernization ? 'State CIO modernization example' : 'Workstation refresh example', facts };
+    const title = stateCio && modernization ? 'State CIO modernization example'
+        : stateAgency ? 'State agency scenario'
+        : primaryPriority ? `${primaryPriority} example`
+        : 'Workstation refresh example';
+    return { title, facts };
 }
 
 export function diffAmyEvaluationSample(previous: AmyWorkbenchModel | null, next: AmyWorkbenchModel): AmyWorkbenchFactChange[] {
@@ -88,10 +129,11 @@ export function diffAmyEvaluationSample(previous: AmyWorkbenchModel | null, next
     const prior = new Map((previous?.evaluationSample?.facts ?? []).map(fact => [fact.label, fact.value]));
     const current = new Map((next.evaluationSample?.facts ?? []).map(fact => [fact.label, fact.value]));
     const changes: AmyWorkbenchFactChange[] = [];
+    const sectionFor = (label: string) => /timeline|deadline/i.test(label) ? 'Timing' : 'Priorities';
     for (const [label, value] of current) {
         const previousValue = prior.get(label);
-        if (previousValue === undefined) changes.push({ kind: 'added', section: label.includes('timeline') || label.includes('deadline') ? 'Timing' : 'Priorities', label, value });
-        else if (previousValue !== value) changes.push({ kind: 'updated', section: 'Timing', label, value, previousValue });
+        if (previousValue === undefined) changes.push({ kind: 'added', section: sectionFor(label), label, value });
+        else if (previousValue !== value) changes.push({ kind: 'updated', section: sectionFor(label), label, value, previousValue });
     }
     for (const [label, value] of prior) if (!current.has(label)) changes.push({ kind: 'removed', section: 'Priorities', label, value });
     return changes;
@@ -117,8 +159,10 @@ export function buildAmyEvaluationModel(turns: AmyWorkbenchTurn[]): AmyWorkbench
     const facts: AmyWorkbenchModel['facts'] = topics.map((value, index) => ({ section: 'Priorities', label: `Evaluation topic ${index + 1}`, value, status: 'mentioned' }));
     const evaluationSample = readAmyEvaluationSample(turns);
     const sampleFact = (label: string) => evaluationSample.facts.find(fact => fact.label === label)?.value;
-    const sampleContext = sampleFact('Illustrative stakeholder') || sampleFact('Illustrative initiative')
-        ? [sampleFact('Illustrative stakeholder'), sampleFact('Illustrative initiative')].filter(Boolean).join(' · ')
+    const samplePrimaryPriority = sampleFact('Illustrative primary priority');
+    const sampleSecondaryPriority = sampleFact('Illustrative secondary priority');
+    const sampleContext = sampleFact('Illustrative stakeholder') || sampleFact('Illustrative initiative') || samplePrimaryPriority
+        ? [sampleFact('Illustrative stakeholder'), sampleFact('Illustrative initiative')].filter(Boolean).join(' · ') || 'Illustrative organization'
         : 'Illustrative organization · workstation refresh';
     const sampleTiming = sampleFact('Illustrative revised deadline') || sampleFact('Illustrative original timeline') || 'Timeline remains open in this example';
     return {
@@ -134,7 +178,7 @@ export function buildAmyEvaluationModel(turns: AmyWorkbenchTurn[]): AmyWorkbench
         ] },
         // Presentation-only sample. NEVER merge these fictional values into facts or recaps.
         visualBrief: { title: `Illustrative sample brief · ${evaluationSample.title}`, slides: [
-            { id: 'sample-context', eyebrow: 'FICTIONAL EXAMPLE · 01 / 03', title: 'From a first conversation to a useful brief', summary: `Example scenario: ${evaluationSample.title}.`, bullets: [`Example context: ${sampleContext}.`, `Example timing: ${sampleTiming}.`, 'Example objective, environment, and constraints still require validation.'], boundary: AMY_SAMPLE_BOUNDARY },
+            { id: 'sample-context', eyebrow: 'FICTIONAL EXAMPLE · 01 / 03', title: 'From a first conversation to a useful brief', summary: `Example scenario: ${evaluationSample.title}.`, bullets: [`Example context: ${sampleContext}.`, ...(samplePrimaryPriority ? [`Primary priority: ${samplePrimaryPriority}.`] : []), ...(sampleSecondaryPriority ? [`Secondary priority: ${sampleSecondaryPriority}.`] : []), `Example timing: ${sampleTiming}.`, 'Example objective, environment, and constraints still require validation.'], boundary: AMY_SAMPLE_BOUNDARY },
             { id: 'sample-questions', eyebrow: 'FICTIONAL EXAMPLE · 02 / 03', title: 'Separate known context from open questions', summary: 'A useful handoff preserves uncertainty instead of inventing answers.', bullets: ['Open: budget, decision timing, and accountable owner.', 'Open: application compatibility and actual device requirements.', 'No selected product, quoted price, or approved deployment schedule.'], boundary: AMY_SAMPLE_BOUNDARY },
             { id: 'sample-handoff', eyebrow: 'FICTIONAL EXAMPLE · 03 / 03', title: 'Prepare the next human conversation', summary: 'This illustrates a proposed specialist-preparation brief, not a completed handoff.', bullets: ['Proposed objective: validate scope and decision criteria with the appropriate specialist.', 'Amy organizes the initial context; specialists validate technical and commercial details.', 'This demo sends configured recap emails—not an Insight CRM assignment.'], boundary: AMY_SAMPLE_BOUNDARY },
         ] },

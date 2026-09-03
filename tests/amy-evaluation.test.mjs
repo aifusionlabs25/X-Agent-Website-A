@@ -119,6 +119,51 @@ test('76ae1051: every email is an evaluation recap and excludes fictional scenar
     }
 });
 
+test('420d78ed: an explicit fictional zero-trust replacement updates the visual on the first attempt', () => {
+    const opening = [
+        { role: 'user', content: "Let's say I gave you a messy state agency scenario. What would your output look like?" },
+        { role: 'user', content: 'Show me a sample working brief.' },
+    ];
+    const before = buildAmyWorkbenchModel(opening, '', '', 'visual');
+    assert.equal(before.evaluationSample.title, 'State agency scenario');
+    assert.doesNotMatch(JSON.stringify(before.evaluationSample), /Workstation refresh/i);
+
+    const switched = buildAmyWorkbenchModel([
+        ...opening,
+        { role: 'user', content: 'If they switch from ERP to cybersecurity, can you update that brief on the fly?' },
+        { role: 'user', content: 'The client now prioritizes zero trust architecture as their top requirement. Update the brief to reflect that shift.' },
+    ], '', '', 'visual');
+    const changes = diffAmyEvaluationSample(before, switched);
+    assert.deepEqual(switched.evaluationSample.facts.find(fact => fact.label === 'Illustrative primary priority'), {
+        label: 'Illustrative primary priority', value: 'Zero trust architecture',
+    });
+    assert.ok(changes.some(change => change.label === 'Illustrative primary priority' && change.value === 'Zero trust architecture'));
+    assert.match(JSON.stringify(switched.visualBrief), /Primary priority: Zero trust architecture/);
+    assert.match(buildAmyWorkbenchReceiptDetails(switched, 'visual', changes).spokenConfirmation, /Zero trust architecture as its primary priority/i);
+});
+
+test('420d78ed: a clarified primary and secondary priority remain fictional and produce receipt-supported changes', () => {
+    const before = buildAmyWorkbenchModel([
+        { role: 'user', content: "Let's say I gave you a messy state agency scenario." },
+        { role: 'user', content: 'Show me a sample working brief.' },
+    ], '', '', 'visual');
+    const after = buildAmyWorkbenchModel([
+        { role: 'user', content: "Let's say I gave you a messy state agency scenario." },
+        { role: 'user', content: 'Show me a sample working brief.' },
+        { role: 'user', content: 'They switch from ERP to cybersecurity.' },
+        { role: 'user', content: "Just note that the client's new priority is implementing zero trust security and that the ELP modernization is now secondary." },
+    ], '', '', 'visual');
+    assert.deepEqual(after.evaluationSample.facts.filter(fact => /priority/i.test(fact.label)), [
+        { label: 'Illustrative primary priority', value: 'Implementing zero trust security' },
+        { label: 'Illustrative secondary priority', value: 'ERP modernization' },
+    ]);
+    assert.doesNotMatch(JSON.stringify(after.facts), /zero trust|ERP modernization/i);
+    const changes = diffAmyEvaluationSample(before, after);
+    const receipt = buildAmyWorkbenchReceiptDetails(after, 'visual', changes);
+    assert.match(receipt.spokenConfirmation, /Implementing zero trust security as its primary priority/i);
+    assert.match(receipt.spokenConfirmation, /ERP modernization as its secondary priority/i);
+});
+
 test('known bare tool identifiers are intercepted and caught by transcript QA', () => {
     for (const name of ['show_amy_intelligence', 'show_visual_brief', 'show_session_brief', 'show_solution_roadmap', 'show_live_notes', 'show_solution_catalog', 'end_amy_session', 'skip_turn']) {
         assert.equal(inspectAmyLiveOutput(name)?.reason, 'tool_markup');
