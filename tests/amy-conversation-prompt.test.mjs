@@ -73,11 +73,11 @@ const packageManifest = JSON.parse(await readFile(
 
 test('Amy uses human conversational rhythm without exposing qualification mechanics', () => {
     assert.match(prompt, /connect, listen, acknowledge/i);
-    assert.match(prompt, /small useful observation/i);
+    assert.match(prompt, /small useful grounded observation/i);
     assert.match(prompt, /Answer the actual decision question; never ask the visitor to repeat it/i);
     assert.match(prompt, /integrated-versus-phased or bundled-versus-separate questions, offer conditional business trade-offs—not architecture, assumed entitlements, a selected path, or schedule validation/i);
-    assert.match(prompt, /Do not end every response with a question/i);
-    assert.match(prompt, /end two consecutive substantive responses with questions/i);
+    assert.match(prompt, /do not append a question merely to keep talking/i);
+    assert.match(prompt, /Never end two consecutive substantive replies with questions/i);
     assert.match(prompt, /situational rapport/i);
     assert.match(prompt, /Never say that a certain number of facts is required/i);
     assert.doesNotMatch(baseBehavior, /at least three confirmed facts/i);
@@ -123,8 +123,10 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /post-session bundle.*visitor delivery.*configured demo admin and intake copies/is);
     assert.match(prompt, /not an Insight CRM record or proof of human action/i);
     assert.match(prompt, /Never promise review, contact, handoff, or next steps without an exact action receipt/i);
-    assert.match(prompt, /fifteen to thirty words.*hard ceiling of forty-five spoken words.*explicit request for detail may approach sixty/is);
-    assert.match(prompt, /Finish the sentence and thought/i);
+    assert.match(prompt, /fifteen to thirty words.*normally no more than forty-five words.*requested detail may approach sixty/is);
+    assert.match(prompt, /drafting limits, never cutoffs.*finish every thought/i);
+    assert.match(prompt, /standard follow-up is already included and will arrive after we wrap up/i);
+    assert.match(prompt, /Never say "I'll send it\."/i);
 });
 
 test('Amy handles the exact final CEO-demo conversation failures directly', () => {
@@ -569,8 +571,10 @@ test('Amy has one canonical Insight greeting and a hard spoken ceiling', () => {
     assert.match(prompt, /Hi, I'm Amy with Insight Enterprises\. Who am I speaking with today\?/);
     assert.match(prompt, /After the visitor gives only a name.*acknowledge it naturally and ask one clean discovery question/s);
     assert.match(prompt, /same turn also contains an evaluation or capability request.*answer it immediately/is);
-    assert.match(prompt, /Finish the sentence and thought/i);
-    assert.match(prompt, /hard ceiling of forty-five spoken words.*request for detail may approach sixty/is);
+    assert.match(prompt, /drafting limits, never cutoffs.*finish every thought/i);
+    assert.match(prompt, /normally no more than forty-five words.*requested detail may approach sixty/is);
+    assert.match(prompt, /End complete answers as confident statements with clean final punctuation/i);
+    assert.match(prompt, /do not append a question merely to keep talking/i);
     assert.match(reliabilityPrompt, /configured greeting is exact and complete/i);
     assert.match(reliabilityPrompt, /do not ask for the name a second time/i);
     assert.doesNotMatch(reliabilityPrompt, /ask exactly, "What name would you like me to use\?"/i);

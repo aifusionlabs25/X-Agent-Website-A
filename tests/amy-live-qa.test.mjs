@@ -297,10 +297,39 @@ Amy: Thanks for talking this through with me. Take care.`;
 test('a truthful Meeting Concierge and follow-up explanation passes', () => {
     const transcript = `Amy: ${AMY_CANONICAL_GREETING}
 User: I'm evaluating you. Can you join one of our Teams meetings, and what happens afterward?
-Amy: This independent demo includes Meeting Concierge, so an organizer can invite me to Teams after private check-in. The standard follow-up goes to your check-in address with configured demo copies; it does not promise human action.
+Amy: An organizer can invite me to Teams after private check-in. The standard follow-up goes to your check-in address with configured demo copies; it does not promise human action.
 User: Is there anything else you'd like to share?
 Amy: I can also organize confirmed conversation facts into working views while keeping architecture, pricing, and commitments with qualified humans.
 User: Goodbye.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.findings.length, 0);
+});
+
+test('session 668b7b06 catches a manual email-delivery promise while accepting visitor-friendly meeting language', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Could you send me a summary of what we covered after we wrap up?
+Amy: I can definitely do that. I'll send you a summary of what we covered after we wrap up.
+User: If I wanted you to join a live Teams call, could you? What's your role on that call?
+Amy: I can join as a working note-taker and brief-builder, not a decision-maker. I'd capture the key points, flag open questions, and prepare a summary for your team.
+User: That's all I needed. Take care.
+Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
+Amy: Thanks for talking this through with me. Take care.`;
+    const report = evaluateAmyTranscript(transcript);
+    assert.ok(report.findings.some((finding) => finding.code === 'unsupported_email_delivery_claim'));
+    assert.ok(!report.findings.some((finding) => finding.code === 'meeting_concierge_capability_denial'));
+    assert.equal(report.status, 'fail');
+});
+
+test('the corrected session 668b7b06 delivery and meeting language passes', () => {
+    const transcript = `Amy: ${AMY_CANONICAL_GREETING}
+User: Could you send me a summary of what we covered after we wrap up?
+Amy: The standard follow-up is already included and will arrive after we wrap up.
+User: If I wanted you to join a live Teams call, could you? What's your role on that call?
+Amy: Yes. An organizer can invite me after private check-in. I capture key points and open questions as an SDR, not a decision-maker.
+User: That's all I needed. Take care.
 Tool (end_amy_session): Result: {"status":"farewell_required","retryAllowed":false}
 Amy: Thanks for talking this through with me. Take care.`;
     const report = evaluateAmyTranscript(transcript);
