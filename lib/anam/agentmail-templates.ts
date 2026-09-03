@@ -2,6 +2,7 @@ import type { AmyTranscriptTurn } from './session-spine.ts';
 import type { AmyWorkbenchFact, AmyWorkbenchModel } from './workbench-v2.ts';
 import { renderAmyVisitorRecap } from './amy-visitor-email.ts';
 import { renderAmyEmailRoadmap } from './amy-roadmap-email.ts';
+import { AMY_EVALUATION_BOUNDARY } from './amy-evaluation.ts';
 
 export type AmyEmailContent = {
     subject: string;
@@ -210,6 +211,7 @@ function visualBriefText(model: AmyWorkbenchModel): string[] {
 }
 
 export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
+    const isEvaluation = input.model.conversationKind === 'evaluation';
     const generatedAt = input.generatedAt ?? new Date().toISOString();
     const name = safeName(input.displayName);
     const callbackPhone = safeCallbackPhone(input.callbackPhone);
@@ -243,9 +245,9 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
         phases: input.model.roadmap.phases.map(phase => ({ title: clean(phase.title, 180), detail: clean(phase.detail, 700) })),
     } : undefined;
     const roadmapRecap = renderAmyEmailRoadmap(roadmap);
-    const includeVisualBrief = input.displayedArtifactView === 'visual'
+    const includeVisualBrief = !isEvaluation && (input.displayedArtifactView === 'visual'
         || /visual brief/i.test(requestedOutput)
-        || input.turns.some((turn) => turn.role === 'user' && /\bvisual brief\b/i.test(turn.content));
+        || input.turns.some((turn) => turn.role === 'user' && /\bvisual brief\b/i.test(turn.content)));
     const nextStep = clean(input.model.brief.nextStep, 600)
         || 'Review the confirmed scope with the appropriate Insight specialist and agree on the next decision gate.';
     const priorities = unique(
@@ -254,6 +256,7 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     );
     const openQuestions = unique(input.model.brief.openQuestions, 6);
     const highlights = unique([
+        ...(isEvaluation ? input.model.brief.priorities.map(topic => `Evaluation topic: ${topic}`) : []),
         ...qualificationDetails.map(item => `${item.label}: ${item.value}`),
         environment ? `Technology context: ${environment}` : '',
         workloads ? `Critical workloads: ${workloads}` : '',
@@ -289,10 +292,12 @@ export function buildAmyEmailBundle(input: TemplateInput): AmyEmailBundle {
     ], 5);
 
     const visitorRecap = renderAmyVisitorRecap({
+        isEvaluation,
         firstName,
         lane: clean(input.model.lane, 150) || 'Technology planning',
         objective: input.turns.length ? objective : 'No detailed conversation context was available for this recap.',
         details: [
+            ...(isEvaluation ? input.model.brief.priorities.map(value => ({ label: 'What you explored', value })) : []),
             ...qualificationDetails,
             { label: 'Technology context', value: environment },
             { label: 'Critical workloads', value: workloads },
@@ -420,7 +425,17 @@ ${includeVisualBrief ? `<div style="margin-top:30px;font-size:18px;line-height:2
                 footer: 'Internal AI Fusion Labs operational record. The verified contact came from the secure website check-in and was not reconstructed from speech.',
             }),
         },
-        intake: {
+        intake: isEvaluation ? {
+            subject: `[AMY EVALUATION] ${name} · Demo review`,
+            text: ['AMY EVALUATION RECAP', '', `Contact: ${name}`, `Verified email: ${input.verifiedEmail}`, `Session ID: ${input.externalSessionId}`, '', objective, '', ...textSection('Topics raised by the evaluator', highlights), `Suggested next step: ${nextStep}`, '', AMY_EVALUATION_BOUNDARY, 'Any sample brief is fictional and is excluded from the customer record and attachments.'].join('\n'),
+            html: shell({
+                preview: 'Amy capability evaluation—not a customer opportunity.',
+                eyebrow: 'AI Fusion Labs · Demo evaluation', title: 'Amy evaluation recap',
+                subtitle: 'What the evaluator explored, without inventing a sales opportunity.',
+                body: `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">${detailRow('Contact', name)}${detailRow('Verified email', input.verifiedEmail)}${detailRow('Session ID', input.externalSessionId)}${detailRow('Session type', 'Demo evaluation · no customer opportunity established')}</table><p style="margin:24px 0 12px;color:#263548;line-height:24px;">${escapeHtml(objective)}</p><h2 style="font-size:18px;">Topics raised by the evaluator</h2><table role="presentation" width="100%">${bulletRows(highlights)}</table><h2 style="font-size:18px;">Suggested next step</h2><p style="line-height:24px;">${escapeHtml(nextStep)}</p><p style="padding:16px;background:#fff7fa;line-height:22px;">${escapeHtml(AMY_EVALUATION_BOUNDARY)}</p>`,
+                footer: 'Any sample brief is fictional and is excluded from the customer record and attachments. Private check-in identity is retained; spoken role-play names do not replace it.',
+            }),
+        } : {
             subject: `[INSIGHT INTAKE] ${subjectContext} · ${name}`,
             text: intakeText,
             html: shell({

@@ -199,7 +199,7 @@ export function evaluateAmyTranscript(input: string): AmyLiveQaReport {
         if (/\b(?:state|say|repeat|spell|share).{0,50}\b(?:email|e-mail|address)\b|\b(?:I heard|I have|I got|I've got|recorded).{0,120}(?:@|\bat\s+(?:gmail|outlook|hotmail|yahoo)\b|\b(?:gmail|outlook|hotmail|yahoo)\s+(?:dot|\.)\s*com\b)/i.test(assistant.content)) {
             add('spoken_email_handling', 'critical', index, assistant.content);
         }
-        if (TOOL_MARKUP.test(assistant.content)) {
+        if (TOOL_MARKUP.test(assistant.content) || inspectAmyLiveOutput(assistant.content)?.reason === 'tool_markup') {
             add('tool_markup_exposed', 'critical', index, assistant.content);
             if (priorUser && SOFT_COMPLETION.test(priorUser.content) && !hasExplicitAmyCloseIntent(priorUser.content)) {
                 add('premature_close_attempt', 'critical', index, priorUser.content);

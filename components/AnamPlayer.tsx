@@ -840,7 +840,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 .catch(() => console.error('[Amy Anam] Farewell recovery was not confirmed'));
                             return;
                         }
-                        if (reason === 'provider_fallback') {
+                        if (reason === 'provider_fallback' || reason === 'tool_markup') {
                             if (lastAmyFallbackRecoveryTurn === completedUserTurns) return;
                             lastAmyFallbackRecoveryTurn = completedUserTurns;
                             const recoveryTurn = completedUserTurns;
@@ -974,7 +974,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         ? buildAmyWorkbenchModel(transcriptRef.current.slice(-120) as AmyWorkbenchTurn[], '', '', artifactView) : null;
                                     let browserArtifactRequested = false;
                                     if (artifactView && candidate && requestAmyArtifact
-                                        && (candidate.quality.level === 'grounded' || workbenchOpenRef.current)) {
+                                        && (candidate.conversationKind === 'evaluation' || candidate.quality.level === 'grounded' || workbenchOpenRef.current)) {
                                         browserArtifactRequested = true;
                                         const requestTurn = completedUserTurns;
                                         void requestAmyArtifact(artifactView).then(result => {
@@ -997,7 +997,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         view: workbenchViewRef.current,
                                         lastReceipt: lastWorkbenchModelRef.current,
                                     });
-                                    if (discoveryGuidance && !browserArtifactRequested) {
+                                    if (discoveryGuidance && !browserArtifactRequested
+                                        && buildAmyWorkbenchModel(transcriptRef.current as AmyWorkbenchTurn[]).conversationKind !== 'evaluation') {
                                         try {
                                             anamClient.addContext(discoveryGuidance);
                                         } catch {
@@ -1010,6 +1011,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     isAmyCara4
                                     && workbenchEnabled
                                     && hasAmyCapabilityOverviewIntent(completedUserTurn)
+                                    && !requestedAmyArtifact(completedUserTurn)
                                     && capabilityIntentTurn !== lastAmyCapabilityIntentTurn
                                 ) {
                                     lastAmyCapabilityIntentTurn = capabilityIntentTurn;

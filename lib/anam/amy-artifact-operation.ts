@@ -13,9 +13,9 @@ export function requestedAmyArtifact(userTurn: string, priorAgentTurn = '', open
         || /\b(?:email|e-mail|send|forward|part number|SKU|inventory|price|pricing|catalog|case study|customer example|capabilities)\b/i.test(text)) return null;
     const viewFrom = (value: string): AmyArtifactView | null =>
         /\blive notes\b/i.test(value) ? 'notes'
-        : /\b(?:live|session) brief\b/i.test(value) ? 'brief'
+        : /\b(?:live|session) briefs?\b/i.test(value) ? 'brief'
         : /\broad\s?map\b/i.test(value) ? 'roadmap'
-        : /\b(?:visual|brief|diagram|presentation)\b/i.test(value) ? 'visual' : null;
+        : /\b(?:visuals?|briefs?|diagrams?|presentations?)\b/i.test(value) ? 'visual' : null;
     if (/\b(?:show|open|display|create|build|update|refresh|revise|add|include|put together)\b/i.test(text)) return viewFrom(text)
         ?? (/\b(?:update|refresh|revise|add|include)\b/i.test(text) ? openView ?? null : null);
     if (/^(?:yes|sure|please do|go ahead|that (?:would be|sounds) (?:perfect|great|good|helpful))\b/i.test(text)

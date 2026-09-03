@@ -108,8 +108,9 @@ test('session 3d852e0a regression: Amy stays in a bounded executive capability i
     assert.match(prompt, /explicitly hypothetical three-beat walkthrough.*customer signal.*working view.*Insight validation/is);
     assert.match(prompt, /Insight Intelligence.*features, capabilities.*show_amy_intelligence.*once if attached/is);
     assert.match(prompt, /non-customer overview/i);
-    assert.match(prompt, /amy_intelligence_opened.*one short sentence.*without generic discovery/is);
-    assert.match(prompt, /If unavailable.*never substitute `show_visual_brief`/is);
+    assert.match(prompt, /unless the browser already opened it.*Acknowledge the non-customer overview briefly/is);
+    assert.match(prompt, /Sample-brief requests use the sample instead/i);
+    assert.match(workbenchPrompt, /fictional example without customer discovery.*Never invent sample facts/is);
     assert.ok(amyIntelligenceTool, 'show_amy_intelligence tool must exist');
     assert.match(amyIntelligenceTool.description, /Insight Intelligence Layer/i);
     assert.match(amyIntelligenceTool.description, /not a customer Visual Brief/i);

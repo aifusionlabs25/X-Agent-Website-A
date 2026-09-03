@@ -54,7 +54,11 @@ export function buildAmyWorkbenchReceiptDetails(
         return change.kind === 'removed' ? !current : current?.value === change.value;
     });
     const subject = `The ${VIEW_NAME[view]}`;
-    const spokenConfirmation = supportedChanges.length === 0
+    const spokenConfirmation = model.conversationKind === 'evaluation'
+        ? view === 'visual'
+            ? 'The fictional sample brief is open. It illustrates the format, not a real customer or completed handoff.'
+            : 'The evaluation view is open; it describes this demo discussion, not a customer opportunity.'
+        : supportedChanges.length === 0
         ? `${subject} is open; I checked it, but no supported facts changed.`
         : model.quality.level === 'developing' || roadmap?.complete === false
         ? `${subject} is open, with details still to clarify.`

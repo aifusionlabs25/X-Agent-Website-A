@@ -383,7 +383,7 @@ export default function AmyAnamWorkbenchV2({
                 ) : view === 'visual' ? (
                     <section aria-labelledby="amy-visual-heading" className="flex min-h-0 flex-1 flex-col">
                         <div className="flex flex-none items-end justify-between gap-4">
-                            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{model.quality.level === 'grounded' ? 'Conversation-grounded decision brief' : 'Developing conversation working brief'}</p><h3 id="amy-visual-heading" className="mt-0.5 text-xl font-semibold tracking-[-0.035em]">Visual Brief</h3></div>
+                            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#ff68a9]">{model.conversationKind === 'evaluation' ? 'Fictional example · not customer data' : model.quality.level === 'grounded' ? 'Conversation-grounded decision brief' : 'Developing conversation working brief'}</p><h3 id="amy-visual-heading" className="mt-0.5 text-xl font-semibold tracking-[-0.035em]">{model.conversationKind === 'evaluation' ? 'Illustrative Sample Brief' : 'Visual Brief'}</h3></div>
                             <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-400">{visualSlideIndex + 1} / {model.visualBrief.slides.length}</p>
                         </div>
                         {model.quality.level === 'developing' && model.quality.missing.length > 0 && (
@@ -401,7 +401,7 @@ export default function AmyAnamWorkbenchV2({
                                 <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-[#ef0065]/[0.055] blur-2xl" />
                                 <div className="relative flex items-center justify-between gap-4 border-b border-[#3a292f]/10 pb-2">
                                     <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#c50055]">{activeSlide.eyebrow}</p>
-                                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e7b82]">Insight · Working view</span>
+                                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e7b82]">{model.conversationKind === 'evaluation' ? 'Demo · Illustrative only' : 'Insight · Working view'}</span>
                                 </div>
                                 <div className="relative mt-[clamp(0.7rem,1.6vh,1.35rem)] max-w-3xl">
                                     <h4 className="max-w-2xl text-[clamp(1.65rem,3vw,3rem)] [font-family:Georgia,'Times_New_Roman',serif] font-normal leading-[0.98] tracking-[-0.045em] text-[#2d2326]">{activeSlide.title}</h4>
@@ -410,7 +410,7 @@ export default function AmyAnamWorkbenchV2({
                                 <div className="relative mt-[clamp(0.7rem,1.7vh,1.25rem)] grid min-h-0 content-start gap-2 md:grid-cols-3">
                                     {activeSlide.bullets.map((bullet, index) => (
                                         <div key={bullet} className={`${index === 0 ? 'border-[#d6005b] bg-[#d6005b] text-white' : 'border-[#eadde2] bg-white/80 text-[#56474c]'} min-h-0 border px-3 py-3 text-[clamp(0.72rem,1.15vw,0.875rem)] leading-5 shadow-[0_10px_28px_rgba(74,38,52,0.05)]`}>
-                                            <span className={`mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] ${index === 0 ? 'text-pink-100' : 'text-[#c50055]'}`}>Signal {String(index + 1).padStart(2, '0')}</span>
+                                            <span className={`mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] ${index === 0 ? 'text-pink-100' : 'text-[#c50055]'}`}>{model.conversationKind === 'evaluation' ? 'Example' : 'Signal'} {String(index + 1).padStart(2, '0')}</span>
                                             {bullet}
                                         </div>
                                     ))}

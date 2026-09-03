@@ -1,6 +1,10 @@
 const LIVE_PRODUCT_DATA_REQUEST = /\b(?:sku|part(?:\s+number)?|inventory|price|pricing|availability|lead[- ]?time|contract[- ]?eligibility|live\s+(?:catalog|search|product\s+data))\b/i;
 
 const CAPABILITY_OVERVIEW_REQUESTS = [
+    /\btell me\b.{0,35}\bwhat you are\b/i,
+    /\b(?:see|learn|understand)\b.{0,25}\bwhat (?:we|you) can do\b/i,
+    /\b(?:asked|invited|told) me to (?:check|try) (?:this|you|amy) out\b/i,
+    /\bhow (?:exactly )?would (?:you|that|this) help (?:my|our|the) team\b/i,
     /\bwhat\s+(?:do|can)\s+you\s+do\b/i,
     /\bwhat\s+you\s+can\s+do\b/i,
     /\bhow\s+do\s+you\s+work\b/i,
@@ -17,7 +21,7 @@ const CAPABILITY_OVERVIEW_REQUESTS = [
 ];
 
 export function normalizeAmyCapabilityTurn(value: string): string {
-    return String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return String(value ?? '').replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 export function hasAmyCapabilityOverviewIntent(value: string): boolean {

@@ -5,10 +5,13 @@ export type AmyLiveOutputInspection = {
     safePrefix: string;
 };
 
+export const AMY_SPOKEN_TOOL_NAME = /\b(?:show_(?:amy_intelligence|session_brief|live_notes|solution_roadmap|visual_brief|solution_catalog)|end_amy_session|end_call|skip_turn|send_amy_follow_up)\b/i;
+
 const UNSAFE_SPOKEN_PATTERNS: Array<{
     reason: AmyUnsafeSpokenOutputReason;
     pattern: RegExp;
 }> = [
+    { reason: 'tool_markup', pattern: AMY_SPOKEN_TOOL_NAME },
     {
         reason: 'contact_privacy',
         pattern: /\b(?:could|can|would) you (?:please )?(?:state|say|repeat|spell|share).{0,45}\b(?:email|e-mail|address)\b/i,

@@ -2,6 +2,7 @@ import { isQualificationOpenItem, readAmyQualificationFacts } from './amy-qualif
 import { readAmySecurityFacts } from './amy-security-facts.ts';
 import { applyAmyPlanningComparison } from './amy-planning-comparison.ts';
 import { applyAmyCommercialDiscovery } from './amy-commercial-discovery.ts';
+import { amyConversationMode, buildAmyEvaluationModel } from './amy-evaluation.ts';
 
 export type AmyWorkbenchView = 'capabilities' | 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 
@@ -47,6 +48,7 @@ interface CatalogCategory {
 }
 
 export interface AmyWorkbenchModel {
+    conversationKind?: 'discovery' | 'evaluation';
     status: 'listening' | 'live';
     lane: string;
     signalCount: number;
@@ -621,6 +623,7 @@ function makeFact(section: AmyWorkbenchFact['section'], label: string, value: st
 }
 
 export function buildAmyWorkbenchModel(turns: AmyWorkbenchTurn[], roadmapTopic = '', catalogQuery = '', requestedView?: AmyWorkbenchView): AmyWorkbenchModel {
+    if (amyConversationMode(turns) === 'evaluation') return buildAmyEvaluationModel(turns);
     const userTurns = turns
         .filter((turn) => turn.role === 'user')
         .map((turn) => canonical(turn.content))
