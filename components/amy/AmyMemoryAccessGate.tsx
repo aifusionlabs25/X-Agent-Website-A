@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { AlertCircle, ArrowRight, Brain, CheckCircle2, LogOut, RotateCcw, Sparkles, UserRound, X } from 'lucide-react';
 
 type AccessStatus = {
@@ -115,7 +116,10 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
             if (!response.ok) throw new Error(String(payload.error ?? 'Access was not granted'));
             const nextStatus = normalizeStatus(payload);
             setStatus(nextStatus);
-            setCheckInResult(nextStatus);
+            // Skip the redundant completion card; the player retains its own
+            // explicit Start button for the browser microphone/audio gesture.
+            setCheckInResult(null);
+            setEmail('');
             setAccessCode('');
             setNotice(nextStatus.approvedMemoryCount > 0
                 ? `Amy found ${nextStatus.approvedMemoryCount} saved conversation highlight(s) for you.`
@@ -359,7 +363,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                         </p>
                         <h1 className="mt-3 text-4xl font-semibold tracking-tight">Meet Amy.</h1>
                         <p className="mt-3 text-sm leading-6 text-zinc-400">
-                            Sign in to begin. We use this address privately for your post-session recap, Visual Brief, and follow-up support.
+                            Check in, then start your conversation. Your email is used for your session recap and follow-up.
                         </p>
                     </div>
                     <div className="hidden">
@@ -411,28 +415,34 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                 placeholder="Provided with your invitation"
                             />
                         </label>
-                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                        <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
                             <input
                                 type="checkbox"
+                                disabled
                                 checked={memoryConsent}
                                 onChange={event => setMemoryConsent(event.target.checked)}
                                 className="mt-1 h-4 w-4 accent-indigo-500"
                             />
                             <span>
-                                <strong className="font-medium text-white">Remember this email</strong>
-                                <span className="mt-1 block text-xs leading-5 text-zinc-500">
-                                    Amy can find reviewed notes on your next visit. Turn this off to start fresh.
+                                <strong className="font-medium text-white">Returning memory is paused</strong>
+                                <span className="mt-1 block text-xs leading-5 text-zinc-300">
+                                    Each visit starts fresh. Your current-session recap and follow-up still work.
                                 </span>
                             </span>
                         </label>
 
                         {error && (
-                            <div className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                            <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                                 {error}
                             </div>
                         )}
+                        <div id="amy-demo-disclosure" className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs leading-5 text-zinc-300">
+                            Amy is an AI demo independently built by AI Fusion Labs, not an official Insight service. Conversations are transcribed and processed by supporting services. A recap goes to your email; intake and session-record copies go to the demo operator for review. Use fictional or non-sensitive information.
+                            <Link href="/agents/amy/privacy" target="_blank" rel="noopener noreferrer" className="mt-2 block text-indigo-200 underline underline-offset-2">Demo privacy details (new tab)</Link>
+                        </div>
                         <button
                             type="submit"
+                            aria-describedby="amy-demo-disclosure"
                             disabled={submitting}
                             className="w-full rounded-xl bg-indigo-500 px-5 py-3.5 font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -459,12 +469,6 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                     </form>
                 </section>
             </div>
-            <footer className="hidden">
-                Amy is an AI-powered agent, not a human. Conversations may be transcribed and reviewed to support this preview. Please don’t share sensitive or confidential information.
-            </footer>
         </main>
     );
-            <footer className="relative mt-5 max-w-lg text-center text-[0.7rem] leading-5 text-zinc-600">
-                Amy is an AI agent. Conversations may be transcribed and reviewed. Do not share sensitive information.
-            </footer>
 }

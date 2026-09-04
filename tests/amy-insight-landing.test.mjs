@@ -79,8 +79,8 @@ assert.equal(
 );
 assert.match(
   demo,
-  /isAmyCara4Canary = agent\.slug === ['"]amy['"] && rawVariant === ['"]cara4['"][\s\S]*sessionVariant = isAmyCara4Canary \? AMY_CARA4_VARIANT/,
-  'Amy demo resolves the production Cara-4 query to the server-owned session variant',
+  /isAmyCara4Canary = agent\.slug === ['"]amy['"];[\s\S]*sessionVariant = isAmyCara4Canary \? AMY_CARA4_VARIANT/,
+  'all Amy bookmarks use the protected production view and server-owned variant',
 );
 assert.match(
   demo,

@@ -19,12 +19,12 @@ import {
 } from '@/lib/anam/contact-token';
 import {
     deleteAmyAnamBrowserIdentity,
-    readAmyAnamApprovedMemoryHistory,
     readAmyAnamBrowserIdentity,
     readAmyAnamMemoryConfig,
     normalizeAmyAnamMemoryEmail,
     storeAmyAnamBrowserIdentity,
 } from '@/lib/anam/user-memory';
+import { AMY_MEMORY_ACCESS_MODE } from '@/lib/anam/amy-demo-policy';
 
 function noStoreJson(body: unknown, init?: ResponseInit) {
     const response = NextResponse.json(body, init);
@@ -58,20 +58,15 @@ function safeIdentityStatus(input: {
         rawEmailReturned: false,
         identityHashReturned: false,
         memoryContentReturned: false,
+        memoryAccessMode: AMY_MEMORY_ACCESS_MODE,
     };
 }
 
 export async function GET(request: Request) {
     try {
         const config = readAmyAnamMemoryConfig();
-        if (!config.enabled) {
-            return noStoreJson(safeIdentityStatus({
-                required: false,
-                authenticated: true,
-            }));
-        }
         if (!config.gatesOpen) {
-            return noStoreJson({ error: 'Amy returning memory is temporarily unavailable' }, { status: 503 });
+            return noStoreJson({ error: 'Amy check-in is temporarily unavailable' }, { status: 503 });
         }
         const spine = readAmyAnamSpineConfig();
         const browserSession = readAmyAnamBrowserSession(request, spine.signingSecret);
@@ -82,13 +77,11 @@ export async function GET(request: Request) {
         if (!identity) {
             return noStoreJson(safeIdentityStatus({ required: true, authenticated: false }));
         }
-        const history = await readAmyAnamApprovedMemoryHistory(identity);
         return noStoreJson(safeIdentityStatus({
             required: true,
             authenticated: true,
             displayName: identity.displayName,
-            memoryConsent: identity.memoryConsent,
-            history,
+            memoryConsent: false,
         }));
     } catch {
         return noStoreJson({ error: 'Amy returning memory status is unavailable' }, { status: 503 });
@@ -120,7 +113,8 @@ export async function POST(request: Request) {
         const displayName = typeof body.displayName === 'string' ? body.displayName : '';
         const email = typeof body.email === 'string' ? body.email : '';
         const accessCode = typeof body.accessCode === 'string' ? body.accessCode : '';
-        const memoryConsent = body.memoryConsent === true;
+        // Ignore legacy clients requesting recall. Consent is not identity proof.
+        const memoryConsent = false;
         if (!displayName.trim() || !email.trim() || !accessCode) {
             return noStoreJson(
                 { error: 'Enter a valid name, email, and access code' },
@@ -146,13 +140,11 @@ export async function POST(request: Request) {
             purpose: 'amy_follow_up',
             secret: spine.signingSecret,
         });
-        const history = await readAmyAnamApprovedMemoryHistory(identity);
         const response = noStoreJson(safeIdentityStatus({
             required: true,
             authenticated: true,
             displayName: identity.displayName,
-            memoryConsent: identity.memoryConsent,
-            history,
+            memoryConsent: false,
         }));
         response.cookies.set(
             AMY_ANAM_BROWSER_COOKIE,

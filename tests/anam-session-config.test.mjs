@@ -12,7 +12,7 @@ const TAYLOR_PERSONA_ID = '4183f1fe-9922-4ef5-ad47-9b1949dfdaa4';
 const CANARY_PERSONA_ID = '11111111-2222-4333-8444-555555555555';
 const allowedPersonaIds = [AMY_PUBLIC_PERSONA_ID, TAYLOR_PERSONA_ID];
 
-test('the public Amy persona remains the default', () => {
+test('Amy without a variant resolves to the protected production persona', () => {
     assert.deepEqual(resolveAnamSessionPersona({
         requestedPersonaId: AMY_PUBLIC_PERSONA_ID,
         requestedVariant: undefined,
@@ -20,7 +20,8 @@ test('the public Amy persona remains the default', () => {
         amyCara4PersonaId: CANARY_PERSONA_ID,
     }), {
         ok: true,
-        personaId: AMY_PUBLIC_PERSONA_ID,
+        personaId: CANARY_PERSONA_ID,
+        variant: AMY_CARA4_VARIANT,
     });
 });
 

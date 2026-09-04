@@ -31,10 +31,8 @@ export default function DemoPage({ params, searchParams }: Props) {
     const isEvan = agent.slug === 'evan';
     const isDani = agent.slug === 'dani';
 
-    const rawVariant = Array.isArray(resolvedSearchParams.variant)
-        ? resolvedSearchParams.variant[0]
-        : resolvedSearchParams.variant;
-    const isAmyCara4Canary = agent.slug === 'amy' && rawVariant === 'cara4';
+    // Amy has one production experience, even for old or edited bookmarks.
+    const isAmyCara4Canary = agent.slug === 'amy';
     const sessionVariant = isAmyCara4Canary ? AMY_CARA4_VARIANT : undefined;
 
     const rawAudioBridge = Array.isArray(resolvedSearchParams.audioBridge)

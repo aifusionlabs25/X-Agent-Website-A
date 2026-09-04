@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 export default function SiteFooter() {
     const pathname = usePathname();
+    const isAmy = pathname === '/agents/amy' || pathname === '/demo/amy' || pathname?.startsWith('/agents/amy/');
     if (
         pathname === '/agents/evan'
         || pathname === '/demo/evan'
@@ -48,8 +49,8 @@ export default function SiteFooter() {
                                 X (Twitter)
                             </a>
                         </nav>
-                        <Link href="#" className="text-zinc-600 hover:text-zinc-400 text-xs underline underline-offset-2 transition-colors">
-                            Privacy Policy
+                        <Link href={isAmy ? '/agents/amy/privacy' : '#'} className="text-zinc-600 hover:text-zinc-400 text-xs underline underline-offset-2 transition-colors">
+                            {isAmy ? 'Amy demo privacy and data use' : 'Privacy Policy'}
                         </Link>
                     </div>
                 </div>

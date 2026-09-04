@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { AMY_RETURNING_MEMORY_AVAILABLE } from '@/lib/anam/amy-demo-policy';
 import { ALL_AGENTS } from '@/lib/agents';
 import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
 import { readDaniAnamAgentMailConfig } from '@/lib/anam/dani-agentmail';
@@ -86,6 +87,35 @@ export async function POST(req: Request) {
         const isDani = resolution.personaId === DANI_PERSONA_ID;
         const isEvan = resolution.personaId === EVAN_PERSONA_ID;
         const evanLocalTestMode = isEvan && isEvanLocalTestMode();
+        if (isAmyCara4) {
+            // Check-in cannot be bypassed by disabling a memory/tracking flag.
+            if (!spineConfig.gatesOpen || !memoryConfig.gatesOpen) {
+                return noStoreJson({ error: 'Amy check-in is temporarily unavailable' }, { status: 503 });
+            }
+            if (!isTrustedBrowserOrigin(req)) {
+                return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
+            }
+            const rate = await consumeAmyAnamDistributedRateLimit({
+                fingerprint: requestFingerprint(req, 'token'),
+                limit: 10,
+                windowSeconds: 10 * 60,
+            });
+            if (!rate.allowed) {
+                return noStoreJson({ error: 'Too many session starts' }, {
+                    status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) },
+                });
+            }
+            const checkedInSession = readAmyAnamBrowserSession(req, spineConfig.signingSecret);
+            if (!checkedInSession || !await readAmyAnamBrowserIdentity(checkedInSession.id)) {
+                return noStoreJson({ error: 'Amy check-in is required' }, { status: 401 });
+            }
+            const contact = readAmyAnamContactFromRequest({
+                request: req, browserSessionId: checkedInSession.id, secret: spineConfig.signingSecret,
+            });
+            if (contact?.purpose !== 'amy_follow_up') {
+                return noStoreJson({ error: 'Amy check-in is required' }, { status: 401 });
+            }
+        }
         if (isDani && !daniSessionSecrets.configured) {
             console.error('[Dani Anam Session] Isolated session secrets are unavailable');
             return noStoreJson(
@@ -259,7 +289,7 @@ export async function POST(req: Request) {
                 return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
             }
 
-            const ipRate = await consumeAmyAnamDistributedRateLimit({
+            const ipRate = isAmyCara4 ? { allowed: true, retryAfterSeconds: 0 } : await consumeAmyAnamDistributedRateLimit({
                 fingerprint: requestFingerprint(req, 'token'),
                 limit: 10,
                 windowSeconds: 10 * 60,
@@ -306,7 +336,7 @@ export async function POST(req: Request) {
                         { status: 401 },
                     );
                 }
-                memoryUnlockAvailable = identity.memoryConsent
+                memoryUnlockAvailable = AMY_RETURNING_MEMORY_AVAILABLE && identity.memoryConsent
                     && Boolean(identity.emailIdentityHash);
                 memoryPolicyContext = buildAmyAnamMemoryAccessPolicy(memoryUnlockAvailable);
                 agentMailAvailable = agentMailConfig.effectiveGateOpen && Boolean(

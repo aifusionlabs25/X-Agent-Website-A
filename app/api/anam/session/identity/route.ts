@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { AMY_RETURNING_MEMORY_AVAILABLE, AMY_MEMORY_PAUSED_MESSAGE } from '@/lib/anam/amy-demo-policy';
 import { verifyAmyAnamLiveIdentity } from '@/lib/anam/live-identity';
 import {
     AmyAnamRequestError,
@@ -29,6 +30,10 @@ function noStoreJson(body: unknown, init?: ResponseInit) {
 }
 
 export async function POST(request: Request) {
+    // Independent of consent, feature flags, and pre-existing browser sessions.
+    if (!AMY_RETURNING_MEMORY_AVAILABLE) {
+        return noStoreJson({ error: AMY_MEMORY_PAUSED_MESSAGE, memoryUnlocked: false }, { status: 403 });
+    }
     try {
         const spineConfig = readAmyAnamSpineConfig();
         const memoryConfig = readAmyAnamMemoryConfig();

@@ -28,6 +28,11 @@ export async function POST(req: Request) {
         if (!agent) {
             return NextResponse.json({ error: 'Persona is not available on this site.' }, { status: 403 });
         }
+        if (agent.slug === 'amy') {
+            return NextResponse.json({
+                error: 'Amy transcripts are accepted only through the provider-authoritative Anam session finalizer.',
+            }, { status: 409 });
+        }
         if (agent.slug === 'dani') {
             return NextResponse.json({
                 error: 'Dani transcripts are accepted only through the provider-authoritative Anam session finalizer.',

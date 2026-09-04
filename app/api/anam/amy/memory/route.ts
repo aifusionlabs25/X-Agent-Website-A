@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { AMY_RETURNING_MEMORY_AVAILABLE, AMY_MEMORY_PAUSED_MESSAGE } from '@/lib/anam/amy-demo-policy';
 import {
     isTrustedBrowserOrigin,
     readAmyAnamBrowserSession,
@@ -27,6 +28,9 @@ async function authenticatedIdentity(request: Request) {
 }
 
 export async function GET(request: Request) {
+    if (!AMY_RETURNING_MEMORY_AVAILABLE) {
+        return noStoreJson({ error: AMY_MEMORY_PAUSED_MESSAGE }, { status: 403 });
+    }
     try {
         const identity = await authenticatedIdentity(request);
         if (!identity) return noStoreJson({ error: 'Authentication required' }, { status: 401 });
@@ -44,6 +48,9 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+    if (!AMY_RETURNING_MEMORY_AVAILABLE) {
+        return noStoreJson({ error: AMY_MEMORY_PAUSED_MESSAGE }, { status: 403 });
+    }
     try {
         if (!isTrustedBrowserOrigin(request)) {
             return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });

@@ -25,6 +25,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     if (slug === 'amy') {
         return {
             title: 'Amy · Senior SDR for Insight',
+            openGraph: {
+                title: 'Amy · Insight SDR demo',
+                description: 'An independently built AI Fusion Labs demonstration of discovery and working briefs. Human review remains essential.',
+            },
             description:
                 'Meet Amy for focused executive discovery, opportunity qualification, and preparation for the right Insight specialist conversation.',
         };

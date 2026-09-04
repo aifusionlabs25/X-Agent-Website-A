@@ -306,21 +306,18 @@ test('a newly opened Amy demo requires a fresh tester check-in without clearing 
     assert.doesNotMatch(freshCheckIn, /\/api\/anam\/amy\/memory/);
 });
 
-test('check-in pauses before launch and clearly reports whether prior memory was found', async () => {
+test('check-in goes directly to the existing player with an honest memory pause', async () => {
     const gate = await readFile(
         new URL('../components/amy/AmyMemoryAccessGate.tsx', import.meta.url),
         'utf8',
     );
 
-    assert.match(gate, /setCheckInResult\(nextStatus\)/);
-    assert.match(gate, /status\.authenticated && checkInResult/);
-    assert.match(gate, /Previous conversation found\./);
-    assert.match(gate, /No previous conversation found\./);
-    assert.match(gate, /check the email spelling/i);
-    assert.match(gate, /Check email/);
-    assert.match(gate, /Continue fresh/);
-    assert.match(gate, /Your email stays private and is never shown to Amy\./);
-    assert.match(gate, /post-session recap, Visual Brief, and follow-up support/i);
+    assert.doesNotMatch(gate, /setCheckInResult\(nextStatus\)/);
+    assert.match(gate, /setCheckInResult\(null\)/);
+    assert.match(gate, /Returning memory is paused/);
+    assert.match(gate, /type="checkbox"\s+disabled/);
+    assert.match(gate, /id="amy-demo-disclosure"/);
+    assert.match(gate, /href="\/agents\/amy\/privacy"/);
     assert.match(gate, /By continuing, you agree to receive Amy&apos;s session follow-up/i);
     assert.match(gate, /will not ask you to repeat or confirm the address/i);
     assert.match(gate, /<details className="hidden">/);

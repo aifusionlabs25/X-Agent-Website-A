@@ -3,6 +3,7 @@ import { readAmyAnamHermesShadowConfig } from './hermes-shadow.ts';
 import { readAmyAnamRecoveryConfig } from './session-recovery.ts';
 import { readAmyAnamSpineConfig } from './session-spine.ts';
 import { readAmyAnamMemoryConfig } from './user-memory.ts';
+import { AMY_RETURNING_MEMORY_AVAILABLE, AMY_MEMORY_ACCESS_MODE } from './amy-demo-policy.ts';
 
 type CapabilityRequest = {
     enabled: boolean;
@@ -83,6 +84,8 @@ export function buildAmyAnamCapabilityReadiness(
             cloudContentAllowed: false,
         },
         memory: {
+            accessMode: AMY_MEMORY_ACCESS_MODE,
+            returningRecallAvailable: AMY_RETURNING_MEMORY_AVAILABLE,
             implemented: true,
             enabled: memory.enabled,
             configured: memory.configured,

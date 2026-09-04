@@ -43,11 +43,17 @@ export function resolveAnamSessionPersona({
         ? requestedVariant.trim()
         : '';
 
-    if (!variant) {
+    if (personaId === AMY_PUBLIC_PERSONA_ID
+        && requestedVariant != null && typeof requestedVariant !== 'string') {
+        return { ok: false, status: 400, error: 'Unsupported Anam session variant' };
+    }
+
+    // Missing variants must never select the retired, unprotected Amy persona.
+    if (!variant && personaId !== AMY_PUBLIC_PERSONA_ID) {
         return { ok: true, personaId };
     }
 
-    if (variant !== AMY_CARA4_VARIANT) {
+    if (variant && variant !== AMY_CARA4_VARIANT) {
         return { ok: false, status: 400, error: 'Unsupported Anam session variant' };
     }
 
