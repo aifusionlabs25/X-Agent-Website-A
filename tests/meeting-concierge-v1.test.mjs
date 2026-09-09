@@ -52,6 +52,8 @@ test('v1 shared core stays agent-neutral', () => {
   }
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /MEETING_CONCIERGE_VERSION\s*=\s*['"]v1['"]/);
   assert.match(read('components/meeting-concierge/v1/MeetingConcierge.tsx'), /data-meeting-concierge-version=\{MEETING_CONCIERGE_VERSION\}/);
+  assert.match(read('components/meeting-concierge/v1/MeetingConcierge.tsx'), /persistInvite !== false/);
+  assert.match(read('components/meeting-concierge/v1/MeetingConcierge.tsx'), /checkInEnabled/);
 });
 
 test('Amy adapter uses only Amy identity, consent, persona, and routes', () => {
@@ -92,6 +94,9 @@ test('Dani adapter uses only Dani identity, consent, persona, and routes', () =>
   assert.match(client, /followUpConsent:\s*true/);
   assert.match(client, /memoryConsent:\s*false/);
   assert.match(client, /defaultMode:\s*['"]observer['"]/);
+  assert.match(client, /persistInvite:\s*false/);
+  assert.match(client, /checkInEnabled:\s*DANI_MEETING_CHECK_IN_ENABLED/);
+  assert.match(client, /meetingBootstrap:\s*true/);
   assert.match(client, /mode:\s*['"]observer['"][\s\S]*mode:\s*['"]participant['"][\s\S]*mode:\s*['"]facilitator['"]/);
   assert.match(client, /Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1/);
   assert.doesNotMatch(client, /standard meeting follow-up/);
@@ -100,6 +105,8 @@ test('Dani adapter uses only Dani identity, consent, persona, and routes', () =>
   assert.match(route, /expectedPersonaId:\s*DANI_PERSONA_ID/);
   assert.match(route, /storedContact\?\.purpose\s*!==\s*['"]dani_follow_up['"]/);
   assert.match(route, /emailOwnershipVerified\s*!==\s*true/);
+  assert.match(route, /NEXT_PUBLIC_DANI_MEETING_CHECK_IN_ENABLED/);
+  assert.match(route, /displayName: 'Organizer'/);
   assert.match(route, /removeToolNames:\s*\[[\s\S]*['"]end_dani_session['"][\s\S]*['"]send_dani_follow_up_email['"][\s\S]*['"]confirm_dani_live_identity['"]/);
   assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);
   assert.match(route, /Call end_call once with confirmed true/i);

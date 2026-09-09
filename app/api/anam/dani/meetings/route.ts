@@ -17,6 +17,9 @@ import {
 } from '@/lib/anam/dani-meeting-participation';
 
 const DANI_MEETING_PARTICIPATION_MODES = ['observer', 'participant', 'facilitator'] as const;
+// Keep the email-code gate available, but paused for the controlled Dani
+// meeting lane until this public flag is explicitly turned back on.
+const DANI_MEETING_CHECK_IN_ENABLED = process.env.NEXT_PUBLIC_DANI_MEETING_CHECK_IN_ENABLED === 'true';
 
 const DANI_MEETING_EXIT_INSTRUCTIONS = `MEETING-ONLY SESSION CONTROL — HIGHEST PRIORITY
 - This runtime is an external video meeting, not Dani's X Agents website session. Never call end_dani_session here.
@@ -72,6 +75,13 @@ const daniMeetingConcierge = createMeetingConciergeHandlers({
         if (!spine.gatesOpen || !secrets.configured) return null;
         const browser = readDaniAnamBrowserSession(request, secrets.sessionSecret);
         if (!browser) return null;
+        if (!DANI_MEETING_CHECK_IN_ENABLED) {
+            return {
+                authenticated: true,
+                displayName: 'Organizer',
+                isolationId: browser.id,
+            };
+        }
         const cookieContact = readDaniAnamContactFromRequest({
             request,
             browserSessionId: browser.id,

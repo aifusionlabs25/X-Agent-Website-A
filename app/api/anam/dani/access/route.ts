@@ -176,6 +176,7 @@ export async function POST(request: Request) {
 
         const body = await readBoundedJsonObject(request, 4 * 1024);
         const allowedFields = new Set([
+            'meetingBootstrap',
             'guest',
             'displayName',
             'email',
@@ -195,6 +196,24 @@ export async function POST(request: Request) {
         const emailConfig = readDaniAnamAgentMailConfig();
         const memoryConfig = readDaniAnamMemoryConfig();
         const memoryEnrollmentAvailable = memoryConfig.gatesOpen && emailConfig.effectiveGateOpen;
+
+        if (body.meetingBootstrap === true) {
+            if (Object.keys(body).some(key => key !== 'meetingBootstrap')) {
+                return json({ error: 'Meeting bootstrap cannot include contact or memory fields' }, { status: 400 });
+            }
+            const response = json(status({
+                authenticated: true,
+                emailFollowUpAvailable: emailConfig.effectiveGateOpen,
+                memoryAvailable: memoryEnrollmentAvailable,
+            }));
+            if (created) {
+                response.cookies.set(DANI_ANAM_BROWSER_COOKIE, created.token, daniAnamSessionCookieOptions());
+            }
+            return response;
+        }
+        if (Object.hasOwn(body, 'meetingBootstrap')) {
+            return json({ error: 'Meeting bootstrap must be enabled explicitly' }, { status: 400 });
+        }
 
         if (body.guest === true) {
             if (Object.keys(body).some(key => key !== 'guest')) {

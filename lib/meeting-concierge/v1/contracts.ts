@@ -74,6 +74,21 @@ export type MeetingConciergeClientAdapter = {
         meetingApiPath: string;
         groupWakeName: string;
     };
+    /**
+     * Keep the invitation in this browser so an organizer can monitor it
+     * after a reload. Controlled lanes can disable this to start fresh.
+     */
+    persistInvite?: boolean;
+    /**
+     * Keep the adapter's check-in implementation available while allowing a
+     * controlled lane to pause the check-in UI behind a single feature flag.
+     */
+    checkInEnabled?: boolean;
+    /**
+     * Establish the agent-scoped browser session when a controlled lane does
+     * not show its normal check-in UI.
+     */
+    prepareOrganizer?: () => Promise<MeetingConciergeOrganizer>;
     copy: {
         eyebrow: string;
         confirmedTitle: string;

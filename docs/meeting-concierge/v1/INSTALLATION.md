@@ -33,6 +33,7 @@ Dani is the reference implementation. Observer is her corporate-safe default, on
 
 - Organizer removal uses `DELETE /v1/meetings/invites/{id}` behind the agent's authenticated X Agents route. The browser sends only its opaque HMAC ticket; it never receives or submits the raw provider invite ID.
 - The shared UI keeps the active invitation in agent-namespaced browser storage. Reloading the same route restores monitoring and the removal control. Stored controls expire locally after eight days.
+- A controlled adapter may set `persistInvite: false` to clear any older browser record and start with a fresh scheduler after reload. In that mode the UI omits the cancel/remove loop and offers a direct “Start another meeting” reset on the same page.
 - A meeting-scoped persona snapshot copies the saved persona's avatar, voice, LLM, prompt, tools, and provider settings at invitation time. Remove that agent's website-only close tool and every other client tool whose handler exists only in the website, then add Anam's native `end_call` tool. Keep server RAG/system tools that are valid in native meetings. Never attach another agent's tool.
 - Add a short meeting-only prompt suffix: an explicit request directed at the agent to leave is confirmed intent, needs no follow-up confirmation, and invokes `end_call` exactly once. Casual thanks alone is not closing intent.
 - Set `maxSessionLengthSeconds` through the shared duration choices. This bounds abandoned sessions even if the organizer closes the X Agents page.
@@ -43,6 +44,7 @@ Dani is the reference implementation. Observer is her corporate-safe default, on
 - Version 1 schedules, monitors, and removes the Anam participant. It does not bind a native Google Meet, Zoom, or Teams session into the website session spine.
 - Do not promise a transcript, recap email, returning memory, Hermes review, or other website post-session workflow from this module. Those require a separate provider-session ingestion module.
 - Agent check-in may reuse an existing identity flow to protect invitation controls, but the UI must state this boundary plainly.
+- A controlled adapter may set `checkInEnabled: false` while retaining its existing check-in implementation for later re-enablement. If the server route also gates organizer access, use one matching public feature flag for both sides, silently bootstrap only the agent-scoped browser session, and keep the browser-session isolation boundary in place.
 
 ## Non-negotiable isolation
 
@@ -71,6 +73,6 @@ Dani is the reference implementation. Observer is her corporate-safe default, on
 - Brand shell: `components/dani/DaniMeetingScheduler.tsx`
 - Entry point: `/agents/dani?meeting=google`
 - Existing private session (unchanged): `/demo/dani`
-- Check-in: Dani's existing verified-email OTP with follow-up consent; returning memory remains separately disabled unless the visitor explicitly enables it through Dani's normal memory flow.
+- Check-in: Dani's existing verified-email OTP with follow-up consent is retained behind `NEXT_PUBLIC_DANI_MEETING_CHECK_IN_ENABLED=true`; the controlled lane currently leaves it paused. Returning memory remains separately disabled unless the visitor explicitly enables it through Dani's normal memory flow.
 
 Run `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/meeting-concierge-v1.test.mjs` for the module and isolation contract.

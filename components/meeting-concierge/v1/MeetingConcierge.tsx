@@ -167,6 +167,9 @@ function statusCopy(agentName: string, invite: MeetingConciergeInvite, joinState
 
 export default function MeetingConcierge({ adapter, initialProvider, styles }: MeetingConciergeProps) {
     const { meetingApiPath } = adapter.agent;
+    const checkInEnabled = adapter.checkInEnabled !== false && Boolean(adapter.checkIn);
+    const persistInvite = adapter.persistInvite !== false;
+    const prepareOrganizer = adapter.prepareOrganizer;
     const [step, setStep] = useState(1);
     const [provider, setProvider] = useState<MeetingConciergeProvider>(initialProvider);
     const [meetingUrl, setMeetingUrl] = useState('');
@@ -179,7 +182,8 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
     const [maxDurationMinutes, setMaxDurationMinutes] = useState<MeetingConciergeDurationMinutes>(30);
     const [purpose, setPurpose] = useState('');
     const [displayName, setDisplayName] = useState('');
-    const [authenticated, setAuthenticated] = useState(false);
+    const [authenticated, setAuthenticated] = useState(!checkInEnabled);
+    const [preparing, setPreparing] = useState(!checkInEnabled && Boolean(prepareOrganizer));
     const [busy, setBusy] = useState(false);
     const [removing, setRemoving] = useState(false);
     const [confirmingRemoval, setConfirmingRemoval] = useState(false);
@@ -196,7 +200,8 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
             } catch {
                 // Keep the visible fallback when browser timezone data is unavailable.
             }
-            const stored = readStoredMeetingConciergeInvite(adapter.agent.key);
+            const stored = persistInvite ? readStoredMeetingConciergeInvite(adapter.agent.key) : null;
+            if (!persistInvite) clearStoredMeetingConciergeInvite(adapter.agent.key);
             if (stored) {
                 setInvite(stored.invite);
                 setProvider(stored.provider);
@@ -209,15 +214,39 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 setRestoredInvite(true);
             }
         });
-        void readMeetingConciergeOrganizer(meetingApiPath)
-            .then(organizer => {
-                if (disposed) return;
-                setAuthenticated(organizer.authenticated);
-                setDisplayName(organizer.displayName ?? 'Organizer');
-            })
-            .catch(() => undefined);
+        if (!checkInEnabled) {
+            if (prepareOrganizer) {
+                void prepareOrganizer()
+                    .then(organizer => {
+                        if (disposed) return;
+                        setAuthenticated(organizer.authenticated);
+                        setDisplayName(organizer.displayName ?? 'Organizer');
+                    })
+                    .catch(caught => {
+                        if (disposed) return;
+                        setAuthenticated(false);
+                        setError(caught instanceof Error ? caught.message : adapter.agent.name + ' meeting access could not be prepared');
+                    })
+                    .finally(() => {
+                        if (!disposed) setPreparing(false);
+                    });
+            } else {
+                setAuthenticated(true);
+                setDisplayName('Organizer');
+                setPreparing(false);
+            }
+        } else {
+            setPreparing(false);
+            void readMeetingConciergeOrganizer(meetingApiPath)
+                .then(organizer => {
+                    if (disposed) return;
+                    setAuthenticated(organizer.authenticated);
+                    setDisplayName(organizer.displayName ?? 'Organizer');
+                })
+                .catch(() => undefined);
+        }
         return () => { disposed = true; };
-    }, [adapter.agent.key, adapter.participation, meetingApiPath]);
+    }, [adapter.agent.key, adapter.agent.name, adapter.participation, checkInEnabled, meetingApiPath, persistInvite, prepareOrganizer]);
 
     const inviteId = invite?.id ?? null;
     useEffect(() => {
@@ -237,7 +266,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
     }, [invite, inviteId, meetingApiPath, removing]);
 
     useEffect(() => {
-        if (!invite) return;
+        if (!persistInvite || !invite) return;
         const effectiveParticipationMode = groupCall ? participationMode : 'participant';
         storeMeetingConciergeInvite(adapter.agent.key, {
             invite,
@@ -247,7 +276,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
             ...(adapter.participation ? { participationMode: effectiveParticipationMode } : {}),
             savedAt: Date.now(),
         });
-    }, [adapter.agent.key, adapter.participation, groupCall, invite, maxDurationMinutes, participationMode, provider]);
+    }, [adapter.agent.key, adapter.participation, groupCall, invite, maxDurationMinutes, participationMode, persistInvite, provider]);
 
     const scheduledJoinAt = (() => {
         const value = new Date(`${date}T${time}:00`);
@@ -319,7 +348,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 <p className={styles.eyebrow}>Invitation created</p>
                 <h1 className={styles.title}>{adapter.copy.confirmedTitle}</h1>
                 <p className={styles.intro}>{statusCopy(adapter.agent.name, invite, joinState)}</p>
-                {restoredInvite ? <p className={styles.restoredNote}>Restored from this browser so you can continue monitoring or remove {adapter.agent.name}.</p> : null}
+                {restoredInvite && persistInvite ? <p className={styles.restoredNote}>Restored from this browser so you can continue monitoring or remove {adapter.agent.name}.</p> : null}
                 <div className={styles.liveStatus} data-status={invite.status} role="status" aria-live="polite">
                     <span aria-hidden="true" />
                     <div><strong>{joinState || invite.status.replaceAll('_', ' ')}</strong><small>This follows {adapter.agent.name}&apos;s Anam participant—not the meeting window on your computer.</small></div>
@@ -332,7 +361,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                     <div><dt>Safety limit</dt><dd>{maxDurationMinutes} minutes</dd></div>
                 </dl>
                 {invite.statusReason ? <p className={styles.error}>{invite.statusReason}</p> : null}
-                {confirmingRemoval && !terminal ? <div className={styles.dangerPanel} role="alert">
+                {confirmingRemoval && persistInvite && !terminal ? <div className={styles.dangerPanel} role="alert">
                     <TriangleAlert size={20} />
                     <div><strong>{invite.status === 'pending' ? 'Cancel this invitation?' : `Remove ${adapter.agent.name} now?`}</strong><p>{invite.status === 'pending' ? `${adapter.agent.name} will not join this meeting.` : `${adapter.agent.name} will leave immediately and the Anam meeting session will end.`}</p></div>
                     <button type="button" className={styles.secondaryButton} onClick={() => setConfirmingRemoval(false)} disabled={removing}>Keep meeting</button>
@@ -340,8 +369,8 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 </div> : null}
                 {error ? <p role="alert" className={styles.error}>{error}</p> : null}
                 <div className={styles.actions}>
-                    {terminal
-                        ? <button type="button" className={styles.secondaryButton} onClick={scheduleAnotherMeeting}>Schedule another meeting</button>
+                    {terminal || !persistInvite
+                        ? <button type="button" className={styles.secondaryButton} onClick={scheduleAnotherMeeting}>{terminal ? 'Schedule another meeting' : 'Start another meeting'}</button>
                         : <button type="button" className={styles.dangerButton} onClick={() => setConfirmingRemoval(true)} disabled={confirmingRemoval || removing}><LogOut size={16} /> {removalLabel}</button>}
                     <Link href={adapter.agent.returnHref} className={styles.primaryButton}>Return to {adapter.agent.name} <ArrowRight size={15} /></Link>
                 </div>
@@ -395,7 +424,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                 <div className={styles.formStack}>
                     <div className={styles.reviewCard}><div>{platformMark(provider, styles)}<span><strong>{PROVIDER_COPY[provider].name}</strong><small>{joinAt ? new Date(joinAt).toLocaleString() : 'Join now'} · {groupCall ? `Group meeting${participationLabel ? ` · ${participationLabel}` : ''}` : '1:1 conversation'} · {maxDurationMinutes} minute limit</small></span></div><button type="button" onClick={() => setStep(1)}>Edit</button></div>
                     {purpose.trim() ? <p className={styles.purposeReview}><strong>Working objective:</strong> {purpose.trim()}</p> : null}
-                    {authenticated ? <div className={styles.verifiedCard}><ShieldCheck size={21} /><div><strong>{adapter.copy.authenticatedLabel}</strong><span>{displayName || 'Verified organizer'} · existing consent and follow-up settings remain unchanged.</span></div></div> : <CheckInFields adapter={adapter} styles={styles} onAuthenticated={name => { setAuthenticated(true); setDisplayName(name ?? 'Organizer'); }} onError={setError} />}
+                    {preparing ? <div className={styles.verifiedCard}><ShieldCheck size={21} /><div><strong>Preparing meeting access</strong><span>Securing this browser for {adapter.agent.name}&apos;s meeting controls.</span></div></div> : authenticated ? <div className={styles.verifiedCard}><ShieldCheck size={21} /><div><strong>{checkInEnabled ? adapter.copy.authenticatedLabel : adapter.agent.name + ' meeting access is open'}</strong><span>{checkInEnabled ? (displayName || 'Verified organizer') + ' · existing consent and follow-up settings remain unchanged.' : 'The organizer code step is paused for this controlled meeting lane.'}</span></div></div> : checkInEnabled ? <CheckInFields adapter={adapter} styles={styles} onAuthenticated={name => { setAuthenticated(true); setDisplayName(name ?? 'Organizer'); }} onError={setError} /> : <p role="alert" className={styles.error}>Meeting access could not be prepared. Refresh and try again.</p>}
                     <div className={styles.note}><Mail size={18} /><p>{adapter.copy.contactBoundary}</p></div>
                 </div>
             )}
@@ -403,7 +432,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
             {error ? <p role="alert" className={styles.error}>{error}</p> : null}
             <div className={styles.actions}>
                 {step > 1 ? <button type="button" className={styles.secondaryButton} onClick={() => setStep(value => value - 1)}>Back</button> : <span />}
-                {step < 3 ? <button type="button" className={styles.primaryButton} onClick={() => setStep(value => value + 1)} disabled={step === 1 && (!meetingUrl.trim() || (joinTiming === 'scheduled' && !joinAt))}>Continue <ArrowRight size={16} /></button> : <button type="button" className={styles.primaryButton} onClick={createInvite} disabled={!authenticated || busy}>{busy ? <LoaderCircle className={styles.spinner} size={16} /> : null} Invite {adapter.agent.name} <ArrowRight size={16} /></button>}
+                {step < 3 ? <button type="button" className={styles.primaryButton} onClick={() => setStep(value => value + 1)} disabled={step === 1 && (!meetingUrl.trim() || (joinTiming === 'scheduled' && !joinAt))}>Continue <ArrowRight size={16} /></button> : <button type="button" className={styles.primaryButton} onClick={createInvite} disabled={!authenticated || busy || preparing}>{busy || preparing ? <LoaderCircle className={styles.spinner} size={16} /> : null} Invite {adapter.agent.name} <ArrowRight size={16} /></button>}
             </div>
         </div>
     );
