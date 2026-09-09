@@ -29,6 +29,9 @@ const daniMeetingConcierge = createMeetingConciergeHandlers({
     agentKey: 'dani',
     agentName: 'Dani',
     displayName: 'Dani AI Solutions Director',
+    // Temporarily unlimited for the controlled Dani meeting/demo lane. Keep
+    // the short-window IP/pre-auth limiter and Anam's own capacity controls.
+    organizerCreateRateLimit: null,
     participation: {
         allowedModes: DANI_MEETING_PARTICIPATION_MODES,
         defaultMode: 'observer',

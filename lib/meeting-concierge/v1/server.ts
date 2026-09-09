@@ -21,6 +21,14 @@ export type MeetingConciergeServerAdapter = {
     agentKey: string;
     agentName: string;
     displayName: string;
+    /**
+     * Set to null only for an explicitly approved internal/demo lane. The
+     * shared default remains four organizer-created invitations per 24 hours.
+     */
+    organizerCreateRateLimit?: {
+        limit: number;
+        windowSeconds: number;
+    } | null;
     resolvePersona(input: {
         apiKey: string;
         groupCall: boolean;
@@ -184,12 +192,16 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
             });
             if (!preAuthRate.allowed) return json({ error: 'Too many meeting requests' }, { status: 429, headers: { 'Retry-After': String(preAuthRate.retryAfterSeconds) } });
             const organizer = await requireOrganizer(request);
-            const organizerRate = await adapter.platform.consumeRateLimit({
-                fingerprint: `${adapter.agentKey}-meeting-create:${organizer.isolationId}`,
-                limit: 4,
-                windowSeconds: 24 * 60 * 60,
-            });
-            if (!organizerRate.allowed) return json({ error: `This organizer has reached the daily ${adapter.agentName} meeting limit` }, { status: 429, headers: { 'Retry-After': String(organizerRate.retryAfterSeconds) } });
+            const organizerCreateRateLimit = adapter.organizerCreateRateLimit === undefined
+                ? { limit: 4, windowSeconds: 24 * 60 * 60 }
+                : adapter.organizerCreateRateLimit;
+            if (organizerCreateRateLimit) {
+                const organizerRate = await adapter.platform.consumeRateLimit({
+                    fingerprint: `${adapter.agentKey}-meeting-create:${organizer.isolationId}`,
+                    ...organizerCreateRateLimit,
+                });
+                if (!organizerRate.allowed) return json({ error: `This organizer has reached the daily ${adapter.agentName} meeting limit` }, { status: 429, headers: { 'Retry-After': String(organizerRate.retryAfterSeconds) } });
+            }
             const body = await adapter.platform.readBoundedJsonObject(request, 5 * 1024);
             const allowedFields = new Set([
                 'meetingUrl',

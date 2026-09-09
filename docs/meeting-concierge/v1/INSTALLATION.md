@@ -19,6 +19,8 @@ Meeting Concierge v1 is the reusable X-Agent meeting-invitation flow for Google 
 4. Route an explicit `?meeting=google|zoom|teams` entry to the shell. Keep the agent's normal conversation CTA and session route unchanged.
 5. Add the isolation assertions described below and run the focused test, type check, lint, full suite, production build, and a real provider smoke test.
 
+The shared server defaults to four organizer-created invitations per 24 hours. An explicitly approved internal or demo adapter may set `organizerCreateRateLimit: null` to remove that organizer-level cap temporarily; the short-window pre-auth limiter, authentication, provider capacity, session safety limit, status polling, and removal controls remain active.
+
 ### Optional participation modes
 
 An agent may opt into the shared `observer`, `participant`, and `facilitator` contract without changing the other adapters. Add the mode labels to that agent's client adapter and the exact allowed modes plus a safe default to its server adapter. The shared server rejects unsupported values and limits Observer and Facilitator to group calls.

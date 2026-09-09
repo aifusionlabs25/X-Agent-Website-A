@@ -147,6 +147,16 @@ test('three-agent adapters remain isolated while sharing one versioned core', ()
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]email-code['"]/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]contact['"]/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /MEETING_CONCIERGE_PARTICIPATION_MODES\s*=\s*\[['"]observer['"], ['"]participant['"], ['"]facilitator['"]\]/);
+  assert.match(read('app/api/anam/dani/meetings/route.ts'), /organizerCreateRateLimit:\s*null/);
+  assert.doesNotMatch(amy, /organizerCreateRateLimit:\s*null/);
+  assert.doesNotMatch(evan, /organizerCreateRateLimit:\s*null/);
+});
+
+test('the shared meeting core keeps its daily organizer cap unless an adapter explicitly opts out', () => {
+  const server = read('lib/meeting-concierge/v1/server.ts');
+  assert.match(server, /adapter\.organizerCreateRateLimit === undefined/);
+  assert.match(server, /limit: 4, windowSeconds: 24 \* 60 \* 60/);
+  assert.match(server, /if \(organizerCreateRateLimit\)/);
 });
 
 test('status tickets are signed and bound to the agent and organizer', () => {
