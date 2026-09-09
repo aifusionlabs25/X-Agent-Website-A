@@ -1605,7 +1605,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     id="persona-video"
                     autoPlay
                     playsInline
-                    className={`${evanPlannerEnabled ? 'aspect-video h-auto max-h-full w-full max-w-[1080px] rounded-2xl object-contain shadow-[0_28px_90px_rgba(0,0,0,.45)]' : personaId === DANI_PERSONA_ID ? 'h-full w-full scale-[.97] transform-gpu object-contain shadow-[0_24px_80px_rgba(0,0,0,.24)] md:scale-[.94] motion-reduce:transform-none' : 'h-full w-full object-contain'} transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
+                    className={`${evanPlannerEnabled ? 'aspect-video h-auto max-h-full w-full max-w-[1080px] rounded-2xl object-contain shadow-[0_28px_90px_rgba(0,0,0,.45)]' : personaId === DANI_PERSONA_ID ? 'h-full w-full scale-[.84] origin-center transform-gpu object-contain object-center shadow-[0_24px_80px_rgba(0,0,0,.24)] sm:scale-[.8] lg:scale-[.76] motion-reduce:transform-none' : 'h-full w-full object-contain'} transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
                 />
             </div>
 
