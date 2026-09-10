@@ -22,6 +22,10 @@ test('observer mode is the silent corporate default with one-response activation
   assert.match(prompt, /Hi, I'm Dannie\. I'm just here to listen in—pull me in if you want me\./);
   assert.match(prompt, /One activation permits one short response only/);
   assert.match(prompt, /automatically return to observer lock/);
+  assert.match(prompt, /persistent silence lock/);
+  assert.match(prompt, /Do not answer with "I'm here," "I'm ready,"/);
+  assert.match(prompt, /silence is the whole response/);
+  assert.match(prompt, /start with the human meaning/);
   assert.match(prompt, /under 20 seconds/);
   assert.match(prompt, /Do not enter an SDR, sales, pitch, or generic discovery pattern/);
   assert.match(prompt, /"thanks," "okay," "bye,"/);
