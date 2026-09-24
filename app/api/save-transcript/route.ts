@@ -6,6 +6,8 @@ import { LLMService } from '@/lib/openai-service';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { escapeHtml } from '@/lib/sanitize-html';
 import { ALL_AGENTS } from '@/lib/agents';
+import jamesRuntimeReleaseManifest from '@/config/anam/james/v2/runtime-release-manifest.json';
+import { JAMES_SOURCE_PERSONA_ID } from '@/lib/anam/james-release-policy';
 import { AMY_CARA4_VARIANT, isAmyCara4Variant } from '@/lib/anam/session-config';
 
 // Allow route to run for up to 60 seconds (Vercel max duration)
@@ -25,6 +27,19 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: 'Transcript was empty, nothing to save.' }, { status: 200 });
         }
         const agent = ALL_AGENTS.find(a => a.personaId === personaId);
+        const isJamesPersona = personaId === JAMES_SOURCE_PERSONA_ID
+            || (typeof jamesRuntimeReleaseManifest.managedPersona.id === 'string'
+                && personaId === jamesRuntimeReleaseManifest.managedPersona.id);
+        // This also recognizes an isolated candidate persona id that is not in
+        // ALL_AGENTS, so no James transcript can fall through to generic storage.
+        if (isJamesPersona) {
+            return NextResponse.json({
+                success: true,
+                privacySuppressed: true,
+                outbound: false,
+                messageCount: transcript.length,
+            }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+        }
         if (!agent) {
             return NextResponse.json({ error: 'Persona is not available on this site.' }, { status: 403 });
         }
@@ -32,6 +47,17 @@ export async function POST(req: Request) {
             return NextResponse.json({
                 error: 'Dani transcripts are accepted only through the provider-authoritative Anam session finalizer.',
             }, { status: 409 });
+        }
+
+        // James is an AI legal-intake demo. Never persist, analyze, email, or
+        // export its transcript through the generic post-session pipeline.
+        if (agent.slug === 'james') {
+            return NextResponse.json({
+                success: true,
+                privacySuppressed: true,
+                outbound: false,
+                messageCount: transcript.length,
+            }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
         }
 
         if (variant && !isAmyCara4Variant(variant)) {

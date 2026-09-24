@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "james-anam-runtime-v2-2026-09-23",
+  "deploymentStatus": "draft_not_live",
+  "preparedAt": "2026-09-23",
+  "sourcePersona": {
+    "id": "8a991c93-0c95-42c5-8c22-a67428946eb8",
+    "name": "James Knowles Law Firm",
+    "avatarModel": "cara-3",
+    "avatarId": "81b70170-2e80-4e4b-a6fb-e04ac110dc4b",
+    "voiceId": "e9104cf7-d163-4f89-b01a-311f2e8943d0",
+    "llmId": "85906141-db1c-4927-b74d-3c82ebe2436e",
+    "zeroDataRetention": false,
+    "promptSha256": "d3c481633e6d5285a3d1120f8b0c98fb6607461f01611eabc97963699cad9d3a",
+    "knowledgeToolId": "1e4e52df-d648-4ea5-86a3-0806e6acb592",
+    "preserveAsRollback": true
+  },
+  "priorCanary": {
+    "id": "ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d",
+    "name": "James Knowles Law Firm - Cara 4",
+    "avatarModel": "cara-4",
+    "avatarId": "81b70170-2e80-4e4b-a6fb-e04ac110dc4b",
+    "voiceId": "e9104cf7-d163-4f89-b01a-311f2e8943d0",
+    "llmId": "85906141-db1c-4927-b74d-3c82ebe2436e",
+    "zeroDataRetention": false,
+    "promptSha256": "4ac1b2e2dc34ed3a517db0dfbfe2c0dc4b8faebc5e5113af3a3523e4bc3c0f0e",
+    "knowledgeGroupId": "0487402b-b539-4069-abc9-f080e72b1e12",
+    "knowledgeToolId": "a204f0b1-6284-47cb-b740-7ed2d636f77f"
+  },
+  "managedPersona": {
+    "id": "1663b021-60fb-4782-be63-8ed366dea747",
+    "name": "James Knowles Law Firm - Cara 4 2026-09-23",
+    "avatarModel": "cara-4",
+    "avatarId": "81b70170-2e80-4e4b-a6fb-e04ac110dc4b",
+    "voiceId": "e9104cf7-d163-4f89-b01a-311f2e8943d0",
+    "llmId": "85906141-db1c-4927-b74d-3c82ebe2436e",
+    "voice": "preserve from source persona",
+    "llm": "preserve from source persona",
+    "zeroDataRetention": false,
+    "initialMessage": "Hi, I'm James, an AI intake assistant for Knowles Law Firm. This demo isn't confidential or privileged, and the service may record or transcribe it, so please don't share personal or detailed case information. I can share basic firm information and point you to the firm, but I can't give legal advice. What general kind of help are you looking for?"
+  },
+  "prompt": {
+    "file": "system-prompt.md",
+    "sha256": "1509b4e018c1a09a4aef26a14fcf76077fdf2d23582b68065cd9a8458db7cdca",
+    "managedMarkerPairs": [
+      {
+        "start": "<!-- JAMES_CANONICAL_SP_START -->",
+        "end": "<!-- JAMES_CANONICAL_SP_END -->"
+      }
+    ]
+  },
+  "requiredTools": [
+    {
+      "name": "Knowledge_James_Knowles_Law_Firm_2026_09",
+      "id": "5796aee6-6963-4b0e-a378-28517a631461"
+    },
+    {
+      "name": "skip_turn",
+      "id": "69a89bda-9e11-443f-84c0-1cbea75e4fcb"
+    },
+    {
+      "name": "end_call",
+      "id": "4d05849d-329f-4cd3-996f-f2a28d8135f0"
+    }
+  ],
+  "knowledge": {
+    "manifest": "knowledge-manifest.json",
+    "toolName": "Knowledge_James_Knowles_Law_Firm_2026_09",
+    "toolType": "SERVER_RAG",
+    "documentFolderIds": ["eae271e8-9d73-4cfd-8a46-6463f893aed3"],
+    "documentsReady": true
+  },
+  "privacyGate": {
+    "status": "blocked",
+    "providerZeroDataRetention": {
+      "verified": false,
+      "verifiedAt": null,
+      "evidenceReference": null
+    },
+    "retainedTranscriptApproval": {
+      "status": "pending",
+      "approvedBy": null,
+      "approvedAt": null,
+      "evidenceReference": null,
+      "scopeConfirmed": false
+    }
+  },
+  "liveVerification": {
+    "status": "candidate_readback_passed",
+    "verifiedAt": "2026-09-23T18:49:17-07:00",
+    "personaReadbackSha256": "68f02496056d62d5950a71244f8ea14577facfc058303e7217f9b86da3eaea3e",
+    "knowledgeToolReadbackId": "5796aee6-6963-4b0e-a378-28517a631461",
+    "knowledgeGroupReadbackId": "eae271e8-9d73-4cfd-8a46-6463f893aed3",
+    "allDocumentsReady": true,
+    "toolAttachmentsMatch": true,
+    "promptHashMatches": true,
+    "smokeTestsPassed": false,
+    "sourcePersonaUnchanged": true,
+    "priorCanaryUnchanged": true
+  },
+  "releaseGate": "Do not route production traffic to this candidate until the Anam persona, prompt hash, avatar/voice/LLM, exact tool attachments, RAG group, all document READY states, either provider-side zero retention or documented privacy approval for retained transcripts, website suppression path, and smoke checks are verified. Keep the source persona and prior canary unchanged."
+}

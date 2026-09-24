@@ -12,6 +12,7 @@ import AmyMemoryAccessGate from '@/components/amy/AmyMemoryAccessGate';
 import DaniContactGate from '@/components/dani/DaniContactGate';
 import daniStyles from '@/components/dani/DaniEditorial.module.css';
 import EvanContactGate from '@/components/evan/EvanContactGate';
+import JamesPrivacyReleaseGate from '@/components/james/JamesPrivacyReleaseGate';
 import Link from 'next/link';
 import { LogOut } from 'lucide-react';
 
@@ -188,5 +189,6 @@ export default function DemoPage({ params, searchParams }: Props) {
     if (isAmyCara4Canary) return <AmyMemoryAccessGate>{experience}</AmyMemoryAccessGate>;
     if (agent.slug === 'dani') return <DaniContactGate>{experience}</DaniContactGate>;
     if (agent.slug === 'evan') return <EvanContactGate>{experience}</EvanContactGate>;
+    if (agent.slug === 'james') return <JamesPrivacyReleaseGate>{experience}</JamesPrivacyReleaseGate>;
     return experience;
 }

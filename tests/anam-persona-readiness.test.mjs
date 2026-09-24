@@ -492,7 +492,7 @@ test('the token route fails closed before reserving or authenticating a stripped
     assert.match(route, /status: 503/);
     assert.doesNotMatch(route, /missingToolNames[^\n]*error:/);
     const tokenRequest = route.slice(sessionToken, route.indexOf('const data =', sessionToken));
-    assert.match(tokenRequest, /personaConfig:\s*\{\s*personaId: resolution\.personaId/);
+    assert.match(tokenRequest, /personaConfig:\s*\{\s*personaId: tokenPersonaId/);
     assert.doesNotMatch(tokenRequest, /zeroDataRetention|enableAudioPassthrough|livekit/i);
     assert.match(player, /const errorPayload = await tokenRes\.json\(\)\.catch/);
     assert.match(player, /serverMessage \|\| 'Failed to start the agent session'/);

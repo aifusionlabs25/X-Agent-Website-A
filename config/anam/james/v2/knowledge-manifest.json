@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 2,
+  "deploymentStatus": "draft_not_live",
+  "agent": "James",
+  "company": "Knowles Law Firm, PLC",
+  "bundleVersion": "JAMES_KB_2026_09_23",
+  "verifiedAt": "2026-09-23",
+  "persona": {
+    "sourceId": "8a991c93-0c95-42c5-8c22-a67428946eb8",
+    "managedCanaryId": "1663b021-60fb-4782-be63-8ed366dea747"
+  },
+  "folderName": "James Knowles Law Firm Knowledge - JAMES_KB_2026_09_23",
+  "liveGroupId": "eae271e8-9d73-4cfd-8a46-6463f893aed3",
+  "toolName": "Knowledge_James_Knowles_Law_Firm_2026_09",
+  "sourceToolId": "1e4e52df-d648-4ea5-86a3-0806e6acb592",
+  "liveToolId": "5796aee6-6963-4b0e-a378-28517a631461",
+  "bundleSha256": "b4cb339f4ff88953bc582de25ba446df97ba12eaaa0c0ca7000ee18b5b3f775f",
+  "liveDocuments": [
+    { "id": "63434704-7821-48c9-9699-a7c5241bde92", "filename": "01-firm-facts-and-contact.md", "status": "READY" },
+    { "id": "e8b720d9-fada-4fd3-b85e-436356248543", "filename": "02-practice-areas.md", "status": "READY" },
+    { "id": "7ca2957a-2144-49e9-a4c5-59714e3385c4", "filename": "03-intake-and-data-minimization.md", "status": "READY" },
+    { "id": "3b9c2e21-42c5-4b16-adbc-976183d3329e", "filename": "04-urgency-and-safety.md", "status": "READY" },
+    { "id": "3b6a94bf-862c-4fd4-b0bc-b72b08ae2a91", "filename": "05-safe-response-patterns.md", "status": "READY" },
+    { "id": "ab5ba1e5-642e-4957-8f0e-22923b23b4f4", "filename": "06-provenance-and-exclusions.md", "status": "READY" }
+  ],
+  "documents": [
+    "01-firm-facts-and-contact.md",
+    "02-practice-areas.md",
+    "03-intake-and-data-minimization.md",
+    "04-urgency-and-safety.md",
+    "05-safe-response-patterns.md",
+    "06-provenance-and-exclusions.md"
+  ],
+  "documentFingerprints": {
+    "01-firm-facts-and-contact.md": {
+      "bytes": 1048,
+      "sha256": "947a9f639873ffdac0d4771065823c867518990810c076830ac0f83e3866e8d7"
+    },
+    "02-practice-areas.md": {
+      "bytes": 754,
+      "sha256": "2a57d40d78e2ac059feb30e942c1daded0478fc2483b998d11a0e1a52dd3c335"
+    },
+    "03-intake-and-data-minimization.md": {
+      "bytes": 1294,
+      "sha256": "c19be75e187cd7f9b19e1a6cf740c786dfc51526ab13e22e4309bb255a2f733c"
+    },
+    "04-urgency-and-safety.md": {
+      "bytes": 815,
+      "sha256": "ba489dc3c3343f51fcdfef924da589d78423374dcc9c325021cd0728b18cf719"
+    },
+    "05-safe-response-patterns.md": {
+      "bytes": 1177,
+      "sha256": "f7f5810afb73ee3c6c2797c1dfc0db0cecdedff7ba55814bd3dd110bb2a6fd30"
+    },
+    "06-provenance-and-exclusions.md": {
+      "bytes": 1477,
+      "sha256": "29d7cd5acee7fa5db3efca52b0f0369989917abb9ede7a885e67727422a5a6fe"
+    }
+  },
+  "excludedClasses": [
+    "all Tavus prompts, personas, tags, upload wrappers, and runtime instructions",
+    "legal advice, strategies, interpretations, deadline calculations, eligibility decisions, and outcome predictions",
+    "visitor names, contact details, case details, transcripts, recordings, backups, and test fixtures",
+    "fees, office hours, availability, appointment times, response commitments, and unsupported firm claims",
+    "testimonials, case results, awards, and attorney experience claims",
+    "other agents' knowledge, memory, configuration, and session data"
+  ],
+  "sourcePolicy": "This James-only allowlist contains compact public firm facts, broad practice scope, privacy and urgency boundaries, and safe response language. Public sources were reviewed 2026-09-23. The system prompt and tool contracts remain authoritative over retrieved content. A new isolated v2 RAG group, tool, and Cara 4 candidate have been created and read back; this package remains draft_not_live until privacy approval, smoke tests, and the release gate are complete. Provider zero-data-retention is currently disabled; do not solicit sensitive legal-intake details or describe this session as private."
+}

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ALL_AGENTS } from '@/lib/agents';
+import jamesRuntimeReleaseManifest from '@/config/anam/james/v2/runtime-release-manifest.json';
+import { inspectJamesReleasePolicy, JAMES_SOURCE_PERSONA_ID } from '@/lib/anam/james-release-policy';
 import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
 import { readDaniAnamAgentMailConfig } from '@/lib/anam/dani-agentmail';
 import { readEvanAnamAgentMailConfig } from '@/lib/anam/evan-agentmail';
@@ -74,6 +76,22 @@ export async function POST(req: Request) {
                 { status: resolution.status }
             );
         }
+
+        const isJames = resolution.personaId === JAMES_SOURCE_PERSONA_ID;
+        const jamesReleasePolicy = isJames
+            ? inspectJamesReleasePolicy(jamesRuntimeReleaseManifest)
+            : null;
+        const managedJamesPersonaId: unknown = jamesRuntimeReleaseManifest.managedPersona.id;
+        if (isJames && (!jamesReleasePolicy?.ready || typeof managedJamesPersonaId !== 'string')) {
+            console.info('[James Anam Configuration] Session blocked by the privacy/release gate', {
+                failures: jamesReleasePolicy?.failures ?? ['managed_persona_not_pinned'],
+            });
+            return noStoreJson(
+                { error: 'James is temporarily unavailable while privacy and release checks are completed.' },
+                { status: 503 },
+            );
+        }
+        const tokenPersonaId = isJames ? managedJamesPersonaId as string : resolution.personaId;
 
         const spineConfig = readAmyAnamSpineConfig();
         const daniSessionSecrets = readDaniAnamSessionSecrets();
@@ -383,7 +401,7 @@ export async function POST(req: Request) {
                 body: JSON.stringify({
                     ...(launch ? { clientLabel: launch.clientLabel } : {}),
                     personaConfig: {
-                        personaId: resolution.personaId,
+                        personaId: tokenPersonaId,
                     },
                 }),
                 signal: AbortSignal.timeout(10_000),
