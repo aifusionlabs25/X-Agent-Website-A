@@ -48,9 +48,14 @@ export default function SiteFooter() {
                                 X (Twitter)
                             </a>
                         </nav>
-                        <Link href="#" className="text-zinc-600 hover:text-zinc-400 text-xs underline underline-offset-2 transition-colors">
-                            Privacy Policy
-                        </Link>
+                        <div className="flex flex-col gap-2 text-xs">
+                            <Link href="/privacy" className="text-zinc-600 hover:text-zinc-400 underline underline-offset-2 transition-colors">
+                                Privacy Policy
+                            </Link>
+                            <Link href="/terms" className="text-zinc-600 hover:text-zinc-400 underline underline-offset-2 transition-colors">
+                                Terms of Service
+                            </Link>
+                        </div>
                     </div>
                 </div>
 
