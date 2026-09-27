@@ -18,17 +18,17 @@ const retain=value=>{fs.appendFileSync(log,JSON.stringify(value)+'\n');console.l
         const request=response.request().postDataJSON();
         try {
             const result=await response.json();delete result.sessionToken;
+            retain({phase:'API',action:request.action,status:response.status(),request,result});
             if(request.action==='start'){startCalls++;id=result.id||'';}
             if(request.action==='begin-close')stops++;
             if(request.action==='tool')toolCalls++;
             if(request.action==='turn'&&result.brief){
                 const rendered=JSON.stringify(result.brief);
                 if(rendered.includes('4805550136')&&!result.brief.some(s=>s.title==='REQUESTED OUTCOME')){
-                    assert.equal(result.readiness.ready,false);assert.equal(result.state,'ACTIVE');depthBlockedAfterContact=true;
+                    assert.equal(result.readiness.ready,false);assert.notEqual(result.state,'CLOSED');depthBlockedAfterContact=true;
                 }
             }
-            retain({phase:'API',action:request.action,status:response.status(),request,result});
-        }catch(error){retain({phase:'API_DIAGNOSTIC',error:error.message});}
+        }catch(error){errors.push(error.message);retain({phase:'API_DIAGNOSTIC',error:error.message});}
     });
     try {
         await page.goto(url,{waitUntil:'networkidle',timeout:45000});
@@ -54,6 +54,7 @@ const retain=value=>{fs.appendFileSync(log,JSON.stringify(value)+'\n');console.l
         assert.equal(final.config.voiceId,'5ea79b27-25e5-52d9-bab8-944038935c40');assert.ok(toolCalls>0);assert.ok(depthBlockedAfterContact);
         const all=JSON.stringify(final.brief);
         assert.match(all,/Morgan/);assert.match(all,/4805550136/);assert.match(all,/DEFERRED_TO_FIRM/);assert.match(all,/Tempe/);
+        assert.match(all,/understanding my options after the collision/i);assert.equal(final.readiness.ready,true);
         assert.ok(['HANDOFF_REQUESTED','PREPARED'].includes(final.handoff));assert.equal(final.email_status,'INACTIVE_NOT_SENT');assert.deepEqual(final.external_actions,[]);
         await page.screenshot({path:path.join(folder,'closed.png'),fullPage:true});
         fs.writeFileSync(path.join(folder,'final.json'),JSON.stringify(final,null,2)+'\n');

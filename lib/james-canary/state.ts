@@ -89,9 +89,12 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         if (requestHandoff(clause, previousAssistant)) continue;
         let remaining = clause;
         for (const [field, label] of [['primary_phone','phone'],['primary_email','email'],['visitor_preferred_identifier','name']] as const) {
-            if (new RegExp(`\\b(?:decline|rather not|do not want to|don't want to|no)\\b[^.!?]{0,50}\\b${label}\\b`, 'i').test(clause)) {
+            const decline=new RegExp(`\\b(?:I\\s+)?(?:decline|rather not|do not want to|don't want to|no)\\b[^.!?]{0,50}\\b${label}\\b`, 'i').exec(remaining);
+            if (decline) {
                 if (!next.declined.includes(field)) next.declined.push(field);
-                remaining = ''; break;
+                // ASR can join a substantive statement and a contact decline.
+                // Remove only the exact decline span, never its sibling facts.
+                remaining=remaining.replace(decline[0],'').replace(/\b(?:and|but)\s*[,.;!?]*$/i,'').replace(/^[,;.\s]+|[,;.\s]+$/g,'');
             }
         }
         if (!remaining) continue;

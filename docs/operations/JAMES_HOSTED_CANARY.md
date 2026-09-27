@@ -60,3 +60,11 @@ Inspected local source: `apps/james_vnext_canary/host.py` SHA-256 `30e640771a4ee
 | Goodbye | Existing visitor end intent, final assistant reply, one SDK stop, verified provider release and evidence equality remain unchanged |
 
 Fifteen focused provider-free tests passed before the one newly authorized hosted smoke. Evidence for this run is retained separately under `C:/Users/AI Fusion Labs/Documents/Codex/james-hosted-sync-evidence-20260927`; the earlier failed smoke is immutable.
+
+### Independent hosted smoke assessment
+
+The single new session `989d28c6-4e50-47ac-a8f3-7f0387568765` / Anam `45f6ef35-6fc2-4b42-8996-0621e26c8cc8` launched the exact persona/Jerry B., accepted six visitor turns, captured name/phone/location correction, preserved a deferred legal question, called the hosted tool four times, recorded HANDOFF_REQUESTED, stopped the SDK once, verified provider release and restored CLOSED after reload. No email was sent.
+
+Independent review overrides the harness's limited PASS: ASR joined the visitor's requested outcome and email decline into one sentence. Contact-decline handling discarded that entire sentence, so the outcome remained missing and James repeatedly asked for it. The existing readiness gate correctly withheld PREPARED, but the result is not owner-ready. The correction removes only the exact decline span, preserving its sibling outcome. Sixteen focused tests and a six-turn retained-output offline replay now pass. No second live session is run, and the historical session is not altered.
+
+The harness now checks the requested outcome and final readiness, records response evidence before assertions, and does not mistake a legitimate visitor-initiated CLOSING_PENDING for premature completion. Original log hash remains `27bb0e2095f97ec701468e4975c5a90e2f79bf29c236a6a88accd9ea4a6c253a`. A read-only completed-provider goodbye addendum preserves the final two turns omitted by the original observer assertion. Live readiness after the final correction remains unverified; no ready claim is made.

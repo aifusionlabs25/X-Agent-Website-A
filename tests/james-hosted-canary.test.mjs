@@ -93,6 +93,17 @@ test('question memory uses accepted state and avoids repeated timing/outcome que
     assert.equal(g.date_authority.calendar_conversion_allowed,false);
     assert.deepEqual(g,conversationGuidance(JSON.parse(JSON.stringify(s))));
 });
+
+test('retained ASR-joined outcome plus email decline preserves both clauses independently',()=>{
+    const text=' I want help understanding my options after the collision, I decline to provide my email.';
+    const s=ingest(emptyIntake(),turn('joined',text));
+    assert.ok(s.declined.includes('primary_email'));
+    const outcome=s.facts.find(f=>f.field==='requested_outcome');
+    assert.equal(outcome.value,'I want help understanding my options after the collision');
+    assert.ok(text.includes(outcome.evidence));assert.ok(!s.facts.some(f=>f.field==='primary_email'||f.field==='material_facts'));
+    const reverse=ingest(emptyIntake(),turn('reverse','I decline email, but I need help understanding the paperwork.'));
+    assert.ok(reverse.facts.some(f=>f.field==='requested_outcome'));assert.ok(reverse.declined.includes('primary_email'));
+});
 test('brief omits filler, all supplied fields remain source-bound and no sent status',()=>{
     let s=ingest(emptyIntake(),turn('1','Okay. Sure. Go ahead. Thanks.'));
     assert.equal(s.facts.length,0);
