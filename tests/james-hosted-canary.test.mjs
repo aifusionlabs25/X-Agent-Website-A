@@ -22,6 +22,18 @@ test('email candidate requires exact contextual confirmation; no general fact du
     s=ingest(s,turn('3','Yes.'),'I heard d.reyes@mail.com. Is that correct?');
     assert.equal(s.facts[0].field,'primary_email');assert.equal(s.facts[0].value,'d.reyes@mail.com');assert.equal(s.emailCandidate,undefined);
 });
+
+test('retained hosted phone answer after phone-or-email question ignores punctuation only',()=>{
+    let s=ingest(emptyIntake(),turn('1',' Hi James, my name is Morgan Hale. I was in a minor car accident this morning in Mesa. The police gave me a report.'));
+    const prior='I’ve noted your name, the accident, and that the police gave you a report. To keep this intake moving, could you let me know how you’d like us to reach you—by phone or email—and what you’re hoping to achieve from contacting us? ';
+    s=ingest(s,turn('2',' Actually, it was Tempe. My phone number is 480-555-0136.'),prior);
+    assert.equal(s.facts.find(f=>f.field==='primary_phone').value,'4805550136');
+    assert.ok(s.facts.some(f=>f.value==='Tempe'));assert.ok(!s.facts.some(f=>f.value==='Mesa'));
+    assert.ok(s.facts.some(f=>f.value.includes('minor car accident')));assert.ok(s.facts.some(f=>f.value==='this morning'));
+    assert.ok(!s.emailCandidate);assert.ok(!s.facts.some(f=>f.field==='uncertainties'));
+    const uncertain=ingest(s,turn('3','My email is unclear.'),prior);
+    assert.ok(uncertain.facts.some(f=>f.field==='uncertainties'&&f.evidence==='My email is unclear.'));
+});
 test('first-class name/phone, legal questions, missing outcome never satisfied by handoff intent',()=>{
     let s=ingest(emptyIntake(),turn('1','My name is Dana Reyes. My phone number is 480-555-0136.'));
     s=ingest(s,turn('2','Should I call the insurer or talk to a lawyer first?'));

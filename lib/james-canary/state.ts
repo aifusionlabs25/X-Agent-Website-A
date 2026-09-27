@@ -99,6 +99,9 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
             add('primary_phone', digits, phone[0]);
             remaining = remaining.replace(phone[0],'').replace(/^(?:and\s+)?(?:my\s+)?(?:phone(?: number)?|number)\s*(?:is|:)?\s*/i,'').trim();
         }
+        // Contact extraction may leave only sentence punctuation. It is not an
+        // uncertain email answer even when the preceding question offered email.
+        if (!remaining || /^[\s,.!?;:]+$/.test(remaining)) continue;
         if (/@|\b(?:email|e-mail|at .* dot)\b/i.test(remaining) || /email.*\?/i.test(previousAssistant)) {
             const match = /[\w.+-]+@[\w.-]+\.[a-z]{2,}|[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)*\s+at\s+[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)+/i.exec(remaining);
             if (match && (/\b(?:my|email|address)\b/i.test(remaining) || /email.*\?/i.test(previousAssistant) || norm(remaining)===norm(match[0]))) {
@@ -106,7 +109,7 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
                 if (candidate) next.emailCandidate = { value: candidate, evidence: match[0], turnId: turn.id, sourceHash,
                     field: /alternate|other email/i.test(remaining) ? 'alternate_email' : 'primary_email' };
                 remaining = remaining.replace(match[0],'').replace(/^(?:and\s+)?(?:my\s+)?(?:primary |alternate )?(?:email(?: address)?|address)\s*(?:is|:)?\s*/i,'').trim();
-            } else if (/\b(?:my email|email address)\b/i.test(remaining) || /email.*\?/i.test(previousAssistant)) {
+            } else if (/\b(?:my email|email address)\b/i.test(remaining)) {
                 add('uncertainties', remaining, remaining, 'NEEDS_CLARIFICATION'); continue;
             }
         }
