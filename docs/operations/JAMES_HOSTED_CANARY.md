@@ -40,3 +40,23 @@ The one authorized hosted session on initial deployment `a8629adc6fa61942c93cd84
 The normal implementation defect is repaired: punctuation-only contact residue is ignored, and a previous email question alone cannot classify an unrelated current correction as an uncertain email. Evidence-span validation remains unchanged. The exact retained two-turn replay and ten existing focused tests pass (11 total). No historical session is rewritten or replayed live. No second session is authorized or launched. Contact completion, unresolved-question retention, requested handoff and successful live CLOSED/reload were not established by this interrupted smoke. Do not present the hosted canary as fully qualified.
 
 Local smoke evidence: `C:/Users/AI Fusion Labs/Documents/Codex/james-hosted-canary-evidence-20260927/smoke.ndjson`; SHA-256 `9b2bbd1eacd223812171c4ea3f7882e9a4aa01acb68b175ef1a60856771c7b12`. Real emails sent: zero. No Anam persona/config mutation occurred.
+
+## Hosted-primary runtime sync — 2026-09-27
+
+Primary owner acceptance is the existing hosted URL, not localhost or Anam Lab. The published persona remains read-only at launch, with current prompt/Knowledge and Jerry B. The registered `james_handoff` client handler awaits finalized-turn persistence and sends operations to the browser-authorized hosted `/api/james-canary` endpoint; Anam Lab generic tool handling is not used.
+
+Inspected local source: `apps/james_vnext_canary/host.py` SHA-256 `30e640771a4ee49a4254f0c9dfdeb74d0c57f13428ae202e3797ec2dedd72dc2`; `apps/james_live_notes/state.py` SHA-256 `1b0ce37a445da08a89b5f84353df028892c26d5de4e196a3caf2e6087f47dea5`. Local files are not modified.
+
+| Capability | Hosted delta / decision |
+|---|---|
+| Structured brief, atomic location correction, canonical phone | Already present; preserved with source spans/history |
+| Contextual name, spoken email candidate, affirmative confirmation | Port hesitation-prefixed name answers, initial/surname candidate interpretation and expanded affirmative confirmation; accepted email carries confirmation and original interpretation provenance |
+| Legal concerns / questions | Port indirect concern disposition, clause-separated direct questions and requested-outcome question retention; deferred is not a firm promise |
+| Relative timing | Retain exact visitor phrases; return structured `date_authority` with conversion forbidden |
+| Readiness/depth | Separate reason, factual context, contact, timing, requested outcome and question disposition. A handoff request is not the attorney outcome. Criminal/protective-order intake also checks reported charge/order, paperwork and conditions; contextual unknowns remain visible and satisfy only the identified gap |
+| Conversational progress | Derive asked-question memory from persisted assistant turns. Supplied facts are not re-asked; repeated gaps use source-bound clarification rather than the same broad question; optional email attempt does not loop |
+| Tool receipt | Include accepted current visitor-turn notes, current revision/hash, readiness, question memory and source-bound timing; PREPARE cannot claim completion before CLOSED and ready |
+| Post-close / email | Existing provider-verified CLOSED then requested+ready PREPARED retained. No hosted owner authentication/send authorization exists, so public and query-string owner modes remain email-disabled. Local governed owner-send policy stays local and unchanged; no secret/recipient exposed |
+| Goodbye | Existing visitor end intent, final assistant reply, one SDK stop, verified provider release and evidence equality remain unchanged |
+
+Fifteen focused provider-free tests passed before the one newly authorized hosted smoke. Evidence for this run is retained separately under `C:/Users/AI Fusion Labs/Documents/Codex/james-hosted-sync-evidence-20260927`; the earlier failed smoke is immutable.

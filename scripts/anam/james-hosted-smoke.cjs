@@ -11,7 +11,7 @@ const retain=value=>{fs.appendFileSync(log,JSON.stringify(value)+'\n');console.l
         '--no-proxy-server','--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',
         '--use-file-for-fake-audio-capture='+path.join(folder,'visitor.wav')]});
     const context=await browser.newContext({permissions:['microphone'],viewport:{width:1440,height:1000}}),page=await context.newPage();
-    let id='',final=null,stops=0,startCalls=0;const errors=[];
+    let id='',final=null,stops=0,startCalls=0,toolCalls=0,depthBlockedAfterContact=false;const errors=[];
     page.on('pageerror',error=>errors.push(error.message));
     page.on('response',async response=>{
         if(!response.url().includes('/api/james-canary')||response.request().method()!=='POST')return;
@@ -20,6 +20,13 @@ const retain=value=>{fs.appendFileSync(log,JSON.stringify(value)+'\n');console.l
             const result=await response.json();delete result.sessionToken;
             if(request.action==='start'){startCalls++;id=result.id||'';}
             if(request.action==='begin-close')stops++;
+            if(request.action==='tool')toolCalls++;
+            if(request.action==='turn'&&result.brief){
+                const rendered=JSON.stringify(result.brief);
+                if(rendered.includes('4805550136')&&!result.brief.some(s=>s.title==='REQUESTED OUTCOME')){
+                    assert.equal(result.readiness.ready,false);assert.equal(result.state,'ACTIVE');depthBlockedAfterContact=true;
+                }
+            }
             retain({phase:'API',action:request.action,status:response.status(),request,result});
         }catch(error){retain({phase:'API_DIAGNOSTIC',error:error.message});}
     });
@@ -44,6 +51,7 @@ const retain=value=>{fs.appendFileSync(log,JSON.stringify(value)+'\n');console.l
         }
         assert.equal(startCalls,1);assert.equal(final?.state,'CLOSED');assert.equal(stops,1);
         assert.equal(final.personaId,'ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d');assert.ok(final.providerRelease?.transcriptHash);
+        assert.equal(final.config.voiceId,'5ea79b27-25e5-52d9-bab8-944038935c40');assert.ok(toolCalls>0);assert.ok(depthBlockedAfterContact);
         const all=JSON.stringify(final.brief);
         assert.match(all,/Morgan/);assert.match(all,/4805550136/);assert.match(all,/DEFERRED_TO_FIRM/);assert.match(all,/Tempe/);
         assert.ok(['HANDOFF_REQUESTED','PREPARED'].includes(final.handoff));assert.equal(final.email_status,'INACTIVE_NOT_SENT');assert.deepEqual(final.external_actions,[]);
@@ -51,7 +59,7 @@ const retain=value=>{fs.appendFileSync(log,JSON.stringify(value)+'\n');console.l
         fs.writeFileSync(path.join(folder,'final.json'),JSON.stringify(final,null,2)+'\n');
         await page.reload({waitUntil:'networkidle'});await page.getByText('Saved closed session restored.',{exact:true}).waitFor();
         const restored=await (await context.request.get(new URL('/api/james-canary?id='+id,url).href)).json();assert.deepEqual(restored,final);
-        retain({phase:'PASS',session:id,providerSession:final.providerId,voice:final.config.voiceName,stops,realEmails:0,reload:true});
+        retain({phase:'PASS',session:id,providerSession:final.providerId,voice:final.config.voiceName,stops,toolCalls,depthBlockedAfterContact,realEmails:0,reload:true});
     }catch(error){
         retain({phase:'BLOCKED',error:error.message,session:id,final,errors});process.exitCode=1;
         await page.screenshot({path:path.join(folder,'blocked.png'),fullPage:true}).catch(()=>{});

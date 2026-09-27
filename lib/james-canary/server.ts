@@ -5,7 +5,7 @@ import { AMY_ANAM_BROWSER_COOKIE, amyAnamCookieOptions, createAmyAnamBrowserSess
     readBoundedJsonObject, isUuid, requestFingerprint } from '../anam/session-spine.ts';
 import { consumeAmyAnamDistributedRateLimit } from '../anam/session-spine-store.ts';
 import { fetchAnamSessionMetadata, verifyAnamSessionMetadata, fetchCompletedAnamTranscript } from '../anam/session-api.ts';
-import { PERSONA_ID, emptyIntake, applyTurn, receipt, readiness, sha, view } from './state.ts';
+import { PERSONA_ID, emptyIntake, applyTurn, receipt, readiness, conversationGuidance, sha, view } from './state.ts';
 import type { Session, Turn } from './state.ts';
 
 const COOKIE='xagent_james_canary';
@@ -75,18 +75,18 @@ export function verifyFinalEvidence(session:Session,providerTurns:{role:'user'|'
         if(!providerTurns.some(p=>p.role==='agent'&&normalized(p.content)===normalized(t.content)))throw new Error('Provider transcript does not match finalized assistant context');
     }
 }
-function toolResult(s:Session,operation:string) {
+export function toolResult(s:Session,operation:string) {
     const fields=(field:string)=>s.intake.facts.filter(f=>f.field===field).map(f=>({value:f.value,status:f.status}));
     const contact_fields=Object.fromEntries(['visitor_preferred_identifier','primary_phone','primary_email','alternate_email'].map(f=>[f,fields(f)]));
     const ready=readiness(s.intake), pending=s.intake.emailCandidate;
-    const next=pending?`Read back ${pending.value} and ask whether it is correct.`:ready.missing[0];
-    return { status:operation==='SEND'?'EMAIL_UNAVAILABLE':s.intake.handoff, handoff_request_state:s.intake.handoff,
+    const currentVisitor=s.turns.findLast(t=>t.role==='user');
+    return { status:operation==='SEND'?'EMAIL_UNAVAILABLE':operation==='PREPARE'&&(!ready.ready||s.state!=='CLOSED')?'HANDOFF_NOT_READY':s.intake.handoff, handoff_request_state:s.intake.handoff,
         sent:false, human_review:'NOT_CONFIRMED', external_actions:[], email_recorded:fields('primary_email').length>0&&!pending,
         primary_email_candidate:pending?.value||null, email_needs_confirmation:Boolean(pending),
         contact_fields,contact_complete:['visitor_preferred_identifier','primary_phone','primary_email'].every(f=>fields(f).length||s.intake.declined.includes(f))&&!pending,
         handoff_readiness:ready,notes_receipt:{revision:s.revision,state_hash:s.stateHash},live_notes:view(s).brief,
-        conversation_guidance:{completion_language_allowed:ready.ready,next_question:next,max_questions_per_reply:1,
-            completed_intents_do_not_reask:s.intake.facts.map(f=>f.field),date_authority:'Only visitor-reported timing; no calendar calculations'},
+        accepted_current_turn_notes:s.intake.facts.filter(f=>f.turnId===currentVisitor?.id),
+        source_turn_id:currentVisitor?.id||null,conversation_guidance:conversationGuidance(s),
         instruction:'PUBLIC CANARY: no email or external action can be sent. A request is not delivery, review or follow-up. Do not promise any firm action. Use only accepted contact fields; confirm the pending email candidate before claiming it recorded. Ask at most one useful missing question, not a repeated broad discovery question. Never invent dates or legal conclusions. A clear visitor goodbye permits one farewell, regardless of intake completeness.' };
 }
 function json(value:unknown,status=200){return NextResponse.json(value,{status,headers:{'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}});}

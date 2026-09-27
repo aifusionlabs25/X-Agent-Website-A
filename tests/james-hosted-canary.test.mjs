@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { emptyIntake,ingest,endIntent,readiness,brief,applyTurn,receipt,PERSONA_ID } from '../lib/james-canary/state.ts';
-import {seal,unseal,verifyFinalEvidence,post,get} from '../lib/james-canary/server.ts';
+import { emptyIntake,ingest,endIntent,readiness,brief,applyTurn,receipt,conversationGuidance,PERSONA_ID } from '../lib/james-canary/state.ts';
+import {seal,unseal,verifyFinalEvidence,toolResult,post,get} from '../lib/james-canary/server.ts';
 const turn=(id,content,role='user')=>({id,content,role});
 const base=()=>({id:'17e1b181-d4fa-42eb-8209-cad30ef97880',browserId:'browser',clientLabel:'label',createdAt:new Date().toISOString(),revision:0,stateHash:'initial',personaId:PERSONA_ID,config:{},state:'ACTIVE',turns:[],intake:emptyIntake(),receipts:[]});
 test('location correction retains event and timing with immutable provenance',()=>{
@@ -42,6 +42,56 @@ test('first-class name/phone, legal questions, missing outcome never satisfied b
     assert.equal(s.facts.find(f=>f.field==='client_questions').status,'DEFERRED_TO_FIRM');
     assert.equal(s.handoff,'HANDOFF_REQUESTED');assert.ok(readiness(s).missing.includes('Requested outcome'));
     assert.equal(s.facts.filter(f=>f.field==='material_facts').length,0);
+});
+
+test('latest local contextual identity and email interpretation stay first-class and confirmed',()=>{
+    let s=ingest(emptyIntake(),turn('1','um Daniel Reyes'),'What name should I use?');
+    s=ingest(s,turn('2','d reyes at inbox dot com'),'What email address would you like to use?');
+    assert.equal(s.emailCandidate.value,'d.reyes@inbox.com');
+    assert.ok(!s.facts.some(f=>f.field==='primary_email'));
+    s=ingest(s,turn('3',"Yes, that email's right."),'I heard d.reyes@inbox.com. Is that correct?');
+    assert.equal(s.facts.find(f=>f.field==='primary_email').status,'VISITOR_CONFIRMED');
+    assert.equal(s.facts.find(f=>f.field==='visitor_preferred_identifier').value,'Daniel Reyes');
+    assert.equal(s.facts.filter(f=>f.field==='material_facts').length,0);
+    assert.equal(JSON.stringify(brief(s)).split('d.reyes@inbox.com').length-1,1);
+    assert.equal(s.facts.find(f=>f.field==='primary_email').interpretedFrom.turnId,'2');
+});
+
+test('legal concerns and requested attorney outcome are separate from ordinary facts; relative dates stay literal',()=>{
+    let s=ingest(emptyIntake(),turn('1','I got out of jail last night. I have a court date in two days. There is a restraining order.'));
+    s=ingest(s,turn('2',"I don't understand the conditions."));
+    s=ingest(s,turn('3',"I want to understand what I'm charged with, what I can or can't do, and what will happen at court."));
+    assert.equal(s.facts.filter(f=>f.field==='client_questions').length,2);
+    assert.ok(s.facts.filter(f=>f.field==='client_questions').every(f=>f.status==='DEFERRED_TO_FIRM'));
+    assert.ok(s.facts.some(f=>f.field==='requested_outcome'));
+    assert.ok(s.facts.some(f=>f.value==='in two days'));
+    assert.doesNotMatch(JSON.stringify(s),/February|2024|2026-/);
+    const joined=ingest(emptyIntake(),turn('4','The insurer called, should I speak to a lawyer first?'));
+    assert.ok(joined.facts.some(f=>f.field==='insurance_details'));assert.ok(joined.facts.some(f=>f.field==='client_questions'));
+});
+
+test('contact and handoff intent alone cannot satisfy depth; criminal gaps accept explicit unknowns',()=>{
+    let s=applyTurn(base(),turn('1','My name is Dana Reyes. My phone number is 480-555-0136. Please prepare the information for the firm.'));
+    assert.equal(readiness(s.intake).ready,false);assert.equal(toolResult(s,'PREPARE').status,'HANDOFF_NOT_READY');
+    assert.equal(toolResult(s,'STATUS').conversation_guidance.completion_language_allowed,false);
+    s=applyTurn(s,turn('2','I got out of jail last night. There is a restraining order. I want help understanding the order.'));
+    assert.ok(readiness(s.intake).missingIntents.includes('paperwork'));
+    assert.ok(readiness(s.intake).missingIntents.includes('conditions'));
+    s=applyTurn(s,turn('3','What paperwork do you have?','persona'));s=applyTurn(s,turn('4','I do not know.'));
+    s=applyTurn(s,turn('5','What conditions are unclear?','persona'));s=applyTurn(s,turn('6','I am not sure.'));
+    assert.equal(readiness(s.intake).ready,true);
+    assert.ok(s.intake.facts.filter(f=>f.field==='uncertainties').every(f=>f.status==='NEEDS_CLARIFICATION'));
+});
+
+test('question memory uses accepted state and avoids repeated timing/outcome questions',()=>{
+    let s=applyTurn(base(),turn('1','I was in a collision this morning. The police gave me a report.'));
+    s=applyTurn(s,turn('2','My name is Dana Reyes. My phone number is 480-555-0136. I decline email.'));
+    s=applyTurn(s,turn('3','What outcome are you hoping for?','persona'));
+    let g=conversationGuidance(s);assert.match(g.next_question,/Do not repeat/);assert.equal(g.repeat_question_after_tool,false);
+    s=applyTurn(s,turn('4','I guess understand the report.'));g=conversationGuidance(s);
+    assert.ok(g.completed_intents_do_not_reask.includes('requested_outcome'));assert.equal(g.completion_language_allowed,true);
+    assert.equal(g.date_authority.calendar_conversion_allowed,false);
+    assert.deepEqual(g,conversationGuidance(JSON.parse(JSON.stringify(s))));
 });
 test('brief omits filler, all supplied fields remain source-bound and no sent status',()=>{
     let s=ingest(emptyIntake(),turn('1','Okay. Sure. Go ahead. Thanks.'));
@@ -108,7 +158,7 @@ test('hosted lifecycle uses existing store, binds persona, persists/reloads and 
         assert.equal(launched.status,200);assert.equal(start.config.voiceName,'Owner voice');
         const action=async(action,extra={})=>{const r=await post(request({action,id:start.id,...extra},cookie));const b=await r.json();assert.equal(r.status,200,JSON.stringify(b));return b;};
         await action('bind',{providerId});
-        const contents=['I got into a fender bender this afternoon in Mesa.','Actually, it was Tempe.','My name is Dana Reyes. My phone number is 480-555-0136.','Should I call the insurer first?','I want help understanding my options.','Please prepare the summary for the firm.','Thanks, James. Goodbye.'];
+        const contents=['I got into a fender bender this afternoon in Mesa. The police gave me a report.','Actually, it was Tempe.','My name is Dana Reyes. My phone number is 480-555-0136.','Should I call the insurer first?','I want help understanding my options.','Please prepare the summary for the firm.','Thanks, James. Goodbye.'];
         for(const [i,content] of contents.entries()) {await action('turn',{turn:turn(String(i),content),finalized:true});providerTurns.push({role:'user',message:content});}
         await action('turn',{turn:turn('farewell','Have a great day.','persona'),finalized:true});providerTurns.push({role:'persona',message:'Have a great day.'});
         const before=await action('tool',{operation:'SEND'});assert.equal(before.status,'EMAIL_UNAVAILABLE');assert.equal(before.sent,false);
