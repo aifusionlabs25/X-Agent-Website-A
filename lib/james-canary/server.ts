@@ -5,8 +5,9 @@ import { AMY_ANAM_BROWSER_COOKIE, amyAnamCookieOptions, createAmyAnamBrowserSess
     readBoundedJsonObject, isUuid, requestFingerprint } from '../anam/session-spine.ts';
 import { consumeAmyAnamDistributedRateLimit } from '../anam/session-spine-store.ts';
 import { fetchAnamSessionMetadata, verifyAnamSessionMetadata, fetchCompletedAnamTranscript } from '../anam/session-api.ts';
-import { PERSONA_ID, emptyIntake, applyTurn, receipt, readiness, conversationGuidance, sha, view } from './state.ts';
+import { PERSONA_ID, emptyIntake, applyTurn, receipt, readiness, conversationGuidance, spokenPhone, sha, view } from './state.ts';
 import type { Session, Turn } from './state.ts';
+import {verifyOwnerGrant,emailConfiguration,sendPreparedOwnerTest} from './owner-email.ts';
 
 const COOKIE='xagent_james_canary';
 const TTL=24*60*60;
@@ -76,7 +77,7 @@ export function verifyFinalEvidence(session:Session,providerTurns:{role:'user'|'
     }
 }
 export function toolResult(s:Session,operation:string) {
-    const fields=(field:string)=>s.intake.facts.filter(f=>f.field===field).map(f=>({value:f.value,status:f.status}));
+    const fields=(field:string)=>s.intake.facts.filter(f=>f.field===field).map(f=>({value:field==='primary_phone'?spokenPhone(f.value):f.value,status:f.status}));
     const contact_fields=Object.fromEntries(['visitor_preferred_identifier','primary_phone','primary_email','alternate_email'].map(f=>[f,fields(f)]));
     const ready=readiness(s.intake), pending=s.intake.emailCandidate;
     const currentVisitor=s.turns.findLast(t=>t.role==='user');
@@ -84,8 +85,8 @@ export function toolResult(s:Session,operation:string) {
         sent:false, human_review:'NOT_CONFIRMED', external_actions:[], email_recorded:fields('primary_email').length>0&&!pending,
         primary_email_candidate:pending?.value||null, email_needs_confirmation:Boolean(pending),
         contact_fields,contact_complete:['visitor_preferred_identifier','primary_phone','primary_email'].every(f=>fields(f).length||s.intake.declined.includes(f))&&!pending,
-        handoff_readiness:ready,notes_receipt:{revision:s.revision,state_hash:s.stateHash},live_notes:view(s).brief,
-        accepted_current_turn_notes:s.intake.facts.filter(f=>f.turnId===currentVisitor?.id),
+        handoff_readiness:ready,notes_receipt:{revision:s.revision,state_hash:s.stateHash},live_notes:view(s).brief.map(section=>({...section,items:section.items.map(item=>item.label==='Phone'?{...item,text:spokenPhone(item.text)}:item)})),
+        accepted_current_turn_notes:s.intake.facts.filter(f=>f.turnId===currentVisitor?.id).map(f=>f.field==='primary_phone'?{...f,value:spokenPhone(f.value),evidence:'Canonical phone retained in receipt-backed state; speak the value exactly.'}:f),
         source_turn_id:currentVisitor?.id||null,conversation_guidance:conversationGuidance(s),
         instruction:'PUBLIC CANARY: no email or external action can be sent. Never say I will pass this on, the firm will review it, someone will call, or it will be sent. A callback question is not handoff consent. Honor handoff_truth and practice_scope. Use the deterministic phone_speech.spoken exactly for any readback: individual digit words in 3-3-4 groups, never regenerate the number as numeric text. Use only accepted contact fields; confirm the pending email candidate before claiming it recorded. Ask one matter-specific missing question at a time; unknown is valid and questions must not loop. Do not offer completion while readiness is false. Never invent dates, legal conclusions, filings or strategy. A clear visitor goodbye permits one farewell, regardless of intake completeness.' };
 }
@@ -98,7 +99,14 @@ export async function post(req:Request) {
     try {
         if(!isTrustedBrowserOrigin(req))return json({error:'Request origin is not allowed'},403);
         const body=await readBoundedJsonObject(req,20*1024);
+        if(body.action==='owner-test-preflight'){
+            verifyOwnerGrant(req.headers.get('x-james-owner-test'),process.env.ANAM_API_KEY||'');
+            return json({ready:true,...emailConfiguration(),maxSends:1,retries:0});
+        }
         if(body.action==='start') {
+            const ownerToken=req.headers.get('x-james-owner-test');
+            const grant=ownerToken?verifyOwnerGrant(ownerToken,process.env.ANAM_API_KEY||''):null;
+            if(grant)emailConfiguration();
             const rate=await consumeAmyAnamDistributedRateLimit({fingerprint:requestFingerprint(req,'james-canary-start'),limit:5,windowSeconds:600});
             if(!rate.allowed)return json({error:'Session start limit reached'},429);
             let owner=browser(req), token:string|undefined;
@@ -109,6 +117,11 @@ export async function post(req:Request) {
             const state:Session={id,browserId:owner.id,clientLabel:'xagent-james-canary:'+id,createdAt:new Date().toISOString(),revision:0,stateHash:'',
                 personaId:PERSONA_ID,config:{promptHash:sha(p.brain?.systemPrompt||''),configHash:sha(JSON.stringify(p)),voiceId:p.voice?.id||'',voiceName:p.voice?.displayName||''},
                 state:'LAUNCHING',turns:[],intake:emptyIntake(),receipts:[]};
+            if(grant){
+                const claimed=await redis(['SET',PREFIX+'owner-grant:'+grant.id,id,'NX','EX',TTL]);
+                if(claimed!=='OK')throw new Error('Owner test authorization already consumed; no new session authorized');
+                state.ownerTest={grantId:grant.id,expiresAt:grant.expiresAt};
+            }
             if(!state.config.voiceId||!p.brain?.systemPrompt)throw new Error('Published persona configuration is incomplete');
             state.stateHash=sha(JSON.stringify(state)); await save(null,state);
             const minted=await provider('/auth/session-token',{clientLabel:state.clientLabel,personaConfig:{personaId:PERSONA_ID}});
@@ -148,6 +161,8 @@ export async function post(req:Request) {
             next.state='CLOSED';next.closedAt=new Date().toISOString();
             if(next.intake.handoff==='HANDOFF_REQUESTED'&&readiness(next.intake).ready)next.intake.handoff='PREPARED';
         } else throw new Error('Unsupported session operation');
-        next=receipt(current,next,body);await save(current,next);return json(view(next));
+        next=receipt(current,next,body);await save(current,next);
+        if(body.action==='close'&&next.ownerTest&&next.intake.handoff==='PREPARED')next=await sendPreparedOwnerTest(next,{save,stamp:receipt});
+        return json(view(next));
     } catch(error) { return json({error:error instanceof Error?error.message:'Canary operation failed'},400); }
 }

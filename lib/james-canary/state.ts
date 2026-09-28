@@ -6,7 +6,7 @@ export type Turn = { id: string; role: 'user' | 'persona'; content: string };
 export type Field = 'visitor_preferred_identifier' | 'primary_phone' | 'primary_email' | 'alternate_email'
     | 'visitor_reported_reason' | 'material_facts' | 'event_location' | 'relevant_dates_events'
     | 'known_documents_as_reported' | 'symptoms_treatment' | 'insurance_details' | 'client_questions'
-    | 'uncertainties' | 'requested_outcome' | 'requested_next_step';
+    | 'uncertainties' | 'requested_outcome' | 'requested_next_step' | 'client_reported_urgency';
 export type Fact = { id: string; field: Field; value: string; turnId: string; sourceHash: string;
     evidence: string; status: 'VISITOR_REPORTED' | 'VISITOR_CONFIRMED' | 'NEEDS_CLARIFICATION' | 'DEFERRED_TO_FIRM' | 'UNRESOLVED' | 'ANSWERED'; supersedes?: string; topic?: string;
     interpretedFrom?: { turnId: string; sourceHash: string; evidence: string } };
@@ -21,13 +21,15 @@ export type Session = {
     providerId?: string; state: 'LAUNCHING' | 'ACTIVE' | 'CLOSING_PENDING' | 'CLOSING' | 'CLOSED';
     turns: Turn[]; intake: Intake; receipts: { revision: number; previousHash: string; stateHash: string; eventHash: string; at: string }[];
     providerRelease?: { endTime: string; transcriptHash: string; verifiedAt: string }; closedAt?: string;
+    ownerTest?: { grantId: string; expiresAt: number };
+    email?: { status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; snapshotHash: string; subject: string; bodyHash: string; reservedAt: string; messageId?: string; error?: string };
 };
 export function emptyIntake(): Intake { return { facts: [], history: [], declined: [], handoff: 'NOT_REQUESTED' }; }
 export function endIntent(text: string): boolean {
     return /^\s*(?:(?:(?:thanks|thank you)(?:\s+for\s+your\s+help)?[,!.\s]*(?:james[,!.\s]*)?)?(?:goodbye|bye|have a (?:good|great|nice) (?:day|evening|night))|(?:that(?:'s|’s| is) all[,!.\s]*(?:thanks|thank you))|(?:i(?:'m|’m| am) all set[,!.\s]*(?:thanks|thank you))|(?:okay[,!.\s]+)?we(?:'re|’re| are) done)[.!\s]*$/i.test(text);
 }
 const filler = /^(?:(?:okay|ok|yes|yeah|yep|no|sure|go ahead|that['’]s right|that is right|thanks|thank you|hi(?:[,!\s]+james)?|hello(?:[,!\s]+james)?|hey(?:[,!\s]+james)?)[,.!\s]*)+$/i;
-const matterWords = /\b(?:arrest\w*|jail|criminal|DUI|charged|charge|protective order|restraining order|collision|accident|fender bender|injur\w*|lawsuit|sued|evict\w*|summons|complaint|notice|dispute|served|business partner|landlord|tenant)\b/i;
+const matterWords = /\b(?:arrest\w*|jail|criminal|DUI|charged|charge|protective order|restraining order|collision|accident|fender bender|injur\w*|lawsuit|sued|evict\w*|summons|complaint|notice|dispute|served|business partner|landlord|tenant|contractor|unfinished work)\b/i;
 export function spokenPhone(digits:string):string {
     if(!/^\d{10}$/.test(digits))throw new Error('Canonical ten-digit phone required');
     const names=['zero','one','two','three','four','five','six','seven','eight','nine'];
@@ -42,7 +44,9 @@ function emailValue(text: string): string | null {
 function requestHandoff(text: string, prior: string): boolean {
     if (/\b(?:do not|don['’]t|not yet)\b/i.test(text)) return false;
     return /\b(?:please|yes|want|like|can you|could you)\b.*\b(?:prepare|send|share|handoff|pass)\b.*\b(?:firm|summary|information|intake|attorney)\b/i.test(text)
-        || (/^(?:yes|sure|please|go ahead)[,.!\s]*$/i.test(text) && /\?/.test(prior)
+        || (/^\s*(?:yes|sure|please|go ahead)(?:[,\s]+please)?[,.!\s]*$/i.test(text)
+            && !/\b(?:cannot|can['’]t|not able|unable)\b/i.test(prior)
+            && (/\?/.test(prior)||/\bif you['’]d like\b/i.test(prior))
             && /\b(?:prepare|send|share)\b.*\b(?:summary|firm|intake)\b/i.test(prior));
 }
 
@@ -127,6 +131,10 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         // Contact extraction may leave only sentence punctuation. It is not an
         // uncertain email answer even when the preceding question offered email.
         if (!remaining || /^[\s,.!?;:]+$/.test(remaining)) continue;
+        // Removing an exact contact span must not manufacture a new evidence span.
+        // Pure conversational residue is not a fact. Preserve any other disconnected
+        // residue with its ORIGINAL clause for review instead of rejecting the turn.
+        if ((name || phone) && /^(?:[\s,.!?;:\-]+|oh\b|yeah\b|yes\b|okay\b|hi\b|james\b)+$/i.test(remaining)) continue;
         if (/@|\b(?:email|e-mail|at .* dot)\b/i.test(remaining) || /email.*\?/i.test(previousAssistant)) {
             const match = /[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:\b[a-z]\s+)?[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)*\s+at\s+[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)+/i.exec(remaining);
             if (match && (/\b(?:my|email|address)\b/i.test(remaining) || /email.*\?/i.test(previousAssistant) || norm(remaining)===norm(match[0]))) {
@@ -140,6 +148,7 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         }
         remaining = remaining.replace(/^[,;\s]+|[,;\s]+$/g,'');
         if (!remaining || /^[.!]+$/.test(remaining) || filler.test(remaining)) continue;
+        if (!text.includes(remaining)) { add('uncertainties',clause,clause,'NEEDS_CLARIFICATION'); continue; }
         if (/^(?:actually|correction|no[,!])/i.test(remaining)) {
             const explicit = /\b([A-Za-z][A-Za-z'-]*)\s*,?\s+not\s+([A-Za-z][A-Za-z'-]*)\b/i.exec(remaining);
             const implicit = /^(?:actually|correction)[,!:\s-]+it was\s+([A-Z][A-Za-z'-]*)[.!]?$/i.exec(remaining);
@@ -160,7 +169,9 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         if (/\b(?:afraid|worried|concerned|unsure|(?:don['’]t|do not) (?:know|understand))[^.!?]{0,160}\b(?:say|saying|talk|communicat\w*|evict\w*|supposed to do|what to do|conditions|order|can or can['’]?t)\b/i.test(remaining)) {
             add('client_questions',remaining,remaining,'DEFERRED_TO_FIRM');continue;
         }
-        if (/\b(?:I (?:want|need|would like)|I['’]d like)\s+(?:to |help|the firm|an attorney|a lawyer)/i.test(remaining)
+        if (/\b(?:I (?:want|need|would like)|I['’]d like)\s+(?:to |help|the firm|an attorney|a lawyer|my (?:money|\$[\d,]+)|a refund)/i.test(remaining)
+            || /\b(?:getting|want|like|recover)\b[^.!?]{0,100}\b(?:money|dollars|deposit)\b[^.!?]{0,30}\bback\b/i.test(remaining)
+            || (questionIntent(previousAssistant)==='requested_outcome' && /refund|money back|finish|complet|understand|review|explain|help|consider/i.test(remaining))
             || (/outcome|hoping|would you like.*(?:firm|understand)|help (?:you )?with/i.test(previousAssistant) && /understand|review|explain|help|consider/i.test(remaining))) {
             add('requested_outcome',remaining);
             if (/\b(?:charged|can or can['’]?t|court|conditions|supposed to do)\b/i.test(remaining))add('client_questions',remaining,remaining,'DEFERRED_TO_FIRM');
@@ -168,7 +179,7 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         }
         const uncertain = /\b(?:not sure|I think|might|maybe|unsure|unclear)\b/i.test(remaining);
         const place = /\b(?:in|at|near)\s+([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*){0,2})\b/.exec(remaining);
-        const time = /\b(?:on\s+)?((?:this|last|next)\s+(?:morning|afternoon|evening|night|week|month|year)|in\s+(?:\d+|one|two|three|four|five|six|seven)\s+(?:days?|weeks?|months?)|today|yesterday|tomorrow|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i.exec(remaining);
+        const time = /\b(?:on\s+)?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?|(?:this|last|next)\s+(?:morning|afternoon|evening|night|week|month|year)|in\s+(?:\d+|one|two|three|four|five|six|seven)\s+(?:days?|weeks?|months?)|today|yesterday|tomorrow|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i.exec(remaining);
         const parts = [place,time].filter((m): m is RegExpExecArray => Boolean(m)).sort((a,b)=>a.index-b.index);
         const residues: string[]=[]; let cursor=0;
         for (const m of parts) { const v=remaining.slice(cursor,m.index).replace(/^[ ,.;!?]+|[ ,.;!?]+$/g,''); if(v)residues.push(v); cursor=m.index+m[0].length; }
@@ -183,13 +194,15 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
 
     function classify(value: string, uncertain: boolean) {
         if(filler.test(value.trim()))return;
+        if (/\b(?:unusable|uninhabitable|urgent|urgency|no running water|unsafe to use)\b/i.test(value))
+            add('client_reported_urgency',value,value,uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
         // A matter requires a reported issue, never simply the first non-contact utterance.
         if(!uncertain && matterWords.test(value) && !next.facts.some(f=>f.field==='visitor_reported_reason'))
             add('visitor_reported_reason',value);
         const field: Field = uncertain ? 'uncertainties'
             : /\b(?:pain|sore|hospital|doctor|treatment|injur\w*)\b/i.test(value) ? 'symptoms_treatment'
             : /\b(?:insur\w*|adjuster|voicemail)\b/i.test(value) ? 'insurance_details'
-            : /\b(?:paperwork|police report|citation|summons|complaint|document|exhibits)\b/i.test(value) ? 'known_documents_as_reported'
+            : /\b(?:paperwork|police report|citation|summons|complaint|document|exhibits|agreement|contract|receipt|bank transfer|text message)\b/i.test(value) ? 'known_documents_as_reported'
             : /\b(?:date|court|hearing|deadline|days|timing unknown|no known deadline)\b/i.test(value) ? 'relevant_dates_events'
             : 'material_facts';
         add(field,value,value,uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
@@ -215,6 +228,13 @@ export function readiness(intake: Intake) {
         timing_location:(has('relevant_dates_events')&&has('event_location'))||unknown('timing_location'),
         injury_treatment:has('symptoms_treatment')||unknown('injury_treatment'),
         insurance_context:has('insurance_details')||unknown('insurance_context'),
+    }: /\bcontractor|unfinished work\b/i.test(matter)?{
+        agreement_payment:covered('agreement_payment',/\b(?:paid|payment|deposit|bank transfer|agreement)\b/i),
+        work_condition:covered('work_condition',/\b(?:unfinished|unusable|torn|apart|completed|not finished|work done)\b/i),
+        timing_urgency:has('relevant_dates_events')||unknown('timing_urgency'),
+        contractor_contact:covered('contractor_contact',/\b(?:not answering|won['’]t answer|called|contacted|refund request|asked.*refund|texted|not responded)\b/i),
+        paperwork:has('known_documents_as_reported')||unknown('paperwork'),
+        client_urgency:has('client_reported_urgency')||unknown('client_urgency')||covered('client_urgency',/\b(?:not urgent|no urgency|no immediate concern)\b/i),
     }:{
         paperwork:has('known_documents_as_reported')||unknown('paperwork'),
         allegations:covered('allegations',/\b(?:alleges?|claims?|demands?|requires?|accuses?|says I|says that|seeks?)\b/i),
@@ -245,6 +265,10 @@ export function matterProfile(intake:Intake) {
 }
 
 const INTAKE_QUESTIONS:Record<string,{label:string;question:string}>={
+    agreement_payment:{label:'Agreement / payment',question:'What was agreed and what payment was made, if any?'},
+    work_condition:{label:'Work completed / current condition',question:'What work was completed and what condition is it in now?'},
+    contractor_contact:{label:'Last contractor contact / refund request',question:'What happened when you last contacted the contractor, including any refund request?'},
+    client_urgency:{label:'Client-reported urgency (or unknown)',question:'Is there a practical urgency or immediate concern you want included?'},
     event_context:{label:'Event / arrest context',question:'What happened during the incident or arrest?'},
     timing_location:{label:'Incident or receipt timing / location (or unknown)',question:'When and where did this happen? Unknown is fine.'},
     injury_treatment:{label:'Injury / treatment (or unknown)',question:'Were there any injuries or treatment, including none that you know of?'},
@@ -267,6 +291,9 @@ const INTAKE_QUESTIONS:Record<string,{label:string;question:string}>={
 export function questionIntent(text:string):string|null {
     if(!text.includes('?'))return null;
     for(const [intent,pattern] of [
+        ['requested_outcome',/refund|money back|recover.*money|finish.*work|outcome|hoping|would you like.*(?:firm|consider)|help (?:you )?with/i],
+        ['agreement_payment',/agreed|agreement.*payment|deposit|how much|amount/i],['work_condition',/what work|condition.*\bnow\b/i],
+        ['contractor_contact',/last.*contractor|contractor.*contact|refund request/i],['client_urgency',/practical urgency|immediate concern/i],
         ['timing_location',/when and where/i],['injury_treatment',/injur|treatment/i],['insurance_context',/insurer|adjuster|insurance/i],
         ['allegations',/alleg|requires|notice.*say|document.*say/i],['receipt_context',/how.*receiv/i],
         ['opposing_contact',/other party.*communicat|opposing.*contact/i],['filing_status',/filed|hearing scheduled/i],
@@ -283,17 +310,28 @@ export function conversationGuidance(session:Session) {
     const asked=session.turns.filter(t=>t.role==='persona').map(t=>questionIntent(t.content)).filter(Boolean);
     const lastVisitor=session.turns.findLast(t=>t.role==='user');
     const hesitation=Boolean(lastVisitor&&/\b(?:not sure|do not know|don['’]t know|I guess)\b/i.test(lastVisitor.content));
-    const completed=[...new Set([...intake.facts.filter(f=>f.status!=='NEEDS_CLARIFICATION').map(f=>f.field),...intake.declined])];
+    const completed=[...new Set([...intake.facts.filter(f=>f.status!=='NEEDS_CLARIFICATION').map(f=>f.field),...intake.declined,...Object.keys(ready.checks).filter(k=>ready.checks[k])])];
+    const emailOpen=!completed.includes('primary_email');
     let intent=ready.missingIntents.find(key=>!asked.includes(key))||(ready.ready?'correctable_summary':'review_unknowns');
     let next=INTAKE_QUESTIONS[intent]?.question||null;
     if(pending){intent='confirm_primary_email';next=`I heard ${pending.value}. Is that correct?`;}
-    else if(!ready.missingIntents.some(k=>['reason_matter','core_facts','timing_urgency','identity','contact_path'].includes(k))&&!completed.includes('primary_email')&&!asked.includes('primary_email')) {
+    else if(!ready.missingIntents.length&&emailOpen&&!asked.includes('primary_email')) {
         intent='primary_email';next="What's the best email address to associate with this intake?";
+    }
+    else if(ready.ready&&emailOpen){
+        intent='email_still_open';next=null;
+        const lastAssistant=session.turns.findLast(t=>t.role==='persona');
+        if(asked.filter(v=>v==='primary_email').length===1&&questionIntent(lastAssistant?.content||'')!=='primary_email'){
+            intent='primary_email';next='Would you like to provide an email for this intake, or leave email out?';
+        }
     }
     const choices=intake.facts.filter(f=>['client_questions','known_documents_as_reported','material_facts','visitor_reported_reason'].includes(f.field)).slice(-3).map(f=>({value:f.value,source_turn_id:f.turnId}));
     const repeated=asked.includes(intent);
     if((repeated||hesitation)&&!pending&&ready.missingIntents.includes(intent))next='Do not repeat the broad question. Briefly synthesize supplied facts, then use one specific source-bound clarification if needed. Explicit unknown/decline is acceptable; do not infer the answer.';
-    return {stage:ready.ready?'READY_FOR_CORRECTABLE_SUMMARY':'INTAKE_INCOMPLETE',completion_language_allowed:ready.ready,
+    return {stage:ready.ready&&!emailOpen?'READY_FOR_CORRECTABLE_SUMMARY':'INTAKE_INCOMPLETE',completion_language_allowed:ready.ready&&!emailOpen&&!next,
+        contact_open_items:emailOpen?['primary_email']:[],
+        one_job_per_turn:true,email_open_instruction:'An unanswered email question stays OPEN. If it was just asked, address the visitor’s intervening information without closing; return to the missing contact detail later, once, and respect decline. Never ask contact and close in the same reply.',
+        known_evidence_do_not_reask:intake.facts.map(f=>({field:f.field,value:f.field==='primary_phone'?spokenPhone(f.value):f.value,status:f.status})),
         practice_scope:ready.practiceScope,matter_profile:ready.matterProfile,
         handoff_truth:{state:intake.handoff,external_action_authorized:false,
             allowed_statement:intake.handoff==='NOT_REQUESTED'?'No handoff has been requested. A callback-timing question is deferred to the firm, not consent or a callback commitment.':'The visitor requested a handoff. Nothing has been sent; no firm review or callback is confirmed.',
@@ -318,12 +356,13 @@ export function brief(intake: Intake) {
     add('MATTER',['visitor_reported_reason']);
     if(sections.some(s=>s.title==='MATTER')&&matterProfile(intake)==='UNVERIFIED_CIVIL_OR_OTHER')sections.find(s=>s.title==='MATTER')!.items.push({label:'Practice scope',text:'UNVERIFIED — firm handling of this matter is not confirmed.'});
     add('KEY FACTS',['material_facts']);
-    add('TIMING / URGENCY',['relevant_dates_events','event_location']); add('DOCUMENTS',['known_documents_as_reported']);
+    add('TIMING / URGENCY',['relevant_dates_events','event_location','client_reported_urgency']); add('DOCUMENTS',['known_documents_as_reported']);
     add('SYMPTOMS / TREATMENT',['symptoms_treatment']); add('INSURANCE',['insurance_details']);
     add('CLIENT QUESTIONS',['client_questions']); add('UNCERTAINTIES',['uncertainties']);
     add('REQUESTED OUTCOME',['requested_outcome']); add('REQUESTED NEXT STEP',['requested_next_step']);
     const open=readiness(intake).missing.map(text=>({label:'Not provided',text}));
     if(intake.emailCandidate)open.push({label:'Confirm email',text:intake.emailCandidate.value});
+    else if(!intake.facts.some(f=>f.field==='primary_email')&&!intake.declined.includes('primary_email'))open.push({label:'OPEN',text:'Primary email — not answered; optional, decline respected.'});
     if(open.length)sections.push({title:'OPEN ITEMS',items:open});
     sections.push({title:'HANDOFF STATUS',items:[{label:intake.handoff,text:'Not sent. No firm review, response or follow-up is confirmed.'}]});
     return sections;
@@ -350,7 +389,10 @@ export function receipt(previous: Session, next: Session, event: unknown): Sessi
 }
 export function view(session: Session) {
     return { id:session.id,providerId:session.providerId,state:session.state,revision:session.revision,stateHash:session.stateHash,
-        config:session.config,personaId:session.personaId,brief:brief(session.intake),readiness:readiness(session.intake),
+        config:session.config,personaId:session.personaId,brief:brief(session.intake).map(section=>session.email?.status==='SENT'&&section.title==='HANDOFF STATUS'?{
+            title:section.title,items:[{label:'OWNER TEST EMAIL SENT',text:'Sent to the authorized test mailbox only. Nothing sent to Knowles; no firm review or follow-up confirmed.'}]}:section),readiness:readiness(session.intake),
         acceptedVisitorTurns:session.turns.filter(t=>t.role==='user').length,providerRelease:session.providerRelease,
-        handoff:session.intake.handoff,email_status:'INACTIVE_NOT_SENT',external_actions:[] };
+        handoff:session.intake.handoff,email_status:session.email?.status||'INACTIVE_NOT_SENT',
+        email_receipt:session.email?.messageId||null,owner_test:Boolean(session.ownerTest),
+        external_actions:session.email?.status==='SENT'?[{type:'OWNER_TEST_EMAIL',recipient:'aifusionlabs@gmail.com',receipt:session.email.messageId}]:[] };
 }

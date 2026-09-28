@@ -21,7 +21,7 @@ export default function JamesCanary(){
             await chain.current;
             await api('begin-close');
             if(client.current&&!stopped.current){stopped.current=true;await client.current.stopStreaming();}
-            const s=await api('close');render(s);setNotice('Session closed. The brief is preserved. Nothing was emailed or sent to the firm.');
+            const s=await api('close');render(s);setNotice(s.email_status==='SENT'?'Session closed. Owner-test email sent to the authorized test mailbox; provider receipt retained. Nothing sent to Knowles.':'Session closed. The brief is preserved. No verified email send to the firm.');
         } catch(error){setNotice(error instanceof Error?error.message:'Closure needs attention');closing.current=false;}
         finally{setBusy(false);}
     }
