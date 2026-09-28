@@ -6,9 +6,10 @@ export type Turn = { id: string; role: 'user' | 'persona'; content: string };
 export type Field = 'visitor_preferred_identifier' | 'primary_phone' | 'primary_email' | 'alternate_email'
     | 'visitor_reported_reason' | 'material_facts' | 'event_location' | 'relevant_dates_events'
     | 'known_documents_as_reported' | 'symptoms_treatment' | 'insurance_details' | 'client_questions'
-    | 'uncertainties' | 'requested_outcome' | 'requested_next_step' | 'client_reported_urgency';
+    | 'uncertainties' | 'requested_outcome' | 'requested_next_step' | 'client_reported_urgency' | 'contractor_contact';
+export type CommunicationAct='CONTACT_REPORTED'|'REFUND_REQUEST_REPORTED'|'NO_RESPONSE_REPORTED'|'EXPLANATION_REPORTED'|'NOT_CONTACTED';
 export type Fact = { id: string; field: Field; value: string; turnId: string; sourceHash: string;
-    evidence: string; status: 'VISITOR_REPORTED' | 'VISITOR_CONFIRMED' | 'NEEDS_CLARIFICATION' | 'DEFERRED_TO_FIRM' | 'UNRESOLVED' | 'ANSWERED'; supersedes?: string; topic?: string;
+    evidence: string; status: 'VISITOR_REPORTED' | 'VISITOR_CONFIRMED' | 'NEEDS_CLARIFICATION' | 'DEFERRED_TO_FIRM' | 'UNRESOLVED' | 'ANSWERED'; supersedes?: string; topic?: string; communicationAct?:CommunicationAct;
     interpretedFrom?: { turnId: string; sourceHash: string; evidence: string } };
 export type Intake = {
     facts: Fact[]; history: Fact[]; declined: string[];
@@ -48,6 +49,24 @@ function requestHandoff(text: string, prior: string): boolean {
             && !/\b(?:cannot|can['’]t|not able|unable)\b/i.test(prior)
             && (/\?/.test(prior)||/\bif you['’]d like\b/i.test(prior))
             && /\b(?:prepare|send|share)\b.*\b(?:summary|firm|intake)\b/i.test(prior));
+}
+
+/** A reported communication is different from a desired remedy. Interpret actor,
+ * tense, action and negation together within established contractor context;
+ * readiness subsequently consumes the typed fact, never these lexical cues. */
+export function contractorCommunication(text:string,intake:Intake,prior:string):CommunicationAct|null {
+    const context=/\bcontractor|unfinished work\b/i.test(text)||intake.facts.some(f=>f.field==='visitor_reported_reason'&&/\bcontractor|unfinished work\b/i.test(f.value));
+    if(!context||/\b(?:insurer|adjuster|attorney|lawyer|James|the firm)\b/i.test(text))return null;
+    if(/^(?:should|could|can|would|what|when|how)\b/i.test(text)||/\b(?:I|we)\s+(?:will|plan to|intend to|want to|would like to|might|may)\b/i.test(text))return null;
+    const actor=/\b(?:contractor|builder|he|she|they|him|her|them|his|their)\b/i.test(text)||questionIntent(prior)==='contractor_contact';
+    if(!actor)return null;
+    if(/\b(?:not|never|haven['’]t|hasn['’]t|didn['’]t)\b[^.!?]{0,50}\b(?:contacted|reached out|called|written|sent)\b/i.test(text)&&/\b(?:I|we)\b/i.test(text))return 'NOT_CONTACTED';
+    if(/\b(?:no|not|never|hasn['’]t|haven['’]t|didn['’]t|won['’]t|doesn['’]t|stopped)\b[^.!?]{0,60}\b(?:answer\w*|respond\w*|repl\w*|return\w*|hear\w*)\b|\b(?:silence|unresponsive|ignored|ignoring)\b/i.test(text))return 'NO_RESPONSE_REPORTED';
+    const communicated=/\b(?:texted|emailed|messaged|called|phoned|rang|wrote|spoken|spoke|told|asked|requested|sent|contacted|reached out|left.{0,15}voicemail|explained|said|says|replied|responded)\b/i.test(text);
+    if(!communicated)return null;
+    if(/\b(?:refund|reimburse\w*|money back|deposit back|return.{0,20}(?:money|deposit|payment))\b/i.test(text))return 'REFUND_REQUEST_REPORTED';
+    if(/\b(?:he|she|they|contractor|builder)\b[^.!?]{0,30}\b(?:said|says|told|explained|replied|responded)\b/i.test(text))return 'EXPLANATION_REPORTED';
+    return 'CONTACT_REPORTED';
 }
 
 /** Conservative port of local source-span notes; no model-supplied fact mutations. */
@@ -169,6 +188,15 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         if (/\b(?:afraid|worried|concerned|unsure|(?:don['’]t|do not) (?:know|understand))[^.!?]{0,160}\b(?:say|saying|talk|communicat\w*|evict\w*|supposed to do|what to do|conditions|order|can or can['’]?t)\b/i.test(remaining)) {
             add('client_questions',remaining,remaining,'DEFERRED_TO_FIRM');continue;
         }
+        const communication=contractorCommunication(remaining,next,previousAssistant);
+        if(communication){
+            add('contractor_contact',remaining,remaining);
+            const fact=next.facts.find(f=>f.field==='contractor_contact'&&f.turnId===turn.id&&norm(f.value)===norm(remaining));
+            if(fact){fact.topic='contractor_contact';fact.communicationAct=communication;}
+            // Past refund request is not the current desired outcome. An explicit
+            // coordinated present want may still supply an independent outcome.
+            if(!/\b(?:I (?:want|need|would like)|I['’]d like)\b/i.test(remaining))continue;
+        }
         if (/\b(?:I (?:want|need|would like)|I['’]d like)\s+(?:to |help|the firm|an attorney|a lawyer|my (?:money|\$[\d,]+)|a refund)/i.test(remaining)
             || /\b(?:getting|want|like|recover)\b[^.!?]{0,100}\b(?:money|dollars|deposit)\b[^.!?]{0,30}\bback\b/i.test(remaining)
             || (questionIntent(previousAssistant)==='requested_outcome' && /refund|money back|finish|complet|understand|review|explain|help|consider/i.test(remaining))
@@ -232,7 +260,7 @@ export function readiness(intake: Intake) {
         agreement_payment:covered('agreement_payment',/\b(?:paid|payment|deposit|bank transfer|agreement)\b/i),
         work_condition:covered('work_condition',/\b(?:unfinished|unusable|torn|apart|completed|not finished|work done)\b/i),
         timing_urgency:has('relevant_dates_events')||unknown('timing_urgency'),
-        contractor_contact:covered('contractor_contact',/\b(?:not answering|won['’]t answer|called|contacted|refund request|asked.*refund|texted|not responded)\b/i),
+        contractor_contact:has('contractor_contact')||unknown('contractor_contact'),
         paperwork:has('known_documents_as_reported')||unknown('paperwork'),
         client_urgency:has('client_reported_urgency')||unknown('client_urgency')||covered('client_urgency',/\b(?:not urgent|no urgency|no immediate concern)\b/i),
     }:{
@@ -290,6 +318,11 @@ const INTAKE_QUESTIONS:Record<string,{label:string;question:string}>={
 };
 export function questionIntent(text:string):string|null {
     if(!text.includes('?'))return null;
+    // Historical communication questions outrank remedy vocabulary such as
+    // "refund". The old ordering mislabeled this as requested_outcome.
+    if(/\b(?:contractor|builder|him|her|them|last reached out)\b/i.test(text)
+        && /\b(?:contact\w*|reach\w*|text\w*|email\w*|call\w*|said|say|spoke|send|sent|ask\w*|request\w*|hear\w*|respond\w*|explain\w*)\b/i.test(text)
+        && !/\b(?:would you like|do you want|hoping|desired outcome)\b/i.test(text))return 'contractor_contact';
     for(const [intent,pattern] of [
         ['requested_outcome',/refund|money back|recover.*money|finish.*work|outcome|hoping|would you like.*(?:firm|consider)|help (?:you )?with/i],
         ['agreement_payment',/agreed|agreement.*payment|deposit|how much|amount/i],['work_condition',/what work|condition.*\bnow\b/i],
@@ -329,6 +362,9 @@ export function conversationGuidance(session:Session) {
     const repeated=asked.includes(intent);
     if((repeated||hesitation)&&!pending&&ready.missingIntents.includes(intent))next='Do not repeat the broad question. Briefly synthesize supplied facts, then use one specific source-bound clarification if needed. Explicit unknown/decline is acceptable; do not infer the answer.';
     return {stage:ready.ready&&!emailOpen?'READY_FOR_CORRECTABLE_SUMMARY':'INTAKE_INCOMPLETE',completion_language_allowed:ready.ready&&!emailOpen&&!next,
+        greeting_allowed:!session.turns.some(t=>t.role==='persona'||t.role==='user'),
+        conversation_continuity:'This is the same ongoing intake. After the initial greeting, never reintroduce yourself, replay the opening, or ask how you can help again. A name or contact detail updates this intake; it never starts a new conversation.',
+        contractor_contact:{resolved:ready.checks.contractor_contact===true,evidence:intake.facts.filter(f=>f.field==='contractor_contact').map(f=>({value:f.value,act:f.communicationAct,status:f.status,source_turn_id:f.turnId})),instruction:'When resolved, do not ask about last contact, refund request or non-response again. Move to a different missing intent or the correctable summary.'},
         contact_open_items:emailOpen?['primary_email']:[],
         one_job_per_turn:true,email_open_instruction:'An unanswered email question stays OPEN. If it was just asked, address the visitor’s intervening information without closing; return to the missing contact detail later, once, and respect decline. Never ask contact and close in the same reply.',
         known_evidence_do_not_reask:intake.facts.map(f=>({field:f.field,value:f.field==='primary_phone'?spokenPhone(f.value):f.value,status:f.status})),
@@ -355,7 +391,7 @@ export function brief(intake: Intake) {
     add('CLIENT',['visitor_preferred_identifier','primary_phone','primary_email','alternate_email']);
     add('MATTER',['visitor_reported_reason']);
     if(sections.some(s=>s.title==='MATTER')&&matterProfile(intake)==='UNVERIFIED_CIVIL_OR_OTHER')sections.find(s=>s.title==='MATTER')!.items.push({label:'Practice scope',text:'UNVERIFIED — firm handling of this matter is not confirmed.'});
-    add('KEY FACTS',['material_facts']);
+    add('KEY FACTS',['material_facts','contractor_contact']);
     add('TIMING / URGENCY',['relevant_dates_events','event_location','client_reported_urgency']); add('DOCUMENTS',['known_documents_as_reported']);
     add('SYMPTOMS / TREATMENT',['symptoms_treatment']); add('INSURANCE',['insurance_details']);
     add('CLIENT QUESTIONS',['client_questions']); add('UNCERTAINTIES',['uncertainties']);

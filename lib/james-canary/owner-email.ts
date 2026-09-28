@@ -8,7 +8,7 @@ export type OwnerGrant={id:string;expiresAt:number;recipient:typeof OWNER_RECIPI
 /** Exact authorization for the owner's 2026-09-28 single test. Only its digest
  * is deployed; the random capability stays with the operator. No provider-key
  * reuse, public issuance endpoint, renewable allowance, or query-string gate. */
-export const OWNER_POLICY:OwnerGrant&{tokenHash:string}={id:'7a47b3b2-a9c9-42a8-8cf3-be09ad5ab9ad',expiresAt:1790586152349,recipient:OWNER_RECIPIENT,maxSends:1,tokenHash:'a4d2fff552359f5f8d99d4112f929633b9267e0b830e8f2e9f39e4ca6a9aa514'};
+export const OWNER_POLICY:OwnerGrant&{tokenHash:string}={id:'6e79476f-19f3-4b35-aeb3-050cc980bbfb',expiresAt:1790614313835,recipient:OWNER_RECIPIENT,maxSends:1,tokenHash:'87d56916644af2fdb7d15f5e01aeaf2784fccdf09e52871e4c104d165c8f0e1d'};
 export function verifyOwnerGrant(token:unknown,now=Date.now(),policy=OWNER_POLICY):OwnerGrant{
     if(typeof token!=='string'||!/^[\w-]{43}$/.test(token)||!timingSafeEqual(Buffer.from(sha(token)),Buffer.from(policy.tokenHash)))throw new Error('Owner test authorization invalid');
     if(policy.recipient!==OWNER_RECIPIENT||policy.maxSends!==1||policy.expiresAt<=now)throw new Error('Owner test authorization expired or outside scope');
