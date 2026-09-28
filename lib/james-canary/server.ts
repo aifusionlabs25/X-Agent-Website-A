@@ -100,12 +100,12 @@ export async function post(req:Request) {
         if(!isTrustedBrowserOrigin(req))return json({error:'Request origin is not allowed'},403);
         const body=await readBoundedJsonObject(req,20*1024);
         if(body.action==='owner-test-preflight'){
-            verifyOwnerGrant(req.headers.get('x-james-owner-test'),process.env.ANAM_API_KEY||'');
+            verifyOwnerGrant(req.headers.get('x-james-owner-test'));
             return json({ready:true,...emailConfiguration(),maxSends:1,retries:0});
         }
         if(body.action==='start') {
             const ownerToken=req.headers.get('x-james-owner-test');
-            const grant=ownerToken?verifyOwnerGrant(ownerToken,process.env.ANAM_API_KEY||''):null;
+            const grant=ownerToken?verifyOwnerGrant(ownerToken):null;
             if(grant)emailConfiguration();
             const rate=await consumeAmyAnamDistributedRateLimit({fingerprint:requestFingerprint(req,'james-canary-start'),limit:5,windowSeconds:600});
             if(!rate.allowed)return json({error:'Session start limit reached'},429);

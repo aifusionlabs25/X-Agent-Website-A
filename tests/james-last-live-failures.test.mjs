@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyIntake,ingest,applyTurn,receipt,readiness,conversationGuidance,brief,spokenPhone,PERSONA_ID} from '../lib/james-canary/state.ts';
-import {signOwnerGrant,verifyOwnerGrant,sendPreparedOwnerTest,OWNER_RECIPIENT} from '../lib/james-canary/owner-email.ts';
+import {emptyIntake,ingest,applyTurn,receipt,readiness,conversationGuidance,brief,spokenPhone,PERSONA_ID,sha} from '../lib/james-canary/state.ts';
+import {verifyOwnerGrant,sendPreparedOwnerTest,OWNER_RECIPIENT,OWNER_POLICY} from '../lib/james-canary/owner-email.ts';
 import {post,get} from '../lib/james-canary/server.ts';
 const base=()=>({id:'17e1b181-d4fa-42eb-8209-cad30ef97880',browserId:'browser',clientLabel:'test',createdAt:new Date().toISOString(),revision:0,stateHash:'initial',personaId:PERSONA_ID,config:{},state:'ACTIVE',turns:[],intake:emptyIntake(),receipts:[]});
 const add=(s,text,role='user')=>applyTurn(s,{id:String(s.turns.length),role,content:text});
@@ -61,13 +61,13 @@ test('contact no longer prevents subsequent handoff and farewell, canonical phon
     assert.equal(spokenPhone(s.intake.facts.find(f=>f.field==='primary_phone').value),'four eight zero, five five five, zero one seven seven');
     assert.throws(()=>add(s,'Late visitor information'),/not accepting/);
 });
-test('one-use owner capability is signed, expiring and fixed recipient; browser mode is insufficient',()=>{
-    const key='fake-secret-long-enough',g={id:'17e1b181-d4fa-42eb-8209-cad30ef97880',expiresAt:Date.now()+60000,recipient:OWNER_RECIPIENT,maxSends:1};
-    assert.deepEqual(verifyOwnerGrant(signOwnerGrant(g,key),key),g);
-    assert.throws(()=>verifyOwnerGrant('owner',key));
-    assert.throws(()=>verifyOwnerGrant(signOwnerGrant({...g,recipient:'elsewhere@example.com'},key),key));
-    assert.throws(()=>verifyOwnerGrant(signOwnerGrant(g,key),key,g.expiresAt+1));
-    assert.throws(()=>verifyOwnerGrant(signOwnerGrant(g,key),'another-secret-long-enough'));
+test('one-use owner capability is digest-bound, expiring and fixed recipient; browser mode is insufficient',()=>{
+    const token='t'.repeat(43),g={id:'17e1b181-d4fa-42eb-8209-cad30ef97880',expiresAt:Date.now()+60000,recipient:OWNER_RECIPIENT,maxSends:1},policy={...g,tokenHash:sha(token)};
+    assert.deepEqual(verifyOwnerGrant(token,Date.now(),policy),g);
+    assert.throws(()=>verifyOwnerGrant('owner',Date.now(),policy));
+    assert.throws(()=>verifyOwnerGrant(token,Date.now(),{...policy,recipient:'elsewhere@example.com'}));
+    assert.throws(()=>verifyOwnerGrant(token,g.expiresAt+1,policy));
+    assert.throws(()=>verifyOwnerGrant('x'.repeat(43),Date.now(),policy));
 });
 test('email reserves before single send; verified receipt required; reload/failure never retries',async()=>{
     const previous={...process.env};Object.assign(process.env,{AGENTMAIL_API_KEY:'fake-key-long-enough',AMY_AGENTMAIL_ADDRESS:'test@agentmail.to'});
@@ -88,7 +88,7 @@ test('email reserves before single send; verified receipt required; reload/failu
     }finally{for(const key of Object.keys(process.env))if(!(key in previous))delete process.env[key];Object.assign(process.env,previous);}
 });
 test('owner HTTP lifecycle consumes grant once and sends only after verified close; reload is read-only',async()=>{
-    const env={...process.env},fetch=globalThis.fetch;
+    const env={...process.env},fetch=globalThis.fetch,originalPolicy={...OWNER_POLICY};
     Object.assign(process.env,{AMY_ANAM_SESSION_SPINE_ENABLED:'true',AMY_ANAM_SESSION_SPINE_KILL_SWITCH:'false',AMY_ANAM_SESSION_SECRET:'mock-secret-long-enough'.repeat(3),AMY_ANAM_REDIS_REST_URL:'https://redis.invalid',AMY_ANAM_REDIS_REST_TOKEN:'fake',ANAM_API_KEY:'fake-anam-key-long-enough',AGENTMAIL_API_KEY:'fake-agentmail-key-long-enough',AMY_AGENTMAIL_ADDRESS:'test@agentmail.to'});
     const db=new Map(),providerId='e5254022-51d0-423e-9870-bb1a1fa117ad',messages=[];let label='',released=false,sends=0,launches=0;
     globalThis.fetch=async(url,options={})=>{
@@ -109,7 +109,7 @@ test('owner HTTP lifecycle consumes grant once and sends only after verified clo
         throw Error('Unexpected target '+u);
     };
     try{
-        const token=signOwnerGrant({id:'17e1b181-d4fa-42eb-8209-cad30ef97880',expiresAt:Date.now()+60000,recipient:OWNER_RECIPIENT,maxSends:1},process.env.ANAM_API_KEY);
+        const token='t'.repeat(43);Object.assign(OWNER_POLICY,{...originalPolicy,expiresAt:Date.now()+60000,tokenHash:sha(token)});
         const request=(body,cookie='',grant=token)=>new Request('https://demo.invalid/api/james-canary',{method:'POST',headers:{origin:'https://demo.invalid','Content-Type':'application/json',cookie,'x-james-owner-test':grant},body:JSON.stringify(body)});
         assert.equal((await post(request({action:'owner-test-preflight'}))).status,200);assert.equal(launches,0);
         const r=await post(request({action:'start'})),cookie=r.headers.get('set-cookie').split(';')[0],started=await r.json();assert.equal(r.status,200);
@@ -122,5 +122,5 @@ test('owner HTTP lifecycle consumes grant once and sends only after verified clo
         const closed=await action('close');assert.equal(closed.state,'CLOSED');assert.equal(closed.handoff,'PREPARED');assert.equal(closed.email_status,'SENT');assert.equal(closed.email_receipt,'verified-receipt');assert.equal(sends,1);
         assert.deepEqual(await action('close'),closed);assert.equal(sends,1);
         assert.deepEqual(await (await get(new Request('https://demo.invalid/api/james-canary?id='+started.id,{headers:{cookie}}))).json(),closed);assert.equal(sends,1);
-    }finally{globalThis.fetch=fetch;for(const k of Object.keys(process.env))if(!(k in env))delete process.env[k];Object.assign(process.env,env);}
+    }finally{Object.assign(OWNER_POLICY,originalPolicy);globalThis.fetch=fetch;for(const k of Object.keys(process.env))if(!(k in env))delete process.env[k];Object.assign(process.env,env);}
 });

@@ -1,26 +1,18 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import { brief, readiness, sha } from './state.ts';
 import type { Session } from './state.ts';
 import { readAmyAgentMailProviderConfig, sendAmyEmailWithAgentMail } from '../email/amy-email-provider.ts';
 
 export const OWNER_RECIPIENT='aifusionlabs@gmail.com';
-const DOMAIN='james-hosted-owner-test-one-send-v1';
 export type OwnerGrant={id:string;expiresAt:number;recipient:typeof OWNER_RECIPIENT;maxSends:1};
-/** Server/operator-only capability. Never issued by the public browser or model.
- * Domain-separated use of the existing canary credential; no new public auth path. */
-export function signOwnerGrant(grant:OwnerGrant,key:string){
-    if(key.length<16)throw new Error('Owner authorization signing unavailable');
-    const payload=Buffer.from(JSON.stringify(grant)).toString('base64url');
-    return payload+'.'+createHmac('sha256',key).update(DOMAIN+':'+payload).digest('hex');
-}
-export function verifyOwnerGrant(token:unknown,key:string,now=Date.now()):OwnerGrant{
-    if(typeof token!=='string'||token.length>1000||key.length<16)throw new Error('Owner test authorization invalid');
-    const [payload,signature,...extra]=token.split('.');
-    const expected=createHmac('sha256',key).update(DOMAIN+':'+payload).digest('hex');
-    if(extra.length||!/^[a-f0-9]{64}$/.test(signature||'')||!timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))throw new Error('Owner test authorization invalid');
-    const g=JSON.parse(Buffer.from(payload,'base64url').toString());
-    if(!/^[a-f0-9-]{36}$/.test(g.id)||g.recipient!==OWNER_RECIPIENT||g.maxSends!==1||!Number.isSafeInteger(g.expiresAt)||g.expiresAt<=now||g.expiresAt>now+2*60*60*1000)throw new Error('Owner test authorization expired or outside scope');
-    return g;
+/** Exact authorization for the owner's 2026-09-28 single test. Only its digest
+ * is deployed; the random capability stays with the operator. No provider-key
+ * reuse, public issuance endpoint, renewable allowance, or query-string gate. */
+export const OWNER_POLICY:OwnerGrant&{tokenHash:string}={id:'7a47b3b2-a9c9-42a8-8cf3-be09ad5ab9ad',expiresAt:1790586152349,recipient:OWNER_RECIPIENT,maxSends:1,tokenHash:'a4d2fff552359f5f8d99d4112f929633b9267e0b830e8f2e9f39e4ca6a9aa514'};
+export function verifyOwnerGrant(token:unknown,now=Date.now(),policy=OWNER_POLICY):OwnerGrant{
+    if(typeof token!=='string'||!/^[\w-]{43}$/.test(token)||!timingSafeEqual(Buffer.from(sha(token)),Buffer.from(policy.tokenHash)))throw new Error('Owner test authorization invalid');
+    if(policy.recipient!==OWNER_RECIPIENT||policy.maxSends!==1||policy.expiresAt<=now)throw new Error('Owner test authorization expired or outside scope');
+    return {id:policy.id,expiresAt:policy.expiresAt,recipient:OWNER_RECIPIENT,maxSends:1};
 }
 export function emailConfiguration(){
     const c=readAmyAgentMailProviderConfig();

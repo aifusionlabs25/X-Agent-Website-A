@@ -32,10 +32,14 @@ is unchanged in `Documents/Codex/james-hosted-last-failures-20260928`.
 - Canonical phone stays in state; tool readbacks use digit words only.
 - Existing end intent, exactly-once SDK stop and provider transcript verification
   remain authoritative. Fix ingestion, not farewell wording.
-- Owner-test email uses the existing AgentMail transport, a signed two-hour
+- Owner-test email uses the existing AgentMail transport, a digest-bound two-hour
   capability, one-use Redis grant, fixed recipient `aifusionlabs@gmail.com`, and
   a durable reservation before the one transport attempt. Public `mode=owner`
   alone is never authorization. No retry; SENT requires provider receipt.
+  The exact owner-authorized test grant is pinned server-side; its random secret
+  is not in source or logs. Initial credential-signed preflight failed before any
+  session because local/hosted signing did not match; this explicit task grant
+  avoids coupling owner authorization to the provider credential.
 
 ## Offline verification
 
