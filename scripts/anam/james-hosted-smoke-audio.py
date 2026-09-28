@@ -15,6 +15,19 @@ turns = [
     'Please prepare the information for the firm after we finish.',
     'Thanks, James. Goodbye.',
 ]
+if '--intake-depth' in sys.argv:
+    turns = [
+        'Hello.',
+        'I was in a minor car collision.',
+        'It happened this morning in Tempe.',
+        'My neck is sore. I went to urgent care and have their paperwork.',
+        'An insurance adjuster left a voicemail. Should I call him back or talk to a lawyer first?',
+        'My name is Morgan Hale. My phone number is four eight zero, five five five, zero one nine nine. Please read the number back.',
+        'I want help understanding my options after the collision. I decline to provide my email.',
+        'Will someone call me today?',
+        'Please prepare the information for the firm after we finish.',
+        'Thanks, James. Goodbye.',
+    ]
 for i, text in enumerate(turns):
     subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
                     f"flite=text='{text}':voice=slt", '-ar', '16000', '-ac', '1', str(out / f'{i}.wav')], check=True)

@@ -26,7 +26,13 @@ export function emptyIntake(): Intake { return { facts: [], history: [], decline
 export function endIntent(text: string): boolean {
     return /^\s*(?:(?:(?:thanks|thank you)(?:\s+for\s+your\s+help)?[,!.\s]*(?:james[,!.\s]*)?)?(?:goodbye|bye|have a (?:good|great|nice) (?:day|evening|night))|(?:that(?:'s|’s| is) all[,!.\s]*(?:thanks|thank you))|(?:i(?:'m|’m| am) all set[,!.\s]*(?:thanks|thank you))|(?:okay[,!.\s]+)?we(?:'re|’re| are) done)[.!\s]*$/i.test(text);
 }
-const filler = /^(?:(?:okay|ok|yes|yeah|yep|no|sure|go ahead|that['’]s right|that is right|thanks|thank you|hi james|hello james)[,.!\s]*)+$/i;
+const filler = /^(?:(?:okay|ok|yes|yeah|yep|no|sure|go ahead|that['’]s right|that is right|thanks|thank you|hi(?:[,!\s]+james)?|hello(?:[,!\s]+james)?|hey(?:[,!\s]+james)?)[,.!\s]*)+$/i;
+const matterWords = /\b(?:arrest\w*|jail|criminal|DUI|charged|charge|protective order|restraining order|collision|accident|fender bender|injur\w*|lawsuit|sued|evict\w*|summons|complaint|notice|dispute|served|business partner|landlord|tenant)\b/i;
+export function spokenPhone(digits:string):string {
+    if(!/^\d{10}$/.test(digits))throw new Error('Canonical ten-digit phone required');
+    const names=['zero','one','two','three','four','five','six','seven','eight','nine'];
+    return [digits.slice(0,3),digits.slice(3,6),digits.slice(6)].map(group=>[...group].map(d=>names[Number(d)]).join(' ')).join(', ');
+}
 const norm = (s: string) => s.toLowerCase().replace(/[.!?,]+$/g, '').replace(/\s+/g, ' ').trim();
 const single = new Set<Field>(['visitor_preferred_identifier', 'primary_phone', 'primary_email', 'alternate_email']);
 function emailValue(text: string): string | null {
@@ -48,11 +54,14 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
     const add = (field: Field, value: string, evidence = value, status: Fact['status'] = 'VISITOR_REPORTED', target?: Fact) => {
         value = value.trim().replace(/[.!?]$/, '').trim();
         if (!value || !text.includes(evidence)) throw new Error('Evidence span is not grounded');
-        if (next.facts.some(f => f.field === field && norm(f.value) === norm(value))) return;
+        const topic=questionIntent(previousAssistant);
+        if (next.facts.some(f => f.field === field && norm(f.value) === norm(value)
+            && (field!=='uncertainties'||f.topic===(topic||undefined)))) return;
         const prior = target || (single.has(field) ? next.facts.find(f => f.field === field) : undefined);
         if (prior) next.facts = next.facts.filter(f => f.id !== prior.id);
         const fact: Fact = { id: sha(`${turn.id}:${field}:${value}`).slice(0,24), field, value, evidence,
             turnId: turn.id, sourceHash, status, ...(prior ? { supersedes: prior.id } : {}) };
+        if(topic && !['primary_email','primary_phone','identity'].includes(topic))fact.topic=topic;
         next.facts.push(fact); next.history.push(fact);
     };
     if (next.emailCandidate && /^(?:yes(?:[, ]+(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))?|yeah|yep|correct|(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))[.!\s]*$/i.test(text.trim())) {
@@ -140,7 +149,12 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
             else add('uncertainties',remaining,remaining,'NEEDS_CLARIFICATION');
             continue;
         }
-        if (/^(?:(?:and|also|but)\s+)?(?:can|could|would|should|is|are|do|does|what|when|where|why|how)\b/i.test(remaining)) {
+        if (/\b(?:call(?:back| me)?|get back|follow.?up|respond)\b/i.test(remaining)
+            && /\b(?:will|when|can|could|would|please|want|like)\b/i.test(remaining)) {
+            add('requested_next_step',/\btoday|same.day\b/i.test(remaining)?'same-day callback requested':remaining,remaining);
+            add('client_questions',remaining,remaining,'DEFERRED_TO_FIRM');continue;
+        }
+        if (/^(?:(?:and|also|but)\s+)?(?:will|can|could|would|should|is|are|do|does|what|when|where|why|how)\b/i.test(remaining)) {
             add('client_questions',remaining,remaining,/should I|what.*(?:file|do)|can I.*(?:drive|sue)|lawyer|attorney|legal|court|deadline/i.test(remaining)?'DEFERRED_TO_FIRM':'UNRESOLVED'); continue;
         }
         if (/\b(?:afraid|worried|concerned|unsure|(?:don['’]t|do not) (?:know|understand))[^.!?]{0,160}\b(?:say|saying|talk|communicat\w*|evict\w*|supposed to do|what to do|conditions|order|can or can['’]?t)\b/i.test(remaining)) {
@@ -159,7 +173,7 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         const residues: string[]=[]; let cursor=0;
         for (const m of parts) { const v=remaining.slice(cursor,m.index).replace(/^[ ,.;!?]+|[ ,.;!?]+$/g,''); if(v)residues.push(v); cursor=m.index+m[0].length; }
         const tail=remaining.slice(cursor).replace(/^[ ,.;!?]+|[ ,.;!?]+$/g,''); if(tail)residues.push(tail);
-        if (parts.length && residues.every(r=>r.split(/\s+/).length>=3)) {
+        if (parts.length && residues.every(r=>r.split(/\s+/).length>=2)) {
             if(place)add('event_location',place[1]); if(time)add('relevant_dates_events',time[1]);
             remaining=residues.join(' ');
             for(const r of residues) classify(r,uncertain);
@@ -168,12 +182,16 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
     return next;
 
     function classify(value: string, uncertain: boolean) {
+        if(filler.test(value.trim()))return;
+        // A matter requires a reported issue, never simply the first non-contact utterance.
+        if(!uncertain && matterWords.test(value) && !next.facts.some(f=>f.field==='visitor_reported_reason'))
+            add('visitor_reported_reason',value);
         const field: Field = uncertain ? 'uncertainties'
             : /\b(?:pain|sore|hospital|doctor|treatment|injur\w*)\b/i.test(value) ? 'symptoms_treatment'
             : /\b(?:insur\w*|adjuster|voicemail)\b/i.test(value) ? 'insurance_details'
             : /\b(?:paperwork|police report|citation|summons|complaint|document|exhibits)\b/i.test(value) ? 'known_documents_as_reported'
             : /\b(?:date|court|hearing|deadline|days|timing unknown|no known deadline)\b/i.test(value) ? 'relevant_dates_events'
-            : !next.facts.some(f=>f.field==='visitor_reported_reason') ? 'visitor_reported_reason' : 'material_facts';
+            : 'material_facts';
         add(field,value,value,uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
     }
 }
@@ -182,29 +200,59 @@ export function readiness(intake: Intake) {
     const has=(...fields: Field[])=>intake.facts.some(f=>fields.includes(f.field)&&f.status!=='NEEDS_CLARIFICATION');
     const supplied=(f: Field)=>has(f)||intake.declined.includes(f);
     const unknown=(topic:string)=>intake.facts.some(f=>f.field==='uncertainties'&&f.topic===topic);
-    const substantive=intake.facts.filter(f=>['material_facts','known_documents_as_reported','symptoms_treatment','insurance_details'].includes(f.field)&&f.value.split(/\s+/).length>=3);
-    const matter=intake.facts.filter(f=>!['requested_next_step','requested_outcome'].includes(f.field)).map(f=>f.value).join(' ');
-    const legalIntake=/\b(?:arrest|jail|criminal|restraining order|protective order|charged)\b/i.test(matter);
-    const checks:Record<string,boolean>={
-        reason_matter:has('visitor_reported_reason','known_documents_as_reported'),
-        core_facts:substantive.length>=1||unknown('core_facts'),
+    const profile=matterProfile(intake);
+    const matter=intake.facts.filter(f=>!['client_questions','requested_next_step','requested_outcome'].includes(f.field)).map(f=>f.value).join(' ');
+    const covered=(topic:string,pattern:RegExp)=>pattern.test(matter)||unknown(topic)
+        ||intake.facts.some(f=>f.topic===topic&&!['client_questions','requested_next_step','requested_outcome'].includes(f.field));
+    const depth:Record<string,boolean>=profile==='CRIMINAL_DUI'?{
+        reported_charge_order:covered('reported_charge_order',/\b(?:charged with|charge is|DUI|restraining order|protective order)\b/i),
+        event_context:covered('event_context',/\b(?:arrest\w*|released|got out of jail|police stop|stopped by)\b/i),
         timing_urgency:has('relevant_dates_events')||unknown('timing_urgency'),
+        conditions:covered('conditions',/\b(?:conditions|restrictions|stay away|no.contact|license taken)\b/i),
+        paperwork:has('known_documents_as_reported')||unknown('paperwork'),
+    }:profile==='PERSONAL_INJURY'?{
+        event_context:covered('event_context',/\b(?:collision|accident|fender bender|fell|fall)\b/i),
+        timing_location:(has('relevant_dates_events')&&has('event_location'))||unknown('timing_location'),
+        injury_treatment:has('symptoms_treatment')||unknown('injury_treatment'),
+        insurance_context:has('insurance_details')||unknown('insurance_context'),
+    }:{
+        paperwork:has('known_documents_as_reported')||unknown('paperwork'),
+        allegations:covered('allegations',/\b(?:alleges?|claims?|demands?|requires?|accuses?|says I|says that|seeks?)\b/i),
+        receipt_context:covered('receipt_context',/\b(?:received|served|delivered|arrived|handed|mailed)\b/i),
+        timing_location:(has('relevant_dates_events')&&has('event_location'))||unknown('timing_location'),
+        opposing_contact:covered('opposing_contact',/\b(?:other party|opposing|partner|landlord|tenant)\b.*\b(?:called|email\w*|wrote|said|contact\w*|message\w*)\b/i),
+        filing_status:covered('filing_status',/\b(?:filed|filing|hearing|court date|no hearing)\b/i),
+    };
+    const checks:Record<string,boolean>={
+        reason_matter:intake.facts.some(f=>f.field==='visitor_reported_reason'&&matterWords.test(f.value)&&!filler.test(f.value)),
+        ...depth,
         identity:supplied('visitor_preferred_identifier'),
         contact_path:has('primary_phone','primary_email')||(intake.declined.includes('primary_phone')&&intake.declined.includes('primary_email')),
         requested_outcome:has('requested_outcome')||unknown('requested_outcome'),
         questions_preserved:intake.facts.filter(f=>f.field==='client_questions').every(f=>['ANSWERED','DEFERRED_TO_FIRM','UNRESOLVED'].includes(f.status)),
-        ...(legalIntake?{
-            reported_charge_order:/\b(?:charge|charged|restraining order|protective order)\b/i.test(matter)||unknown('reported_charge_order'),
-            paperwork:has('known_documents_as_reported')||unknown('paperwork'),
-            conditions:/\b(?:conditions|restrictions|stay away|no.contact)\b/i.test(matter)||unknown('conditions'),
-        }:{}),
     };
     const missingIntents=Object.keys(checks).filter(key=>!checks[key]);
     const missing=missingIntents.map(key=>INTAKE_QUESTIONS[key].label);
-    return {ready:!missing.length,status:missing.length?'INTAKE_INCOMPLETE':'HANDOFF_READY',missing,missingIntents,checks};
+    return {ready:!missing.length,status:missing.length?'INTAKE_INCOMPLETE':'HANDOFF_READY',matterProfile:profile,
+        practiceScope:profile==='UNVERIFIED_CIVIL_OR_OTHER'?'UNVERIFIED — do not imply the firm handles this matter':'AREA_ONLY — representation and acceptance not confirmed',missing,missingIntents,checks};
+}
+
+export function matterProfile(intake:Intake) {
+    const text=intake.facts.filter(f=>['visitor_reported_reason','material_facts','known_documents_as_reported'].includes(f.field)).map(f=>f.value).join(' ');
+    if(/\b(?:DUI|criminal|arrest\w*|jail|charged|restraining order|protective order)\b/i.test(text))return 'CRIMINAL_DUI';
+    if(/\b(?:collision|accident|fender bender|personal injury|slip and fall)\b/i.test(text))return 'PERSONAL_INJURY';
+    return 'UNVERIFIED_CIVIL_OR_OTHER';
 }
 
 const INTAKE_QUESTIONS:Record<string,{label:string;question:string}>={
+    event_context:{label:'Event / arrest context',question:'What happened during the incident or arrest?'},
+    timing_location:{label:'Incident or receipt timing / location (or unknown)',question:'When and where did this happen? Unknown is fine.'},
+    injury_treatment:{label:'Injury / treatment (or unknown)',question:'Were there any injuries or treatment, including none that you know of?'},
+    insurance_context:{label:'Insurance / contact context (or unknown)',question:'Has an insurer or adjuster contacted you about this incident?'},
+    allegations:{label:'Visitor-reported allegations / requirements',question:'What does the notice or document say it alleges or requires?'},
+    receipt_context:{label:'How the document was received',question:'How did you receive the document?'},
+    opposing_contact:{label:'Opposing-party communication (or unknown)',question:'Has the other party communicated with you about this?'},
+    filing_status:{label:'Filing / hearing status (or unknown)',question:'Do you know whether anything has been filed or a hearing scheduled?'},
     reason_matter:{label:'Reason / matter',question:'What brings you to the firm?'},
     core_facts:{label:'Core factual context',question:'What additional detail would help explain what happened?'},
     timing_urgency:{label:'Timing / urgency (or explicitly unknown)',question:'What timing is relevant, or is it unknown?'},
@@ -219,6 +267,10 @@ const INTAKE_QUESTIONS:Record<string,{label:string;question:string}>={
 export function questionIntent(text:string):string|null {
     if(!text.includes('?'))return null;
     for(const [intent,pattern] of [
+        ['timing_location',/when and where/i],['injury_treatment',/injur|treatment/i],['insurance_context',/insurer|adjuster|insurance/i],
+        ['allegations',/alleg|requires|notice.*say|document.*say/i],['receipt_context',/how.*receiv/i],
+        ['opposing_contact',/other party.*communicat|opposing.*contact/i],['filing_status',/filed|hearing scheduled/i],
+        ['event_context',/incident or arrest/i],
         ['conditions',/conditions|restrictions|stay away/i],['reported_charge_order',/charge|type of order/i],['paperwork',/paperwork|documents/i],
         ['primary_email',/email/i],['primary_phone',/phone|number/i],['identity',/\bname\b/i],
         ['requested_outcome',/outcome|hoping|would you like.*(?:firm|consider)|help (?:you )?with/i],
@@ -232,7 +284,7 @@ export function conversationGuidance(session:Session) {
     const lastVisitor=session.turns.findLast(t=>t.role==='user');
     const hesitation=Boolean(lastVisitor&&/\b(?:not sure|do not know|don['’]t know|I guess)\b/i.test(lastVisitor.content));
     const completed=[...new Set([...intake.facts.filter(f=>f.status!=='NEEDS_CLARIFICATION').map(f=>f.field),...intake.declined])];
-    let intent=ready.missingIntents.find(key=>!asked.includes(key))||ready.missingIntents[0]||'correctable_summary';
+    let intent=ready.missingIntents.find(key=>!asked.includes(key))||(ready.ready?'correctable_summary':'review_unknowns');
     let next=INTAKE_QUESTIONS[intent]?.question||null;
     if(pending){intent='confirm_primary_email';next=`I heard ${pending.value}. Is that correct?`;}
     else if(!ready.missingIntents.some(k=>['reason_matter','core_facts','timing_urgency','identity','contact_path'].includes(k))&&!completed.includes('primary_email')&&!asked.includes('primary_email')) {
@@ -242,10 +294,15 @@ export function conversationGuidance(session:Session) {
     const repeated=asked.includes(intent);
     if((repeated||hesitation)&&!pending&&ready.missingIntents.includes(intent))next='Do not repeat the broad question. Briefly synthesize supplied facts, then use one specific source-bound clarification if needed. Explicit unknown/decline is acceptable; do not infer the answer.';
     return {stage:ready.ready?'READY_FOR_CORRECTABLE_SUMMARY':'INTAKE_INCOMPLETE',completion_language_allowed:ready.ready,
+        practice_scope:ready.practiceScope,matter_profile:ready.matterProfile,
+        handoff_truth:{state:intake.handoff,external_action_authorized:false,
+            allowed_statement:intake.handoff==='NOT_REQUESTED'?'No handoff has been requested. A callback-timing question is deferred to the firm, not consent or a callback commitment.':'The visitor requested a handoff. Nothing has been sent; no firm review or callback is confirmed.',
+            forbidden_promises:['I will pass this on','the firm will review it','someone will call','it will be sent']},
+        phone_speech:intake.facts.filter(f=>f.field==='primary_phone').map(f=>({source_turn_id:f.turnId,spoken:spokenPhone(f.value)})),
         next_question_intent:intent,next_question:next,completed_intents_do_not_reask:completed,
         previously_asked_intents:[...new Set(asked)],previous_question_intent:asked.at(-1)||null,
         hesitation_recovery:hesitation,grounded_choice_evidence:choices,max_questions_per_reply:1,repeat_question_after_tool:false,
-        response_pattern:'Brief acknowledgment, useful synthesis, at most one high-value missing question. Do not say that is all I need, offer closure, or claim completion while completion_language_allowed is false.',
+        response_pattern:'Brief acknowledgment, useful synthesis, at most one high-value missing question. Use the matter-specific gaps for 2–4 useful factual questions when needed, never re-ask answered questions or demand invented answers. Ask each gap once; explicit unknown is valid. Do not say that is all I need, offer closure, or claim completion while completion_language_allowed is false. Only a clear visitor goodbye overrides this. Read phone_speech.spoken verbatim using individual digit words, never a numeric value. Do not promise handoff, firm review or callback.',
         date_authority:{reported_timing_only:intake.facts.filter(f=>f.field==='relevant_dates_events').map(f=>({value:f.value,source_turn_id:f.turnId})),calendar_conversion_allowed:false,missing_exact_date:'Unknown; never calculate or invent it.'}};
 }
 export function brief(intake: Intake) {
@@ -258,7 +315,9 @@ export function brief(intake: Intake) {
             text:f.value.replace(/^(?:okay|well|yeah)[,!]?\s+/i,'').replace(/^I got\s+/i,'')}))});
     };
     add('CLIENT',['visitor_preferred_identifier','primary_phone','primary_email','alternate_email']);
-    add('MATTER',['visitor_reported_reason']); add('KEY FACTS',['material_facts']);
+    add('MATTER',['visitor_reported_reason']);
+    if(sections.some(s=>s.title==='MATTER')&&matterProfile(intake)==='UNVERIFIED_CIVIL_OR_OTHER')sections.find(s=>s.title==='MATTER')!.items.push({label:'Practice scope',text:'UNVERIFIED — firm handling of this matter is not confirmed.'});
+    add('KEY FACTS',['material_facts']);
     add('TIMING / URGENCY',['relevant_dates_events','event_location']); add('DOCUMENTS',['known_documents_as_reported']);
     add('SYMPTOMS / TREATMENT',['symptoms_treatment']); add('INSURANCE',['insurance_details']);
     add('CLIENT QUESTIONS',['client_questions']); add('UNCERTAINTIES',['uncertainties']);

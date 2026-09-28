@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { emptyIntake,ingest,endIntent,readiness,brief,applyTurn,receipt,conversationGuidance,PERSONA_ID } from '../lib/james-canary/state.ts';
+import { emptyIntake,ingest,endIntent,readiness,brief,applyTurn,receipt,conversationGuidance,spokenPhone,PERSONA_ID } from '../lib/james-canary/state.ts';
 import {seal,unseal,verifyFinalEvidence,toolResult,post,get} from '../lib/james-canary/server.ts';
 const turn=(id,content,role='user')=>({id,content,role});
 const base=()=>({id:'17e1b181-d4fa-42eb-8209-cad30ef97880',browserId:'browser',clientLabel:'label',createdAt:new Date().toISOString(),revision:0,stateHash:'initial',personaId:PERSONA_ID,config:{},state:'ACTIVE',turns:[],intake:emptyIntake(),receipts:[]});
@@ -84,10 +84,10 @@ test('contact and handoff intent alone cannot satisfy depth; criminal gaps accep
 });
 
 test('question memory uses accepted state and avoids repeated timing/outcome questions',()=>{
-    let s=applyTurn(base(),turn('1','I was in a collision this morning. The police gave me a report.'));
+    let s=applyTurn(base(),turn('1','I was in a collision this morning in Tempe. The police gave me a report. There were no injuries. The insurer has not contacted me.'));
     s=applyTurn(s,turn('2','My name is Dana Reyes. My phone number is 480-555-0136. I decline email.'));
     s=applyTurn(s,turn('3','What outcome are you hoping for?','persona'));
-    let g=conversationGuidance(s);assert.match(g.next_question,/Do not repeat/);assert.equal(g.repeat_question_after_tool,false);
+    let g=conversationGuidance(s);assert.equal(g.next_question_intent,'review_unknowns');assert.equal(g.next_question,null);assert.equal(g.repeat_question_after_tool,false);
     s=applyTurn(s,turn('4','I guess understand the report.'));g=conversationGuidance(s);
     assert.ok(g.completed_intents_do_not_reask.includes('requested_outcome'));assert.equal(g.completion_language_allowed,true);
     assert.equal(g.date_authority.calendar_conversion_allowed,false);
@@ -169,7 +169,7 @@ test('hosted lifecycle uses existing store, binds persona, persists/reloads and 
         assert.equal(launched.status,200);assert.equal(start.config.voiceName,'Owner voice');
         const action=async(action,extra={})=>{const r=await post(request({action,id:start.id,...extra},cookie));const b=await r.json();assert.equal(r.status,200,JSON.stringify(b));return b;};
         await action('bind',{providerId});
-        const contents=['I got into a fender bender this afternoon in Mesa. The police gave me a report.','Actually, it was Tempe.','My name is Dana Reyes. My phone number is 480-555-0136.','Should I call the insurer first?','I want help understanding my options.','Please prepare the summary for the firm.','Thanks, James. Goodbye.'];
+        const contents=['I got into a fender bender this afternoon in Mesa. The police gave me a report. There were no injuries. My insurer called.','Actually, it was Tempe.','My name is Dana Reyes. My phone number is 480-555-0136.','Should I call the insurer first?','I want help understanding my options.','Please prepare the summary for the firm.','Thanks, James. Goodbye.'];
         for(const [i,content] of contents.entries()) {await action('turn',{turn:turn(String(i),content),finalized:true});providerTurns.push({role:'user',message:content});}
         await action('turn',{turn:turn('farewell','Have a great day.','persona'),finalized:true});providerTurns.push({role:'persona',message:'Have a great day.'});
         const before=await action('tool',{operation:'SEND'});assert.equal(before.status,'EMAIL_UNAVAILABLE');assert.equal(before.sent,false);
