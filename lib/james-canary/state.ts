@@ -30,12 +30,39 @@ export type Session = {
     email?: { status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; snapshotHash: string; subject: string; bodyHash: string; reservedAt: string; messageId?: string; error?: string };
 };
 export function emptyIntake(): Intake { return { facts: [], history: [], declined: [], handoff: 'NOT_REQUESTED' }; }
+/** Split independent speech acts, not lists or quoted/reporting content. Every
+ * result is an untouched source span; punctuation normalization is detection-only. */
+function sourceClauses(text:string):string[] {
+    const spans:string[]=[];let start=0,quote='';
+    const independent=/^(?:(?:and|but|also|then)\s+)*(?:I\b|we\b|they\b|he\b|she\b|my (?:name|phone|email|address)\b|there\b|please\b|goodbye\b|bye\b|thanks\b|thank you\b|should\b|can\b|could\b|would\b|when\b|where\b|why\b|how\b)/i;
+    const reported=/\b(?:said|says|say|told|wrote|reads?|quoted?|saying|writing)(?:\s+(?:to\s+)?(?:me|us|him|her|them|you))?\s*$/i;
+    for(let i=0;i<text.length;i++) {
+        const ch=text[i];
+        if(quote){if(ch===quote)quote='';continue;}
+        if(ch==='"'||ch==='“'||(ch==="'"&&!/\w/.test(text[i-1]||'')&&/\w/.test(text[i+1]||''))){quote=ch==='“'?'”':ch;continue;}
+        const tail=text.slice(i+1).trimStart();
+        const sentence=/[.!?]/.test(ch)&&(!text[i+1]||/\s/.test(text[i+1]));
+        const qualifier=/^(?:I (?:think|guess|believe)|I(?:['’]m| am) not sure)[,;.!?\s]*$/i.test(tail);
+        const punctuation=/[,;:]/.test(ch)&&independent.test(tail)&&!qualifier&&!reported.test(text.slice(start,i));
+        const conjunction=/\s/.test(ch)&&/^(?:and|but)\s+/i.test(tail)&&independent.test(tail.replace(/^(?:and|but)\s+/i,''));
+        if(sentence||punctuation||conjunction){
+            const end=conjunction?i:i+1;
+            if(text.slice(start,end).trim())spans.push(text.slice(start,end).trim());
+            start=end;
+            // A coordinator is a boundary, not reconstructed fact text.
+            const connector=/^\s*(?:and|but|also|then)\s+/i.exec(text.slice(start));
+            if(connector)start+=connector[0].length;
+            i=Math.max(i,start-1);
+        }
+    }
+    if(text.slice(start).trim())spans.push(text.slice(start).trim());
+    return spans;
+}
 export function endIntent(text: string): boolean {
-    // A standalone final farewell is an exit even after substantive speech.
-    // Narrated/quoted goodbyes are not standalone conversational acts.
-    const final=text.trim().split(/[.!?]+\s+/).at(-1)||'';
-    if(final!==text.trim()&&/^(?:(?:thanks|thank you)[, ]+(?:james[, ]+)?)?(?:goodbye|bye)[.!\s]*$/i.test(final))return true;
-    return /^\s*(?:(?:(?:thanks|thank you)(?:\s+for\s+your\s+help)?[,!.\s]*(?:james[,!.\s]*)?)?(?:goodbye|bye|have a (?:good|great|nice) (?:day|evening|night))|(?:that(?:'s|’s| is) all[,!.\s]*(?:thanks|thank you))|(?:i(?:'m|’m| am) all set[,!.\s]*(?:thanks|thank you))|(?:okay[,!.\s]+)?we(?:'re|’re| are) done)[.!\s]*$/i.test(text);
+    const direct=(span:string)=>/^(?:(?:(?:thanks|thank you)(?:\s+for\s+your\s+help)?[,!.\s]*(?:james[,!.\s]*)?)?(?:goodbye|bye|have a (?:good|great|nice) (?:day|evening|night))|(?:that(?:'s|’s| is) all[,!.\s]*(?:thanks|thank you))|(?:i(?:'m|’m| am) all set[,!.\s]*(?:thanks|thank you))|(?:okay[,!.\s]+)?we(?:'re|’re| are) done)$/i.test(span.trim().replace(/[,;:.!?\s]+$/g,''));
+    // Inspect a direct terminal act; quotes, narration and negation remain in
+    // their source span and cannot become a standalone farewell by normalization.
+    return direct(text)||direct(sourceClauses(text).at(-1)||'');
 }
 const filler = /^(?:(?:okay|ok|yes|yeah|yep|no|sure|right|understood|go ahead|that['’]s right|that is right|thanks|thank you|hi(?:[,!\s]+james)?|hello(?:[,!\s]+james)?|hey(?:[,!\s]+james)?)[,.!?\s]*)+$/i;
 const matterWords = /\b(?:arrest\w*|jail|criminal|DUI|charged|charge|protective order|restraining order|collision|accident|fender bender|injur\w*|lawsuit|sued|evict\w*|summons|complaint|notice|dispute|served|business partner|landlord|tenant|contractor|unfinished work)\b/i;
@@ -82,10 +109,11 @@ function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake
     const next: Intake = structuredClone(intake);
     const text = turn.content;
     const sourceHash = sha(text);
+    let contextualIntent:string|null=null;
     const add = (field: Field, value: string, evidence = value, status: Fact['status'] = 'VISITOR_REPORTED', target?: Fact) => {
-        value = value.trim().replace(/[.!?]$/, '').trim();
+        value = value.trim().replace(/[.!?,;:]+$/, '').trim();
         if (!value || !text.includes(evidence)) throw new Error('Evidence span is not grounded');
-        const topic=questionIntent(previousAssistant);
+        const topic=contextualIntent;
         if (next.facts.some(f => f.field === field && norm(f.value) === norm(value)
             && (field!=='uncertainties'||f.topic===(topic||undefined)))) return;
         const prior = target || (single.has(field) ? next.facts.find(f => f.field === field) : undefined);
@@ -93,56 +121,51 @@ function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake
         const fact: Fact = { id: sha(`${turn.id}:${field}:${value}`).slice(0,24), field, value, evidence,
             turnId: turn.id, sourceHash, status, ...(prior ? { supersedes: prior.id } : {}) };
         if(topic && !['primary_email','primary_phone','identity','contact_path'].includes(topic)
-            && (field==='material_facts'||field==='uncertainties'||INTENT_FIELDS[topic]?.includes(field))) {
+            && INTENT_FIELDS[topic]?.includes(field)) {
             fact.topic=topic;
             fact.questionBinding={text:previousAssistant,hash:sha(previousAssistant),intent:topic};
         }
         next.facts.push(fact); next.history.push(fact);
     };
-    if (next.emailCandidate && /^(?:yes(?:[, ]+(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))?|yeah|yep|correct|(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))[.!\s]*$/i.test(text.trim())) {
+    for (const raw of sourceClauses(text)) {
+        const clause=raw.trim();
+        const answering=questionIntent(previousAssistant);
+        contextualIntent=answering;
+    if (next.emailCandidate && /^(?:yes(?:[, ]+(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))?|yeah|yep|correct|(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))[,;.!\s]*$/i.test(clause)) {
         const candidate = next.emailCandidate;
         const readback = previousAssistant.replace(/\s+(?:dot|period)\s+/gi,'.').replace(/\s+at\s+/gi,'@');
         if (/\?/.test(readback) && /correct|right|confirm|address/i.test(readback) && readback.toLowerCase().includes(candidate.value.toLowerCase())) {
             // Candidate retains its original source; this event adds confirmation provenance.
             const prior = next.facts.find(f => f.field === candidate.field);
             const fact: Fact = { id: sha(`${turn.id}:confirm:${candidate.value}`).slice(0,24), field: candidate.field,
-                value: candidate.value, evidence: text, turnId: turn.id, sourceHash,
+                value: candidate.value, evidence: clause, turnId: turn.id, sourceHash,
                 interpretedFrom:{turnId:candidate.turnId,sourceHash:candidate.sourceHash,evidence:candidate.evidence},
                 status: 'VISITOR_CONFIRMED', ...(prior ? { supersedes: prior.id } : {}) };
             next.facts = next.facts.filter(f => f.field !== candidate.field); next.facts.push(fact); next.history.push(fact);
             delete next.emailCandidate;
         }
-        return next;
+        continue;
     }
-    if (requestHandoff(text, previousAssistant)) {
-        next.handoff = 'HANDOFF_REQUESTED'; add('requested_next_step', text, text);
+    if (requestHandoff(clause, previousAssistant)) {
+        next.handoff = 'HANDOFF_REQUESTED'; add('requested_next_step', clause, clause); continue;
     }
-    if (endIntent(text)) return next;
-    const answering=questionIntent(previousAssistant),answerState=classifyAnswer(text);
-    // Contextual negatives/unknowns are answers, not corrections or filler.
-    // Never fabricate a contact value from a bare yes/no.
-    const separateContactDecline=answerState==='DECLINED'&&/\b(?:email|phone|name)\b/i.test(text)&&!['identity','primary_phone','primary_email','contact_path'].includes(answering||'');
-    if(answering&&answerState&&!separateContactDecline&&(!filler.test(text.trim())||/^(?:no|yes)[.!\s]*$/i.test(text.trim()))) {
-        if(['identity','primary_phone','primary_email','contact_path'].includes(answering)&&answerState==='ANSWERED')return next;
+    if (endIntent(clause)) continue;
+    const answerState=classifyAnswer(clause);
+    // Only a deictic answer inherits the previous question. Explicit actors or
+    // fields ("they gave no explanation", "no email") own their own meaning.
+    const contactQuestion=['identity','primary_phone','primary_email','contact_path'].includes(answering||'');
+    const shortAnswer=/^(?:yes|no|none|I (?:do not|don['’]t) know|I(?:['’]m| am) not sure|not sure|unknown|I cannot recall|I can['’]t remember|I (?:would )?(?:rather |prefer )?not (?:answer|say)|I decline(?: to answer)?)[,;.!\s]*$/i.test(clause);
+    const deictic=shortAnswer||(!contactQuestion&&/^(?:nothing(?: (?:else|more|beyond that))?|(?:no[, ]+)?(?:just|only) (?:that|the) \w+)[,;.!\s]*$/i.test(clause));
+    if(answering&&answerState&&deictic) {
+        if(['identity','primary_phone','primary_email','contact_path'].includes(answering)&&answerState==='ANSWERED')continue;
         const contactAnswer=['identity','primary_phone','primary_email','contact_path'].includes(answering);
-        add(answerState==='UNKNOWN'||contactAnswer?'uncertainties':canonicalField(answering),text,text,answerState==='UNKNOWN'?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
+        add(answerState==='UNKNOWN'||contactAnswer?'uncertainties':canonicalField(answering),clause,clause,answerState==='UNKNOWN'?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
         const f=next.facts.findLast(f=>f.turnId===turn.id);if(f){f.topic=answering;f.answerState=answerState;f.intents=[answering];f.questionBinding={text:previousAssistant,hash:sha(previousAssistant),intent:answering};}
-        return next;
+        continue;
     }
-    if (filler.test(text.trim())) return next;
-    // A contextual unknown is evidence of an unanswered gap, never a guessed fact.
-    if (/^(?:I (?:do not|don['’]t) know|I['’]m not sure|I am not sure)[.!\s]*$/i.test(text.trim())) {
-        const topic=questionIntent(previousAssistant);
-        add('uncertainties',text,text,'NEEDS_CLARIFICATION');
-        const fact=next.facts.find(f=>f.turnId===turn.id&&f.field==='uncertainties');if(fact)fact.topic=topic||undefined;
-        return next;
-    }
-    // Sentence boundaries do not split email local parts/domains.
-    const clauses = (text.match(/[^.!?]+(?:[.!?](?!\s|$)[^.!?]+)*(?:[.!?](?=\s|$)|$)/g) || [text]).flatMap(clause=>
-        /\bI (?:want|need|would like)\b|\bI['’]d like\b/i.test(clause)?[clause]:clause.split(/[,;:]\s*(?=(?:and\s+)?(?:should|can|could|would|what|when|where|why|how|do|does|is|are)\b)/i));
-    for (const raw of clauses) {
-        const clause = raw.trim(); if (!clause || filler.test(clause) || endIntent(clause)) continue;
-        if (requestHandoff(clause, previousAssistant)) continue;
+        if (!clause || filler.test(clause.replace(/^[\s-]+/,'').replace(/^oh\s+/i,''))) continue;
+        // Specific third-party negatives must not inherit an unrelated question.
+        if(answerState&&!deictic)contextualIntent=null;
         let remaining = clause;
         for (const [field, label] of [['primary_phone','phone'],['primary_email','email'],['visitor_preferred_identifier','name']] as const) {
             const decline=new RegExp(`\\b(?:I\\s+)?(?:would\\s+)?(?:decline|rather not|do not want to|don't want to|no)\\b[^.!?]{0,50}\\b${label}\\b`, 'i').exec(remaining);
@@ -229,7 +252,7 @@ function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake
             if (/\b(?:charged|can or can['’]?t|court|conditions|supposed to do)\b/i.test(remaining))add('client_questions',remaining,remaining,'DEFERRED_TO_FIRM');
             continue;
         }
-        const uncertain = /\b(?:not sure|I think|might|maybe|unsure|unclear)\b/i.test(remaining);
+        const uncertain = classifyAnswer(remaining)==='UNKNOWN'||/\b(?:not sure|I think|might|maybe|unsure|unclear)\b/i.test(remaining);
         const place = /\b(?:in|at|near)\s+([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*){0,2})\b/.exec(remaining);
         const time = /\b(?:on\s+)?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?|(?:this|last|next)\s+(?:morning|afternoon|evening|night|week|month|year)|in\s+(?:\d+|one|two|three|four|five|six|seven)\s+(?:days?|weeks?|months?)|today|yesterday|tomorrow|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i.exec(remaining);
         const parts = [place,time].filter((m): m is RegExpExecArray => Boolean(m)).sort((a,b)=>a.index-b.index);
@@ -251,13 +274,25 @@ function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake
         // A matter requires a reported issue, never simply the first non-contact utterance.
         if(!uncertain && (matterWords.test(value)||questionIntent(previousAssistant)==='reason_matter'||/\b(?:calling|contacting|here|reaching out)\s+(?:you\s+)?because\b/i.test(value)) && !next.facts.some(f=>f.field==='visitor_reported_reason'))
             add('visitor_reported_reason',value);
-        const field: Field = uncertain ? 'uncertainties'
-            : /\b(?:pain|sore|hospital|doctor|treatment|injur\w*)\b/i.test(value) ? 'symptoms_treatment'
+        const classified: Field = /\b(?:pain|sore|hospital|doctor|treatment|injur\w*)\b/i.test(value) ? 'symptoms_treatment'
             : /\b(?:insur\w*|adjuster|voicemail)\b/i.test(value) ? 'insurance_details'
             : /\b(?:paperwork|police report|citation|summons|complaint|document|exhibits|agreement|contract|receipt|bank transfer|text message|email|letter|pay stub|timesheets?)\b/i.test(value) ? 'known_documents_as_reported'
             : /\b(?:date|court|hearing|deadline|days|timing unknown|no known deadline)\b/i.test(value) ? 'relevant_dates_events'
             : 'material_facts';
+        const field:Field=uncertain&&classified==='material_facts'?'uncertainties':classified;
+        if(!contextualIntent&&classifyAnswer(value)==='EXPLICIT_NONE'){
+            const asked=questionIntent(previousAssistant);
+            if(asked&&canonicalField(asked)===field)contextualIntent=asked;
+        }
         add(field,value,value,uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
+        // A negative statement can establish its own explicit field (for
+        // example, no explanation from the other party), never an unrelated
+        // contact answer. Keep that answer state on this span only.
+        const state=classifyAnswer(value);
+        if(state==='EXPLICIT_NONE'){
+            const fact=next.facts.findLast(f=>f.turnId===turn.id&&f.field===field&&f.evidence===value);
+            if(fact)fact.answerState=state;
+        }
     }
 }
 
@@ -280,10 +315,10 @@ const INTENT_CUES:Record<string,RegExp>={
 };
 function canonicalField(intent:string):Field { return INTENT_FIELDS[intent]?.[0]||'material_facts'; }
 function classifyAnswer(text:string):AnswerState|null {
-    const t=text.trim();
+    const t=text.trim().replace(/[,;:.!?\s]+$/g,'');
     if(/^(?:I (?:do not|don['’]t) know|I['’]m not sure|I am not sure|not sure|unknown|I cannot recall|I can['’]t remember)[.!\s]*$/i.test(t))return 'UNKNOWN';
     if(/^(?:I (?:would |would rather |rather )?(?:not|decline)|I don['’]t want to|prefer not to)/i.test(t))return 'DECLINED';
-    if(/^(?:no[,.!\s]|none\b|nothing\b|there (?:was|is|were) no\b)|\b(?:no other|nothing (?:else|more)|nothing beyond|only that|just (?:that|the) (?:phrase|wording))\b/i.test(t))return 'EXPLICIT_NONE';
+    if(/^(?:no(?:[,.!\s]|$)|none\b|nothing\b|there (?:was|is|were) no\b)|\b(?:no other|nothing (?:else|more)|nothing beyond|only that|just (?:that|the) (?:phrase|wording))\b/i.test(t))return 'EXPLICIT_NONE';
     if(/^(?:yes|correct|that['’]s right)[.!\s]*$/i.test(t))return 'ANSWERED';
     return null;
 }

@@ -173,7 +173,13 @@ test('hosted lifecycle uses existing store, binds persona, persists/reloads and 
         for(const [i,content] of contents.entries()) {await action('turn',{turn:turn(String(i),content),finalized:true});providerTurns.push({role:'user',message:content});}
         await action('turn',{turn:turn('farewell','Have a great day.','persona'),finalized:true});providerTurns.push({role:'persona',message:'Have a great day.'});
         const before=await action('tool',{operation:'SEND'});assert.equal(before.status,'EMAIL_UNAVAILABLE');assert.equal(before.sent,false);
-        await action('begin-close');released=true;const closed=await action('close');assert.equal(closed.state,'CLOSED');assert.equal(closed.handoff,'PREPARED');
+        await action('begin-close');
+        const unverified=await post(request({action:'close',id:start.id},cookie));
+        assert.equal(unverified.status,400);assert.match((await unverified.json()).error,/not yet verified/);
+        const waiting=await (await get(new Request('https://demo.invalid/api/james-canary?id='+start.id,{headers:{cookie}}))).json();
+        assert.equal(waiting.state,'CLOSING');assert.equal(waiting.providerRelease,undefined);
+        assert.equal(waiting.email_status,'INACTIVE_NOT_SENT');
+        released=true;const closed=await action('close');assert.equal(closed.state,'CLOSED');assert.equal(closed.handoff,'PREPARED');
         const read=await get(new Request('https://demo.invalid/api/james-canary?id='+start.id,{headers:{cookie}}));assert.deepEqual(await read.json(),closed);
         const unauthorized=await get(new Request('https://demo.invalid/api/james-canary?id='+start.id));assert.equal(unauthorized.status,400);
         assert.ok(calls.every(url=>url.startsWith('https://redis.invalid')||url.startsWith('https://api.anam.ai/v1/')));
