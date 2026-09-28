@@ -10,9 +10,13 @@ export type Field = 'visitor_preferred_identifier' | 'primary_phone' | 'primary_
 export type CommunicationAct='CONTACT_REPORTED'|'REFUND_REQUEST_REPORTED'|'NO_RESPONSE_REPORTED'|'EXPLANATION_REPORTED'|'NOT_CONTACTED';
 export type Fact = { id: string; field: Field; value: string; turnId: string; sourceHash: string;
     evidence: string; status: 'VISITOR_REPORTED' | 'VISITOR_CONFIRMED' | 'NEEDS_CLARIFICATION' | 'DEFERRED_TO_FIRM' | 'UNRESOLVED' | 'ANSWERED'; supersedes?: string; topic?: string; communicationAct?:CommunicationAct;
+    intents?: string[]; answerState?: AnswerState;
+    questionBinding?: { text: string; hash: string; intent: string };
     interpretedFrom?: { turnId: string; sourceHash: string; evidence: string } };
+export type AnswerState='UNANSWERED'|'ANSWERED'|'EXPLICIT_NONE'|'UNKNOWN'|'DECLINED'|'NEEDS_CLARIFICATION';
 export type Intake = {
     facts: Fact[]; history: Fact[]; declined: string[];
+    questionAttempts?: Record<string,number>;
     emailCandidate?: { value: string; evidence: string; turnId: string; sourceHash: string; field: 'primary_email' | 'alternate_email' };
     handoff: 'NOT_REQUESTED' | 'HANDOFF_REQUESTED' | 'PREPARED';
 };
@@ -27,9 +31,13 @@ export type Session = {
 };
 export function emptyIntake(): Intake { return { facts: [], history: [], declined: [], handoff: 'NOT_REQUESTED' }; }
 export function endIntent(text: string): boolean {
+    // A standalone final farewell is an exit even after substantive speech.
+    // Narrated/quoted goodbyes are not standalone conversational acts.
+    const final=text.trim().split(/[.!?]+\s+/).at(-1)||'';
+    if(final!==text.trim()&&/^(?:(?:thanks|thank you)[, ]+(?:james[, ]+)?)?(?:goodbye|bye)[.!\s]*$/i.test(final))return true;
     return /^\s*(?:(?:(?:thanks|thank you)(?:\s+for\s+your\s+help)?[,!.\s]*(?:james[,!.\s]*)?)?(?:goodbye|bye|have a (?:good|great|nice) (?:day|evening|night))|(?:that(?:'s|’s| is) all[,!.\s]*(?:thanks|thank you))|(?:i(?:'m|’m| am) all set[,!.\s]*(?:thanks|thank you))|(?:okay[,!.\s]+)?we(?:'re|’re| are) done)[.!\s]*$/i.test(text);
 }
-const filler = /^(?:(?:okay|ok|yes|yeah|yep|no|sure|go ahead|that['’]s right|that is right|thanks|thank you|hi(?:[,!\s]+james)?|hello(?:[,!\s]+james)?|hey(?:[,!\s]+james)?)[,.!\s]*)+$/i;
+const filler = /^(?:(?:okay|ok|yes|yeah|yep|no|sure|right|understood|go ahead|that['’]s right|that is right|thanks|thank you|hi(?:[,!\s]+james)?|hello(?:[,!\s]+james)?|hey(?:[,!\s]+james)?)[,.!?\s]*)+$/i;
 const matterWords = /\b(?:arrest\w*|jail|criminal|DUI|charged|charge|protective order|restraining order|collision|accident|fender bender|injur\w*|lawsuit|sued|evict\w*|summons|complaint|notice|dispute|served|business partner|landlord|tenant|contractor|unfinished work)\b/i;
 export function spokenPhone(digits:string):string {
     if(!/^\d{10}$/.test(digits))throw new Error('Canonical ten-digit phone required');
@@ -70,7 +78,7 @@ export function contractorCommunication(text:string,intake:Intake,prior:string):
 }
 
 /** Conservative port of local source-span notes; no model-supplied fact mutations. */
-export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Intake {
+function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake {
     const next: Intake = structuredClone(intake);
     const text = turn.content;
     const sourceHash = sha(text);
@@ -84,7 +92,11 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         if (prior) next.facts = next.facts.filter(f => f.id !== prior.id);
         const fact: Fact = { id: sha(`${turn.id}:${field}:${value}`).slice(0,24), field, value, evidence,
             turnId: turn.id, sourceHash, status, ...(prior ? { supersedes: prior.id } : {}) };
-        if(topic && !['primary_email','primary_phone','identity'].includes(topic))fact.topic=topic;
+        if(topic && !['primary_email','primary_phone','identity','contact_path'].includes(topic)
+            && (field==='material_facts'||field==='uncertainties'||INTENT_FIELDS[topic]?.includes(field))) {
+            fact.topic=topic;
+            fact.questionBinding={text:previousAssistant,hash:sha(previousAssistant),intent:topic};
+        }
         next.facts.push(fact); next.history.push(fact);
     };
     if (next.emailCandidate && /^(?:yes(?:[, ]+(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))?|yeah|yep|correct|(?:that is|that['’]s|that email is|that email['’]s)\s+(?:right|correct))[.!\s]*$/i.test(text.trim())) {
@@ -105,7 +117,19 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
     if (requestHandoff(text, previousAssistant)) {
         next.handoff = 'HANDOFF_REQUESTED'; add('requested_next_step', text, text);
     }
-    if (endIntent(text) || filler.test(text.trim())) return next;
+    if (endIntent(text)) return next;
+    const answering=questionIntent(previousAssistant),answerState=classifyAnswer(text);
+    // Contextual negatives/unknowns are answers, not corrections or filler.
+    // Never fabricate a contact value from a bare yes/no.
+    const separateContactDecline=answerState==='DECLINED'&&/\b(?:email|phone|name)\b/i.test(text)&&!['identity','primary_phone','primary_email','contact_path'].includes(answering||'');
+    if(answering&&answerState&&!separateContactDecline&&(!filler.test(text.trim())||/^(?:no|yes)[.!\s]*$/i.test(text.trim()))) {
+        if(['identity','primary_phone','primary_email','contact_path'].includes(answering)&&answerState==='ANSWERED')return next;
+        const contactAnswer=['identity','primary_phone','primary_email','contact_path'].includes(answering);
+        add(answerState==='UNKNOWN'||contactAnswer?'uncertainties':canonicalField(answering),text,text,answerState==='UNKNOWN'?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
+        const f=next.facts.findLast(f=>f.turnId===turn.id);if(f){f.topic=answering;f.answerState=answerState;f.intents=[answering];f.questionBinding={text:previousAssistant,hash:sha(previousAssistant),intent:answering};}
+        return next;
+    }
+    if (filler.test(text.trim())) return next;
     // A contextual unknown is evidence of an unanswered gap, never a guessed fact.
     if (/^(?:I (?:do not|don['’]t) know|I['’]m not sure|I am not sure)[.!\s]*$/i.test(text.trim())) {
         const topic=questionIntent(previousAssistant);
@@ -121,7 +145,7 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         if (requestHandoff(clause, previousAssistant)) continue;
         let remaining = clause;
         for (const [field, label] of [['primary_phone','phone'],['primary_email','email'],['visitor_preferred_identifier','name']] as const) {
-            const decline=new RegExp(`\\b(?:I\\s+)?(?:decline|rather not|do not want to|don't want to|no)\\b[^.!?]{0,50}\\b${label}\\b`, 'i').exec(remaining);
+            const decline=new RegExp(`\\b(?:I\\s+)?(?:would\\s+)?(?:decline|rather not|do not want to|don't want to|no)\\b[^.!?]{0,50}\\b${label}\\b`, 'i').exec(remaining);
             if (decline) {
                 if (!next.declined.includes(field)) next.declined.push(field);
                 // ASR can join a substantive statement and a contact decline.
@@ -154,9 +178,9 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         // Pure conversational residue is not a fact. Preserve any other disconnected
         // residue with its ORIGINAL clause for review instead of rejecting the turn.
         if ((name || phone) && /^(?:[\s,.!?;:\-]+|oh\b|yeah\b|yes\b|okay\b|hi\b|james\b)+$/i.test(remaining)) continue;
-        if (/@|\b(?:email|e-mail|at .* dot)\b/i.test(remaining) || /email.*\?/i.test(previousAssistant)) {
+        if (/@|\b(?:my email|email address|at .* dot)\b/i.test(remaining) || ['primary_email','contact_path'].includes(questionIntent(previousAssistant)||'')) {
             const match = /[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:\b[a-z]\s+)?[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)*\s+at\s+[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)+/i.exec(remaining);
-            if (match && (/\b(?:my|email|address)\b/i.test(remaining) || /email.*\?/i.test(previousAssistant) || norm(remaining)===norm(match[0]))) {
+            if (match && (/\b(?:my|email|address)\b/i.test(remaining) || ['primary_email','contact_path'].includes(questionIntent(previousAssistant)||'') || norm(remaining)===norm(match[0]))) {
                 const candidate = emailValue(match[0]);
                 if (candidate && !next.facts.some(f=>['primary_email','alternate_email'].includes(f.field)&&norm(f.value)===norm(candidate))) next.emailCandidate = { value: candidate, evidence: match[0], turnId: turn.id, sourceHash,
                     field: /alternate|other email/i.test(remaining) ? 'alternate_email' : 'primary_email' };
@@ -168,7 +192,7 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         remaining = remaining.replace(/^[,;\s]+|[,;\s]+$/g,'');
         if (!remaining || /^[.!]+$/.test(remaining) || filler.test(remaining)) continue;
         if (!text.includes(remaining)) { add('uncertainties',clause,clause,'NEEDS_CLARIFICATION'); continue; }
-        if (/^(?:actually|correction|no[,!])/i.test(remaining)) {
+        if (/^(?:actually|correction|no[,!].*\bnot\b)/i.test(remaining)) {
             const explicit = /\b([A-Za-z][A-Za-z'-]*)\s*,?\s+not\s+([A-Za-z][A-Za-z'-]*)\b/i.exec(remaining);
             const implicit = /^(?:actually|correction)[,!:\s-]+it was\s+([A-Z][A-Za-z'-]*)[.!]?$/i.exec(remaining);
             const targets = next.facts.filter(f => explicit ? norm(f.value)===norm(explicit[2]) : f.field==='event_location');
@@ -213,7 +237,7 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         for (const m of parts) { const v=remaining.slice(cursor,m.index).replace(/^[ ,.;!?]+|[ ,.;!?]+$/g,''); if(v)residues.push(v); cursor=m.index+m[0].length; }
         const tail=remaining.slice(cursor).replace(/^[ ,.;!?]+|[ ,.;!?]+$/g,''); if(tail)residues.push(tail);
         if (parts.length && residues.every(r=>r.split(/\s+/).length>=2)) {
-            if(place)add('event_location',place[1]); if(time)add('relevant_dates_events',time[1]);
+            if(place)add('event_location',place[1],place[1],uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED'); if(time)add('relevant_dates_events',time[1],time[1],uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
             remaining=residues.join(' ');
             for(const r of residues) classify(r,uncertain);
         } else classify(remaining,uncertain);
@@ -225,64 +249,118 @@ export function ingest(intake: Intake, turn: Turn, previousAssistant = ''): Inta
         if (/\b(?:unusable|uninhabitable|urgent|urgency|no running water|unsafe to use)\b/i.test(value))
             add('client_reported_urgency',value,value,uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
         // A matter requires a reported issue, never simply the first non-contact utterance.
-        if(!uncertain && matterWords.test(value) && !next.facts.some(f=>f.field==='visitor_reported_reason'))
+        if(!uncertain && (matterWords.test(value)||questionIntent(previousAssistant)==='reason_matter'||/\b(?:calling|contacting|here|reaching out)\s+(?:you\s+)?because\b/i.test(value)) && !next.facts.some(f=>f.field==='visitor_reported_reason'))
             add('visitor_reported_reason',value);
         const field: Field = uncertain ? 'uncertainties'
             : /\b(?:pain|sore|hospital|doctor|treatment|injur\w*)\b/i.test(value) ? 'symptoms_treatment'
             : /\b(?:insur\w*|adjuster|voicemail)\b/i.test(value) ? 'insurance_details'
-            : /\b(?:paperwork|police report|citation|summons|complaint|document|exhibits|agreement|contract|receipt|bank transfer|text message)\b/i.test(value) ? 'known_documents_as_reported'
+            : /\b(?:paperwork|police report|citation|summons|complaint|document|exhibits|agreement|contract|receipt|bank transfer|text message|email|letter|pay stub|timesheets?)\b/i.test(value) ? 'known_documents_as_reported'
             : /\b(?:date|court|hearing|deadline|days|timing unknown|no known deadline)\b/i.test(value) ? 'relevant_dates_events'
             : 'material_facts';
         add(field,value,value,uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
     }
 }
 
+// One canonical mapping owns storage fields, inferred intents and question labels.
+// Only extraction applies lexical cues; readiness never re-parses visitor text.
+const INTENT_FIELDS:Record<string,Field[]>={
+    reason_matter:['visitor_reported_reason'],core_facts:['material_facts','known_documents_as_reported','contractor_contact'],
+    paperwork:['known_documents_as_reported'],timing_urgency:['relevant_dates_events'],
+    identity:['visitor_preferred_identifier'],primary_phone:['primary_phone'],primary_email:['primary_email'],
+    requested_outcome:['requested_outcome'],client_urgency:['client_reported_urgency'],contractor_contact:['contractor_contact'],
+    injury_treatment:['symptoms_treatment'],insurance_context:['insurance_details'],
+};
+const INTENT_CUES:Record<string,RegExp>={
+    agreement_payment:/\b(?:paid|payment|deposit|bank transfer|agreement)\b/i,
+    work_condition:/\b(?:unfinished|unusable|torn|apart|completed|not finished|work done)\b/i,
+    reported_charge_order:/\b(?:charged with|charge is|DUI|restraining order|protective order)\b/i,
+    event_context:/\b(?:arrest\w*|released|got out of jail|police stop|stopped by|collision|accident|fender bender|fell|fall)\b/i,
+    conditions:/\b(?:conditions|restrictions|stay away|no.contact|license taken)\b/i,
+    client_urgency:/\b(?:not urgent|no urgency|no immediate concern)\b/i,
+};
+function canonicalField(intent:string):Field { return INTENT_FIELDS[intent]?.[0]||'material_facts'; }
+function classifyAnswer(text:string):AnswerState|null {
+    const t=text.trim();
+    if(/^(?:I (?:do not|don['’]t) know|I['’]m not sure|I am not sure|not sure|unknown|I cannot recall|I can['’]t remember)[.!\s]*$/i.test(t))return 'UNKNOWN';
+    if(/^(?:I (?:would |would rather |rather )?(?:not|decline)|I don['’]t want to|prefer not to)/i.test(t))return 'DECLINED';
+    if(/^(?:no[,.!\s]|none\b|nothing\b|there (?:was|is|were) no\b)|\b(?:no other|nothing (?:else|more)|nothing beyond|only that|just (?:that|the) (?:phrase|wording))\b/i.test(t))return 'EXPLICIT_NONE';
+    if(/^(?:yes|correct|that['’]s right)[.!\s]*$/i.test(t))return 'ANSWERED';
+    return null;
+}
+function factIntents(f:Fact):string[] {
+    if(f.intents)return f.intents;
+    const result=Object.entries(INTENT_FIELDS).filter(([,fields])=>fields.includes(f.field)).map(([intent])=>intent);
+    if(f.topic&&INTAKE_QUESTIONS[f.topic]&&!['client_questions','requested_next_step','requested_outcome'].includes(f.field))result.push(f.topic);
+    return [...new Set(result)];
+}
+export function ingest(intake:Intake,turn:Turn,previousAssistant=''):Intake {
+    const next=ingestFacts(intake,turn,previousAssistant);
+    for(const f of next.facts.filter(f=>f.turnId===turn.id)) {
+        const context=questionIntent(previousAssistant);
+        const sibling=next.facts.some(other=>other.id!==f.id&&other.turnId===turn.id&&norm(other.value)===norm(f.value)&&other.field!=='material_facts');
+        if(f.field==='material_facts'&&(sibling||Object.values(INTENT_CUES).some(c=>c.test(f.value))||(context==='contractor_contact'&&!f.answerState))){delete f.topic;delete f.questionBinding;}
+        const own=factIntents(f);
+        // Explicit storage/meaning wins over stale question context. Only a
+        // substantive, non-question answer may fill the current factual gap.
+        const factual=!['client_questions','requested_next_step','requested_outcome','primary_phone','primary_email','visitor_preferred_identifier'].includes(f.field);
+        if(factual){
+            for(const [intent,cue] of Object.entries(INTENT_CUES))if(cue.test(f.value))own.push(intent);
+            if(context&&f.questionBinding&&!/^(?:should|can|could|what|when|why|how)\b/i.test(f.value))own.push(context);
+        }
+        f.intents=[...new Set(own)];
+        f.answerState??=f.status==='NEEDS_CLARIFICATION'?'NEEDS_CLARIFICATION':'ANSWERED';
+        if(f.questionBinding&&f.field==='material_facts'&&context&&INTENT_FIELDS[context]&&!['core_facts','reason_matter'].includes(context))f.field=canonicalField(context);
+        // Keep the exact source value/evidence; only its canonical category changes.
+        const historical=next.history.findIndex(h=>h.id===f.id);if(historical>=0)next.history[historical]=structuredClone(f);
+    }
+    const intent=questionIntent(previousAssistant);
+    if(intent&&(next.questionAttempts?.[intent]||0)>=2&&['UNANSWERED','NEEDS_CLARIFICATION'].includes(intentStates(next)[intent]||'UNANSWERED')&&!endIntent(turn.content)) {
+        const f:Fact={id:sha(turn.id+':exhausted:'+intent).slice(0,24),field:'uncertainties',value:'Answer remains unknown after one clarification',
+            evidence:turn.content,turnId:turn.id,sourceHash:sha(turn.content),status:'NEEDS_CLARIFICATION',topic:intent,intents:[intent],answerState:'UNKNOWN',questionBinding:{text:previousAssistant,hash:sha(previousAssistant),intent}};
+        next.facts.push(f);next.history.push(f);
+    }
+    return next;
+}
+export function intentStates(intake:Intake):Record<string,AnswerState> {
+    const states:Record<string,AnswerState>={};
+    for(const key of Object.keys(INTAKE_QUESTIONS))states[key]='UNANSWERED';
+    for(const f of intake.facts)for(const key of factIntents(f)) {
+        const state=f.answerState||(f.status==='NEEDS_CLARIFICATION'?'NEEDS_CLARIFICATION':'ANSWERED');
+        if(states[key]==='UNANSWERED'||states[key]==='NEEDS_CLARIFICATION'||state!=='NEEDS_CLARIFICATION')states[key]=state;
+    }
+    for(const field of intake.declined)for(const [key,fields] of Object.entries(INTENT_FIELDS))if(fields.includes(field as Field))states[key]='DECLINED';
+    return states;
+}
 export function readiness(intake: Intake) {
-    const has=(...fields: Field[])=>intake.facts.some(f=>fields.includes(f.field)&&f.status!=='NEEDS_CLARIFICATION');
-    const supplied=(f: Field)=>has(f)||intake.declined.includes(f);
-    const unknown=(topic:string)=>intake.facts.some(f=>f.field==='uncertainties'&&f.topic===topic);
+    const states=intentStates(intake);
+    const resolved=(intent:string)=>!['UNANSWERED','NEEDS_CLARIFICATION'].includes(states[intent]||'UNANSWERED');
+    const has=(...fields:Field[])=>intake.facts.some(f=>fields.includes(f.field)&&f.status!=='NEEDS_CLARIFICATION');
     const profile=matterProfile(intake);
-    const matter=intake.facts.filter(f=>!['client_questions','requested_next_step','requested_outcome'].includes(f.field)).map(f=>f.value).join(' ');
-    const covered=(topic:string,pattern:RegExp)=>pattern.test(matter)||unknown(topic)
-        ||intake.facts.some(f=>f.topic===topic&&!['client_questions','requested_next_step','requested_outcome'].includes(f.field));
     const depth:Record<string,boolean>=profile==='CRIMINAL_DUI'?{
-        reported_charge_order:covered('reported_charge_order',/\b(?:charged with|charge is|DUI|restraining order|protective order)\b/i),
-        event_context:covered('event_context',/\b(?:arrest\w*|released|got out of jail|police stop|stopped by)\b/i),
-        timing_urgency:has('relevant_dates_events')||unknown('timing_urgency'),
-        conditions:covered('conditions',/\b(?:conditions|restrictions|stay away|no.contact|license taken)\b/i),
-        paperwork:has('known_documents_as_reported')||unknown('paperwork'),
+        reported_charge_order:resolved('reported_charge_order'),event_context:resolved('event_context'),
+        timing_urgency:resolved('timing_urgency'),conditions:resolved('conditions'),paperwork:resolved('paperwork'),
     }:profile==='PERSONAL_INJURY'?{
-        event_context:covered('event_context',/\b(?:collision|accident|fender bender|fell|fall)\b/i),
-        timing_location:(has('relevant_dates_events')&&has('event_location'))||unknown('timing_location'),
-        injury_treatment:has('symptoms_treatment')||unknown('injury_treatment'),
-        insurance_context:has('insurance_details')||unknown('insurance_context'),
-    }: /\bcontractor|unfinished work\b/i.test(matter)?{
-        agreement_payment:covered('agreement_payment',/\b(?:paid|payment|deposit|bank transfer|agreement)\b/i),
-        work_condition:covered('work_condition',/\b(?:unfinished|unusable|torn|apart|completed|not finished|work done)\b/i),
-        timing_urgency:has('relevant_dates_events')||unknown('timing_urgency'),
-        contractor_contact:has('contractor_contact')||unknown('contractor_contact'),
-        paperwork:has('known_documents_as_reported')||unknown('paperwork'),
-        client_urgency:has('client_reported_urgency')||unknown('client_urgency')||covered('client_urgency',/\b(?:not urgent|no urgency|no immediate concern)\b/i),
+        event_context:resolved('event_context'),timing_location:(has('relevant_dates_events')&&has('event_location'))||resolved('timing_location'),
+        injury_treatment:resolved('injury_treatment'),insurance_context:resolved('insurance_context'),
+    }:intake.facts.some(f=>f.field==='visitor_reported_reason'&&/\bcontractor|unfinished work\b/i.test(f.value))?{
+        agreement_payment:resolved('agreement_payment'),work_condition:resolved('work_condition'),
+        timing_urgency:resolved('timing_urgency'),contractor_contact:resolved('contractor_contact'),
+        paperwork:resolved('paperwork'),client_urgency:resolved('client_urgency'),
     }:{
-        paperwork:has('known_documents_as_reported')||unknown('paperwork'),
-        allegations:covered('allegations',/\b(?:alleges?|claims?|demands?|requires?|accuses?|says I|says that|seeks?)\b/i),
-        receipt_context:covered('receipt_context',/\b(?:received|served|delivered|arrived|handed|mailed)\b/i),
-        timing_location:(has('relevant_dates_events')&&has('event_location'))||unknown('timing_location'),
-        opposing_contact:covered('opposing_contact',/\b(?:other party|opposing|partner|landlord|tenant)\b.*\b(?:called|email\w*|wrote|said|contact\w*|message\w*)\b/i),
-        filing_status:covered('filing_status',/\b(?:filed|filing|hearing|court date|no hearing)\b/i),
+        core_facts:resolved('core_facts'),timing_urgency:resolved('timing_urgency'),
     };
     const checks:Record<string,boolean>={
-        reason_matter:intake.facts.some(f=>f.field==='visitor_reported_reason'&&matterWords.test(f.value)&&!filler.test(f.value)),
+        reason_matter:resolved('reason_matter'),
         ...depth,
-        identity:supplied('visitor_preferred_identifier'),
-        contact_path:has('primary_phone','primary_email')||(intake.declined.includes('primary_phone')&&intake.declined.includes('primary_email')),
-        requested_outcome:has('requested_outcome')||unknown('requested_outcome'),
+        identity:resolved('identity'),
+        contact_path:has('primary_phone','primary_email')||resolved('contact_path')||(resolved('primary_phone')&&resolved('primary_email')),
+        requested_outcome:resolved('requested_outcome'),
         questions_preserved:intake.facts.filter(f=>f.field==='client_questions').every(f=>['ANSWERED','DEFERRED_TO_FIRM','UNRESOLVED'].includes(f.status)),
     };
     const missingIntents=Object.keys(checks).filter(key=>!checks[key]);
     const missing=missingIntents.map(key=>INTAKE_QUESTIONS[key].label);
     return {ready:!missing.length,status:missing.length?'INTAKE_INCOMPLETE':'HANDOFF_READY',matterProfile:profile,
-        practiceScope:profile==='UNVERIFIED_CIVIL_OR_OTHER'?'UNVERIFIED — do not imply the firm handles this matter':'AREA_ONLY — representation and acceptance not confirmed',missing,missingIntents,checks};
+        practiceScope:profile==='UNVERIFIED_CIVIL_OR_OTHER'?'UNVERIFIED — do not imply the firm handles this matter':'AREA_ONLY — representation and acceptance not confirmed',missing,missingIntents,checks,intentStates:states};
 }
 
 export function matterProfile(intake:Intake) {
@@ -293,6 +371,8 @@ export function matterProfile(intake:Intake) {
 }
 
 const INTAKE_QUESTIONS:Record<string,{label:string;question:string}>={
+    primary_email:{label:'Primary email (optional)',question:"What's the best email address to associate with this intake?"},
+    primary_phone:{label:'Phone (or declined)',question:'What is the best phone number for this intake?'},
     agreement_payment:{label:'Agreement / payment',question:'What was agreed and what payment was made, if any?'},
     work_condition:{label:'Work completed / current condition',question:'What work was completed and what condition is it in now?'},
     contractor_contact:{label:'Last contractor contact / refund request',question:'What happened when you last contacted the contractor, including any refund request?'},
@@ -318,11 +398,17 @@ const INTAKE_QUESTIONS:Record<string,{label:string;question:string}>={
 };
 export function questionIntent(text:string):string|null {
     if(!text.includes('?'))return null;
-    // Historical communication questions outrank remedy vocabulary such as
-    // "refund". The old ordering mislabeled this as requested_outcome.
+    // Inspect the actual question, not factual preamble containing old topics.
+    text=text.slice(0,text.lastIndexOf('?')).split(/(?<=[.!])\s+/).at(-1)||text;
     if(/\b(?:contractor|builder|him|her|them|last reached out)\b/i.test(text)
         && /\b(?:contact\w*|reach\w*|text\w*|email\w*|call\w*|said|say|spoke|send|sent|ask\w*|request\w*|hear\w*|respond\w*|explain\w*)\b/i.test(text)
         && !/\b(?:would you like|do you want|hoping|desired outcome)\b/i.test(text))return 'contractor_contact';
+    if(/\b(?:what brings|reason for (?:calling|contact)|how can I help|why.*(?:call|contact))\b/i.test(text))return 'reason_matter';
+    if(/\b(?:date|when)\b/i.test(text)&&!/\b(?:birth|callback|contractor|builder|last reached out)\b/i.test(text))return /when and where/i.test(text)?'timing_location':'timing_urgency';
+    if(/\b(?:what|any|other|specific|additional)\b.*\b(?:reason|wording|explanation|phrase|detail)\b|\bwhat (?:did|does).*(?:say|said)\b/i.test(text))return 'core_facts';
+    if(/\b(?:do you have|what documents|paperwork|written notice)\b/i.test(text))return 'paperwork';
+    if(/\b(?:best|your|provide|use|associate|contact|leave|confirm|heard)\b.*\b(?:email|e-mail|address)\b|\bwhat email address\b/i.test(text)&&!/\b(?:termination|sent|received|notice|document|wording)\b/i.test(text))return 'primary_email';
+    if(/\bphone\b.*\bemail\b|\bemail\b.*\bphone\b/i.test(text))return 'contact_path';
     for(const [intent,pattern] of [
         ['requested_outcome',/refund|money back|recover.*money|finish.*work|outcome|hoping|would you like.*(?:firm|consider)|help (?:you )?with/i],
         ['agreement_payment',/agreed|agreement.*payment|deposit|how much|amount/i],['work_condition',/what work|condition.*\bnow\b/i],
@@ -332,7 +418,7 @@ export function questionIntent(text:string):string|null {
         ['opposing_contact',/other party.*communicat|opposing.*contact/i],['filing_status',/filed|hearing scheduled/i],
         ['event_context',/incident or arrest/i],
         ['conditions',/conditions|restrictions|stay away/i],['reported_charge_order',/charge|type of order/i],['paperwork',/paperwork|documents/i],
-        ['primary_email',/email/i],['primary_phone',/phone|number/i],['identity',/\bname\b/i],
+        ['primary_phone',/phone|number/i],['identity',/\bname\b/i],
         ['requested_outcome',/outcome|hoping|would you like.*(?:firm|consider)|help (?:you )?with/i],
         ['timing_urgency',/timing|when|date|hearing/i],['core_facts',/what happened|additional detail/i],
     ] as const)if(pattern.test(text))return intent;
@@ -343,9 +429,12 @@ export function conversationGuidance(session:Session) {
     const asked=session.turns.filter(t=>t.role==='persona').map(t=>questionIntent(t.content)).filter(Boolean);
     const lastVisitor=session.turns.findLast(t=>t.role==='user');
     const hesitation=Boolean(lastVisitor&&/\b(?:not sure|do not know|don['’]t know|I guess)\b/i.test(lastVisitor.content));
-    const completed=[...new Set([...intake.facts.filter(f=>f.status!=='NEEDS_CLARIFICATION').map(f=>f.field),...intake.declined,...Object.keys(ready.checks).filter(k=>ready.checks[k])])];
+    const states=intentStates(intake);
+    const completed=[...new Set([...Object.keys(states).filter(k=>!['UNANSWERED','NEEDS_CLARIFICATION'].includes(states[k])),...Object.keys(ready.checks).filter(k=>ready.checks[k])])];
     const emailOpen=!completed.includes('primary_email');
-    let intent=ready.missingIntents.find(key=>!asked.includes(key))||(ready.ready?'correctable_summary':'review_unknowns');
+    let intent=ready.missingIntents.find(key=>!completed.includes(key)&&!asked.includes(key))
+        ||ready.missingIntents.find(key=>!completed.includes(key)&&states[key]==='NEEDS_CLARIFICATION'&&(intake.questionAttempts?.[key]||0)<2)
+        ||(ready.ready?'correctable_summary':'review_unknowns');
     let next=INTAKE_QUESTIONS[intent]?.question||null;
     if(pending){intent='confirm_primary_email';next=`I heard ${pending.value}. Is that correct?`;}
     else if(!ready.missingIntents.length&&emailOpen&&!asked.includes('primary_email')) {
@@ -374,6 +463,8 @@ export function conversationGuidance(session:Session) {
             forbidden_promises:['I will pass this on','the firm will review it','someone will call','it will be sent']},
         phone_speech:intake.facts.filter(f=>f.field==='primary_phone').map(f=>({source_turn_id:f.turnId,spoken:spokenPhone(f.value)})),
         next_question_intent:intent,next_question:next,completed_intents_do_not_reask:completed,
+        intent_states:states,clarification_attempts:intake.questionAttempts||{},max_clarifications_per_intent:1,
+        resolved_answer_policy:'ANSWERED, EXPLICIT_NONE, UNKNOWN and DECLINED are resolved for questioning. UNKNOWN is not a confirmed fact. Never ask a resolved intent again, even using different wording. Use only next_question; when null, acknowledge or summarize without inventing another discovery question.',
         previously_asked_intents:[...new Set(asked)],previous_question_intent:asked.at(-1)||null,
         hesitation_recovery:hesitation,grounded_choice_evidence:choices,max_questions_per_reply:1,repeat_question_after_tool:false,
         response_pattern:'Brief acknowledgment, useful synthesis, at most one high-value missing question. Use the matter-specific gaps for 2–4 useful factual questions when needed, never re-ask answered questions or demand invented answers. Ask each gap once; explicit unknown is valid. Do not say that is all I need, offer closure, or claim completion while completion_language_allowed is false. Only a clear visitor goodbye overrides this. Read phone_speech.spoken verbatim using individual digit words, never a numeric value. Do not promise handoff, firm review or callback.',
@@ -413,6 +504,9 @@ export function applyTurn(session: Session, turn: Turn): Session {
         const prior=next.turns.slice().reverse().find(t=>t.role==='persona')?.content||'';
         next.intake=ingest(next.intake,turn,prior);
         if(endIntent(turn.content))next.state='CLOSING_PENDING';
+    } else {
+        const intent=questionIntent(turn.content);
+        if(intent){next.intake.questionAttempts??={};next.intake.questionAttempts[intent]=(next.intake.questionAttempts[intent]||0)+1;}
     }
     next.turns.push(turn); return next;
 }

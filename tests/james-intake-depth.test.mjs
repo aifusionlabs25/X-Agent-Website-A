@@ -27,9 +27,10 @@ test('explicit unknown answers cover only their matter-aware gap and retain evid
     assert.equal(readiness(s).ready,true);
     assert.ok(s.facts.some(f=>f.topic==='conditions'&&f.status==='NEEDS_CLARIFICATION'));
 });
-test('unverified civil intake needs distinct context and never implies practice acceptance',()=>{
+test('unverified civil intake uses bounded general context, not mandatory notice/filing discovery',()=>{
     let s=contact(add(emptyIntake(),'My former business partner sued me. I received a complaint yesterday in Tempe.'));
-    assert.equal(readiness(s).ready,false);
+    assert.equal(readiness(s).ready,true);
+    assert.ok(!readiness(s).missingIntents.includes('filing_status'));
     assert.match(readiness(s).practiceScope,/UNVERIFIED/);
     s=add(s,'The complaint alleges unpaid invoices. My former partner emailed a demand. No hearing has been scheduled.');
     assert.equal(readiness(s).ready,true);
