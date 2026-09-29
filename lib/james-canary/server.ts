@@ -8,6 +8,8 @@ import { fetchAnamSessionMetadata, verifyAnamSessionMetadata, fetchCompletedAnam
 import { PERSONA_ID, emptyIntake, applyTurn, receipt, readiness, conversationGuidance, spokenPhone, sha, view } from './state.ts';
 import type { Session, Turn } from './state.ts';
 import {verifyOwnerGrant,emailConfiguration,sendPreparedOwnerTest} from './owner-email.ts';
+import {comparisonEnabled,authorizeComparison,checkComparisonPersona,comparisonResult,COMPARISON_ID,COMMON_PROMPT_HASH} from './comparison.ts';
+import type {ComparedSession} from './comparison.ts';
 
 const COOKIE='xagent_james_canary';
 const TTL=24*60*60;
@@ -26,10 +28,10 @@ export function seal(session: Session, key: string): string {
     const encrypted=Buffer.concat([cipher.update(JSON.stringify(session),'utf8'),cipher.final()]);
     return JSON.stringify({revision:session.revision,iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:encrypted.toString('base64')});
 }
-export function unseal(value:string,id:string,key:string):Session {
+export function unseal(value:string,id:string,key:string):ComparedSession {
     const box=JSON.parse(value), decipher=createDecipheriv('aes-256-gcm',Buffer.from(key,'hex'),Buffer.from(box.iv,'base64'));
     decipher.setAAD(Buffer.from(PREFIX+id)); decipher.setAuthTag(Buffer.from(box.tag,'base64'));
-    const state=JSON.parse(Buffer.concat([decipher.update(Buffer.from(box.data,'base64')),decipher.final()]).toString('utf8')) as Session;
+    const state=JSON.parse(Buffer.concat([decipher.update(Buffer.from(box.data,'base64')),decipher.final()]).toString('utf8')) as ComparedSession;
     if(state.id!==id||state.personaId!==PERSONA_ID||state.revision!==box.revision)throw new Error('Session integrity check failed');
     return state;
 }
@@ -92,18 +94,24 @@ export function toolResult(s:Session,operation:string) {
 }
 function json(value:unknown,status=200){return NextResponse.json(value,{status,headers:{'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}});}
 export async function get(req:Request) {
-    try { const id=new URL(req.url).searchParams.get('id'); return json(view(await load(req,id))); }
+    try { const id=new URL(req.url).searchParams.get('id'); const s=await load(req,id);return json({...view(s),comparison:s.comparison}); }
     catch(error){return json({error:error instanceof Error?error.message:'Session unavailable'},400);}
 }
 export async function post(req:Request) {
     try {
         if(!isTrustedBrowserOrigin(req))return json({error:'Request origin is not allowed'},403);
         const body=await readBoundedJsonObject(req,20*1024);
+        const comparing=comparisonEnabled();
+        // This gate exists only on the isolated preview. No email owner grant is
+        // available in either arm; ordinary production behavior is unchanged.
+        if(comparing&&req.headers.has('x-james-owner-test'))throw Error('Email authority is not allowed in this comparison');
         if(body.action==='owner-test-preflight'){
             verifyOwnerGrant(req.headers.get('x-james-owner-test'));
             return json({ready:true,...emailConfiguration(),maxSends:1,retries:0});
         }
         if(body.action==='start') {
+            const arm=comparing?authorizeComparison(req.headers.get('x-james-comparison'),body.arm):null;
+            if(comparing&&await redis(['GET',PREFIX+COMPARISON_ID+':stopped']))throw Error('Comparison is closed');
             const ownerToken=req.headers.get('x-james-owner-test');
             const grant=ownerToken?verifyOwnerGrant(ownerToken):null;
             if(grant)emailConfiguration();
@@ -113,10 +121,16 @@ export async function post(req:Request) {
             if(!owner){const created=createAmyAnamBrowserSessionWithSecret(secret());owner=created.session;token=created.token;}
             const p=await provider('/personas/'+PERSONA_ID);
             if(p.id!==PERSONA_ID)throw new Error('Persona identity did not match');
+            if(arm)checkComparisonPersona(p);
             const id=randomUUID();
-            const state:Session={id,browserId:owner.id,clientLabel:'xagent-james-canary:'+id,createdAt:new Date().toISOString(),revision:0,stateHash:'',
+            const state:ComparedSession={id,browserId:owner.id,clientLabel:'xagent-james-canary:'+id,createdAt:new Date().toISOString(),revision:0,stateHash:'',
                 personaId:PERSONA_ID,config:{promptHash:sha(p.brain?.systemPrompt||''),configHash:sha(JSON.stringify(p)),voiceId:p.voice?.id||'',voiceName:p.voice?.displayName||''},
                 state:'LAUNCHING',turns:[],intake:emptyIntake(),receipts:[]};
+            if(arm){
+                const claim=await redis(['SET',PREFIX+COMPARISON_ID+':'+arm,id,'NX','EX',TTL]);
+                if(claim!=='OK')throw Error('This comparison arm already reserved its one session; no retry authorized');
+                state.comparison={experiment:COMPARISON_ID,arm,promptHash:COMMON_PROMPT_HASH};
+            }
             if(grant){
                 const claimed=await redis(['SET',PREFIX+'owner-grant:'+grant.id,id,'NX','EX',TTL]);
                 if(claimed!=='OK')throw new Error('Owner test authorization already consumed; no new session authorized');
@@ -126,7 +140,7 @@ export async function post(req:Request) {
             state.stateHash=sha(JSON.stringify(state)); await save(null,state);
             const minted=await provider('/auth/session-token',{clientLabel:state.clientLabel,personaConfig:{personaId:PERSONA_ID}});
             if(typeof minted.sessionToken!=='string')throw new Error('Session token missing');
-            const response=json({...view(state),sessionToken:minted.sessionToken});
+            const response=json({...view(state),comparison:state.comparison,sessionToken:minted.sessionToken});
             if(token)response.cookies.set(COOKIE,token,amyAnamCookieOptions());
             return response;
         }
@@ -147,7 +161,8 @@ export async function post(req:Request) {
             if(!['STATUS','REQUEST_HANDOFF','PREPARE','SEND'].includes(String(body.operation)))throw new Error('Unsupported tool operation');
             if(!current.providerId)throw new Error('Session is not bound');
             // Model cannot invent visitor consent or authorize an action.
-            return json(toolResult(current,String(body.operation)));
+            const result=toolResult(current,String(body.operation));
+            return json(current.comparison?comparisonResult(result,current.comparison.arm):result);
         } else if(body.action==='begin-close') {
             if(current.state==='CLOSED')return json(view(current));
             if(!current.providerId)throw new Error('Session is not bound');next.state='CLOSING';
@@ -163,6 +178,6 @@ export async function post(req:Request) {
         } else throw new Error('Unsupported session operation');
         next=receipt(current,next,body);await save(current,next);
         if(body.action==='close'&&next.ownerTest&&next.intake.handoff==='PREPARED')next=await sendPreparedOwnerTest(next,{save,stamp:receipt});
-        return json(view(next));
+        return json({...view(next),comparison:next.comparison});
     } catch(error) { return json({error:error instanceof Error?error.message:'Canary operation failed'},400); }
 }
