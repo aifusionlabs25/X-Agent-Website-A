@@ -43,7 +43,8 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         }
     }
     useEffect(()=>{
-        const saved=localStorage.getItem(storageKey);
+        let saved:string|null=null;
+        try{saved=localStorage.getItem(storageKey);}catch{/* Private/blocked storage must not crash the page. */}
         if(saved){id.current=saved;
             void fetch(apiPath+'?id='+encodeURIComponent(saved)).then(async r=>{const s=await r.json();if(!r.ok)throw new Error(s.error);render(s);if(s.state==='CLOSED')setPadOpen(true);setNotice(s.state==='CLOSED'?'Saved closed session restored.':'Saved session restored. The media stream is not automatically reconnected.');}).catch(error=>setNotice(error.message));}
         return()=>{if(client.current&&!stopped.current){stopped.current=true;void client.current.stopStreaming();}};
@@ -54,7 +55,9 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         seen.current.clear();finalized.current.clear();messages.current=[];setHistory([]);setPreview(null);setApproved(false);
         try{
             if(accessCode)await api('demo-email-preflight',{},accessCode);
-            const launched=await api('start',{},accessCode||undefined);setAccessCode('');id.current=launched.id;localStorage.setItem(storageKey,launched.id);render(launched);
+            const launched=await api('start',{},accessCode||undefined);setAccessCode('');id.current=launched.id;
+            try{localStorage.setItem(storageKey,launched.id);}catch{/* The active call can continue without reload recovery. */}
+            render(launched);
             const c=createClient(launched.sessionToken);client.current=c;
             let resolveBinding:()=>void,rejectBinding:(error:Error)=>void;
             const binding=new Promise<void>((resolve,reject)=>{resolveBinding=resolve;rejectBinding=reject;});chain.current=binding;
