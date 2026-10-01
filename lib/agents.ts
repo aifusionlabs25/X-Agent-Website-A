@@ -58,7 +58,7 @@ export const ALL_AGENTS: AgentData[] = [
     name: "JAMES",
     role: "Legal Intake",
     personaId: "8a991c93-0c95-42c5-8c22-a67428946eb8",
-    thumbnailSrc: "/agents/thumbnails/James Knowles Law Firm 1.jpg",
+    thumbnailSrc: "/agents/thumbnails/james-knowles-cara4-20261001.png",
     accentColor: "#3b82f6",
     liveUrl: "/demo/james",
   },
