@@ -126,6 +126,8 @@ test('provider confirmation context must preserve turn order, not just text memb
 test('new route targets current James; legacy routes and prompt/KB overrides stay unchanged',()=>{
     const source=readFileSync(new URL('../lib/james-canary/demo-server.ts',import.meta.url),'utf8');assert.match(source,/CURRENT_JAMES_PERSONA_ID/);assert.match(source,/xagent:james:notepad-demo:v1/);
     const client=readFileSync(new URL('../components/james/JamesCanary.tsx',import.meta.url),'utf8');assert.match(client,/Show legal pad/);assert.match(client,/repeating-linear-gradient/);assert.match(client,/type="password"/);assert.doesNotMatch(client,/localStorage.setItem\([^\n]*accessCode/);
+    assert.match(client,/Layout preview only/);assert.match(client,/disabled=\{busy\|\|Boolean\(active\)\|\|!launchReady\}/);
+    const page=readFileSync(new URL('../app/demo/james-notepad/page.tsx',import.meta.url),'utf8');assert.match(page,/await connection\(\)/);assert.match(page,/launchReady=\{launchReady\}/);
 });
 test('HTTP demo lifecycle: isolated original persona, no automatic sends, preview/consent, two sends, replay safe',async()=>{
     const previous={...process.env},oldFetch=globalThis.fetch;

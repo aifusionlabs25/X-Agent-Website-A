@@ -7,7 +7,7 @@ import type { Turn, view } from '@/lib/james-canary/state';
 
 type State=ReturnType<typeof view>;
 type EmailPreview={snapshotHash:string;callerAddress:string;sender:string;replyTo:string;messages:{lane:string;to:string;text:string}[]};
-export default function JamesCanary({apiPath='/api/james-canary',storageKey='james-hosted-canary-session-v1',notepadDemo=false}:{apiPath?:string;storageKey?:string;notepadDemo?:boolean}={}){
+export default function JamesCanary({apiPath='/api/james-canary',storageKey='james-hosted-canary-session-v1',notepadDemo=false,launchReady=true}:{apiPath?:string;storageKey?:string;notepadDemo?:boolean;launchReady?:boolean}={}){
     const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(notepadDemo?'Start a demo conversation when ready.':'Start a new canary conversation when ready.'),[history,setHistory]=useState<Turn[]>([]);
     const [padOpen,setPadOpen]=useState(!notepadDemo),[accessCode,setAccessCode]=useState(''),[preview,setPreview]=useState<EmailPreview|null>(null),[approved,setApproved]=useState(false);
     const client=useRef<AnamClient|null>(null), id=useRef(''), chain=useRef<Promise<unknown>>(Promise.resolve()), failed=useRef(false), stopped=useRef(false), closing=useRef(false);
@@ -106,9 +106,10 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         </header>
         <div className={'mx-auto grid max-w-7xl gap-5 '+(padOpen?'lg:grid-cols-2':'')}>
             <section><video id="james-canary-video" autoPlay playsInline className="aspect-[4/3] w-full rounded-xl bg-black object-contain"/>
+                {!launchReady&&<p role="alert" className="mt-3 rounded border border-amber-200/40 p-3 text-sm text-amber-200">Layout preview only. Live calls are disabled until this demo’s session storage and Anam settings are configured.</p>}
                 <p role="status" className="my-3 text-sm text-zinc-200">{notice}</p>
                 {notepadDemo&&!active&&<details className="mb-4 rounded border border-white/20 p-3"><summary className="cursor-pointer text-sm">Operator email test (optional)</summary><label className="mt-3 block text-xs">One-use demo access code<input type="password" autoComplete="off" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={busy} className="mt-2 block w-full rounded border border-white/30 bg-zinc-900 p-2 text-white"/></label><p className="mt-2 text-xs text-zinc-400">Leave blank for a notes-only call. Codes are never saved in browser storage or URLs.</p></details>}
-                <div className="flex flex-wrap gap-3"><button onClick={()=>void start()} disabled={busy||Boolean(active)} className="rounded bg-white px-5 py-3 font-semibold text-black disabled:opacity-40">Start James</button>
+                <div className="flex flex-wrap gap-3"><button onClick={()=>void start()} disabled={busy||Boolean(active)||!launchReady} className="rounded bg-white px-5 py-3 font-semibold text-black disabled:opacity-40">Start James</button>
                     <button onClick={()=>void close()} disabled={busy||!active} className="rounded border border-white/40 px-5 py-3 disabled:opacity-40">{state?.state==='CLOSING'?'Verify closure':'End conversation'}</button>
                     <button aria-expanded={padOpen} aria-controls="james-legal-pad" onClick={()=>setPadOpen(v=>!v)} className="rounded border border-amber-300/60 px-5 py-3 text-amber-200">{padOpen?'Hide legal pad':'Show legal pad'}</button></div>
                 <p className="mt-4 text-xs text-zinc-400">Use fictional case details only. This is not legal advice or a submission to Knowles. {state?.demo_email_authorized?'Email testing is authorized for this session, but requires post-call review and explicit approval.':state?.owner_test?'Legacy owner email test; inspect its send status.':'Email sending is off for this session.'} Notes expire 24 hours after their last saved update. Anam transcripts and emailed copies have separate retention rules.</p>

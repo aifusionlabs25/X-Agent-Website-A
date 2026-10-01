@@ -98,3 +98,18 @@ name is an inbox setting, not an arbitrary per-message From spoof.
 Before activation, verify a dedicated sender/reply-to, provision the operator
 test configuration, run one fictional end-to-end call, and check both actual
 mailboxes. Do not substitute unit tests for that live qualification.
+
+## Preview configuration audit
+
+The feature was pushed as a draft review, not merged to main. The Vercel preview
+renders the interface but has no matching branch-scoped session-spine secret,
+enable/kill settings, or Redis URL/token. Its Start button is therefore disabled
+with a visible layout-preview notice. Anam's key is present for preview, but
+that alone does not make a call ready. Configure separate demo storage rather
+than borrowing production credentials or the expired older planner branch.
+
+The existing AgentMail key is configured only in production. The scoped Vercel
+read returned `decrypted: false` and no value. No key was extracted, stored or
+printed, and no inbox inventory or creation occurred. A dedicated sending inbox
+and usable server-side demo credentials remain required. The approved internal
+destination is not automatically assumed to be the approved Reply-To address.
