@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
+import type { DemoEmailState } from './demo-email.ts';
+import { instructionLeakageSuspected } from './speech-quality.ts';
 
 export const PERSONA_ID = 'ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d';
+export const CURRENT_JAMES_PERSONA_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
 export const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 export type Turn = { id: string; role: 'user' | 'persona'; content: string };
 export type Field = 'visitor_preferred_identifier' | 'primary_phone' | 'primary_email' | 'alternate_email'
@@ -27,6 +30,7 @@ export type Session = {
     turns: Turn[]; intake: Intake; receipts: { revision: number; previousHash: string; stateHash: string; eventHash: string; at: string }[];
     providerRelease?: { endTime: string; transcriptHash: string; verifiedAt: string }; closedAt?: string;
     ownerTest?: { grantId: string; expiresAt: number };
+    demoEmail?: DemoEmailState;
     email?: { status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; snapshotHash: string; subject: string; bodyHash: string; reservedAt: string; messageId?: string; error?: string };
 };
 export function emptyIntake(): Intake { return { facts: [], history: [], declined: [], handoff: 'NOT_REQUESTED' }; }
@@ -553,11 +557,16 @@ export function receipt(previous: Session, next: Session, event: unknown): Sessi
     return next;
 }
 export function view(session: Session) {
+    const deliveries=session.demoEmail?.deliveries;
+    const demoStatus=deliveries?(['internal','caller'] as const).map(lane=>({lane,status:deliveries[lane].status,recipient:deliveries[lane].recipient})):[];
     return { id:session.id,providerId:session.providerId,state:session.state,revision:session.revision,stateHash:session.stateHash,
         config:session.config,personaId:session.personaId,brief:brief(session.intake).map(section=>session.email?.status==='SENT'&&section.title==='HANDOFF STATUS'?{
-            title:section.title,items:[{label:'OWNER TEST EMAIL SENT',text:'Sent to the authorized test mailbox only. Nothing sent to Knowles; no firm review or follow-up confirmed.'}]}:section),readiness:readiness(session.intake),
+            title:section.title,items:[{label:'OWNER TEST EMAIL SENT',text:'Sent to the authorized test mailbox only. Nothing sent to Knowles; no firm review or follow-up confirmed.'}]}:deliveries&&section.title==='HANDOFF STATUS'?{
+            title:section.title,items:demoStatus.map(d=>({label:d.lane==='internal'?'INTERNAL DEMO EMAIL':'CALLER RECAP',text:d.status==='SENT'?'AgentMail accepted this demo email. Inbox delivery and human review are not confirmed.':d.status==='RESERVED'?'Send result unknown or pending. Do not retry.':'No verified send receipt. Do not retry.'}))}:section),readiness:readiness(session.intake),
         acceptedVisitorTurns:session.turns.filter(t=>t.role==='user').length,providerRelease:session.providerRelease,
         handoff:session.intake.handoff,email_status:session.email?.status||'INACTIVE_NOT_SENT',
         email_receipt:session.email?.messageId||null,owner_test:Boolean(session.ownerTest),
-        external_actions:session.email?.status==='SENT'?[{type:'OWNER_TEST_EMAIL',recipient:'aifusionlabs@gmail.com',receipt:session.email.messageId}]:[] };
+        demo_email_authorized:Boolean(session.demoEmail),demo_email_status:demoStatus,
+        speech_review_required:instructionLeakageSuspected(session.turns),
+        external_actions:session.email?.status==='SENT'?[{type:'OWNER_TEST_EMAIL',recipient:'aifusionlabs@gmail.com',receipt:session.email.messageId}]:demoStatus.filter(d=>d.status==='SENT').map(d=>({type:'DEMO_EMAIL',recipient:d.recipient})) };
 }
