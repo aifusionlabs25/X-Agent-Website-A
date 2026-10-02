@@ -79,4 +79,3 @@ through notes-only, one-use, reusable and visitor modes without live provider ca
 The existing brief and email safety regressions remain in scope. Production
 activation and actual mailbox results are recorded separately in the private
 owner handoff, not inferred from offline tests.
-
