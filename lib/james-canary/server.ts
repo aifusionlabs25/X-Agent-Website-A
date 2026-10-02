@@ -10,6 +10,7 @@ import type { Session, Turn } from './state.ts';
 import {verifyOwnerGrant,emailConfiguration,sendPreparedOwnerTest} from './owner-email.ts';
 import {verifyDemoGrant,bindDemoGrant,readDemoAccessMode,createVisitorDemoAuthorization,reserveVisitorEmailAllowance,preflightDemoTransport,prepareDemoMessages,sendDemoSummaries} from './demo-email.ts';
 import {finalizeBrief,confirmBrief,applyBriefCorrection,reserveBriefInvitation,hasSubstantiveBriefFact} from './structured-brief.ts';
+import {cancelWebsiteClose} from './closing.ts';
 
 const COOKIE='xagent_james_canary';
 const TTL=24*60*60;
@@ -91,7 +92,7 @@ async function post(req:Request) {
             const state:Session={id,browserId:owner.id,clientLabel:(options.allowDemoEmail?'xagent-james-notepad:':'xagent-james-canary:')+id,createdAt:new Date().toISOString(),revision:0,stateHash:'',
                 personaId:PERSONA_ID,config:{promptHash:sha(p.brain?.systemPrompt||''),configHash:sha(JSON.stringify(p)),voiceId:p.voice?.id||'',voiceName:p.voice?.displayName||''},
                 state:'LAUNCHING',turns:[],intake:emptyIntake(),receipts:[]};
-            if(options.allowDemoEmail)state.intakeBrief={version:2};
+            if(options.allowDemoEmail){state.intakeBrief={version:2};state.websiteClosing={policy:'JAMES-CLOSE-001'};}
             if(grant){
                 const claimed=await redis(['SET',prefix+'owner-grant:'+grant.id,id,'NX','EX',TTL]);
                 if(claimed!=='OK')throw new Error('Owner test authorization already consumed; no new session authorized');
@@ -154,8 +155,14 @@ async function post(req:Request) {
             if(!current.providerId)throw new Error('Session is not bound');
             // No spoken/model tool call can consent to the email workflow.
             return json(toolResult(current,String(body.operation)));
+        } else if(body.action==='cancel-close') {
+            if(!current.websiteClosing||current.state==='CLOSED'||current.providerRelease)throw new Error('Closing cannot be cancelled');
+            cancelWebsiteClose(next);
         } else if(body.action==='begin-close') {
             if(current.state==='CLOSED')return json(view(current));
+            if(body.automatic===true&&(!current.websiteClosing?.farewellTurnId||current.state!=='CLOSING_PENDING'
+                ||body.farewellTurnId!==current.websiteClosing.farewellTurnId||body.revision!==current.revision))
+                throw new Error('Automatic closing evidence changed');
             if(!current.providerId)throw new Error('Session is not bound');next.state='CLOSING';
         } else if(body.action==='close') {
             if(current.state==='CLOSED')return json(view(current));

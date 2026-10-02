@@ -6,6 +6,7 @@ import type { AnamClient } from '@anam-ai/js-sdk';
 import type { Turn, view } from '@/lib/james-canary/state';
 import { initialPadVisibility, revealForFirstFact, togglePad, BRIEF_REVIEW_INVITATION } from '@/lib/james-canary/pad-visibility';
 import type { PadVisibility } from '@/lib/james-canary/pad-visibility';
+import { enqueueClosingMutation, playbackAllowsClose } from '@/lib/james-canary/closing';
 
 type State=ReturnType<typeof view>;
 type EmailPreview={snapshotHash:string;callerAddress:string;sender:string;replyTo:string;messages:{lane:string;to:string;text:string}[]};
@@ -17,7 +18,9 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     const client=useRef<AnamClient|null>(null), id=useRef(''), chain=useRef<Promise<unknown>>(Promise.resolve()), failed=useRef(false), stopped=useRef(false), closing=useRef(false);
     const latest=useRef<State|null>(null), seen=useRef(new Set<string>()), finalized=useRef(new Set<string>()), messages=useRef<Turn[]>([]);
     const invitationTimer=useRef<ReturnType<typeof setTimeout>|null>(null),personaSpeaking=useRef(false),visitorSpeaking=useRef(false);
-    const audio=useRef<{context:AudioContext;source:MediaStreamAudioSourceNode;analyser:AnalyserNode;quietSince:number|null}|null>(null);
+    const closeTimer=useRef<ReturnType<typeof setTimeout>|null>(null),audioMonitor=useRef<ReturnType<typeof setInterval>|null>(null);
+    const closeEpoch=useRef(0),closeInFlight=useRef(false),speechStarts=useRef(new Map<string,number>());
+    const audio=useRef<{context:AudioContext;source:MediaStreamAudioSourceNode;analyser:AnalyserNode;quietSince:number|null;lastSoundAt:number}|null>(null);
     const render=useCallback((s:State)=>{
         latest.current=s;setState(s);
         if(notepadDemo)setPadVisibility(v=>revealForFirstFact(v,Boolean(s.intakeBrief?.hasSubstantiveFact)));
@@ -38,7 +41,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         }
         const samples=new Float32Array(probe.analyser.fftSize);probe.analyser.getFloatTimeDomainData(samples);
         const rms=Math.sqrt(samples.reduce((sum,v)=>sum+v*v,0)/samples.length);
-        if(rms>=0.006){probe.quietSince=null;return false;}
+        if(rms>=0.006){probe.quietSince=null;probe.lastSoundAt=performance.now();return false;}
         probe.quietSince??=performance.now();
         return performance.now()-probe.quietSince>=1200;
     }
@@ -48,6 +51,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         const check=()=>{
             invitationTimer.current=null;
             const s=latest.current;
+            if(s?.websiteClosing&&(s.websiteClosing.departureTurnId||s.websiteClosing.recap||s.websiteClosing.complete))return;
             if(closing.current||stopped.current||failed.current||s?.state!=='ACTIVE'||s.intakeBrief?.phase!=='REVIEW'||s.intakeBrief.invitationReserved)return;
             if(++attempts>120)return; // Visible review remains available; no automatic retry.
             if(!outputIsQuiet()){invitationTimer.current=setTimeout(check,250);return;}
@@ -70,17 +74,55 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         const response=await fetch(apiPath,{method:'POST',headers:{'Content-Type':'application/json',...(demoAccess?{'x-james-demo-access':demoAccess}:{})},body:JSON.stringify({action,id:id.current,...body})});
         const data=await response.json(); if(!response.ok)throw new Error(data.error||'Canary request failed');return data;
     }
-    async function close(){
-        if(closing.current)return;closing.current=true;setBusy(true);
+    function cancelPendingClose(){
+        closeEpoch.current++;
+        if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
+        if(!latest.current?.websiteClosing||closing.current||stopped.current)return;
+        if(!latest.current.websiteClosing.farewellTurnId&&!latest.current.websiteClosing.departureTurnId)return;
+        chain.current=chain.current.then(async()=>{render(await api('cancel-close'));})
+            .catch(()=>{failed.current=true;setNotice('Closing paused. The session needs attention; use End conversation when ready.');});
+    }
+    function scheduleClose(farewellTurnId:string){
+        if(closeTimer.current)clearTimeout(closeTimer.current);
+        const epoch=closeEpoch.current,finalizedAt=performance.now();
+        const check=()=>{
+            closeTimer.current=null;
+            if(epoch!==closeEpoch.current||closing.current||failed.current||stopped.current||latest.current?.websiteClosing?.farewellTurnId!==farewellTurnId)return;
+            const probe=audio.current;outputIsQuiet();
+            const allowed=probe&&playbackAllowsClose({now:performance.now(),finalizedAt,turnStartedAt:speechStarts.current.get(farewellTurnId)??Infinity,
+                lastSoundAt:probe.lastSoundAt,quietSince:probe.quietSince,running:probe.context.state==='running',personaSpeaking:personaSpeaking.current,
+                visitorSpeaking:visitorSpeaking.current,epoch:closeEpoch.current,expectedEpoch:epoch});
+            if(allowed){void close({epoch,farewellTurnId});return;}
+            if(performance.now()-finalizedAt>45000){setNotice('James has finished the conversation. Use End conversation when ready; automatic audio completion could not be verified.');return;}
+            closeTimer.current=setTimeout(check,200);
+        };
+        closeTimer.current=setTimeout(check,200);
+    }
+    async function close(automatic?:{epoch:number;farewellTurnId:string}){
+        if(closing.current||closeInFlight.current)return;closeInFlight.current=true;setBusy(true);
+        const stillCurrent=()=>!automatic||(automatic.epoch===closeEpoch.current&&!visitorSpeaking.current
+            &&latest.current?.websiteClosing?.farewellTurnId===automatic.farewellTurnId);
         try {
-            await chain.current;
-            await api('begin-close');
+            // Closure and visitor cancellation share the same mutation queue.
+            // Otherwise both could race the server revision and discard the
+            // very correction that was supposed to cancel automatic closing.
+            const beginTask=enqueueClosingMutation(chain,async()=>{
+                if(!stillCurrent())return null;
+                return api('begin-close',automatic?{automatic:true,farewellTurnId:automatic.farewellTurnId,revision:latest.current?.revision}:{});
+            });
+            const begun=await beginTask;
+            if(!begun)return;
+            if(!stillCurrent()){await chain.current;return;}
+            render(begun);
+            closing.current=true;
             if(client.current&&!stopped.current){stopped.current=true;await client.current.stopStreaming();}
+            if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
+            if(audioMonitor.current)clearInterval(audioMonitor.current);audioMonitor.current=null;
             if(invitationTimer.current)clearTimeout(invitationTimer.current);invitationTimer.current=null;
             if(audio.current)void audio.current.context.close().catch(()=>{});audio.current=null;
             const s=await api('close');render(s);if(!notepadDemo)setPadVisibility(v=>({...v,open:true}));setNotice(s.operation_notice||(s.email_status==='SENT'?'Session closed. Owner-test email accepted by AgentMail. Nothing sent to Knowles.':'Session closed. Review the finalized intake brief; nothing has been emailed unless a send result is shown below.'));
         } catch(error){setNotice(error instanceof Error?error.message:'Closure needs attention');closing.current=false;}
-        finally{setBusy(false);}
+        finally{closeInFlight.current=false;setBusy(false);}
     }
     function queueHistory(){
         if(closing.current||failed.current)return;
@@ -91,10 +133,13 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             chain.current=chain.current.then(async()=>{
                 if(failed.current)throw new Error('Prior finalized event did not persist');
                 // No late intake after a visitor ending; permit its one final assistant turn.
-                if(latest.current?.state==='CLOSING_PENDING'&&turn.role==='user')return;
+                if(latest.current?.state==='CLOSING_PENDING'&&!latest.current.websiteClosing&&turn.role==='user')return;
                 const s=await api('turn',{turn,finalized:true});render(s);
                 scheduleInvitation();
-                if(s.state==='CLOSING_PENDING'&&turn.role==='persona')setTimeout(()=>void close(),1500);
+                if(s.state==='CLOSING_PENDING'&&turn.role==='persona'){
+                    if(s.websiteClosing?.farewellTurnId)scheduleClose(s.websiteClosing.farewellTurnId);
+                    else if(!s.websiteClosing)setTimeout(()=>void close(),1500);
+                }
             }).catch(error=>{failed.current=true;setNotice(`Notes need attention: ${error.message}. End the session; do not repeat the turn.`);});
         }
     }
@@ -106,12 +151,15 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             void fetch(apiPath+'?id='+encodeURIComponent(saved)).then(async r=>{const s=await r.json();if(!r.ok)throw new Error(s.error);render(s);
                 try{const choice=JSON.parse(localStorage.getItem(storageKey+'-pad')||'null');if(choice?.id===saved&&typeof choice.open==='boolean'&&typeof choice.revealed==='boolean'&&choice.manual===true)setPadVisibility(choice);}catch{/* Ignore malformed presentation preferences. */}
                 setNotice(s.state==='CLOSED'?'Saved closed session restored.':'Saved session restored. The media stream is not automatically reconnected.');}).catch(error=>setNotice(error.message));}
-        return()=>{if(invitationTimer.current)clearTimeout(invitationTimer.current);if(audio.current)void audio.current.context.close().catch(()=>{});if(client.current&&!stopped.current){stopped.current=true;void client.current.stopStreaming();}};
+        return()=>{if(closeTimer.current)clearTimeout(closeTimer.current);if(audioMonitor.current)clearInterval(audioMonitor.current);if(invitationTimer.current)clearTimeout(invitationTimer.current);if(audio.current)void audio.current.context.close().catch(()=>{});if(client.current&&!stopped.current){stopped.current=true;void client.current.stopStreaming();}};
     // This effect restores once; mutable SDK lifecycle is held in refs.
     },[apiPath,storageKey,previewStates,render]);
     async function start(){
         setBusy(true);setNotice('Connecting to the current James persona…');failed.current=false;stopped.current=false;closing.current=false;
         personaSpeaking.current=false;visitorSpeaking.current=false;
+        closeEpoch.current++;closeInFlight.current=false;speechStarts.current.clear();
+        if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
+        if(audioMonitor.current)clearInterval(audioMonitor.current);audioMonitor.current=null;
         if(notepadDemo)setPadVisibility(initialPadVisibility());setEditing(false);
         if(invitationTimer.current)clearTimeout(invitationTimer.current);invitationTimer.current=null;
         if(audio.current)void audio.current.context.close().catch(()=>{});audio.current=null;
@@ -130,7 +178,12 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                     .catch(error=>{failed.current=true;setNotice(error.message);rejectBinding(error);if(!stopped.current){stopped.current=true;void c.stopStreaming();}});
             });
             c.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED,event=>{
-                if(event.role==='persona')personaSpeaking.current=!event.endOfSpeech&&!event.interrupted;
+                if(event.role==='persona'){
+                    if(!speechStarts.current.has(event.id))speechStarts.current.set(event.id,performance.now());
+                    personaSpeaking.current=!event.endOfSpeech&&!event.interrupted;
+                    if(event.interrupted)cancelPendingClose();
+                }
+                if(event.role==='user'&&!event.endOfSpeech&&latest.current?.websiteClosing)cancelPendingClose();
                 // SDK emits the stream event BEFORE appending its final chunk to history.
                 // Only the subsequent HISTORY_UPDATED event may enqueue the assembled reply.
                 if(event.endOfSpeech===true && !event.interrupted)finalized.current.add(event.id);
@@ -139,13 +192,21 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 messages.current=items.filter(t=>t.role==='user'||t.role==='persona').map(t=>({id:t.id,role:t.role as Turn['role'],content:t.content}));
                 setHistory(messages.current);queueHistory();
             });
-            c.addListener(AnamEvent.USER_SPEECH_STARTED,()=>{visitorSpeaking.current=true;if(audio.current)audio.current.quietSince=null;});
+            c.addListener(AnamEvent.USER_SPEECH_STARTED,()=>{visitorSpeaking.current=true;if(audio.current)audio.current.quietSince=null;if(latest.current?.websiteClosing)cancelPendingClose();});
             c.addListener(AnamEvent.USER_SPEECH_ENDED,()=>{visitorSpeaking.current=false;});
             c.addListener(AnamEvent.AUDIO_STREAM_STARTED,stream=>{
                 try{
                     if(audio.current)void audio.current.context.close().catch(()=>{});
                     const context=new AudioContext(),source=context.createMediaStreamSource(stream),analyser=context.createAnalyser();
-                    analyser.fftSize=1024;source.connect(analyser);audio.current={context,source,analyser,quietSince:null};
+                    analyser.fftSize=1024;source.connect(analyser);audio.current={context,source,analyser,quietSince:null,lastSoundAt:0};
+                    if(audioMonitor.current)clearInterval(audioMonitor.current);
+                    audioMonitor.current=setInterval(()=>{
+                        const probe=audio.current;if(probe?.context.state!=='running')return;
+                        const samples=new Float32Array(probe.analyser.fftSize);probe.analyser.getFloatTimeDomainData(samples);
+                        const rms=Math.sqrt(samples.reduce((sum,v)=>sum+v*v,0)/samples.length);
+                        if(rms>=0.006){probe.lastSoundAt=performance.now();probe.quietSince=null;}
+                        else if(!personaSpeaking.current&&!visitorSpeaking.current)probe.quietSince??=performance.now();
+                    },100);
                     void context.resume().catch(()=>{}); // Failure keeps spoken review off, not guessed.
                 }catch{/* A visible deterministic review still works without Web Audio. */}
             });
@@ -225,7 +286,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                     {state?.intakeBrief?.sections.map(section=><section key={section.title} className="mb-6"><h3 className="mb-3 border-b border-amber-700/20 pb-1 text-[11px] font-bold uppercase tracking-[0.15em]">{section.title}</h3><dl className="space-y-3">{section.rows.map(row=><div key={row.key}><dt className="text-[11px] font-semibold text-amber-950/80">{row.label}{['name','phone','email'].includes(row.key)&&row.sourceIds.length>0&&<span className="ml-2 font-normal text-zinc-600">{row.confirmed?'verified':'not yet verified'}</span>}</dt><dd className={'mt-0.5 text-sm leading-relaxed '+(!row.sourceIds.length?'italic text-zinc-500':'')}>{row.value}</dd></div>)}</dl></section>)}
                     {state?.intakeBrief&&state.intakeBrief.phase!=='COLLECTING'&&<section className="mt-6 border-t border-amber-700/25 pt-4" aria-label="Intake brief review">
                         {!!state.intakeBrief.missing.length&&<p className="mb-3 text-xs text-amber-950">Partial intake · still open: {state.intakeBrief.missing.join(', ')}. Confirming this brief does not fill those gaps.</p>}
-                        <div className="flex flex-wrap gap-2"><button onClick={()=>briefAction('confirm-brief',{snapshotHash:state.intakeBrief!.hash})} disabled={busy||state.intakeBrief.phase==='CONFIRMED'||Boolean(previewStates)||Boolean(state.demo_email_status.length)} className="rounded bg-amber-950 px-4 py-2 text-sm text-amber-50 disabled:opacity-40">{state.intakeBrief.phase==='CONFIRMED'?'Brief confirmed':'Confirm brief'}</button><button onClick={()=>setEditing(v=>!v)} disabled={busy||Boolean(state.demo_email_status.length)} className="rounded border border-amber-950/40 px-4 py-2 text-sm">Correct a field</button></div>
+                        <div className="flex flex-wrap gap-2"><button onClick={()=>briefAction('confirm-brief',{snapshotHash:state.intakeBrief!.hash})} disabled={busy||state.intakeBrief.phase==='CONFIRMED'||Boolean(previewStates)||Boolean(state.demo_email_status.length)} className="rounded bg-amber-950 px-4 py-2 text-sm text-amber-50 disabled:opacity-40">{state.intakeBrief.phase==='CONFIRMED'?'Brief confirmed':'Confirm brief'}</button><button onClick={()=>{if(!editing&&active)cancelPendingClose();setEditing(v=>!v);}} disabled={busy||Boolean(state.demo_email_status.length)} className="rounded border border-amber-950/40 px-4 py-2 text-sm">Correct a field</button></div>
                         {editing&&<form onSubmit={event=>{event.preventDefault();briefAction('correct-brief',{slot:editSlot,value:editValue,snapshotHash:state.intakeBrief!.hash});}} className="mt-4 space-y-3">
                             <label className="block text-xs">Field<select value={editSlot} onChange={event=>setEditSlot(event.target.value)} className="mt-1 block w-full rounded border border-amber-900/30 bg-amber-50/70 p-2">{state.intakeBrief.editableSlots.map(slot=><option key={slot.key} value={slot.key}>{slot.label}</option>)}</select></label>
                             <label className="block text-xs">Correct value<input value={editValue} onChange={event=>setEditValue(event.target.value)} maxLength={1000} required className="mt-1 block w-full rounded border border-amber-900/30 bg-amber-50/70 p-2"/></label>
