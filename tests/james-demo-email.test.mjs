@@ -272,6 +272,19 @@ test('HTTP demo lifecycle: isolated original persona, no automatic sends, previe
         const repeatedInvite=await action('reserve-brief-invitation',{snapshotHash:activeReview.intakeBrief.hash});
         assert.equal(repeatedInvite.invitation_allowed,false);assert.equal(repeatedInvite.revision,firstInvite.revision);
         assert.equal((await post(request({action:'preview-demo-email',id:s.id},cookie))).status,400);
+        // JAMES-CLOSE-001: authenticated closing requests bind the exact final
+        // turn/revision; an interruption cancels them and remains recordable.
+        assert.equal((await post(request({action:'begin-close',id:s.id,automatic:true,farewellTurnId:'invented',revision:0},cookie))).status,400);
+        const goodbye={id:'closing-user',role:'user',content:'Thanks, James. Goodbye.'};
+        await action('turn',{turn:goodbye,finalized:true});messages.push({role:goodbye.role,message:goodbye.content});
+        const farewell={id:'closing-persona',role:'persona',content:'Thank you. Take care.'};
+        const pending=await action('turn',{turn:farewell,finalized:true});messages.push({role:farewell.role,message:farewell.content});
+        assert.equal(pending.state,'CLOSING_PENDING');
+        assert.equal((await post(request({action:'begin-close',id:s.id,automatic:true,farewellTurnId:farewell.id,revision:pending.revision-1},cookie))).status,400);
+        const cancelled=await action('cancel-close');assert.equal(cancelled.state,'ACTIVE');
+        assert.equal((await post(request({action:'begin-close',id:s.id,automatic:true,farewellTurnId:farewell.id,revision:pending.revision},cookie))).status,400);
+        const wait={id:'closing-wait',role:'user',content:'Wait, not yet.'};
+        const resumed=await action('turn',{turn:wait,finalized:true});messages.push({role:wait.role,message:wait.content});assert.equal(resumed.state,'ACTIVE');
         await action('begin-close');
         assert.equal((await post(request({action:'correct-brief',id:s.id,slot:'name',value:'Maya Patel',snapshotHash:activeReview.intakeBrief.hash},cookie))).status,400);
         released=true;const closed=await action('close');assert.equal(closed.state,'CLOSED');assert.equal(sends,0);
