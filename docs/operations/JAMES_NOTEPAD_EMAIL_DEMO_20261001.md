@@ -1,5 +1,9 @@
 # James legal-pad and email demo — October 1, 2026
 
+The release described below is the original category-based pad. A subsequent
+structured-brief revision is documented in
+[James progressive intake brief](JAMES_STRUCTURED_INTAKE_BRIEF_20261001.md).
+
 ## Plain-English result
 
 This release connects the current website icon URL, `/demo/james`, to the same
@@ -144,7 +148,7 @@ that deployment. Provider rollback is independent: run
 supplied `ANAM_API_KEY`. It restores only James's original GPT OSS model; it never
 reverts the owner's prompt. Both helpers stop if the prompt changes again.
 
-Qualified newest prompt SHA-256:
+Release-time qualified prompt SHA-256 (not a claim about later owner revisions):
 `6559610760f561bce8f08b322426fe9938528221b50a9653e653fd58eb9d5cb8`.
 Model IDs: GPT OSS `a7cf662c-2ace-4de1-a21e-ef0fbf144bb7`;
 GPT5Chat `89649f1a-feb2-4fea-be43-56baec997a93`.
