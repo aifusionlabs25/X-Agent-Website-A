@@ -63,6 +63,27 @@ test('leakage diagnostics block email, not speech; ordinary intake wording is pe
     }
     assert.equal(instructionLeakageSuspected([{role:'user',content:'system prompt'},{role:'persona',content:'I am not a lawyer. What happened?'}]),false);
 });
+test('recorded malformed reasoning and James role markers block both email drafts',()=>{
+    for(const content of [
+        'What would you like help with? <think< message >We need to capture their answer then recap.',
+        '<think< message >We need to capture answer then recap and close....',
+        'Could you spell your last name? <J> What is your phone number? <J>',
+        '< analysis We should recap now',
+        '< /reasoning >internal',
+    ]){
+        const s=complete();s.turns.push({id:'observed-leak',role:'persona',content});
+        assert.equal(instructionLeakageSuspected(s.turns),true);
+        assert.equal(view(s).speech_review_required,true);
+        assert.throws(()=>prepareDemoMessages(s,Date.now(),environment()),/leakage/);
+    }
+    assert.equal(instructionLeakageSuspected([{role:'persona',content:'Take your time. I am listening. What happened?'}]),false);
+    assert.equal(instructionLeakageSuspected([{role:'user',content:'I saw <think< message > in the test.'}]),false);
+});
+test('the current public James URL uses the same legal-pad page, not a different persona',()=>{
+    const page=readFileSync(new URL('../app/demo/james/page.tsx',import.meta.url),'utf8');
+    assert.match(page,/export \{ metadata, default \} from '\.\.\/james-notepad\/page'/);
+    assert.doesNotMatch(page,/ff9c480e|systemPrompt|sessionToken/);
+});
 test('HTML is escaped and oversized summaries are rejected, never truncated',()=>{
     const s=complete();s.intake.facts.push({...s.intake.facts[0],field:'material_facts',value:'<script>alert("demo")</script>'});
     assert.ok(!prepareDemoMessages(s,Date.now(),environment()).caller.html.includes('<script>'));

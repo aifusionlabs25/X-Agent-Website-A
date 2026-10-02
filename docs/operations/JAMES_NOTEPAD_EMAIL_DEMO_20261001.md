@@ -2,10 +2,17 @@
 
 ## Plain-English result
 
-A separate `/demo/james-notepad` route uses the current James persona,
-`8a991c93-0c95-42c5-8c22-a67428946eb8`, with the owner's published prompt,
-voice, avatar and knowledge files. No provider settings or knowledge files are
-overridden or updated by this change. The public `/demo/james` is unchanged.
+This release connects the current website icon URL, `/demo/james`, to the same
+legal-pad application as `/demo/james-notepad`. Both use James persona
+`8a991c93-0c95-42c5-8c22-a67428946eb8`. Tokens resolve the published persona;
+the website never sends a replacement prompt or KB. Anam's Lab uses this same
+persona, but the website's pad/email interface is not part of Anam's own page.
+
+The provider-side leakage correction changes only this persona's LLM from
+GPT OSS 120B to GPT5Chat. The owner's latest 50,251-character prompt, knowledge
+tool, end/pause tools, greeting, Cara 4 avatar, voice and retention setting remain
+unchanged. A concurrent prompt revision was detected and preserved; qualification
+was repeated with the revised prompt before applying the model update.
 
 Show legal pad opens the yellow lined notepad beside James on desktop. Smaller
 screens stack it below the video. Finalized speech updates the notes; supported
@@ -41,7 +48,7 @@ after provider acceptance must be reconciled by an operator, not resent. Provide
 receipts are retained server-side, not exposed in the new browser response.
 “Accepted by AgentMail” does not mean inbox delivery or human review.
 
-Configure only the dedicated demo environment/branch before a qualification test:
+Configure only the operator-gated James demo before an email qualification test:
 
 | Server-only setting | Required value |
 | --- | --- |
@@ -68,9 +75,17 @@ acceptance is demo-only; resolve the real-client privacy gate before a pilot.
 Caption diagnostics identify explicit internal-instruction markers and block
 summary emails for review. They do not modify the conversation or filter audio.
 The native provider streams speech independently; a text-event filter is not a
-guarantee against spoken leakage. No speculative prompt/model/voice changes
-were made. An actual example or session/time remains necessary to isolate the
-reported intermittent spoken issue.
+guarantee against spoken leakage. Actual retained tests exposed two defects:
+malformed `<think< message >` followed by internal planning, and `<J>` role markers.
+The earlier marker scan required a closing angle bracket and missed the malformed
+case. Both observed forms now have regressions and block recap emails for review.
+
+The spoken correction is provider-side, not caption hiding: GPT5Chat was tested
+with the full published prompt and all three existing tools. GPT4.1 was rejected
+after it repeated a question continuously. Two GPT5Chat samples passed the
+leakage challenge, one with each prompt revision. These are bounded fictional
+text-input samples with live audio/video received, not a guarantee about every
+future call or a microphone/ASR/end-to-end email test. No caller email was sent.
 
 The older Hermes Python projection synthesizes bare document names from keyword
 mentions, including negated statements. This new hosted path retains the whole
@@ -82,14 +97,23 @@ remains a separate implementation, not silently fixed by this web update.
 ## Verification
 
 - Existing James regressions: 55 passing.
-- New demo/email/security regressions: 17 passing.
+- New demo/email/security regressions: 19 passing, including observed malformed
+  thinking markers and both current website James URL bindings.
 - Shared session, Amy AgentMail and deployment-contract checks: 26 passing.
+- Full existing website suite: 548 passing, one deliberately skipped. Windows
+  CRLF checkout differences in 21 unmodified Amy/Dani fixtures were normalized
+  locally only when the resulting bytes exactly matched existing manifests;
+  no KB content or committed hashes changed.
 - TypeScript and focused lint: passing.
 - Next.js optimized build: passing after an environment-only worker restriction
   was resolved by running the build with the appropriate execution permissions.
 - Browser: legal pad opens; desktop side-by-side and narrow-screen stacked
   layouts observed; no console warnings/errors during the UI-only check.
-- No live Anam call started, no provider prompt or KB mutation, no email sent.
+- Live fictional Anam sessions used the official Python SDK with no microphone;
+  greeting, contact corrections, prompt-extraction refusal, placeholder document
+  destination, advice/callback boundaries, and ending were exercised.
+- Only the James persona's model association changed. No prompt or KB mutation,
+  no shared/global model configuration changes, and no email sends.
 
 Provider contract: [AgentMail send API](https://docs.agentmail.to/api-reference/inboxes/messages/send)
 supports an explicit `reply_to` and returns message/thread IDs. Sender display
@@ -99,17 +123,37 @@ Before activation, verify a dedicated sender/reply-to, provision the operator
 test configuration, run one fictional end-to-end call, and check both actual
 mailboxes. Do not substitute unit tests for that live qualification.
 
-## Preview configuration audit
+## Deployment and rollback
 
-The feature was pushed as a draft review, not merged to main. The Vercel preview
-renders the interface but has no matching branch-scoped session-spine secret,
-enable/kill settings, or Redis URL/token. Its Start button is therefore disabled
-with a visible layout-preview notice. Anam's key is present for preview, but
-that alone does not make a call ready. Configure separate demo storage rather
-than borrowing production credentials or the expired older planner branch.
+The initial draft preview had no matching branch-scoped session-spine settings;
+its Start button was correctly disabled. Production already has enabled session
+storage and the Anam key. The release must be built for production with those
+existing settings, initially without assigning the current domains, then checked
+before promotion. Do not promote the unconfigured ordinary preview to production.
+James uses its own encrypted-state context, cookie and Redis namespace; this
+release changes no Amy/Dani/Evan settings. Hosting promotion status is reported
+separately after verification; this document is the release/rollback contract.
+
+Previous production: `dpl_AsPKWyxCgP4bmiBJRX7S2LcoejzN`, source
+`8a7f000ce1b88c03fe165f6eaaad9f0bf29faa78`. A hosting rollback reassigns that
+deployment. Provider rollback is independent: run
+`scripts/anam/update-james-qualified-model.mjs --rollback --apply` with securely
+supplied `ANAM_API_KEY`. It restores only James's original GPT OSS model; it never
+reverts the owner's prompt. Both helpers stop if the prompt changes again.
+
+Qualified newest prompt SHA-256:
+`6559610760f561bce8f08b322426fe9938528221b50a9653e653fd58eb9d5cb8`.
+Model IDs: GPT OSS `a7cf662c-2ace-4de1-a21e-ef0fbf144bb7`;
+GPT5Chat `89649f1a-feb2-4fea-be43-56baec997a93`.
+Evidence sessions: malformed planning `369b5e4e-e70d-4dc9-9088-ee79df0b477d`,
+role markers `5353eaca-2081-4243-8dcc-dba80ab22f2c`, rejected GPT4.1
+`692a29d0-4402-4bf0-8d7f-84a61b7bd164`, GPT5Chat original prompt
+`74b42829-c91e-4f3c-a77b-e13d8d818ad7`, GPT5Chat newest prompt
+`fa9760b1-2e5f-4ae7-b3b7-70efc68cec46`. No real caller details are copied here.
 
 The existing AgentMail key is configured only in production. The scoped Vercel
 read returned `decrypted: false` and no value. No key was extracted, stored or
 printed, and no inbox inventory or creation occurred. A dedicated sending inbox
-and usable server-side demo credentials remain required. The approved internal
+and James sender/grant configuration remain required; the existing production key
+can be used by the server without extracting it. The approved internal
 destination is not automatically assumed to be the approved Reply-To address.
