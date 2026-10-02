@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { brief, readiness, sha } from './state.ts';
 import type { Session } from './state.ts';
 import { instructionLeakageSuspected } from './speech-quality.ts';
+import { structuredBriefView } from './structured-brief.ts';
 
 export const INTERNAL_DEMO_RECIPIENT = 'aifusionlabs@gmail.com';
 export const DEMO_SENDER_NAME = 'AI Fusion Labs Demo';
@@ -69,11 +70,14 @@ export function prepareDemoMessages(session: Session, now = Date.now(), env: Env
     const config = readDemoEmailConfig(env);
     if (authorization.sender !== config.sender || authorization.replyTo !== config.replyTo) throw new Error('Demo sender configuration changed; no send authorized');
     if (session.state !== 'CLOSED' || !session.providerRelease || !readiness(session.intake).ready) throw new Error('Verified closed and complete notes required');
+    const structured = structuredBriefView(session);
+    if (structured && (structured.phase !== 'CONFIRMED' || structured.missing.length)) throw new Error('Review and confirm the complete current intake brief before preparing email');
     if (instructionLeakageSuspected(session.turns)) throw new Error('Possible instruction leakage: review this conversation before emailing summaries');
     const email = session.intake.facts.find(f => f.field === 'primary_email' && f.status === 'VISITOR_CONFIRMED');
-    if (!email || session.intake.emailCandidate || session.intake.declined.includes('primary_email')) throw new Error('Caller email must be explicitly confirmed in the conversation');
+    if (!email || session.intake.emailCandidate || session.intake.declined.includes('primary_email')) throw new Error('Caller email must be explicitly confirmed');
     const callerAddress = address(email.value);
-    const sections = brief(session.intake).filter(section => section.title !== 'HANDOFF STATUS');
+    const sections = structured ? structured.sections.map(section => ({title:section.title,items:section.rows.map(row => ({label:row.label,text:row.value}))}))
+        : brief(session.intake).filter(section => section.title !== 'HANDOFF STATUS');
     const sectionText = (includeStatus: boolean) => sections.map(section => section.title + '\n' + section.items.map(item =>
         (item.label && (includeStatus || !['ANSWERED', 'DEFERRED_TO_FIRM', 'UNRESOLVED'].includes(item.label)) ? item.label.replaceAll('_', ' ') + ': ' : '') + item.text
     ).join('\n')).join('\n\n');

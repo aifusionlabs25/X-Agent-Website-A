@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { DemoEmailState } from './demo-email.ts';
 import { instructionLeakageSuspected } from './speech-quality.ts';
+import { reconcileStructuredTurn, structuredBriefView, syncBriefWorkflow, confirmBrief, BRIEF_REVIEW_INVITATION } from './structured-brief.ts';
+import type { BriefSlot, BriefWorkflow } from './structured-brief.ts';
 
 export const PERSONA_ID = 'ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d';
 export const CURRENT_JAMES_PERSONA_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
@@ -14,6 +16,7 @@ export type CommunicationAct='CONTACT_REPORTED'|'REFUND_REQUEST_REPORTED'|'NO_RE
 export type Fact = { id: string; field: Field; value: string; turnId: string; sourceHash: string;
     evidence: string; status: 'VISITOR_REPORTED' | 'VISITOR_CONFIRMED' | 'NEEDS_CLARIFICATION' | 'DEFERRED_TO_FIRM' | 'UNRESOLVED' | 'ANSWERED'; supersedes?: string; topic?: string; communicationAct?:CommunicationAct;
     intents?: string[]; answerState?: AnswerState;
+    briefSlot?: BriefSlot; sourceKind?: 'VISITOR_EDIT';
     questionBinding?: { text: string; hash: string; intent: string };
     interpretedFrom?: { turnId: string; sourceHash: string; evidence: string } };
 export type AnswerState='UNANSWERED'|'ANSWERED'|'EXPLICIT_NONE'|'UNKNOWN'|'DECLINED'|'NEEDS_CLARIFICATION';
@@ -31,6 +34,7 @@ export type Session = {
     providerRelease?: { endTime: string; transcriptHash: string; verifiedAt: string }; closedAt?: string;
     ownerTest?: { grantId: string; expiresAt: number };
     demoEmail?: DemoEmailState;
+    intakeBrief?: BriefWorkflow;
     email?: { status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; snapshotHash: string; subject: string; bodyHash: string; reservedAt: string; messageId?: string; error?: string };
 };
 export function emptyIntake(): Intake { return { facts: [], history: [], declined: [], handoff: 'NOT_REQUESTED' }; }
@@ -542,12 +546,25 @@ export function applyTurn(session: Session, turn: Turn): Session {
     if(turn.role==='user') {
         const prior=next.turns.slice().reverse().find(t=>t.role==='persona')?.content||'';
         next.intake=ingest(next.intake,turn,prior);
+        if(next.intakeBrief) next.intake=reconcileStructuredTurn(session.intake,next.intake,turn,prior);
         if(endIntent(turn.content))next.state='CLOSING_PENDING';
     } else {
         const intent=questionIntent(turn.content);
         if(intent){next.intake.questionAttempts??={};next.intake.questionAttempts[intent]=(next.intake.questionAttempts[intent]||0)+1;}
     }
-    next.turns.push(turn); return next;
+    next.turns.push(turn);
+    syncBriefWorkflow(next);
+    if(next.intakeBrief && turn.role==='persona' && turn.content.trim()===BRIEF_REVIEW_INVITATION && next.intakeBrief.invitation)
+        next.intakeBrief.invitation.status='OBSERVED';
+    if(next.intakeBrief && turn.role==='user') {
+        const prior=session.turns.findLast(t=>t.role==='persona')?.content;
+        const snapshot=next.intakeBrief.finalized;
+        if(prior===BRIEF_REVIEW_INVITATION && session.intakeBrief?.invitation?.status==='OBSERVED'
+            && snapshot?.hash===session.intakeBrief.invitation.hash
+            && /^(?:yes|yes[, ]+it(?:['’]s| is) (?:accurate|correct)|the brief is (?:accurate|correct)|that(?:['’]s| is) (?:right|correct))[,!.\s]*$/i.test(turn.content.trim()))
+            return confirmBrief(next,snapshot.hash,'SPEECH',turn.id);
+    }
+    return next;
 }
 export function receipt(previous: Session, next: Session, event: unknown): Session {
     next.revision=previous.revision+1;
@@ -560,7 +577,7 @@ export function view(session: Session) {
     const deliveries=session.demoEmail?.deliveries;
     const demoStatus=deliveries?(['internal','caller'] as const).map(lane=>({lane,status:deliveries[lane].status,recipient:deliveries[lane].recipient})):[];
     return { id:session.id,providerId:session.providerId,state:session.state,revision:session.revision,stateHash:session.stateHash,
-        config:session.config,personaId:session.personaId,brief:brief(session.intake).map(section=>session.email?.status==='SENT'&&section.title==='HANDOFF STATUS'?{
+        config:session.config,personaId:session.personaId,intakeBrief:structuredBriefView(session),brief:brief(session.intake).map(section=>session.email?.status==='SENT'&&section.title==='HANDOFF STATUS'?{
             title:section.title,items:[{label:'OWNER TEST EMAIL SENT',text:'Sent to the authorized test mailbox only. Nothing sent to Knowles; no firm review or follow-up confirmed.'}]}:deliveries&&section.title==='HANDOFF STATUS'?{
             title:section.title,items:demoStatus.map(d=>({label:d.lane==='internal'?'INTERNAL DEMO EMAIL':'CALLER RECAP',text:d.status==='SENT'?'AgentMail accepted this demo email. Inbox delivery and human review are not confirmed.':d.status==='RESERVED'?'Send result unknown or pending. Do not retry.':'No verified send receipt. Do not retry.'}))}:section),readiness:readiness(session.intake),
         acceptedVisitorTurns:session.turns.filter(t=>t.role==='user').length,providerRelease:session.providerRelease,

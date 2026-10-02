@@ -9,6 +9,7 @@ import { PERSONA_ID as CANARY_PERSONA_ID, emptyIntake, applyTurn, receipt, readi
 import type { Session, Turn } from './state.ts';
 import {verifyOwnerGrant,emailConfiguration,sendPreparedOwnerTest} from './owner-email.ts';
 import {verifyDemoGrant,preflightDemoTransport,prepareDemoMessages,sendDemoSummaries} from './demo-email.ts';
+import {finalizeBrief,confirmBrief,applyBriefCorrection,reserveBriefInvitation,hasSubstantiveBriefFact} from './structured-brief.ts';
 
 const COOKIE='xagent_james_canary';
 const TTL=24*60*60;
@@ -86,6 +87,7 @@ async function post(req:Request) {
             const state:Session={id,browserId:owner.id,clientLabel:(options.allowDemoEmail?'xagent-james-notepad:':'xagent-james-canary:')+id,createdAt:new Date().toISOString(),revision:0,stateHash:'',
                 personaId:PERSONA_ID,config:{promptHash:sha(p.brain?.systemPrompt||''),configHash:sha(JSON.stringify(p)),voiceId:p.voice?.id||'',voiceName:p.voice?.displayName||''},
                 state:'LAUNCHING',turns:[],intake:emptyIntake(),receipts:[]};
+            if(options.allowDemoEmail)state.intakeBrief={version:2};
             if(grant){
                 const claimed=await redis(['SET',prefix+'owner-grant:'+grant.id,id,'NX','EX',TTL]);
                 if(claimed!=='OK')throw new Error('Owner test authorization already consumed; no new session authorized');
@@ -129,6 +131,16 @@ async function post(req:Request) {
             if(!t||typeof t.id!=='string'||t.id.length>160||!['user','persona'].includes(t.role)||typeof t.content!=='string'||body.finalized!==true)throw new Error('Finalized turn required');
             next=applyTurn(current,{id:t.id,role:t.role,content:t.content});
             if(next===current)return json(view(current));
+        } else if(['finalize-brief','confirm-brief','correct-brief','reserve-brief-invitation'].includes(String(body.action))) {
+            if(!options.allowDemoEmail||!current.providerId||!current.intakeBrief)throw new Error('Structured brief is unavailable');
+            if(!['ACTIVE','CLOSED'].includes(current.state))throw new Error('Brief review is unavailable during connection or closure');
+            if(body.action==='finalize-brief')next=finalizeBrief(current);
+            else if(body.action==='confirm-brief')next=confirmBrief(current,body.snapshotHash);
+            else if(body.action==='correct-brief')next=applyBriefCorrection(current,body.slot,body.value,body.snapshotHash);
+            else {
+                next=reserveBriefInvitation(current,body.snapshotHash);
+                if(next===current)return json({...view(current),invitation_allowed:false});
+            }
         } else if(body.action==='tool') {
             if(!['STATUS','REQUEST_HANDOFF','PREPARE','SEND'].includes(String(body.operation)))throw new Error('Unsupported tool operation');
             if(!current.providerId)throw new Error('Session is not bound');
@@ -145,6 +157,7 @@ async function post(req:Request) {
             verifyFinalEvidence(current,completed.turns);
             next.providerRelease={endTime:completed.metadata.endTime||completed.metadata.exitStatus||'',transcriptHash:sha(JSON.stringify(completed.turns)),verifiedAt:new Date().toISOString()};
             next.state='CLOSED';next.closedAt=new Date().toISOString();
+            if(next.intakeBrief&&hasSubstantiveBriefFact(next.intake))next=finalizeBrief(next);
             if(next.intake.handoff==='HANDOFF_REQUESTED'&&readiness(next.intake).ready)next.intake.handoff='PREPARED';
         } else throw new Error('Unsupported session operation');
         next=receipt(current,next,body);await save(current,next);
@@ -152,7 +165,7 @@ async function post(req:Request) {
             try{next=await sendPreparedOwnerTest(next,{save,stamp:receipt});}
             catch{return json({...view(next),operation_notice:'Session closed. Legacy owner email requires attention; inspect saved state before any further action.'});}
         }
-        return json(view(next));
+        return json({...view(next),...(body.action==='reserve-brief-invitation'?{invitation_allowed:true}:{})});
     } catch(error) { return json({error:error instanceof Error?error.message:'Canary operation failed'},400); }
 }
 return {get,post};
@@ -197,11 +210,15 @@ export function toolResult(s:Session,operation:string) {
     const contact_fields=Object.fromEntries(['visitor_preferred_identifier','primary_phone','primary_email','alternate_email'].map(f=>[f,fields(f)]));
     const ready=readiness(s.intake), pending=s.intake.emailCandidate;
     const currentVisitor=s.turns.findLast(t=>t.role==='user');
+    const stateView=view(s);
+    const liveNotes=stateView.intakeBrief?stateView.intakeBrief.sections.map(section=>({title:section.title,items:section.rows.map(row=>({
+        label:row.label,text:row.key==='phone'&&/^\d{3}-\d{3}-\d{4}$/.test(row.value)?spokenPhone(row.value.replaceAll('-','')):row.value,
+    }))})):stateView.brief.map(section=>({...section,items:section.items.map(item=>item.label==='Phone'?{...item,text:spokenPhone(item.text)}:item)}));
     return { status:operation==='SEND'?'EMAIL_UNAVAILABLE':operation==='PREPARE'&&(!ready.ready||s.state!=='CLOSED')?'HANDOFF_NOT_READY':s.intake.handoff, handoff_request_state:s.intake.handoff,
         sent:false, human_review:'NOT_CONFIRMED', external_actions:[], email_recorded:fields('primary_email').length>0&&!pending,
         primary_email_candidate:pending?.value||null, email_needs_confirmation:Boolean(pending),
         contact_fields,contact_complete:['visitor_preferred_identifier','primary_phone','primary_email'].every(f=>fields(f).length||s.intake.declined.includes(f))&&!pending,
-        handoff_readiness:ready,notes_receipt:{revision:s.revision,state_hash:s.stateHash},live_notes:view(s).brief.map(section=>({...section,items:section.items.map(item=>item.label==='Phone'?{...item,text:spokenPhone(item.text)}:item)})),
+        handoff_readiness:ready,notes_receipt:{revision:s.revision,state_hash:s.stateHash},live_notes:liveNotes,
         accepted_current_turn_notes:s.intake.facts.filter(f=>f.turnId===currentVisitor?.id).map(f=>f.field==='primary_phone'?{...f,value:spokenPhone(f.value),evidence:'Canonical phone retained in receipt-backed state; speak the value exactly.'}:f),
         source_turn_id:currentVisitor?.id||null,conversation_guidance:conversationGuidance(s),
         instruction:'PUBLIC CANARY: no email or external action can be sent. Never say I will pass this on, the firm will review it, someone will call, or it will be sent. A callback question is not handoff consent. Honor handoff_truth and practice_scope. Use the deterministic phone_speech.spoken exactly for any readback: individual digit words in 3-3-4 groups, never regenerate the number as numeric text. Use only accepted contact fields; confirm the pending email candidate before claiming it recorded. Ask one matter-specific missing question at a time; unknown is valid and questions must not loop. Do not offer completion while readiness is false. Never invent dates, legal conclusions, filings or strategy. A clear visitor goodbye permits one farewell, regardless of intake completeness.' };
