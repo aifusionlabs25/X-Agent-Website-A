@@ -8,7 +8,7 @@ import { fetchAnamSessionMetadata, verifyAnamSessionMetadata, fetchCompletedAnam
 import { PERSONA_ID as CANARY_PERSONA_ID, emptyIntake, applyTurn, receipt, readiness, conversationGuidance, spokenPhone, sha, view } from './state.ts';
 import type { Session, Turn } from './state.ts';
 import {verifyOwnerGrant,emailConfiguration,sendPreparedOwnerTest} from './owner-email.ts';
-import {verifyDemoGrant,preflightDemoTransport,prepareDemoMessages,sendDemoSummaries} from './demo-email.ts';
+import {verifyDemoGrant,bindDemoGrant,readDemoAccessMode,createVisitorDemoAuthorization,reserveVisitorEmailAllowance,preflightDemoTransport,prepareDemoMessages,sendDemoSummaries} from './demo-email.ts';
 import {finalizeBrief,confirmBrief,applyBriefCorrection,reserveBriefInvitation,hasSubstantiveBriefFact} from './structured-brief.ts';
 
 const COOKIE='xagent_james_canary';
@@ -60,8 +60,9 @@ async function post(req:Request) {
         const body=await readBoundedJsonObject(req,20*1024);
         if(body.action==='demo-email-preflight'){
             if(!options.allowDemoEmail)throw new Error('Demo email is unavailable on this surface');
-            verifyDemoGrant(req.headers.get('x-james-demo-access'));
-            return json({ready:true,...await preflightDemoTransport(),maxSessions:1,maxEmails:2,retries:0});
+            const grant=verifyDemoGrant(req.headers.get('x-james-demo-access'));
+            return json({ready:true,...await preflightDemoTransport(),accessMode:grant.accessMode,
+                maxSessions:grant.accessMode==='reusable'?null:1,maxEmails:2,maxEmailsPerSession:2,retries:0});
         }
         if(body.action==='owner-test-preflight'){
             if(options.allowDemoEmail)throw new Error('Legacy owner authorization is not valid on this surface');
@@ -75,15 +76,18 @@ async function post(req:Request) {
             if(grant)emailConfiguration();
             const demoToken=req.headers.get('x-james-demo-access');
             if(demoToken&&!options.allowDemoEmail)throw new Error('Demo email is unavailable on this surface');
+            const visitorEmail=Boolean(options.allowDemoEmail&&process.env.JAMES_DEMO_EMAIL_ENABLED==='true'&&readDemoAccessMode()==='visitor');
+            if(visitorEmail&&demoToken)throw new Error('No email access code is needed; start without an operator code');
             const demoGrant=demoToken?verifyDemoGrant(demoToken):null;
-            const demoTransport=demoGrant?await preflightDemoTransport():null;
             const rate=await consumeAmyAnamDistributedRateLimit({fingerprint:requestFingerprint(req,prefix+'start'),limit:5,windowSeconds:600});
             if(!rate.allowed)return json({error:'Session start limit reached'},429);
+            const id=randomUUID();
+            const visitorAuthorization=visitorEmail?createVisitorDemoAuthorization(id):null;
+            const demoTransport=demoGrant||visitorAuthorization?await preflightDemoTransport():null;
             let owner=browser(req), token:string|undefined;
             if(!owner){const created=createAmyAnamBrowserSessionWithSecret(secret());owner=created.session;token=created.token;}
             const p=await provider('/personas/'+PERSONA_ID);
             if(p.id!==PERSONA_ID)throw new Error('Persona identity did not match');
-            const id=randomUUID();
             const state:Session={id,browserId:owner.id,clientLabel:(options.allowDemoEmail?'xagent-james-notepad:':'xagent-james-canary:')+id,createdAt:new Date().toISOString(),revision:0,stateHash:'',
                 personaId:PERSONA_ID,config:{promptHash:sha(p.brain?.systemPrompt||''),configHash:sha(JSON.stringify(p)),voiceId:p.voice?.id||'',voiceName:p.voice?.displayName||''},
                 state:'LAUNCHING',turns:[],intake:emptyIntake(),receipts:[]};
@@ -94,11 +98,14 @@ async function post(req:Request) {
                 state.ownerTest={grantId:grant.id,expiresAt:grant.expiresAt};
             }
             if(demoGrant&&demoTransport){
-                // A token permits exactly one session and two separate messages.
-                const claimed=await redis(['SET',prefix+'demo-grant:'+demoGrant.id,id,'NX','EX',TTL]);
+                // Legacy codes are single-use. Reusable operator access receives
+                // a unique call capability so different calls never share send keys.
+                const bound=bindDemoGrant(demoGrant,id);
+                const claimed=await redis(['SET',prefix+'demo-grant:'+bound.grantId,id,'NX','EX',TTL]);
                 if(claimed!=='OK')throw new Error('Demo authorization already consumed; create no new session with this code');
-                state.demoEmail={grantId:demoGrant.id,expiresAt:demoGrant.expiresAt,sender:demoTransport.sender,replyTo:demoTransport.replyTo};
+                state.demoEmail={...bound,sender:demoTransport.sender,replyTo:demoTransport.replyTo};
             }
+            if(visitorAuthorization&&demoTransport)state.demoEmail={...visitorAuthorization,sender:demoTransport.sender,replyTo:demoTransport.replyTo};
             if(!state.config.voiceId||!p.brain?.systemPrompt)throw new Error('Published persona configuration is incomplete');
             state.stateHash=sha(JSON.stringify(state)); await save(null,state);
             const minted=await provider('/auth/session-token',{clientLabel:state.clientLabel,personaConfig:{personaId:PERSONA_ID}});
@@ -116,7 +123,8 @@ async function post(req:Request) {
         }
         if(body.action==='send-demo-email'){
             if(!options.allowDemoEmail)throw new Error('Demo email is unavailable on this surface');
-            next=await sendDemoSummaries(current,{snapshotHash:body.snapshotHash,callerAddress:body.callerAddress,approved:body.approved},{save,stamp:receipt});
+            next=await sendDemoSummaries(current,{snapshotHash:body.snapshotHash,callerAddress:body.callerAddress,approved:body.approved},
+                {save,stamp:receipt,reserveAllowance:callerAddress=>reserveVisitorEmailAllowance(callerAddress,{redis,prefix})});
             return json(view(next));
         }
         if(body.action==='bind') {
