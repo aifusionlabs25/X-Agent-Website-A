@@ -134,9 +134,9 @@ James uses its own encrypted-state context, cookie and Redis namespace; this
 release changes no Amy/Dani/Evan settings. Hosting promotion status is reported
 separately after verification; this document is the release/rollback contract.
 
-Previous production: `dpl_AsPKWyxCgP4bmiBJRX7S2LcoejzN`, source
-`8a7f000ce1b88c03fe165f6eaaad9f0bf29faa78`. A hosting rollback reassigns that
-deployment. Provider rollback is independent: run
+The previous production deployment and private test evidence are recorded in
+the local owner handoff, not this public repository. A hosting rollback reassigns
+that deployment. Provider rollback is independent: run
 `scripts/anam/update-james-qualified-model.mjs --rollback --apply` with securely
 supplied `ANAM_API_KEY`. It restores only James's original GPT OSS model; it never
 reverts the owner's prompt. Both helpers stop if the prompt changes again.
@@ -145,11 +145,7 @@ Qualified newest prompt SHA-256:
 `6559610760f561bce8f08b322426fe9938528221b50a9653e653fd58eb9d5cb8`.
 Model IDs: GPT OSS `a7cf662c-2ace-4de1-a21e-ef0fbf144bb7`;
 GPT5Chat `89649f1a-feb2-4fea-be43-56baec997a93`.
-Evidence sessions: malformed planning `369b5e4e-e70d-4dc9-9088-ee79df0b477d`,
-role markers `5353eaca-2081-4243-8dcc-dba80ab22f2c`, rejected GPT4.1
-`692a29d0-4402-4bf0-8d7f-84a61b7bd164`, GPT5Chat original prompt
-`74b42829-c91e-4f3c-a77b-e13d8d818ad7`, GPT5Chat newest prompt
-`fa9760b1-2e5f-4ae7-b3b7-70efc68cec46`. No real caller details are copied here.
+No real caller details or operational session identifiers are included here.
 
 The existing AgentMail key is configured only in production. The scoped Vercel
 read returned `decrypted: false` and no value. No key was extracted, stored or
