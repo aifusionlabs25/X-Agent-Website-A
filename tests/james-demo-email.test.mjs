@@ -228,6 +228,7 @@ test('new route targets current James; legacy routes and prompt/KB overrides sta
     const client=readFileSync(new URL('../components/james/JamesCanary.tsx',import.meta.url),'utf8');assert.match(client,/Show legal pad/);assert.match(client,/repeating-linear-gradient/);assert.match(client,/type="password"/);assert.doesNotMatch(client,/localStorage.setItem\([^\n]*accessCode/);
     assert.match(client,/notepadDemo&&emailAccessMode!=='visitor'&&!active&&<details/);
     assert.match(client,/const operatorCode=emailAccessMode==='visitor'\?undefined:accessCode\|\|undefined/);
+    assert.match(client,/!state\?'Email availability is checked when you start James/);
     assert.match(client,/Layout preview only/);assert.match(client,/disabled=\{busy\|\|Boolean\(active\)\|\|!launchReady\}/);
     const page=readFileSync(new URL('../app/demo/james-notepad/page.tsx',import.meta.url),'utf8');assert.match(page,/await connection\(\)/);assert.match(page,/launchReady=\{launchReady\}/);
 });
