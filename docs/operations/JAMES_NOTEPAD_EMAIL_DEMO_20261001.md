@@ -127,9 +127,12 @@ mailboxes. Do not substitute unit tests for that live qualification.
 
 The initial draft preview had no matching branch-scoped session-spine settings;
 its Start button was correctly disabled. Production already has enabled session
-storage and the Anam key. The release must be built for production with those
-existing settings, initially without assigning the current domains, then checked
-before promotion. Do not promote the unconfigured ordinary preview to production.
+storage and the Anam key. The existing production contract permits only main;
+do not weaken it or relabel a feature branch to bypass it. Complete the local
+and preview checks, merge the reviewed commit, and use the normal main-branch
+production build with its existing settings. Verify the resulting website with
+the prior deployment ready for rollback. Do not promote the unconfigured ordinary
+preview to production.
 James uses its own encrypted-state context, cookie and Redis namespace; this
 release changes no Amy/Dani/Evan settings. Hosting promotion status is reported
 separately after verification; this document is the release/rollback contract.
