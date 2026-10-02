@@ -3,6 +3,8 @@
 The release described below is the original category-based pad. A subsequent
 structured-brief revision is documented in
 [James progressive intake brief](JAMES_STRUCTURED_INTAKE_BRIEF_20261001.md).
+Code-free visitor email and optional reusable operator access are documented in
+[James code-free visitor email](JAMES_VISITOR_EMAIL_20261001.md).
 
 ## Plain-English result
 
@@ -36,8 +38,11 @@ included in the caller recap. Every email is sent separately, without CC/BCC.
 ## Safety and activation
 
 Email is **off by default**. Ordinary visitors can use notes but cannot send.
-One operator capability authorizes one session and at most two email attempts;
-it expires within 24 hours. It is entered in a password field, sent only in a
+The original `one-use` qualification mode authorizes one session with an
+expiring code. The owner-requested `reusable` mode accepts the same private
+operator code across new calls without a code-expiry window. Every call receives
+its own 24-hour capability and at most two email attempts, with separate
+idempotency keys. The code is entered in a password field, sent only in a
 start/preflight header, never placed in a URL or saved in browser storage.
 
 After provider-verified closure, the caller reviews both draft bodies, recipient,
@@ -61,7 +66,9 @@ Configure only the operator-gated James demo before an email qualification test:
 | `JAMES_AGENTMAIL_ADDRESS` | Dedicated James sending inbox; no Amy fallback |
 | `JAMES_DEMO_REPLY_TO` | Owner-approved reply address |
 | `JAMES_DEMO_EMAIL_ACCESS_SHA256` | SHA-256 digest of a fresh random 32-byte base64url code |
-| `JAMES_DEMO_EMAIL_EXPIRES_AT` | UTC ISO timestamp no more than 24 hours ahead |
+| `JAMES_DEMO_EMAIL_ACCESS_MODE` | `visitor` for code-free demo calls; `reusable` for private operator demos; omitted or `one-use` preserves the original gate |
+| `JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT` | Required for `visitor`: bounded summary pairs per expiring 24-hour window; suggested initial value `25` |
+| `JAMES_DEMO_EMAIL_EXPIRES_AT` | Required only for `one-use`: UTC ISO timestamp no more than 24 hours ahead |
 
 The sending inbox must exist with the exact display name `AI Fusion Labs Demo`.
 Preflight checks that identity with AgentMail. No custom-domain verification,

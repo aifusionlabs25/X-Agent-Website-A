@@ -7,7 +7,8 @@ import { structuredBriefView } from './structured-brief.ts';
 export const INTERNAL_DEMO_RECIPIENT = 'aifusionlabs@gmail.com';
 export const DEMO_SENDER_NAME = 'AI Fusion Labs Demo';
 type Environment = Record<string, string | undefined>;
-export type DemoGrant = { id: string; expiresAt: number };
+export type DemoAccessMode = 'one-use' | 'reusable' | 'visitor';
+export type DemoGrant = { id: string; expiresAt: number; accessMode: DemoAccessMode };
 export type DemoMessage = { to: string; subject: string; text: string; html: string };
 export type DemoDelivery = {
     status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; recipient: string;
@@ -15,6 +16,7 @@ export type DemoDelivery = {
 };
 export type DemoEmailState = {
     grantId: string; expiresAt: number; sender: string; replyTo: string;
+    accessMode?: DemoAccessMode; accessDigest?: string;
     snapshotHash?: string; consentAt?: string;
     deliveries?: { internal: DemoDelivery; caller: DemoDelivery };
 };
@@ -34,18 +36,59 @@ export function readDemoEmailConfig(env: Environment = process.env) {
     // Never reuse Amy's sender, endpoint overrides, or Knowles branding implicitly.
     return { apiKey, sender, replyTo, apiBaseUrl: 'https://api.agentmail.to' as const };
 }
+export function readDemoAccessMode(env: Environment = process.env): DemoAccessMode {
+    const mode = env.JAMES_DEMO_EMAIL_ACCESS_MODE ?? 'one-use';
+    if (mode !== 'one-use' && mode !== 'reusable' && mode !== 'visitor') throw new Error('Demo email access mode is invalid');
+    return mode;
+}
+export function readVisitorEmailPolicy(env: Environment = process.env) {
+    if (env.JAMES_DEMO_EMAIL_ENABLED !== 'true' || readDemoAccessMode(env) !== 'visitor') throw new Error('Visitor demo email is off');
+    const limit = env.JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT || '';
+    if (!/^[1-9]\d{0,3}$/.test(limit) || Number(limit) > 1000) throw new Error('Configure a bounded visitor email send allowance');
+    return { summaryPairs: Number(limit), perRecipient: 5, windowSeconds: 24 * 60 * 60 };
+}
+/** Server-created capability; the signed browser cookie and encrypted session
+ * remain the authorization boundary. No visitor code or API key is exposed. */
+export function createVisitorDemoAuthorization(sessionId: string, now = Date.now(), env: Environment = process.env) {
+    readVisitorEmailPolicy(env);
+    readDemoEmailConfig(env);
+    return { grantId: sha('james-demo-visitor-session:' + sessionId), expiresAt: now + 24 * 60 * 60 * 1000,
+        accessMode: 'visitor' as const };
+}
+export async function reserveVisitorEmailAllowance(callerAddress: string, options: {
+    redis: (command: (string | number)[]) => Promise<unknown>; prefix: string; env?: Environment;
+}) {
+    const policy = readVisitorEmailPolicy(options.env);
+    const recipientHash = sha(address(callerAddress));
+    // Check and reserve both bounds atomically. Counters contain no intake data
+    // or raw recipient address, expire after 24 hours, and fail closed on error.
+    const script = "local total=tonumber(redis.call('GET',KEYS[1]) or '0'); local recipient=tonumber(redis.call('GET',KEYS[2]) or '0'); if total>=tonumber(ARGV[1]) or recipient>=tonumber(ARGV[2]) then return 0 end; local a=redis.call('INCR',KEYS[1]); local b=redis.call('INCR',KEYS[2]); if a==1 then redis.call('EXPIRE',KEYS[1],ARGV[3]) end; if b==1 then redis.call('EXPIRE',KEYS[2],ARGV[3]) end; return 1";
+    const result = await options.redis(['EVAL', script, 2, options.prefix + 'demo-email-budget:total',
+        options.prefix + 'demo-email-budget:recipient:' + recipientHash, policy.summaryPairs, policy.perRecipient, policy.windowSeconds]);
+    if (result !== 1) throw new Error('Demo email allowance reached or unavailable; no email was attempted');
+}
 export function verifyDemoGrant(token: unknown, now = Date.now(), env: Environment = process.env): DemoGrant {
     if (env.JAMES_DEMO_EMAIL_ENABLED !== 'true') throw new Error('Demo email is off');
     const digest = env.JAMES_DEMO_EMAIL_ACCESS_SHA256 || '';
-    const expiresAt = Date.parse(env.JAMES_DEMO_EMAIL_EXPIRES_AT || '');
+    const accessMode = readDemoAccessMode(env);
+    if (accessMode === 'visitor') throw new Error('Visitor email uses server session authorization, not an operator code');
     if (typeof token !== 'string' || !/^[\w-]{43}$/.test(token) || !/^[a-f0-9]{64}$/.test(digest)
         || !timingSafeEqual(Buffer.from(sha(token), 'hex'), Buffer.from(digest, 'hex'))) {
         throw new Error('Demo operator authorization is invalid');
     }
+    // Reusable access authenticates the operator, not a lifetime send grant.
+    // Each new call receives a separate 24-hour capability and send reservation.
+    if (accessMode === 'reusable') return { id: digest, expiresAt: now + 24 * 60 * 60 * 1000, accessMode };
+    const expiresAt = Date.parse(env.JAMES_DEMO_EMAIL_EXPIRES_AT || '');
     if (!Number.isFinite(expiresAt) || expiresAt <= now || expiresAt - now > 24 * 60 * 60 * 1000) {
         throw new Error('Demo operator authorization expired or exceeds the 24-hour test window');
     }
-    return { id: digest, expiresAt };
+    return { id: digest, expiresAt, accessMode };
+}
+export function bindDemoGrant(grant: DemoGrant, sessionId: string) {
+    return { grantId: grant.accessMode === 'reusable' ? sha('james-demo-session:' + grant.id + ':' + sessionId) : grant.id,
+        expiresAt: grant.expiresAt, accessMode: grant.accessMode,
+        ...(grant.accessMode === 'reusable' ? { accessDigest: grant.id } : {}) };
 }
 export async function preflightDemoTransport(options: { env?: Environment; fetchImpl?: typeof fetch } = {}) {
     const config = readDemoEmailConfig(options.env);
@@ -68,9 +111,15 @@ export function prepareDemoMessages(session: Session, now = Date.now(), env: Env
     const authorization = session.demoEmail;
     if (!authorization || authorization.expiresAt <= now || session.ownerTest || session.email) throw new Error('Active demo authorization required');
     const config = readDemoEmailConfig(env);
+    if (authorization.accessMode === 'reusable' && (readDemoAccessMode(env) !== 'reusable'
+        || authorization.accessDigest !== env.JAMES_DEMO_EMAIL_ACCESS_SHA256)) {
+        throw new Error('Reusable demo access was revoked or changed; no send authorized');
+    }
+    if (authorization.accessMode === 'visitor') readVisitorEmailPolicy(env);
     if (authorization.sender !== config.sender || authorization.replyTo !== config.replyTo) throw new Error('Demo sender configuration changed; no send authorized');
     if (session.state !== 'CLOSED' || !session.providerRelease || !readiness(session.intake).ready) throw new Error('Verified closed and complete notes required');
     const structured = structuredBriefView(session);
+    if (authorization.accessMode === 'visitor' && !structured) throw new Error('Confirmed structured intake brief required');
     if (structured && (structured.phase !== 'CONFIRMED' || structured.missing.length)) throw new Error('Review and confirm the complete current intake brief before preparing email');
     if (instructionLeakageSuspected(session.turns)) throw new Error('Possible instruction leakage: review this conversation before emailing summaries');
     const email = session.intake.facts.find(f => f.field === 'primary_email' && f.status === 'VISITOR_CONFIRMED');
@@ -115,11 +164,16 @@ export async function sendDemoSummaries(session: Session, consent: { snapshotHas
     save: (previous: Session, next: Session) => Promise<void>;
     stamp: (previous: Session, next: Session, event: unknown) => Session;
     send?: typeof sendDemoMessage; env?: Environment; now?: number;
+    reserveAllowance?: (callerAddress: string) => Promise<void>;
 }) {
     if (session.demoEmail?.deliveries) return session;
     const prepared = prepareDemoMessages(session, deps.now ?? Date.now(), deps.env);
     if (consent.approved !== true || consent.snapshotHash !== prepared.snapshotHash || consent.callerAddress !== prepared.callerAddress) {
         throw new Error('Approve both current summaries and the confirmed caller address before sending');
+    }
+    if (session.demoEmail?.accessMode === 'visitor') {
+        if (!deps.reserveAllowance) throw new Error('Visitor email allowance is unavailable; no email was attempted');
+        await deps.reserveAllowance(prepared.callerAddress);
     }
     const reservedAt = new Date(deps.now ?? Date.now()).toISOString();
     const reserved = structuredClone(session);

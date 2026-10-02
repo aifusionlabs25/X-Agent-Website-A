@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {emptyIntake,applyTurn,ingest,brief,receipt,sha,view,CURRENT_JAMES_PERSONA_ID,readiness} from '../lib/james-canary/state.ts';
-import {prepareDemoMessages,sendDemoSummaries,sendDemoMessage,verifyDemoGrant,readDemoEmailConfig,preflightDemoTransport,INTERNAL_DEMO_RECIPIENT} from '../lib/james-canary/demo-email.ts';
+import {prepareDemoMessages,sendDemoSummaries,sendDemoMessage,verifyDemoGrant,bindDemoGrant,readDemoAccessMode,readVisitorEmailPolicy,createVisitorDemoAuthorization,reserveVisitorEmailAllowance,readDemoEmailConfig,preflightDemoTransport,INTERNAL_DEMO_RECIPIENT} from '../lib/james-canary/demo-email.ts';
+import {finalizeBrief,confirmBrief,applyBriefCorrection,structuredBriefView} from '../lib/james-canary/structured-brief.ts';
 import {instructionLeakageSuspected} from '../lib/james-canary/speech-quality.ts';
 import {post,get} from '../lib/james-canary/demo-server.ts';
 import {post as legacyPost,verifyFinalEvidence} from '../lib/james-canary/server.ts';
@@ -19,6 +20,47 @@ function complete(){
     Object.assign(s,{state:'CLOSED',providerRelease:{endTime:'closed',transcriptHash:'verified',verifiedAt:'now'},demoEmail:{grantId:sha(token),expiresAt:Date.now()+60000,sender:'james-demo@agentmail.to',replyTo:'aifusionlabs@gmail.com'}});
     return s;
 }
+const visitorEnvironment=()=>({...environment(),JAMES_DEMO_EMAIL_ACCESS_MODE:'visitor',JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT:'25',JAMES_DEMO_EMAIL_ACCESS_SHA256:undefined,JAMES_DEMO_EMAIL_EXPIRES_AT:undefined});
+function visitorComplete(){
+    let s=complete();s.intakeBrief={version:2};s=finalizeBrief(s);
+    for(const [slot,value] of [['name','Maya Patel'],['phone','480-555-0177'],['location','Phoenix']])s=applyBriefCorrection(s,slot,value,structuredBriefView(s).hash);
+    s=confirmBrief(s,structuredBriefView(s).hash);
+    s.demoEmail={...s.demoEmail,...createVisitorDemoAuthorization(s.id,Date.now(),visitorEnvironment())};
+    return s;
+}
+test('visitor capability is created on the server without code, bound to one call, bounded and revocable',()=>{
+    const env=visitorEnvironment(),now=Date.now();
+    const a=createVisitorDemoAuthorization('first',now,env),b=createVisitorDemoAuthorization('second',now,env);
+    assert.equal(a.accessMode,'visitor');assert.notEqual(a.grantId,b.grantId);assert.equal(a.expiresAt-now,24*60*60*1000);
+    assert.equal(a.accessDigest,undefined);assert.throws(()=>verifyDemoGrant(token,now,env),/server session/);
+    for(const limit of [undefined,'','0','-1','1001','25\n',' 25 ','2.5'])assert.throws(()=>readVisitorEmailPolicy({...env,JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT:limit}),/bounded/);
+    assert.throws(()=>createVisitorDemoAuthorization('call',now,{...env,JAMES_DEMO_EMAIL_ENABLED:'false'}),/off/);
+    const s=visitorComplete();assert.equal(prepareDemoMessages(s,Date.now(),env).callerAddress,'maya@example.test');
+    assert.throws(()=>prepareDemoMessages(s,Date.now(),{...env,JAMES_DEMO_EMAIL_ACCESS_MODE:'reusable'}),/off/);
+    assert.throws(()=>prepareDemoMessages(s,s.demoEmail.expiresAt,env),/authorization/);
+    assert.throws(()=>prepareDemoMessages({...s,intakeBrief:undefined},Date.now(),env),/structured/);
+    assert.equal(prepareDemoMessages(complete(),Date.now(),env).callerAddress,'maya@example.test');
+});
+test('visitor send allowance uses atomic expiring global/recipient counters without raw addresses, fails closed',async()=>{
+    const env=visitorEnvironment();let calls=0;
+    await reserveVisitorEmailAllowance('maya@example.test',{env,prefix:'james:',redis:async command=>{
+        calls++;assert.equal(command[0],'EVAL');assert.equal(command[2],2);
+        assert.deepEqual(command.slice(3),['james:demo-email-budget:total','james:demo-email-budget:recipient:'+sha('maya@example.test'),25,5,86400]);
+        assert.ok(!JSON.stringify(command).includes('maya@'));assert.match(command[1],/EXPIRE/);return 1;
+    }});assert.equal(calls,1);
+    for(const result of [0,null,'1'])await assert.rejects(reserveVisitorEmailAllowance('maya@example.test',{env,prefix:'james:',redis:async()=>result}),/no email was attempted/);
+    await assert.rejects(reserveVisitorEmailAllowance('maya@example.test',{env,prefix:'james:',redis:async()=>{throw Error('storage offline');}}),/offline/);
+});
+test('code-free email still needs confirmed brief and explicit consent; quota precedes reservation and duplicate requests send nothing',async()=>{
+    const s=visitorComplete(),store=memoryStore(s);let allowances=0;
+    store.deps.env=visitorEnvironment();store.deps.reserveAllowance=async recipient=>{assert.equal(recipient,'maya@example.test');assert.equal(store.stored.demoEmail.deliveries,undefined);allowances++;};
+    const consent={approved:true,snapshotHash:s.stateHash,callerAddress:'maya@example.test'};
+    await assert.rejects(sendDemoSummaries(s,{...consent,approved:false},store.deps),/Approve/);assert.equal(allowances,0);assert.equal(store.calls.length,0);
+    await assert.rejects(sendDemoSummaries(s,consent,{...store.deps,reserveAllowance:undefined}),/allowance/);
+    await assert.rejects(sendDemoSummaries(s,consent,{...store.deps,reserveAllowance:async()=>{throw Error('budget exceeded');}}),/budget/);assert.equal(store.calls.length,0);
+    const result=await sendDemoSummaries(s,consent,store.deps);assert.equal(allowances,1);assert.equal(store.calls.length,2);
+    await sendDemoSummaries(result,{},store.deps);assert.equal(allowances,1);assert.equal(store.calls.length,2);
+});
 test('email is fail-closed, James-specific; Amy credentials never choose sender',()=>{
     assert.throws(()=>readDemoEmailConfig({}),/off/);
     const env=environment();assert.equal(readDemoEmailConfig(env).sender,'james-demo@agentmail.to');
@@ -30,6 +72,43 @@ test('one-session operator grant is digest bound, expiring and max 24 hours',()=
     const env=environment();assert.equal(verifyDemoGrant(token,Date.now(),env).id,sha(token));
     for(const changed of [{JAMES_DEMO_EMAIL_ENABLED:'false'},{JAMES_DEMO_EMAIL_ACCESS_SHA256:'x'.repeat(64)},{JAMES_DEMO_EMAIL_EXPIRES_AT:'invalid'},{JAMES_DEMO_EMAIL_EXPIRES_AT:new Date(Date.now()-1).toISOString()},{JAMES_DEMO_EMAIL_EXPIRES_AT:new Date(Date.now()+25*60*60*1000).toISOString()}])assert.throws(()=>verifyDemoGrant(token,Date.now(),{...env,...changed}));
     assert.throws(()=>verifyDemoGrant('x'.repeat(43),Date.now(),env));
+});
+test('reusable private code remains valid across calls and days, never opens unauthenticated access',()=>{
+    const now=Date.now(),env={...environment(),JAMES_DEMO_EMAIL_ACCESS_MODE:'reusable',JAMES_DEMO_EMAIL_EXPIRES_AT:'expired'};
+    assert.equal(readDemoAccessMode({}),'one-use');
+    for(const mode of ['public','', ' reusable '])assert.throws(()=>readDemoAccessMode({JAMES_DEMO_EMAIL_ACCESS_MODE:mode}),/invalid/);
+    const first=verifyDemoGrant(token,now,env),later=verifyDemoGrant(token,now+7*24*60*60*1000,env);
+    assert.equal(first.accessMode,'reusable');assert.equal(first.id,later.id);
+    assert.equal(first.expiresAt-now,24*60*60*1000);assert.equal(later.expiresAt-(now+7*24*60*60*1000),24*60*60*1000);
+    for(const code of [undefined,'','x'.repeat(43),token+'\n'])assert.throws(()=>verifyDemoGrant(code,now,env));
+    assert.throws(()=>verifyDemoGrant(token,now,{...env,JAMES_DEMO_EMAIL_ENABLED:'false'}),/off/);
+    const a=bindDemoGrant(first,'first-call'),b=bindDemoGrant(first,'second-call');
+    assert.notEqual(a.grantId,b.grantId);assert.equal(a.accessDigest,sha(token));
+    assert.equal(bindDemoGrant(verifyDemoGrant(token,now,environment()),'legacy-call').grantId,sha(token));
+});
+test('reusable call authorization respects expiry, revocation and sender changes; prior one-use calls survive upgrade',()=>{
+    const env={...environment(),JAMES_DEMO_EMAIL_ACCESS_MODE:'reusable'},s=complete();
+    s.demoEmail={...s.demoEmail,...bindDemoGrant(verifyDemoGrant(token,Date.now(),env),s.id)};
+    assert.equal(prepareDemoMessages(s,Date.now(),env).callerAddress,'maya@example.test');
+    assert.throws(()=>prepareDemoMessages(s,s.demoEmail.expiresAt,env),/authorization/);
+    assert.throws(()=>prepareDemoMessages(s,Date.now(),{...env,JAMES_DEMO_EMAIL_ACCESS_SHA256:sha('revoked')}),/revoked/);
+    assert.throws(()=>prepareDemoMessages(s,Date.now(),{...env,JAMES_DEMO_EMAIL_ACCESS_MODE:'one-use'}),/revoked/);
+    assert.throws(()=>prepareDemoMessages(s,Date.now(),{...env,JAMES_AGENTMAIL_ADDRESS:'different@agentmail.to'}),/sender/);
+    assert.equal(prepareDemoMessages(complete(),Date.now(),env).callerAddress,'maya@example.test');
+});
+test('reusing one operator code never reuses another call\'s AgentMail idempotency keys or sends twice',async()=>{
+    const env={...environment(),JAMES_DEMO_EMAIL_ACCESS_MODE:'reusable'},keys=[],stored=new Map();
+    const grant=verifyDemoGrant(token,Date.now(),env);
+    for(const id of ['first-call','second-call']){
+        const s=complete();s.id=id;s.stateHash=sha(id);s.demoEmail={...s.demoEmail,...bindDemoGrant(grant,id)};
+        stored.set(id,s);
+        const deps={env,stamp:receipt,save:async(p,n)=>{assert.equal(stored.get(id).revision,p.revision);stored.set(id,structuredClone(n));},
+            send:async(m,o)=>{keys.push(o.idempotencyKey);return {messageId:'accepted-'+keys.length};}};
+        const result=await sendDemoSummaries(s,{snapshotHash:s.stateHash,callerAddress:'maya@example.test',approved:true},deps);
+        assert.ok(Object.values(result.demoEmail.deliveries).every(d=>d.status==='SENT'));
+        await sendDemoSummaries(result,{},deps);
+    }
+    assert.equal(keys.length,4);assert.equal(new Set(keys).size,4);
 });
 test('transport preflight verifies exact inbox and AI Fusion Labs Demo display name',async()=>{
     for(const inbox of [{email:'james-demo@agentmail.to',display_name:'Knowles Law Firm'},{email:'amy@agentmail.to',display_name:'AI Fusion Labs Demo'}])await assert.rejects(preflightDemoTransport({env:environment(),fetchImpl:async()=>Response.json(inbox)}));
@@ -147,6 +226,8 @@ test('provider confirmation context must preserve turn order, not just text memb
 test('new route targets current James; legacy routes and prompt/KB overrides stay unchanged',()=>{
     const source=readFileSync(new URL('../lib/james-canary/demo-server.ts',import.meta.url),'utf8');assert.match(source,/CURRENT_JAMES_PERSONA_ID/);assert.match(source,/xagent:james:notepad-demo:v1/);
     const client=readFileSync(new URL('../components/james/JamesCanary.tsx',import.meta.url),'utf8');assert.match(client,/Show legal pad/);assert.match(client,/repeating-linear-gradient/);assert.match(client,/type="password"/);assert.doesNotMatch(client,/localStorage.setItem\([^\n]*accessCode/);
+    assert.match(client,/notepadDemo&&emailAccessMode!=='visitor'&&!active&&<details/);
+    assert.match(client,/const operatorCode=emailAccessMode==='visitor'\?undefined:accessCode\|\|undefined/);
     assert.match(client,/Layout preview only/);assert.match(client,/disabled=\{busy\|\|Boolean\(active\)\|\|!launchReady\}/);
     const page=readFileSync(new URL('../app/demo/james-notepad/page.tsx',import.meta.url),'utf8');assert.match(page,/await connection\(\)/);assert.match(page,/launchReady=\{launchReady\}/);
 });
@@ -160,6 +241,7 @@ test('HTTP demo lifecycle: isolated original persona, no automatic sends, previe
         if(u==='https://redis.invalid'){
             if(body[0]==='GET')return Response.json({result:db.get(body[1])||null});
             if(body[0]==='SET'){if(db.has(body[1]))return Response.json({result:null});db.set(body[1],body[2]);return Response.json({result:'OK'});}
+            if(body[0]==='EVAL'&&body[2]===2){const total=Number(db.get(body[3])||0),recipient=Number(db.get(body[4])||0);if(total>=body[5]||recipient>=body[6])return Response.json({result:0});db.set(body[3],String(total+1));db.set(body[4],String(recipient+1));return Response.json({result:1});}
             const [,,,key,rev,box]=body;
             if((rev===-1&&db.has(key))||(rev!==-1&&(!db.has(key)||JSON.parse(db.get(key)).revision!==rev)))return Response.json({result:0});
             db.set(key,box);return Response.json({result:1});
@@ -168,7 +250,7 @@ test('HTTP demo lifecycle: isolated original persona, no automatic sends, previe
         if(u.endsWith('/auth/session-token')){assert.deepEqual(body.personaConfig,{personaId:CURRENT_JAMES_PERSONA_ID});label=body.clientLabel;launches++;return Response.json({sessionToken:'fake'});}
         if(u.endsWith('/sessions/'+providerId))return Response.json({id:providerId,personaId:CURRENT_JAMES_PERSONA_ID,clientLabel:label,startTime:new Date().toISOString(),endTime:released?new Date().toISOString():null});
         if(u.endsWith('/transcript'))return Response.json({sessionId:providerId,transcriptsEnabled:true,totalMessages:messages.length,messages,endTime:new Date().toISOString()});
-        if(u.includes('api.agentmail.to')){if(!o.method)return Response.json({email:'james-demo@agentmail.to',display_name:'AI Fusion Labs Demo'});assert.ok(released);assert.deepEqual(body.to,[sends?'maya@example.test':INTERNAL_DEMO_RECIPIENT]);sends++;return Response.json({message_id:'provider-'+sends});}
+        if(u.includes('api.agentmail.to')){if(!o.method)return Response.json({email:'james-demo@agentmail.to',display_name:'AI Fusion Labs Demo'});assert.ok(released);assert.deepEqual(body.to,[sends%2?'maya@example.test':INTERNAL_DEMO_RECIPIENT]);sends++;return Response.json({message_id:'provider-'+sends});}
         throw Error('Unexpected target '+u);
     };
     try{
@@ -206,6 +288,42 @@ test('HTTP demo lifecycle: isolated original persona, no automatic sends, previe
         await action('send-demo-email',{snapshotHash:p.snapshotHash,callerAddress:p.callerAddress,approved:true});assert.equal(sends,2);
         const reload=await get(new Request('https://demo.invalid/api/james-notepad?id='+s.id,{headers:{cookie}}));assert.deepEqual(await reload.json(),sent);assert.equal(sends,2);
         assert.equal((await get(new Request('https://demo.invalid/api/james-notepad?id='+s.id))).status,400);
+        // Upgrade leaves the old code/claim intact while each future call gets
+        // a distinct send capability. Preflight never starts a provider call.
+        process.env.JAMES_DEMO_EMAIL_ACCESS_MODE='reusable';process.env.JAMES_DEMO_EMAIL_EXPIRES_AT='expired';
+        const reusableCheck=await post(request({action:'demo-email-preflight'},'',token));
+        const reusableMeta=await reusableCheck.json();assert.equal(reusableCheck.status,200);
+        assert.equal(reusableMeta.accessMode,'reusable');assert.equal(reusableMeta.maxSessions,null);assert.equal(reusableMeta.maxEmailsPerSession,2);assert.equal(launches,1);
+        const nextCalls=[];
+        for(let i=0;i<2;i++){
+            const nextCall=await post(request({action:'start'},cookie,token));assert.equal(nextCall.status,200);nextCalls.push(await nextCall.json());
+        }
+        assert.notEqual(nextCalls[0].id,nextCalls[1].id);assert.equal(launches,3);assert.equal(sends,2);
+        for(const nextCall of nextCalls)assert.equal(db.get('xagent:james:notepad-demo:v1:demo-grant:'+sha('james-demo-session:'+sha(token)+':'+nextCall.id)),nextCall.id);
+        assert.equal((await post(request({action:'start',accessMode:'reusable'},cookie,'x'.repeat(43)))).status,400);assert.equal(launches,3);
+        // Code-free mode is a server setting, not a request-body privilege.
+        Object.assign(process.env,{JAMES_DEMO_EMAIL_ACCESS_MODE:'visitor',JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT:'25'});
+        delete process.env.JAMES_DEMO_EMAIL_ACCESS_SHA256;
+        assert.equal((await post(request({action:'demo-email-preflight'}))).status,400);assert.equal(launches,3);
+        messages.length=0;released=false;
+        const visitorStart=await post(request({action:'start'},cookie));const visitor=await visitorStart.json();assert.equal(visitorStart.status,200,JSON.stringify(visitor));
+        assert.equal(visitor.demo_email_authorized,true);assert.equal(launches,4);assert.equal(sends,2);
+        assert.doesNotMatch(JSON.stringify(visitor),/grantId|accessDigest/);
+        const visitorAction=async(action,extra={})=>{const r=await post(request({action,id:visitor.id,...extra},cookie));const data=await r.json();assert.equal(r.status,200,JSON.stringify(data));return data;};
+        assert.equal((await post(request({action:'preview-demo-email',id:visitor.id}))).status,400);
+        await visitorAction('bind',{providerId});
+        for(const t of complete().turns){await visitorAction('turn',{turn:t,finalized:true});messages.push({role:t.role,message:t.content});}
+        await visitorAction('begin-close');released=true;let visitorReviewed=await visitorAction('close');assert.equal(sends,2);
+        for(const [slot,value] of [['name','Maya Patel'],['phone','480-555-0177'],['location','Phoenix']])visitorReviewed=await visitorAction('correct-brief',{slot,value,snapshotHash:visitorReviewed.intakeBrief.hash});
+        await visitorAction('confirm-brief',{snapshotHash:visitorReviewed.intakeBrief.hash});const vp=await visitorAction('preview-demo-email');
+        assert.equal((await post(request({action:'send-demo-email',id:visitor.id,...vp,approved:false},cookie))).status,400);assert.equal(sends,2);
+        const visitorSent=await visitorAction('send-demo-email',{snapshotHash:vp.snapshotHash,callerAddress:vp.callerAddress,approved:true});assert.equal(sends,4);
+        assert.ok(visitorSent.demo_email_status.every(d=>d.status==='SENT'));
+        await visitorAction('send-demo-email',{});assert.equal(sends,4);
+        assert.equal(db.get('xagent:james:notepad-demo:v1:demo-email-budget:total'),'1');
+        assert.equal(db.get('xagent:james:notepad-demo:v1:demo-email-budget:recipient:'+sha('maya@example.test')),'1');
+        process.env.JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT='0';assert.equal((await post(request({action:'start'},cookie))).status,400);assert.equal(launches,4);
+        process.env.JAMES_DEMO_EMAIL_ENABLED='false';const notesOnly=await post(request({action:'start',accessMode:'visitor',demoEmail:{accessMode:'visitor'}},cookie));assert.equal(notesOnly.status,200);assert.equal((await notesOnly.json()).demo_email_authorized,false);assert.equal(launches,5);assert.equal(sends,4);
         assert.ok([...db.keys()].every(k=>k.startsWith('xagent:james:notepad-demo:v1:')));assert.ok(![...db.values()].some(v=>v.includes('Maya')));
     }finally{globalThis.fetch=oldFetch;for(const k of Object.keys(process.env))if(!(k in previous))delete process.env[k];Object.assign(process.env,previous);}
 });

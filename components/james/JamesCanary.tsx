@@ -9,7 +9,7 @@ import type { PadVisibility } from '@/lib/james-canary/pad-visibility';
 
 type State=ReturnType<typeof view>;
 type EmailPreview={snapshotHash:string;callerAddress:string;sender:string;replyTo:string;messages:{lane:string;to:string;text:string}[]};
-export default function JamesCanary({apiPath='/api/james-canary',storageKey='james-hosted-canary-session-v1',notepadDemo=false,launchReady=true,previewStates}:{apiPath?:string;storageKey?:string;notepadDemo?:boolean;launchReady?:boolean;previewStates?:{label:string;state:State|null}[]}={}){
+export default function JamesCanary({apiPath='/api/james-canary',storageKey='james-hosted-canary-session-v1',notepadDemo=false,launchReady=true,emailAccessMode='one-use',previewStates}:{apiPath?:string;storageKey?:string;notepadDemo?:boolean;launchReady?:boolean;emailAccessMode?:'one-use'|'reusable'|'visitor';previewStates?:{label:string;state:State|null}[]}={}){
     const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(notepadDemo?'Start a demo conversation when ready.':'Start a new canary conversation when ready.'),[history,setHistory]=useState<Turn[]>([]);
     const [padVisibility,setPadVisibility]=useState<PadVisibility>(()=>notepadDemo?initialPadVisibility():{open:true,revealed:true,manual:false}),[accessCode,setAccessCode]=useState(''),[preview,setPreview]=useState<EmailPreview|null>(null),[approved,setApproved]=useState(false);
     const [editSlot,setEditSlot]=useState('name'),[editValue,setEditValue]=useState(''),[editing,setEditing]=useState(false),[previewIndex,setPreviewIndex]=useState(0);
@@ -117,8 +117,9 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         if(audio.current)void audio.current.context.close().catch(()=>{});audio.current=null;
         seen.current.clear();finalized.current.clear();messages.current=[];setHistory([]);setPreview(null);setApproved(false);
         try{
-            if(accessCode)await api('demo-email-preflight',{},accessCode);
-            const launched=await api('start',{},accessCode||undefined);setAccessCode('');id.current=launched.id;
+            const operatorCode=emailAccessMode==='visitor'?undefined:accessCode||undefined;
+            if(operatorCode)await api('demo-email-preflight',{},operatorCode);
+            const launched=await api('start',{},operatorCode);setAccessCode('');id.current=launched.id;
             try{localStorage.setItem(storageKey,launched.id);}catch{/* The active call can continue without reload recovery. */}
             render(launched);
             const c=createClient(launched.sessionToken);client.current=c;
@@ -202,7 +203,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             <section className={padOpen?'lg:sticky lg:top-0 lg:self-start':''}><video id="james-canary-video" autoPlay playsInline poster={notepadDemo?'/agents/thumbnails/james-knowles-cara4-20261001.png':undefined} className={'w-full rounded-xl bg-black object-contain '+(padOpen?'aspect-[4/3]':'h-[calc(100dvh-19rem)] min-h-[320px]')}/>
                 {!launchReady&&<p role="alert" className="mt-3 rounded border border-amber-200/40 p-3 text-sm text-amber-200">Layout preview only. Live calls are disabled until this demo’s session storage and Anam settings are configured.</p>}
                 <p role="status" className="my-3 text-sm text-zinc-200">{notice}</p>
-                {notepadDemo&&!active&&<details className="mb-4 rounded border border-white/20 p-3"><summary className="cursor-pointer text-sm">Operator email test (optional)</summary><label className="mt-3 block text-xs">One-use demo access code<input type="password" autoComplete="off" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={busy} className="mt-2 block w-full rounded border border-white/30 bg-zinc-900 p-2 text-white"/></label><p className="mt-2 text-xs text-zinc-400">Leave blank for a notes-only call. Codes are never saved in browser storage or URLs.</p></details>}
+                {notepadDemo&&emailAccessMode!=='visitor'&&!active&&<details className="mb-4 rounded border border-white/20 p-3"><summary className="cursor-pointer text-sm">Operator email test (optional)</summary><label className="mt-3 block text-xs">{emailAccessMode==='reusable'?'Reusable demo access code':'One-use demo access code'}<input type="password" autoComplete="off" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={busy} className="mt-2 block w-full rounded border border-white/30 bg-zinc-900 p-2 text-white"/></label><p className="mt-2 text-xs text-zinc-400">{emailAccessMode==='reusable'?'Use the same private code for each new call. Each call requires its own summary review and approval. ':'Leave blank for a notes-only call. '}Codes are never saved in browser storage or URLs.</p>{emailAccessMode==='reusable'&&<p className="mt-2 text-xs text-zinc-400">Leave blank to keep this call notes-only. The reusable code does not expire; each call’s email authorization lasts up to 24 hours.</p>}</details>}
                 <div className="flex flex-wrap gap-3"><button onClick={()=>void start()} disabled={busy||Boolean(active)||!launchReady} className="rounded bg-white px-5 py-3 font-semibold text-black disabled:opacity-40">Start James</button>
                     <button onClick={()=>void close()} disabled={busy||!active||Boolean(previewStates)} className="rounded border border-white/40 px-5 py-3 disabled:opacity-40">{state?.state==='CLOSING'?'Verify closure':'End conversation'}</button>
                     <button aria-expanded={padOpen} aria-controls="james-legal-pad" onClick={changePad} className="rounded border border-amber-300/60 px-5 py-3 text-amber-200">{padOpen?'Hide legal pad':'Show legal pad'}</button>
