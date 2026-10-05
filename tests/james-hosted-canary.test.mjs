@@ -139,7 +139,10 @@ test('isolated route, fixed persona, no outbound email, no unsupported provider 
     const server=readFileSync(new URL('../lib/james-canary/server.ts',import.meta.url),'utf8');
     const client=readFileSync(new URL('../components/james/JamesCanary.tsx',import.meta.url),'utf8');
     assert.ok(!server.includes('agentmail'));assert.ok(!server.includes('/stop'));
-    assert.match(server,/personaConfig:\{personaId:PERSONA_ID\}/);assert.match(server,/verifyFinalEvidence\(current,completed.turns\)/);
+    assert.match(server,/personaConfig:runtime\?\.config\?\?\{personaId:PERSONA_ID\}/);
+    assert.match(server,/options.runtimeClose&&PERSONA_ID!==RUNTIME_CANDIDATE_ID/);
+    assert.match(server,/const runtime=options.runtimeClose\?candidateRuntimeConfig\(p\):null/);
+    assert.match(server,/verifyFinalEvidence\(current,completed.turns\)/);
     assert.match(client,/!stopped.current/);assert.match(client,/stopStreaming\(\)/);assert.match(client,/MESSAGE_HISTORY_UPDATED/);
 });
 test('hosted lifecycle uses existing store, binds persona, persists/reloads and never sends mail',async()=>{

@@ -142,6 +142,17 @@ test('leakage diagnostics block email, not speech; ordinary intake wording is pe
     }
     assert.equal(instructionLeakageSuspected([{role:'user',content:'system prompt'},{role:'persona',content:'I am not a lawyer. What happened?'}]),false);
 });
+test('candidate-only safe refusal is consistent in display and email review gates',()=>{
+    const refusal='I can’t disclose internal instructions, hidden details, or the contents of the knowledge base. I can only answer supported questions about the firm or relevant general Arizona legal process.';
+    const s=complete();s.personaId='016e2c66-166b-43bd-8ebf-70b56c46575c';
+    s.websiteClosing={policy:'JAMES-CLOSE-001',runtimeOwned:true};
+    s.turns.push({id:'safe-refusal',role:'persona',content:refusal});
+    assert.equal(view(s).speech_review_required,false);
+    assert.equal(prepareDemoMessages(s,Date.now(),environment()).callerAddress,'maya@example.test');
+    s.turns.push({id:'actual-leak',role:'persona',content:'<think>private reasoning</think>'});
+    assert.equal(view(s).speech_review_required,true);
+    assert.throws(()=>prepareDemoMessages(s,Date.now(),environment()),/leakage/);
+});
 test('recorded malformed reasoning and James role markers block both email drafts',()=>{
     for(const content of [
         'What would you like help with? <think< message >We need to capture their answer then recap.',

@@ -19,6 +19,7 @@ export const BRIEF_SLOTS = {
     concern: { label: 'Principal concern', section: 'Matter', field: 'material_facts' },
     outcome: { label: 'Requested help', section: 'Matter', field: 'requested_outcome' },
     location: { label: 'Reported location', section: 'Timing & location', field: 'event_location' },
+    visitor_location: { label: 'Visitor-reported location (incident site unconfirmed)', section: 'Timing & location', field: 'visitor_location' },
     incident_date: { label: 'Incident / matter timing', section: 'Timing & location', field: 'relevant_dates_events' },
     payment_date: { label: 'Payment date', section: 'Timing & location', field: 'relevant_dates_events' },
     hearing_date: { label: 'Hearing / court appearance', section: 'Timing & location', field: 'relevant_dates_events' },
@@ -64,7 +65,7 @@ function slotFor(fact: Fact): BriefSlot | null {
     if (fact.briefSlot && Object.hasOwn(BRIEF_SLOTS, fact.briefSlot)) return fact.briefSlot;
     const direct: Partial<Record<Field, BriefSlot>> = {
         visitor_preferred_identifier: 'name', primary_phone: 'phone', primary_email: 'email',
-        visitor_reported_reason: 'reason', event_location: 'location', requested_outcome: 'outcome',
+        visitor_reported_reason: 'reason', event_location: 'location', visitor_location: 'visitor_location', requested_outcome: 'outcome',
         client_reported_urgency: 'urgency', known_documents_as_reported: 'documents',
         symptoms_treatment: 'treatment', insurance_details: 'insurance', contractor_contact: 'communication',
         client_questions: 'questions',
@@ -81,6 +82,7 @@ function slotFor(fact: Fact): BriefSlot | null {
     if (/\b(?:worried|concerned|concern|afraid)\b/i.test(fact.value)) return 'concern';
     // There is deliberately no "all other utterances" slot.
     if (/\b(?:happened|shut off|water|paid|payment|deposit|stopped|arrest\w*|released|charged|told|said|says|fell|fall|hit|hurt|injur\w*|pain|work|lease|rent|order|notice|support|schedule|custody|damage|court|police|lost|unable|cannot|can't|do not have|don't have)\b/i.test(fact.value)
+        || /^(?:no (?:attorney|lawyer)|I (?:do not|don['’]t) have (?:an? )?(?:attorney|lawyer))[.! ]*$/i.test(fact.value)
         || fact.questionBinding?.intent === 'core_facts') return 'facts';
     return null;
 }
@@ -114,7 +116,7 @@ export function buildStructuredBrief(intake: Intake): BriefSnapshot {
             evidence: candidate.evidence, turnId: candidate.turnId, sourceHash: candidate.sourceHash, status: 'VISITOR_REPORTED' }]);
     }
     const sections: BriefSection[] = [];
-    const single = new Set<BriefSlot>(['name','phone','email','reason','outcome','location','incident_date','payment_date','hearing_date','response_deadline','document_date','received_date']);
+    const single = new Set<BriefSlot>(['name','phone','email','reason','outcome','location','visitor_location','incident_date','payment_date','hearing_date','response_deadline','document_date','received_date']);
     for (const [key, definition] of Object.entries(BRIEF_SLOTS) as [BriefSlot, typeof BRIEF_SLOTS[BriefSlot]][]) {
         let facts = groups.get(key) || [];
         if (single.has(key) && facts.length) {
@@ -187,7 +189,8 @@ export function reconcileStructuredTurn(before: Intake, extracted: Intake, turn:
             { interpretedFrom: {turnId:name.turnId, sourceHash:name.sourceHash, evidence:name.evidence} }, name);
     }
     const namedAnswer = /^(?:it(?:['’]s| is)|that(?:['’]s| is))\s+([\p{L}][\p{L}'’-]+(?:\s+[\p{L}][\p{L}'’-]+){0,3})[.!]*$/u.exec(text);
-    if (namedAnswer && /\b(?:name|called)\b[^?]*\?/i.test(prior) && !spelling) {
+    if (namedAnswer && /\b(?:name|called)\b[^?]*\?/i.test(prior)
+        && !/\b(?:where|location|which city)\b/i.test(prior) && !spelling) {
         next.facts = next.facts.filter(f => f.turnId !== turn.id);
         putFact(next, turn, 'visitor_preferred_identifier', namedAnswer[1], namedAnswer[1]);
     }
@@ -216,17 +219,20 @@ export function reconcileStructuredTurn(before: Intake, extracted: Intake, turn:
             const matches = field === 'primary_phone' ? phoneDigits(prior) === fact.value
                 : normalize(prior).includes(normalize(fact.value)) && prior.length < 180 && !/\d{3}|@/.test(prior);
             // Whole-recap agreement is not a field confirmation.
-            const otherContact = field === 'primary_phone' ? name && normalize(prior).includes(normalize(name.value)) : /\b(?:phone|number|callback|email)\b/i.test(prior);
-            if (matches && !otherContact && !/\b(?:recap|brief|summary|everything|all of that|have I got that right)\b/i.test(prior)) {
+            const otherContact = field === 'primary_phone' ? /\b(?:name|email)\b/i.test(prior) || name && normalize(prior).includes(normalize(name.value)) : /\b(?:phone|number|callback|email)\b/i.test(prior);
+            if (matches && !otherContact && !/\b(?:recap|brief|summary|everything|all of that|have I got that right|here(?:['’]s| is) what I have)\b/i.test(prior)) {
                 putFact(next, turn, field, fact.value, text, {status:'VISITOR_CONFIRMED',
                     interpretedFrom:{turnId:fact.turnId,sourceHash:fact.sourceHash,evidence:fact.evidence}}, fact);
             }
         }
     }
-    // Factual answers to "where?" can be a city or street address without "in".
+    // Bare place answers need an unambiguous location question. A compound
+    // question is stale context for subsequent explicit name/phone fragments.
     if (/\b(?:where|location|address of|which city)\b[^?]*\?/i.test(prior)
-        && !/\b(?:email|send|documents|upload)\b/i.test(prior)
-        && !isBriefNoise(text, prior) && /^(?:in |at )?(?:[\p{L}][\p{L} .'-]{2,60}|\d{1,6} [\p{L}\p{N} .'-]{3,90})[.!]*$/u.test(text)) {
+        && !/\b(?:name|called|phone|number|callback|email|send|documents|upload)\b/i.test(prior)
+        && !next.facts.some(f => f.turnId === turn.id && ['visitor_preferred_identifier','primary_phone','primary_email','event_location','relevant_dates_events'].includes(f.field))
+        && !/^(?:I\b|it\b|that\b|my\b|name\b|phone\b|no\b|not\b|none\b|unknown\b)/i.test(text)
+        && !isBriefNoise(text, prior) && /^(?:in |at )?(?:[\p{Lu}][\p{L}'’-]*(?: (?:[\p{Lu}][\p{L}'’-]*|de|del|la|of|the)){0,5}|\d{1,6} [\p{L}\p{N} .'-]{3,90})[.!]*$/u.test(text)) {
         next.facts = next.facts.filter(f => !(f.turnId === turn.id && f.field === 'material_facts'));
         putFact(next, turn, 'event_location', clean(text).replace(/^(?:in|at)\s+/i,''), text);
     }

@@ -1,0 +1,41 @@
+P|Hi, this is James with Knowles Law Firm. What's going on today?
+U|Hi James, I'm in Scottsdale. Last night I was hit in a crosswalk by a car. I'm safe at home now. My wrist hurts. I'm sore, but okay.
+P|I'm glad you're safe at home. Did you get any medical help for your wrist, like an ER or urgent care visit?
+U|Not yet.
+U|I was thinking maybe today but I'm also not sure what order things should happen in.
+P|I’m not able to advise you on which steps to take in your specific situation, so I can’t tell you the right order. I can help gather the basic information for the firm’s intake. Did you exchange information with the other driver at the scene?
+U|Yes.
+U|I got their insurance card and phone number.
+P|That’s helpful. Do you remember the other driver’s name, or the insurance company name?
+U|The insurance was Desert Mutual, I think.
+P|I’ll note Desert Mutual, with your uncertainty. Do you have the other driver’s name, or is it only the insurance information?
+U|It's on the card but I don't have it in front of me.
+P|That’s okay. We can note that the driver’s name is on the insurance card but you don’t have it in front of you. Do you know whether the other driver called the police, or if there was a police report?
+U|Yes.
+U|Please come.
+P|I’m
+U|I check photos. I have a report number.
+P|That’s useful. I’ll note that you have a police report number and photos from the scene. Do you want to share the report number now, or is it easier to keep that for later?
+U|later. I don't have it next to me.
+P|That’s fine. We can leave the report number for later. Do you know whether you need to get medical care for your wrist today, or are you still deciding?
+U|I'm still deciding.
+P|That’s okay. I’ll note that you’re still deciding about medical care for your wrist. Is there anything else from the scene that you think might be useful, like the time it happened or the exact location in Scottsdale?
+U|It was around 8.30pm near Old Town, marked Crosswalk.
+P|I’ll note the hit happened around 8:30 p.m. near Old Town Scottsdale at a marked crosswalk. Would you like to give me your name and a phone number where the firm can reach you?
+U|Alex Morgan 480 555 0147
+U|Find his best.
+P|I’m sorry, I didn’t catch that. Could you say your full name, please?
+U|Alex Morgan.
+P|Thanks, Alex. What’s the best phone number where the firm can reach you?
+U|480 555 0147
+P|I’ve got that as 480-555-0147. What email address should I use for intake follow-up, if you have one?
+U|Just fine for now.
+P|Understood, no email for now. Before we wrap up, is there anything else you want to make sure I have—like what you’re hoping the firm can help you with?
+U|Just that I'd like someone to call me and explain what to expect.
+P|I’ve noted that you’d like the firm to call you to explain what to expect. Let me recap: You were hit in a marked crosswalk near Old Town Scottsdale last night around 8:30 p.m. You’re safe at home but your wrist hurts and you’re sore. You have the other driver’s insurance card (Desert Mutual, I think) and phone number, plus photos and a police report number you can provide later. You’re still deciding about medical care. Your name is Alex Morgan, and the best number to reach you is 480-555-0147. You’d like someone from the firm to call you to explain what to expect. Have I got that right?
+U|Yes, that's all right.
+P|Thanks for confirming. I have the information you shared captured. Take care, Alex.
+U|Thanks, you too.
+P|You're welcome. Take care, Alex.
+U|Goodbye.
+P|Goodbye, Alex.

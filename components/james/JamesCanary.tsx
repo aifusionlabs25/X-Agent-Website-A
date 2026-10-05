@@ -7,10 +7,12 @@ import type { Turn, view } from '@/lib/james-canary/state';
 import { initialPadVisibility, revealForFirstFact, togglePad, BRIEF_REVIEW_INVITATION } from '@/lib/james-canary/pad-visibility';
 import type { PadVisibility } from '@/lib/james-canary/pad-visibility';
 import { enqueueClosingMutation, playbackAllowsClose } from '@/lib/james-canary/closing';
+import { explicitRuntimeDeparture, freshRuntimeCloseAttempt, runtimeCloseSignal, runtimeDepartureToArm } from '@/lib/james-canary/runtime-close';
+import type { RuntimeCloseAttempt } from '@/lib/james-canary/runtime-close';
 
 type State=ReturnType<typeof view>;
 type EmailPreview={snapshotHash:string;callerAddress:string;sender:string;replyTo:string;messages:{lane:string;to:string;text:string}[]};
-export default function JamesCanary({apiPath='/api/james-canary',storageKey='james-hosted-canary-session-v1',notepadDemo=false,launchReady=true,emailAccessMode='one-use',previewStates}:{apiPath?:string;storageKey?:string;notepadDemo?:boolean;launchReady?:boolean;emailAccessMode?:'one-use'|'reusable'|'visitor';previewStates?:{label:string;state:State|null}[]}={}){
+export default function JamesCanary({apiPath='/api/james-canary',storageKey='james-hosted-canary-session-v1',clearSavedSessionOnLoad=false,notepadDemo=false,launchReady=true,emailAccessMode='one-use',previewStates,surfaceLabel}:{apiPath?:string;storageKey?:string;clearSavedSessionOnLoad?:boolean;notepadDemo?:boolean;launchReady?:boolean;emailAccessMode?:'one-use'|'reusable'|'visitor';previewStates?:{label:string;state:State|null}[];surfaceLabel?:string}={}){
     const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(notepadDemo?'Start a demo conversation when ready.':'Start a new canary conversation when ready.'),[history,setHistory]=useState<Turn[]>([]);
     const [padVisibility,setPadVisibility]=useState<PadVisibility>(()=>notepadDemo?initialPadVisibility():{open:true,revealed:true,manual:false}),[accessCode,setAccessCode]=useState(''),[preview,setPreview]=useState<EmailPreview|null>(null),[approved,setApproved]=useState(false);
     const [editSlot,setEditSlot]=useState('name'),[editValue,setEditValue]=useState(''),[editing,setEditing]=useState(false),[previewIndex,setPreviewIndex]=useState(0);
@@ -20,6 +22,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     const invitationTimer=useRef<ReturnType<typeof setTimeout>|null>(null),personaSpeaking=useRef(false),visitorSpeaking=useRef(false);
     const closeTimer=useRef<ReturnType<typeof setTimeout>|null>(null),audioMonitor=useRef<ReturnType<typeof setInterval>|null>(null);
     const closeEpoch=useRef(0),closeInFlight=useRef(false),speechStarts=useRef(new Map<string,number>());
+    const runtimeAttempt=useRef<RuntimeCloseAttempt|null>(null);
     const audio=useRef<{context:AudioContext;source:MediaStreamAudioSourceNode;analyser:AnalyserNode;quietSince:number|null;lastSoundAt:number}|null>(null);
     const render=useCallback((s:State)=>{
         latest.current=s;setState(s);
@@ -77,6 +80,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     function cancelPendingClose(){
         closeEpoch.current++;
         if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
+        runtimeAttempt.current=null;
         if(!latest.current?.websiteClosing||closing.current||stopped.current)return;
         if(!latest.current.websiteClosing.farewellTurnId&&!latest.current.websiteClosing.departureTurnId)return;
         chain.current=chain.current.then(async()=>{render(await api('cancel-close'));})
@@ -98,17 +102,38 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         };
         closeTimer.current=setTimeout(check,200);
     }
-    async function close(automatic?:{epoch:number;farewellTurnId:string}){
+    function scheduleRuntimeClose(departureTurnId:string){
+        if(closeTimer.current)clearTimeout(closeTimer.current);
+        const epoch=closeEpoch.current;
+        // A repeated goodbye must not request or permit a second farewell.
+        runtimeAttempt.current=freshRuntimeCloseAttempt(departureTurnId,performance.now(),latest.current?.websiteClosing?.farewellTurnId);
+        const check=()=>{
+            closeTimer.current=null;
+            const attempt=runtimeAttempt.current;
+            if(!attempt||epoch!==closeEpoch.current||closing.current||stopped.current||failed.current
+                ||latest.current?.websiteClosing?.departureTurnId!==departureTurnId)return;
+            const probe=audio.current;
+            const signal=runtimeCloseSignal(attempt,{now:performance.now(),visitorSpeaking:visitorSpeaking.current,
+                personaSpeaking:personaSpeaking.current,audioRunning:probe?.context.state==='running',
+                lastSoundAt:probe?.lastSoundAt??0,quietSince:probe?.quietSince??null});
+            if(signal){void close({epoch,departureTurnId,signal});return;}
+            closeTimer.current=setTimeout(check,100);
+        };
+        closeTimer.current=setTimeout(check,100);
+    }
+    async function close(automatic?:{epoch:number;farewellTurnId?:string;departureTurnId?:string;signal?:string}){
         if(closing.current||closeInFlight.current)return;closeInFlight.current=true;setBusy(true);
         const stillCurrent=()=>!automatic||(automatic.epoch===closeEpoch.current&&!visitorSpeaking.current
-            &&latest.current?.websiteClosing?.farewellTurnId===automatic.farewellTurnId);
+            &&(automatic.departureTurnId?latest.current?.websiteClosing?.departureTurnId===automatic.departureTurnId
+                :latest.current?.websiteClosing?.farewellTurnId===automatic.farewellTurnId));
         try {
             // Closure and visitor cancellation share the same mutation queue.
             // Otherwise both could race the server revision and discard the
             // very correction that was supposed to cancel automatic closing.
             const beginTask=enqueueClosingMutation(chain,async()=>{
                 if(!stillCurrent())return null;
-                return api('begin-close',automatic?{automatic:true,farewellTurnId:automatic.farewellTurnId,revision:latest.current?.revision}:{});
+                return api('begin-close',automatic?{automatic:true,farewellTurnId:automatic.farewellTurnId,
+                    departureTurnId:automatic.departureTurnId,signal:automatic.signal,revision:latest.current?.revision}:{});
             });
             const begun=await beginTask;
             if(!begun)return;
@@ -130,13 +155,21 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             if(messages.current.findLastIndex(t=>t.id===turn.id)!==index)continue;
             if(!finalized.current.has(turn.id)||seen.current.has(turn.id))continue;
             seen.current.add(turn.id);
+            if(latest.current?.websiteClosing?.runtimeOwned&&turn.role==='user'&&!explicitRuntimeDeparture(turn.content))runtimeAttempt.current=null;
             chain.current=chain.current.then(async()=>{
                 if(failed.current)throw new Error('Prior finalized event did not persist');
                 // No late intake after a visitor ending; permit its one final assistant turn.
                 if(latest.current?.state==='CLOSING_PENDING'&&!latest.current.websiteClosing&&turn.role==='user')return;
                 const s=await api('turn',{turn,finalized:true});render(s);
                 scheduleInvitation();
-                if(s.state==='CLOSING_PENDING'&&turn.role==='persona'){
+                if(s.websiteClosing?.runtimeOwned){
+                    const departureId=runtimeDepartureToArm(turn,s.websiteClosing);
+                    if(departureId)scheduleRuntimeClose(departureId);
+                    if(turn.role==='persona'&&s.websiteClosing.farewellTurnId===turn.id&&runtimeAttempt.current){
+                        runtimeAttempt.current.farewellTurnId??=turn.id;
+                        runtimeAttempt.current.finalizedAt??=performance.now();
+                    }
+                }else if(s.state==='CLOSING_PENDING'&&turn.role==='persona'){
                     if(s.websiteClosing?.farewellTurnId)scheduleClose(s.websiteClosing.farewellTurnId);
                     else if(!s.websiteClosing)setTimeout(()=>void close(),1500);
                 }
@@ -146,18 +179,22 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     useEffect(()=>{
         if(previewStates)return;
         let saved:string|null=null;
-        try{saved=localStorage.getItem(storageKey);}catch{/* Private/blocked storage must not crash the page. */}
+        try{
+            if(clearSavedSessionOnLoad)localStorage.removeItem(storageKey);
+            else saved=localStorage.getItem(storageKey);
+        }catch{/* Private/blocked storage must not crash the page. */}
         if(saved){id.current=saved;
             void fetch(apiPath+'?id='+encodeURIComponent(saved)).then(async r=>{const s=await r.json();if(!r.ok)throw new Error(s.error);render(s);
                 try{const choice=JSON.parse(localStorage.getItem(storageKey+'-pad')||'null');if(choice?.id===saved&&typeof choice.open==='boolean'&&typeof choice.revealed==='boolean'&&choice.manual===true)setPadVisibility(choice);}catch{/* Ignore malformed presentation preferences. */}
                 setNotice(s.state==='CLOSED'?'Saved closed session restored.':'Saved session restored. The media stream is not automatically reconnected.');}).catch(error=>setNotice(error.message));}
         return()=>{if(closeTimer.current)clearTimeout(closeTimer.current);if(audioMonitor.current)clearInterval(audioMonitor.current);if(invitationTimer.current)clearTimeout(invitationTimer.current);if(audio.current)void audio.current.context.close().catch(()=>{});if(client.current&&!stopped.current){stopped.current=true;void client.current.stopStreaming();}};
     // This effect restores once; mutable SDK lifecycle is held in refs.
-    },[apiPath,storageKey,previewStates,render]);
+    },[apiPath,storageKey,clearSavedSessionOnLoad,previewStates,render]);
     async function start(){
         setBusy(true);setNotice('Connecting to the current James persona…');failed.current=false;stopped.current=false;closing.current=false;
         personaSpeaking.current=false;visitorSpeaking.current=false;
         closeEpoch.current++;closeInFlight.current=false;speechStarts.current.clear();
+        runtimeAttempt.current=null;
         if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
         if(audioMonitor.current)clearInterval(audioMonitor.current);audioMonitor.current=null;
         if(notepadDemo)setPadVisibility(initialPadVisibility());setEditing(false);
@@ -178,17 +215,26 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                     .catch(error=>{failed.current=true;setNotice(error.message);rejectBinding(error);if(!stopped.current){stopped.current=true;void c.stopStreaming();}});
             });
             c.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED,event=>{
+                if(stopped.current||closing.current)return;
                 if(event.role==='persona'){
+                    // Once one farewell has finalized, suppress follow-up output
+                    // while departure remains pending. No additional talk command.
+                    if(latest.current?.websiteClosing?.runtimeOwned&&runtimeAttempt.current?.farewellTurnId
+                        &&event.id!==runtimeAttempt.current.farewellTurnId){c.interruptPersona();return;}
                     if(!speechStarts.current.has(event.id))speechStarts.current.set(event.id,performance.now());
                     personaSpeaking.current=!event.endOfSpeech&&!event.interrupted;
-                    if(event.interrupted)cancelPendingClose();
+                    if(event.interrupted&&!latest.current?.websiteClosing?.runtimeOwned)cancelPendingClose();
                 }
                 if(event.role==='user'&&!event.endOfSpeech&&latest.current?.websiteClosing)cancelPendingClose();
                 // SDK emits the stream event BEFORE appending its final chunk to history.
                 // Only the subsequent HISTORY_UPDATED event may enqueue the assembled reply.
-                if(event.endOfSpeech===true && !event.interrupted)finalized.current.add(event.id);
+                if(event.endOfSpeech===true && !event.interrupted){
+                    if(event.role==='user')visitorSpeaking.current=false;
+                    finalized.current.add(event.id);
+                }
             });
             c.addListener(AnamEvent.MESSAGE_HISTORY_UPDATED,items=>{
+                if(stopped.current||closing.current)return;
                 messages.current=items.filter(t=>t.role==='user'||t.role==='persona').map(t=>({id:t.id,role:t.role as Turn['role'],content:t.content}));
                 setHistory(messages.current);queueHistory();
             });
@@ -256,7 +302,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     const active=state&&state.state!=='CLOSED';
     return <main className="fixed inset-0 z-[110] overflow-auto bg-zinc-950 p-4 text-white sm:p-6">
         <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3">
-            <div><p className="text-xs tracking-widest text-amber-300">{notepadDemo?'AI FUSION LABS · JAMES LEGAL PAD DEMO':'JAMES vNEXT · CANARY / DEMO'}</p><h1 className="font-serif text-3xl">A conversation with James</h1></div>
+            <div><p className="text-xs tracking-widest text-amber-300">{surfaceLabel??(notepadDemo?'AI FUSION LABS · JAMES LEGAL PAD DEMO':'JAMES vNEXT · CANARY / DEMO')}</p><h1 className="font-serif text-3xl">A conversation with James</h1></div>
             <Link href="/" className="text-sm underline">X-Agent website</Link>
         </header>
         {previewStates&&<div className="mx-auto mb-4 flex max-w-7xl items-center gap-4 border border-amber-300/30 p-3 text-sm"><span>Local fictional-data preview: {previewStates[previewIndex].label}</span><button className="rounded border px-3 py-2" onClick={advancePreview}>Advance preview</button></div>}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyIntake,applyTurn,view,receipt,CURRENT_JAMES_PERSONA_ID} from '../lib/james-canary/state.ts';
-import {confirmBrief} from '../lib/james-canary/structured-brief.ts';
+import {emptyIntake,applyTurn,view,receipt,CURRENT_JAMES_PERSONA_ID,endIntent} from '../lib/james-canary/state.ts';
+import {confirmBrief,applyBriefCorrection} from '../lib/james-canary/structured-brief.ts';
 import {isFinalFarewell,playbackAllowsClose,cancelWebsiteClose,enqueueClosingMutation} from '../lib/james-canary/closing.ts';
 const base=()=>({id:'17e1b181-d4fa-42eb-8209-cad30ef97880',browserId:'browser',clientLabel:'fictional-close-test',createdAt:new Date().toISOString(),revision:0,stateHash:'initial',personaId:CURRENT_JAMES_PERSONA_ID,config:{},state:'ACTIVE',turns:[],intake:emptyIntake(),intakeBrief:{version:2},websiteClosing:{policy:'JAMES-CLOSE-001'},receipts:[]});
 let serial=0;
@@ -58,6 +58,77 @@ test('explicit visitor departure permits limited intake, but spoken goodbye alon
 test('no question, quoted example or conditional farewell is a close command',()=>{
  for(const text of ['Is it okay if I end the call?','If you are done, take care.','He said "Goodbye."','Take care. Anything else?','Please say goodbye.'])assert.equal(isFinalFarewell(text),false,text);
  assert.equal(isFinalFarewell('Thanks, Avery. Take care.'),true);
+});
+test('natural terminal farewells accept safe evening and a name after an independent conditional sentence',()=>{
+ for(const farewell of [
+  'Have a safe evening, Avery.',
+  'Have a safe evening.',
+  'Have a good evening, Avery Sample.',
+  'If you have other documents later, you can keep them with your notes. Have a safe evening, Avery.',
+ ]){
+  assert.equal(isFinalFarewell(farewell),true,farewell);
+  let s=turn(base(),'Thanks, bye.');s=turn(s,farewell,'persona');
+  assert.equal(s.state,'CLOSING_PENDING',farewell);
+  assert.equal(s.websiteClosing.reason,'VISITOR_DEPARTURE');
+ }
+ for(const farewell of [
+  'If you are finished, have a safe evening, Avery.',
+  'Have a safe evening, if you are finished.',
+  'If you are finished. Have a safe evening, Avery.',
+  'Unless you need something else, have a safe evening.',
+  'When you are ready, have a safe evening.',
+  'He said "Have a safe evening, Avery."',
+  'The example is: have a safe evening, Avery.',
+  'Have a safe evening, Avery. Anything else?',
+ ])assert.equal(isFinalFarewell(farewell),false,farewell);
+});
+test('farewell recognition never removes the normal intake and completeness gates',()=>{
+ assert.equal(turn(base(),'Have a safe evening, Avery.','persona').state,'ACTIVE');
+ assert.equal(turn(recap(complete()),'Have a safe evening, Avery.','persona').state,'ACTIVE');
+ const s=turn(wrap(recap(complete())),'Have a safe evening, Avery.','persona');
+ assert.equal(s.state,'CLOSING_PENDING');assert.equal(s.websiteClosing.reason,'COMPLETED_INTAKE');
+});
+test('ASR five and discussion about a goodbye never manufacture visitor departure',()=>{
+ for(const spoken of ['Thanks bye.','Thanks, bye.','Thanks. Bye.','Bye.'])assert.equal(endIntent(spoken),true,spoken);
+ for(const spoken of [
+  'Thanks.','five.',
+  'When you said thanks bye, that is an explicit goodbye.',
+  'James should have just returned a farewell and stopped.',
+  'The caller said "Thanks, bye."',
+  'By the way, the call never ended. James is still here.',
+ ]){
+  assert.equal(endIntent(spoken),false,spoken);
+  let s=turn(base(),spoken);s=turn(s,'Have a safe evening, Avery.','persona');
+  assert.equal(s.websiteClosing.departureTurnId,undefined,spoken);
+  assert.equal(s.state,'ACTIVE',spoken);
+ }
+});
+test('separately finalized courtesy preserves existing completeness only for the unchanged brief',()=>{
+ for(const courtesy of ['Thanks.','Thank you.','You too.','Thanks, James.']){
+  let s=wrap(recap(complete()));const established=structuredClone(s.websiteClosing.complete);
+  s=turn(s,courtesy);
+  assert.deepEqual(s.websiteClosing.complete,established,courtesy);
+  assert.equal(s.state,'ACTIVE');assert.equal(s.websiteClosing.farewellTurnId,undefined);
+  s=turn(s,'Thank you. Take care.','persona');assert.equal(s.state,'CLOSING_PENDING',courtesy);
+ }
+ let changed=wrap(recap(complete()));
+ changed=applyBriefCorrection(changed,'incident_date','October 1st',view(changed).intakeBrief.hash);
+ changed=turn(changed,'Thanks.');assert.equal(changed.websiteClosing.complete,undefined);
+ changed=turn(changed,'Take care.','persona');assert.equal(changed.state,'ACTIVE');
+});
+test('courtesy does not suppress raw-speech cancellation or turn interruption into new permission',()=>{
+ let s=turn(wrap(recap(complete())),'Take care.','persona');
+ const established=structuredClone(s.websiteClosing.complete);
+ cancelWebsiteClose(s);s=turn(s,'You too.');
+ assert.equal(s.state,'ACTIVE');assert.equal(s.websiteClosing.farewellTurnId,undefined);
+ assert.deepEqual(s.websiteClosing.complete,established);
+ for(const interruption of ['Thanks, but wait.','Thank you, not yet.','Thanks, is that all?','Actually, it was October 1st.','five.']){
+  let pending=wrap(recap(complete()));pending=turn(pending,interruption);
+  assert.equal(pending.websiteClosing.complete,undefined,interruption);
+  pending=turn(pending,'Take care.','persona');assert.equal(pending.state,'ACTIVE',interruption);
+ }
+ const empty=turn(base(),'Thanks.');assert.equal(empty.websiteClosing.complete,undefined);
+ assert.equal(empty.providerRelease,undefined);assert.equal(empty.demoEmail,undefined);
 });
 test('completed recap may follow completeness, without forcing another completeness ritual',()=>{
  let s=complete();s=confirmBrief(s,view(s).intakeBrief.hash);s=wrap(s);s=recap(s);

@@ -8,5 +8,5 @@ export const metadata: Metadata = { title: 'James — legal pad demo', robots: {
 export default async function Page() {
     await connection();
     const launchReady = readAmyAnamSpineConfig().gatesOpen && Boolean(process.env.ANAM_API_KEY);
-    return <JamesCanary apiPath="/api/james-notepad" storageKey="james-notepad-demo-session-v1" notepadDemo launchReady={launchReady} emailAccessMode={readDemoAccessMode()} />;
+    return <JamesCanary apiPath="/api/james-notepad" storageKey="james-notepad-session-v2" notepadDemo launchReady={launchReady} emailAccessMode={readDemoAccessMode()} />;
 }

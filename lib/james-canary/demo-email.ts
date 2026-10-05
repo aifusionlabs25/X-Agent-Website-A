@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { brief, readiness, sha } from './state.ts';
 import type { Session } from './state.ts';
-import { instructionLeakageSuspected } from './speech-quality.ts';
+import { instructionLeakageSuspected, candidateInstructionLeakageSuspected } from './speech-quality.ts';
 import { structuredBriefView } from './structured-brief.ts';
 
 export const INTERNAL_DEMO_RECIPIENT = 'aifusionlabs@gmail.com';
@@ -121,7 +121,9 @@ export function prepareDemoMessages(session: Session, now = Date.now(), env: Env
     const structured = structuredBriefView(session);
     if (authorization.accessMode === 'visitor' && !structured) throw new Error('Confirmed structured intake brief required');
     if (structured && (structured.phase !== 'CONFIRMED' || structured.missing.length)) throw new Error('Review and confirm the complete current intake brief before preparing email');
-    if (instructionLeakageSuspected(session.turns)) throw new Error('Possible instruction leakage: review this conversation before emailing summaries');
+    if (session.websiteClosing?.runtimeOwned
+        ? candidateInstructionLeakageSuspected(session.turns):instructionLeakageSuspected(session.turns))
+        throw new Error('Possible instruction leakage: review this conversation before emailing summaries');
     const email = session.intake.facts.find(f => f.field === 'primary_email' && f.status === 'VISITOR_CONFIRMED');
     if (!email || session.intake.emailCandidate || session.intake.declined.includes('primary_email')) throw new Error('Caller email must be explicitly confirmed');
     const callerAddress = address(email.value);

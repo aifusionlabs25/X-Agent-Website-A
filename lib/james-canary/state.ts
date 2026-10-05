@@ -1,17 +1,19 @@
 import { createHash } from 'node:crypto';
 import type { DemoEmailState } from './demo-email.ts';
-import { instructionLeakageSuspected } from './speech-quality.ts';
+import { instructionLeakageSuspected, candidateInstructionLeakageSuspected } from './speech-quality.ts';
 import { reconcileStructuredTurn, structuredBriefView, syncBriefWorkflow, confirmBrief, BRIEF_REVIEW_INVITATION } from './structured-brief.ts';
 import type { BriefSlot, BriefWorkflow } from './structured-brief.ts';
 import { trackWebsiteClose } from './closing.ts';
+import { repairCandidateIntake } from './candidate-intake.ts';
 import type { WebsiteClosing } from './closing.ts';
+import type { RuntimeBinding } from './runtime-session.ts';
 
 export const PERSONA_ID = 'ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d';
 export const CURRENT_JAMES_PERSONA_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
 export const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 export type Turn = { id: string; role: 'user' | 'persona'; content: string };
 export type Field = 'visitor_preferred_identifier' | 'primary_phone' | 'primary_email' | 'alternate_email'
-    | 'visitor_reported_reason' | 'material_facts' | 'event_location' | 'relevant_dates_events'
+    | 'visitor_reported_reason' | 'material_facts' | 'event_location' | 'visitor_location' | 'relevant_dates_events'
     | 'known_documents_as_reported' | 'symptoms_treatment' | 'insurance_details' | 'client_questions'
     | 'uncertainties' | 'requested_outcome' | 'requested_next_step' | 'client_reported_urgency' | 'contractor_contact';
 export type CommunicationAct='CONTACT_REPORTED'|'REFUND_REQUEST_REPORTED'|'NO_RESPONSE_REPORTED'|'EXPLANATION_REPORTED'|'NOT_CONTACTED';
@@ -38,6 +40,7 @@ export type Session = {
     demoEmail?: DemoEmailState;
     intakeBrief?: BriefWorkflow;
     websiteClosing?: WebsiteClosing;
+    runtimeBinding?: RuntimeBinding;
     email?: { status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; snapshotHash: string; subject: string; bodyHash: string; reservedAt: string; messageId?: string; error?: string };
 };
 export function emptyIntake(): Intake { return { facts: [], history: [], declined: [], handoff: 'NOT_REQUESTED' }; }
@@ -190,11 +193,15 @@ function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake
         if (!remaining) continue;
         // Brief answers to a specific contact question retain their original span.
         const answer=clause.replace(/^(?:(?:um|uh|erm|well|sure|okay|yes)[,.! ]+)*(?:(?:it['’]s|it is)\s+)?/i,'').replace(/[.!?]$/,'').trim();
-        if (/\?/.test(previousAssistant)&&/\bname\b/i.test(previousAssistant)&&/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(answer)) {
+        // A compound name/place question cannot disambiguate a bare proper noun.
+        // Explicit field markers below still own their value in that context.
+        const nameQuestion=/\?/.test(previousAssistant)&&/\bname\b/i.test(previousAssistant)
+            && !/\b(?:where|location|which city)\b/i.test(previousAssistant);
+        if (nameQuestion&&/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(answer)) {
             add('visitor_preferred_identifier',answer,answer);continue;
         }
-        const name = /\b(?:[Mm]y name is|[Tt]his is|I am|I'm|I’m)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})(?=[,.;!]|$)/.exec(clause);
-        const nameAnswer = /\bname\b.*\?/i.test(previousAssistant) && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}[.!]?$/.test(clause);
+        const name = /\b(?:(?:[Mm]y )?(?:[Ff]ull )?[Nn]ame(?: is|['’]s)|[Tt]his is|I am|I'm|I’m)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})(?=[,.;!]|$)/.exec(clause);
+        const nameAnswer = nameQuestion && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}[.!]?$/.test(clause);
         if (name || nameAnswer) {
             const v = name ? name[1] : clause.replace(/[.!]$/,''); add('visitor_preferred_identifier',v,v);
             remaining = remaining.replace(name ? name[0] : clause,'').replace(/^[,;\s]+/,'');
@@ -203,7 +210,7 @@ function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake
         if (phone && (/\b(?:my|phone|number|reach me|call me)\b/i.test(remaining) || /phone|number/i.test(previousAssistant))) {
             const digits = phone[0].replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');
             add('primary_phone', digits, phone[0]);
-            remaining = remaining.replace(phone[0],'').replace(/^(?:and\s+)?(?:my\s+)?(?:phone(?: number)?|number)\s*(?:is|:)?\s*/i,'').trim();
+            remaining = remaining.replace(phone[0],'').replace(/^(?:and\s+)?(?:my\s+)?(?:phones?(?: number)?|number)\s*(?:is|['’]s|:)?\s*/i,'').trim();
         }
         // Contact extraction may leave only sentence punctuation. It is not an
         // uncertain email answer even when the preceding question offered email.
@@ -265,12 +272,14 @@ function ingestFacts(intake: Intake, turn: Turn, previousAssistant = ''): Intake
         }
         const uncertain = classifyAnswer(remaining)==='UNKNOWN'||/\b(?:not sure|I think|might|maybe|unsure|unclear)\b/i.test(remaining);
         const place = /\b(?:in|at|near)\s+([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*){0,2})\b/.exec(remaining);
-        const time = /\b(?:on\s+)?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?|(?:this|last|next)\s+(?:morning|afternoon|evening|night|week|month|year)|in\s+(?:\d+|one|two|three|four|five|six|seven)\s+(?:days?|weeks?|months?)|today|yesterday|tomorrow|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i.exec(remaining);
+        const time = /\b(?:on\s+)?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?|(?:this|last|next)\s+(?:morning|afternoon|evening|night|week|month|year)|in\s+(?:\d+|one|two|three|four|five|six|seven)\s+(?:days?|weeks?|months?)|tonight|today|yesterday|tomorrow|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i.exec(remaining);
         const parts = [place,time].filter((m): m is RegExpExecArray => Boolean(m)).sort((a,b)=>a.index-b.index);
         const residues: string[]=[]; let cursor=0;
         for (const m of parts) { const v=remaining.slice(cursor,m.index).replace(/^[ ,.;!?]+|[ ,.;!?]+$/g,''); if(v)residues.push(v); cursor=m.index+m[0].length; }
         const tail=remaining.slice(cursor).replace(/^[ ,.;!?]+|[ ,.;!?]+$/g,''); if(tail)residues.push(tail);
-        if (parts.length && residues.every(r=>r.split(/\s+/).length>=2)) {
+        // A known matter can be a one-word sibling ("DUI tonight in Mesa").
+        // Keep other short residues unresolved, including a negating "not".
+        if (parts.length && residues.every(r=>r.split(/\s+/).length>=2 || matterWords.test(r))) {
             if(place)add('event_location',place[1],place[1],uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED'); if(time)add('relevant_dates_events',time[1],time[1],uncertain?'NEEDS_CLARIFICATION':'VISITOR_REPORTED');
             remaining=residues.join(' ');
             for(const r of residues) classify(r,uncertain);
@@ -550,6 +559,7 @@ export function applyTurn(session: Session, turn: Turn): Session {
         const prior=next.turns.slice().reverse().find(t=>t.role==='persona')?.content||'';
         next.intake=ingest(next.intake,turn,prior);
         if(next.intakeBrief) next.intake=reconcileStructuredTurn(session.intake,next.intake,turn,prior);
+        if(next.websiteClosing?.runtimeOwned) next.intake=repairCandidateIntake(session.intake,next.intake,turn,prior);
         if(!next.websiteClosing&&endIntent(turn.content))next.state='CLOSING_PENDING';
     } else {
         const intent=questionIntent(turn.content);
@@ -591,6 +601,7 @@ export function view(session: Session) {
         handoff:session.intake.handoff,email_status:session.email?.status||'INACTIVE_NOT_SENT',
         email_receipt:session.email?.messageId||null,owner_test:Boolean(session.ownerTest),
         demo_email_authorized:Boolean(session.demoEmail),demo_email_status:demoStatus,
-        speech_review_required:instructionLeakageSuspected(session.turns),
+        speech_review_required:session.websiteClosing?.runtimeOwned
+            ? candidateInstructionLeakageSuspected(session.turns):instructionLeakageSuspected(session.turns),
         external_actions:session.email?.status==='SENT'?[{type:'OWNER_TEST_EMAIL',recipient:'aifusionlabs@gmail.com',receipt:session.email.messageId}]:demoStatus.filter(d=>d.status==='SENT').map(d=>({type:'DEMO_EMAIL',recipient:d.recipient})) };
 }

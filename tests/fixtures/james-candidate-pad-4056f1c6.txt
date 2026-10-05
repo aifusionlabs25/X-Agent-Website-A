@@ -1,0 +1,54 @@
+P|Hi, this is James with Knowles Law Firm. What's going on today?
+U|Hi James.
+U|I was in a car accident last night in Scottsdale. I'm a little sore today and I'm not sure what to do.
+P|I’m sorry it happened last night. If your soreness is getting worse or you have serious symptoms, please call 9-1-1 or go to urgent/emergency care now.
+P|I’m still here. Take your time—what would be most helpful for you right now?
+U|I'm not sure whether to call insurance first or go get checked out.
+P|I can’t tell you which one to do first. A lot of people find it useful to get checked out if you’re sore, and also note the basic accident details while they’re fresh. Before I ask a couple more intake questions, did you already speak with the other driver or their insurance company?
+U|I spoke to the other driver at the scene. They apologize. I haven't talked to any insurance yet.
+P|Thanks—that’s helpful. Did anyone call the police, or was it just an exchange of information at the scene?
+U|The police came to the scene.
+P|Got it. Did they give you a police report number or any paperwork before they left?
+U|Not the number. They said it would be as eight of all eight.
+P|I’m not sure what “as eight of all eight” means. Did they say the report would be available online, available later, or did they give you a different number or location?
+U|Sorry, later.
+P|Thanks for clarifying—so the police said the report would be available later. Did the officer give you a report number, case number, or badge number to help locate it?
+U|No, nothing yet.
+P|Got it, no report number yet. Do you know whether the police made any arrests or wrote any citations at the scene?
+U|I don't know.
+P|That’s okay. Do you know whether the police said anyone was cited or arrested?
+U|No, they didn't say anything about that.
+P|Understood. Did either driver exchange insurance information at the scene?
+U|Yeah, we swap insurance cards.
+P|Thanks. Did either driver take photos of the vehicles, the scene, or any visible injuries?
+U|I took some photos of the cars.
+P|That’s useful to have. Have you already noticed any vehicle damage or warnings, and do you know whether the other driver’s car is also damaged?
+U|My front bumper's damaged. The other car had some rear damage.
+P|Thanks—that’s helpful. Since you’re sore, have you already sought medical care, or are you still deciding whether to get checked out?
+U|still deciding
+P|That’s a personal decision. If you do decide to get checked out, keeping a record of what you tell the medical provider and what they document can be useful. For the intake, what is your main concern right now—getting advice about the injury, the vehicle damage, insurance, or something else?
+U|insurance mainly.
+P|Got it, insurance is the main concern. To make sure the firm has enough context, do you have the other driver’s insurance company name or policy number from the card you exchanged?
+U|It's on the card but I don't have it in front of me.
+P|That’s fine—you can add it later. For the intake, do you know the other driver’s name, or maybe their phone number?
+U|I don't remember the name. It's on the card. I don't have it right here.
+P|No problem. The insurance card should have that info when you have it. Do you know the date and approximate time of the accident, or the exact intersection or general area in Scottsdale?
+U|It was around 8.30pm last night, near Old Town.
+P|Thanks—around 8:30 p.m. near Old Town Scottsdale. I have a good sense of the accident and your insurance concern. So the firm can follow up through its intake process, may I get your full name, a good callback number, and email address?
+U|Alex Rivera.
+U|602 555 0138 and alex.robera@email.com
+P|Thanks, Alex. Just to confirm the email: alex.robera@email.com—did you mean “robera” or “rivera”?
+U|Rosara, R-I-C-E-R-A.
+P|Thanks for spelling it. Let me make sure I have it right: alex.ricera@email.com?
+U|Yes.
+U|That's right.
+P|Thanks, Alex. Before I wrap up, I want to make sure I have the key points right: - You were in a car accident in Scottsdale near Old Town last night around 8:30 p.m. - Police responded to the scene, but you didn't receive a report number at the time. - You and the other driver exchanged insurance information, and you took photos of the vehicles. - Your front bumper is damaged, and the other car had rear damage. - You're a little sore but haven't decided whether to seek medical care yet. - Your main concern is the insurance aspect of the accident. - I have your callback number as 602-555-0138 and your email as alex.ricera@email.com. Have I got that right?
+U|Yep, that's right.
+P|Great. Before we wrap up, is there anything else you want to make sure I have for the firm?
+U|Nope, that's everything.
+P|Thanks, Alex. I have the information you shared captured for the firm's intake. Take care and I hope you feel better soon.
+P|I’m still here. Is there anything else you’d like to add before we finish?
+U|No, that's everything.
+P|Thanks again, Alex. Take care.
+U|Thanks.
+P|You’re welcome

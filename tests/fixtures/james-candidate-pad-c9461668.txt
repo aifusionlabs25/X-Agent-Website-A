@@ -1,0 +1,40 @@
+P|Hi, this is James with Knowles Law Firm. What's going on today?
+U|Hi, I was rear-ended in Mesa on September 20th. We're safe, but I'd like to know what the firm needs.
+P|Thanks for the details. Since that’s a personal-injury claim rather than a DUI or criminal matter, could you tell me your full name, a callback number, and the best email for the firm to reach you?
+U|Show.
+U|It's Rob.
+U|I'd prefer the number and email later.
+P|That’s fine, Rob. We can get your callback number and email before we wrap up. Right now, could you tell me a little about what happened on September 20th in Mesa, such as where the collision occurred and whether anyone was injured?
+U|It was at a red light.
+U|I was stopped and got hit from behind.
+U|I went to urgent care later.
+U|for a check.
+P|I’m sorry, I’m not sure what you mean by “for a check.” Could you clarify what you’re referring to?
+U|I mean, I've visited urgent care to get checked out medically.
+P|I’m sorry you were hurt. Did urgent care diagnose any specific injuries, and are you continuing treatment or following up with a doctor?
+U|They said it was a strain and I'm monitoring it.
+U|No specialist yet.
+P|Thanks, Rob. Do you have the other driver’s insurance company name or policy number? If not, can you tell me what information you have about their insurance?
+U|I don't have the policy number.
+U|The insurer called me.
+U|I have the cool look.
+P|I’m sorry, I’m not sure what you mean by “the cool look.” Could you clarify what information you have about the other driver or their insurance?
+U|Sorry, I meant I have the cool log from their insurer.
+P|I’m sorry, I’m not sure what a “cool log” is. Do you mean a claim number, a letter, or some other document from the other driver’s insurer?
+U|No documents yet, just a phone call from them. That's what I have in my call log.
+U|Exactly.
+P|Got it. To make sure the firm has a complete picture, what are your main concerns or what kind of help are you looking for?
+U|I just want to understand my options and what the next steps.
+P|That makes sense. For the intake, the firm can gather the basic collision and injury details so they can evaluate your options; I can’t advise on those myself. Before we wrap, what’s the best callback number and email for the firm to reach you?
+U|I'll provide that directly to the intake team.
+P|I’m sorry, I’m James, the intake specialist. Could you give me your callback number and email now so I can record it?
+U|Not at the moment.
+U|I'd rather wait until I speak with the firm directly.
+P|I respect that. I can’t book a callback without a number, but I can record the collision details and your request to provide contact information directly when you speak with the firm. Is there anything else about the accident or injuries you’d like me to note?
+U|No, that's it for now.
+P|Thanks, Rob. I’ve noted the September 20th rear-end collision in Mesa, the urgent care visit for a strain, the insurer phone call, and that you’d like to provide your contact information directly to the firm. If you change your mind and want to give me a callback number and email now, I can add them to your intake.
+U|Understood. Thank you.
+P|You’re welcome, Rob. I have the information you shared captured.
+P|It looks like you’ve been quiet for a moment. When you’re ready, just say something to continue.
+P|I’m still here. When you’re ready, just let me know.
+P|I’ll disconnect you in 5 seconds. Please say something now if you want to keep the call open.

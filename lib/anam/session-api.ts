@@ -25,6 +25,8 @@ type SessionApiOptions = {
     pollDelaysMs?: number[];
     now?: () => number;
     emptyTranscriptGraceStartedAt?: number;
+    // Explicit opt-in for isolated runtime-derived James sessions only.
+    verifyMetadata?: (metadata: AnamSessionMetadata) => void;
 };
 
 export type AnamSessionMetadata = {
@@ -377,7 +379,8 @@ export async function fetchCompletedAnamTranscript(
         try {
             const metadata = await fetchAnamSessionMetadata(sessionId, options);
             observedMetadata = metadata;
-            verifyAnamSessionMetadata(metadata, launch);
+            if(options.verifyMetadata)options.verifyMetadata(metadata);
+            else verifyAnamSessionMetadata(metadata, launch);
 
             if (!metadata.endTime && !metadata.exitStatus) {
                 finalEmptyObservation = null;
