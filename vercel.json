@@ -8,10 +8,6 @@
     {
       "path": "/api/anam/session/recover?slot=b",
       "schedule": "0 22 * * *"
-    },
-    {
-      "path": "/api/james-notepad/recover",
-      "schedule": "0 11,23 * * *"
     }
   ]
 }

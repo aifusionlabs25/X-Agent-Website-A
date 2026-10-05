@@ -18,10 +18,11 @@ const COOKIE='xagent_james_canary';
 const TTL=24*60*60;
 const PREFIX='xagent:james:canary:v1:';
 function config() { const c=readAmyAnamSpineConfig(); if(!c.gatesOpen)throw new Error('Hosted session storage is unavailable'); return c; }
-export function createJamesServer(options: {personaId?:string;cookie?:string;prefix?:string;allowDemoEmail?:boolean;runtimeClose?:boolean}={}) {
+export function createJamesServer(options: {personaId?:string;cookie?:string;prefix?:string;allowDemoEmail?:boolean;allowEmail?:boolean;runtimeClose?:boolean}={}) {
 const PERSONA_ID=options.personaId||CANARY_PERSONA_ID;
 if(options.runtimeClose&&PERSONA_ID!==RUNTIME_CANDIDATE_ID)throw new Error('Runtime close is candidate-only');
 const cookie=options.cookie||COOKIE, prefix=options.prefix||PREFIX;
+const emailAllowed=Boolean(options.allowDemoEmail&&options.allowEmail!==false);
 function secret() { return createHmac('sha256',config().signingSecret).update(prefix).digest('hex'); }
 function browser(req: Request) {
     const headers=new Headers(req.headers);
@@ -47,8 +48,8 @@ async function save(previous:Session|null,next:Session) {
         return;
     }
     const guard="local old=redis.call('GET',KEYS[1]); if ARGV[1]=='-1' then if old then return 0 end else if not old or cjson.decode(old).revision~=tonumber(ARGV[1]) then return 0 end end; redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[3]); ";
-    // Candidate sessions are indexed in the same CAS write, so a browser loss
-    // cannot leave a bound provider session invisible to scheduled recovery.
+    // Candidate sessions are indexed in the same CAS write for optional recovery.
+    // The James-only public release does not expose or schedule that endpoint.
     const script=guard+"if ARGV[4]=='track' then redis.call('ZADD',KEYS[2],ARGV[5],ARGV[6]); redis.call('EXPIRE',KEYS[2],ARGV[7]) elseif ARGV[4]=='remove' then redis.call('ZREM',KEYS[2],ARGV[6]) end; return 1";
     const mode=next.providerId?(next.state==='CLOSED'?'remove':'track'):'none';
     const result=await redis(['EVAL',script,2,prefix+next.id,prefix+'reconcile:index',previous?.revision??-1,value,TTL,mode,Date.parse(next.createdAt),next.id,TTL+3600]);
@@ -89,7 +90,7 @@ async function post(req:Request) {
         if(!isTrustedBrowserOrigin(req))return json({error:'Request origin is not allowed'},403);
         const body=await readBoundedJsonObject(req,20*1024);
         if(body.action==='demo-email-preflight'){
-            if(!options.allowDemoEmail)throw new Error('Demo email is unavailable on this surface');
+            if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
             const grant=verifyDemoGrant(req.headers.get('x-james-demo-access'));
             return json({ready:true,...await preflightDemoTransport(),accessMode:grant.accessMode,
                 maxSessions:grant.accessMode==='reusable'?null:1,maxEmails:2,maxEmailsPerSession:2,retries:0});
@@ -105,8 +106,8 @@ async function post(req:Request) {
             const grant=ownerToken?verifyOwnerGrant(ownerToken):null;
             if(grant)emailConfiguration();
             const demoToken=req.headers.get('x-james-demo-access');
-            if(demoToken&&!options.allowDemoEmail)throw new Error('Demo email is unavailable on this surface');
-            const visitorEmail=Boolean(options.allowDemoEmail&&process.env.JAMES_DEMO_EMAIL_ENABLED==='true'&&readDemoAccessMode()==='visitor');
+            if(demoToken&&!emailAllowed)throw new Error('Demo email is unavailable on this surface');
+            const visitorEmail=Boolean(emailAllowed&&process.env.JAMES_DEMO_EMAIL_ENABLED==='true'&&readDemoAccessMode()==='visitor');
             if(visitorEmail&&demoToken)throw new Error('No email access code is needed; start without an operator code');
             const demoGrant=demoToken?verifyDemoGrant(demoToken):null;
             const rate=await consumeAmyAnamDistributedRateLimit({fingerprint:requestFingerprint(req,prefix+'start'),limit:5,windowSeconds:600});
@@ -148,13 +149,13 @@ async function post(req:Request) {
         }
         const current=await load(req,body.id); let next=structuredClone(current);
         if(body.action==='preview-demo-email'){
-            if(!options.allowDemoEmail)throw new Error('Demo email is unavailable on this surface');
+            if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
             const prepared=prepareDemoMessages(current);
             return json({snapshotHash:prepared.snapshotHash,callerAddress:prepared.callerAddress,sender:prepared.sender,replyTo:prepared.replyTo,
                 messages:[{lane:'internal',to:prepared.internal.to,text:prepared.internal.text},{lane:'caller',to:prepared.caller.to,text:prepared.caller.text}]});
         }
         if(body.action==='send-demo-email'){
-            if(!options.allowDemoEmail)throw new Error('Demo email is unavailable on this surface');
+            if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
             next=await sendDemoSummaries(current,{snapshotHash:body.snapshotHash,callerAddress:body.callerAddress,approved:body.approved},
                 {save,stamp:receipt,reserveAllowance:callerAddress=>reserveVisitorEmailAllowance(callerAddress,{redis,prefix})});
             return json(view(next));

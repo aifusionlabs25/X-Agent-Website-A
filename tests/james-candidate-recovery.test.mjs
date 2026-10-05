@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {existsSync,readFileSync} from 'node:fs';
 import {createHmac} from 'node:crypto';
 import {emptyIntake} from '../lib/james-canary/state.ts';
 import {completeVerifiedSession,seal,unseal} from '../lib/james-canary/server.ts';
 import {recover} from '../lib/james-canary/prompt-candidate-server.ts';
+import {get as publicGet} from '../lib/james-canary/public-server.ts';
+import {createAmyAnamBrowserSessionWithSecret} from '../lib/anam/session-spine.ts';
 import {candidateRuntimeConfig} from '../lib/james-canary/runtime-session.ts';
 
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/james-candidate-runtime.json',import.meta.url),'utf8'));
@@ -183,16 +185,81 @@ test('bounded recovery rotates pending sessions so a later provider-ended sessio
     }
 });
 
-test('public James recovery is scheduled while the legacy cron schedule remains intact',()=>{
+test('same-browser return reconciles an ended public James session once without a recovery route',async()=>{
+    const oldEnv={...process.env},oldFetch=globalThis.fetch;
+    const prefix='xagent:james:notepad:v2:';
+    const signingSecret='test-only-session-signing-secret'.repeat(3);
+    Object.assign(process.env,{AMY_ANAM_SESSION_SPINE_ENABLED:'true',AMY_ANAM_SESSION_SPINE_KILL_SWITCH:'false',
+        AMY_ANAM_SESSION_SECRET:signingSecret,AMY_ANAM_REDIS_REST_URL:'https://redis.invalid',
+        AMY_ANAM_REDIS_REST_TOKEN:'fake',ANAM_API_KEY:'fake'});
+    const key=createHmac('sha256',signingSecret).update(prefix).digest('hex');
+    const owner=createAmyAnamBrowserSessionWithSecret(key);
+    const {binding}=candidateRuntimeConfig(structuredClone(fixture.candidate));
+    const session={...base(),browserId:owner.session.id,clientLabel:'xagent-james-notepad:'+base().id,
+        runtimeBinding:binding};
+    const stored=new Map([[prefix+session.id,seal(session,key,prefix)]]);
+    const config=structuredClone(fixture.resolvedConfig);
+    config.llmConfig={id:binding.llmId,modelName:'qwen/qwen3.6-27b'};
+    let providerReads=0;
+    globalThis.fetch=async(url,options={})=>{
+        const target=String(url),cmd=options.body?JSON.parse(options.body):null;
+        if(target==='https://redis.invalid'){
+            if(cmd[0]==='GET')return Response.json({result:stored.get(cmd[1])??null});
+            if(cmd[0]==='EVAL'){
+                assert.equal(JSON.parse(stored.get(cmd[3])).revision,cmd[5]);
+                stored.set(cmd[3],cmd[6]);
+                return Response.json({result:1});
+            }
+        }
+        if(target===`https://api.anam.ai/v1/sessions/${providerId}`){
+            providerReads++;
+            return Response.json({id:providerId,personaId:null,clientLabel:session.clientLabel,
+                startTime:session.createdAt,endTime:'2026-10-03T20:01:00Z',exitStatus:'OK',personaConfig:config});
+        }
+        if(target===`https://api.anam.ai/v1/sessions/${providerId}/transcript`)
+            return Response.json({sessionId:providerId,transcriptsEnabled:true,totalMessages:1,
+                endTime:'2026-10-03T20:01:00Z',messages:[{role:'user',message:'I was in an accident.'}]});
+        throw new Error('Unexpected offline target '+target);
+    };
+    const request=()=>new Request(`https://example.invalid/api/james-notepad?id=${session.id}`,
+        {headers:{cookie:'xagent_james_notepad_v2='+owner.token}});
+    try{
+        assert.equal((await publicGet(request())).status,200);
+        const closed=unseal(stored.get(prefix+session.id),session.id,key,candidateId,prefix);
+        assert.equal(closed.state,'CLOSED');
+        assert.equal(closed.websiteClosing.closeOrigin,'PROVIDER_ENDED_RECOVERY');
+        assert.equal(closed.providerRelease.endTime,'2026-10-03T20:01:00Z');
+        assert.equal((await publicGet(request())).status,200);
+        assert.equal(providerReads,1,'the second browser return reads the saved close without re-finalizing');
+    }finally{
+        globalThis.fetch=oldFetch;
+        for(const key of Object.keys(process.env))if(!(key in oldEnv))delete process.env[key];
+        Object.assign(process.env,oldEnv);
+    }
+});
+
+test('public James has browser-return recovery only; Amy and Dani cron entries remain intact',()=>{
     const schedule=JSON.parse(readFileSync(new URL('../vercel.json',import.meta.url),'utf8'));
     assert.deepEqual(schedule.crons.map(c=>c.path),[
-        '/api/anam/session/recover?slot=a','/api/anam/session/recover?slot=b','/api/james-notepad/recover']);
-    const route=readFileSync(new URL('../app/api/james-notepad/recover/route.ts',import.meta.url),'utf8');
-    assert.match(route,/public-server/);
+        '/api/anam/session/recover?slot=a','/api/anam/session/recover?slot=b']);
+    assert.deepEqual(schedule.crons.map(c=>c.schedule),['0 10 * * *','0 22 * * *']);
+    assert.equal(existsSync(new URL('../app/api/james-notepad/recover/route.ts',import.meta.url)),false);
     const candidate=readFileSync(new URL('../lib/james-canary/prompt-candidate-server.ts',import.meta.url),'utf8');
     assert.match(candidate,/runtimeClose: true/);
     const publicServer=readFileSync(new URL('../lib/james-canary/public-server.ts',import.meta.url),'utf8');
     assert.match(publicServer,/runtimeClose: true/);
+    assert.match(publicServer,/export const \{ get, post \}/);
+    const server=readFileSync(new URL('../lib/james-canary/server.ts',import.meta.url),'utf8');
+    assert.match(server,/current=await reconcileProviderEnded\(current\)/);
     const legacy=readFileSync(new URL('../lib/james-canary/demo-server.ts',import.meta.url),'utf8');
     assert.doesNotMatch(legacy,/runtimeClose: true/);
+});
+
+test('24-hour saved-session recovery limit does not gate public James launch',()=>{
+    const server=readFileSync(new URL('../lib/james-canary/server.ts',import.meta.url),'utf8');
+    const page=readFileSync(new URL('../app/demo/james-notepad/page.tsx',import.meta.url),'utf8');
+    assert.match(server,/const TTL=24\*60\*60/);
+    assert.match(server,/redis\(\['EVAL',script,2,prefix\+next\.id,[^\n]*TTL/);
+    assert.match(page,/const launchReady = readAmyAnamSpineConfig\(\)\.gatesOpen && Boolean\(process\.env\.ANAM_API_KEY\)/);
+    assert.doesNotMatch(page,/\bTTL\b|expiresAt/);
 });

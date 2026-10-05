@@ -39,6 +39,7 @@ test('public James uses the bounded runtime without exposing candidate web route
     assert.match(productionServer, /runtimeClose: true/);
     assert.match(productionServer, /xagent_james_notepad_v2/);
     assert.match(productionServer, /xagent:james:notepad:v2:/);
+    assert.match(productionServer, /allowEmail: false/);
     assert.match(legacyServer, /personaId: CURRENT_JAMES_PERSONA_ID/);
     assert.match(legacyServer, /xagent:james:notepad-demo:v1:/);
 });
@@ -53,7 +54,12 @@ test('public launch is server-bound to the bounded persona and cannot read legac
         AMY_ANAM_REDIS_REST_URL: 'https://redis.invalid',
         AMY_ANAM_REDIS_REST_TOKEN: 'fake',
         ANAM_API_KEY: 'fake',
-        JAMES_DEMO_EMAIL_ENABLED: 'false',
+        JAMES_DEMO_EMAIL_ENABLED: 'true',
+        JAMES_DEMO_EMAIL_ACCESS_MODE: 'visitor',
+        JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT: '1',
+        JAMES_AGENTMAIL_API_KEY: 'fake-key-long-enough-for-tests',
+        JAMES_AGENTMAIL_ADDRESS: 'james-demo@agentmail.to',
+        JAMES_DEMO_REPLY_TO: 'owner@example.test',
     });
     const db = new Map();
     const providerCalls = [];
@@ -103,8 +109,19 @@ test('public launch is server-bound to the bounded persona and cannot read legac
         assert.equal(response.status, 200, JSON.stringify(launched));
         assert.equal(launched.personaId, CANDIDATE_ID);
         assert.equal(launched.sessionToken, 'fake-session-token');
+        assert.equal(launched.demo_email_authorized, false);
+        assert.ok(launched.intakeBrief, 'notes-only launch must retain the structured brief');
         const cookie = response.headers.get('set-cookie').split(';')[0];
         assert.match(cookie, /^xagent_james_notepad_v2=/);
+        for (const action of ['demo-email-preflight', 'preview-demo-email', 'send-demo-email']) {
+            const blocked = await post(new Request('https://demo.invalid/api/james-notepad', {
+                method: 'POST',
+                headers: { origin: 'https://demo.invalid', 'Content-Type': 'application/json', cookie },
+                body: JSON.stringify({ action, id: launched.id }),
+            }));
+            assert.equal(blocked.status, 400);
+            assert.match((await blocked.json()).error, /Demo email is unavailable on this surface/);
+        }
         assert.ok([...db.keys()].every(key => key.startsWith('xagent:james:notepad:v2:')));
         assert.deepEqual(providerCalls, [
             `https://api.anam.ai/v1/personas/${CANDIDATE_ID}`,
