@@ -41,6 +41,23 @@ test('first substantive fact reveals once; greetings and debris do not; hide sur
     s=turn(s,'I cannot use the kitchen sink.');assert.equal(revealForFirstFact(pad,true).open,false);
     assert.equal(togglePad(pad).open,true);assert.equal(initialPadVisibility().open,false);
 });
+test('public pad stays minimized for restored notes and opener updates; only a saved visitor fact reveals it',()=>{
+    let pad=initialPadVisibility();
+    pad=revealForFirstFact(pad,true,false); // Restoring an old brief is not a new reply.
+    assert.equal(pad.open,false);assert.equal(pad.revealed,false);
+    pad=revealForFirstFact(pad,true,false); // Bind/opener/persona updates cannot choose layout.
+    assert.equal(pad.open,false);
+    pad=revealForFirstFact(pad,false,true); // A greeting with no note still stays minimized.
+    assert.equal(pad.open,false);
+    pad=revealForFirstFact(pad,true,true);
+    assert.equal(pad.open,true);assert.equal(pad.revealed,true);
+    pad=togglePad(pad);assert.equal(revealForFirstFact(pad,true,true).open,false);
+    assert.equal(initialPadVisibility().open,false); // Every fresh call resets presentation.
+    const client=readFileSync(new URL('../components/james/JamesCanary.tsx',import.meta.url),'utf8');
+    assert.match(client,/render\(s,turn\.role==='user'\)/);
+    assert.match(client,/!publicPresentation\|\|fromFinalizedVisitor/);
+    assert.match(client,/if\(!publicPresentation\)try\{const choice=JSON\.parse/);
+});
 test('brief is named fields, not chronological speech; no duplicate issue, spelling, or control chatter',()=>{
     let s=complete();
     for(const text of ['Go on.','We need to slow down a bit.','down',"I'm holding the line as Dana.","that's all correct"])s=turn(s,text);

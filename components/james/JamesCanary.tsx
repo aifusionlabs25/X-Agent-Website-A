@@ -25,11 +25,11 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     const closeEpoch=useRef(0),closeInFlight=useRef(false),speechStarts=useRef(new Map<string,number>());
     const runtimeAttempt=useRef<RuntimeCloseAttempt|null>(null);
     const audio=useRef<{context:AudioContext;source:MediaStreamAudioSourceNode;analyser:AnalyserNode;quietSince:number|null;lastSoundAt:number}|null>(null);
-    const render=useCallback((s:State)=>{
+    const render=useCallback((s:State,fromFinalizedVisitor=false)=>{
         latest.current=s;setState(s);
-        if(notepadDemo)setPadVisibility(v=>revealForFirstFact(v,Boolean(s.intakeBrief?.hasSubstantiveFact)));
+        if(notepadDemo)setPadVisibility(v=>revealForFirstFact(v,Boolean(s.intakeBrief?.hasSubstantiveFact),!publicPresentation||fromFinalizedVisitor));
         setPreview(null);setApproved(false);
-    },[notepadDemo]);
+    },[notepadDemo,publicPresentation]);
     function changePad(){
         const next=togglePad(padVisibility);setPadVisibility(next);
         if(id.current&&!previewStates)try{localStorage.setItem(storageKey+'-pad',JSON.stringify({id:id.current,...next}));}catch{/* Visibility is local presentation only. */}
@@ -161,7 +161,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 if(failed.current)throw new Error('Prior finalized event did not persist');
                 // No late intake after a visitor ending; permit its one final assistant turn.
                 if(latest.current?.state==='CLOSING_PENDING'&&!latest.current.websiteClosing&&turn.role==='user')return;
-                const s=await api('turn',{turn,finalized:true});render(s);
+                const s=await api('turn',{turn,finalized:true});render(s,turn.role==='user');
                 scheduleInvitation();
                 if(s.websiteClosing?.runtimeOwned){
                     const departureId=runtimeDepartureToArm(turn,s.websiteClosing);
@@ -186,11 +186,11 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         }catch{/* Private/blocked storage must not crash the page. */}
         if(saved){id.current=saved;
             void fetch(apiPath+'?id='+encodeURIComponent(saved)).then(async r=>{const s=await r.json();if(!r.ok)throw new Error(s.error);render(s);
-                try{const choice=JSON.parse(localStorage.getItem(storageKey+'-pad')||'null');if(choice?.id===saved&&typeof choice.open==='boolean'&&typeof choice.revealed==='boolean'&&choice.manual===true)setPadVisibility(choice);}catch{/* Ignore malformed presentation preferences. */}
+                if(!publicPresentation)try{const choice=JSON.parse(localStorage.getItem(storageKey+'-pad')||'null');if(choice?.id===saved&&typeof choice.open==='boolean'&&typeof choice.revealed==='boolean'&&choice.manual===true)setPadVisibility(choice);}catch{/* Ignore malformed presentation preferences. */}
                 setNotice(s.state==='CLOSED'?'Saved closed session restored.':'Saved session restored. The media stream is not automatically reconnected.');}).catch(error=>setNotice(error.message));}
         return()=>{if(closeTimer.current)clearTimeout(closeTimer.current);if(audioMonitor.current)clearInterval(audioMonitor.current);if(invitationTimer.current)clearTimeout(invitationTimer.current);if(audio.current)void audio.current.context.close().catch(()=>{});if(client.current&&!stopped.current){stopped.current=true;void client.current.stopStreaming();}};
     // This effect restores once; mutable SDK lifecycle is held in refs.
-    },[apiPath,storageKey,clearSavedSessionOnLoad,previewStates,render]);
+    },[apiPath,storageKey,clearSavedSessionOnLoad,previewStates,render,publicPresentation]);
     async function start(){
         setBusy(true);setNotice('Connecting to the current James persona…');failed.current=false;stopped.current=false;closing.current=false;
         personaSpeaking.current=false;visitorSpeaking.current=false;
@@ -336,6 +336,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             </section>
             {padOpen&&<aside id="james-legal-pad" className={publicPresentation?styles.pad:'relative rounded-b-lg border-t-[14px] border-amber-800 bg-[#fff1a8] py-6 pl-12 pr-6 text-zinc-900 shadow-xl'} style={publicPresentation?undefined:{backgroundImage:'linear-gradient(90deg, transparent 35px, #df827966 35px, #df827966 37px, transparent 37px), repeating-linear-gradient(transparent 0px, transparent 27px, #b7a56b44 27px, #b7a56b44 28px)'}} aria-label="James legal pad">
                 <div className={publicPresentation?styles.padHeader:'mb-6 flex items-start justify-between gap-3'}><div><p className={publicPresentation?styles.padBrand:'text-[10px] uppercase tracking-[0.2em] text-amber-900'}>{publicPresentation?'Knowles Law Firm':'Knowles · demonstration intake'}</p><h2 className={publicPresentation?styles.padTitle:'mt-1 font-serif text-2xl'}>{publicPresentation?'James’s notes…':'James’s intake brief'}</h2></div><span className="rounded border border-amber-800/25 px-2 py-1 text-[10px] uppercase tracking-wider">{state?.intakeBrief?.phase==='CONFIRMED'?'Confirmed':state?.intakeBrief?.phase==='REVIEW'?'Review':'In progress'}</span></div>
+                <div className={publicPresentation?styles.padBody:undefined} tabIndex={publicPresentation?0:undefined} role={publicPresentation?'region':undefined} aria-label={publicPresentation?'Notes content':undefined}>
                 {(!publicPresentation||state?.intakeBrief?.phase==='REVIEW'||state?.intakeBrief?.phase==='CONFIRMED')&&<p className="mb-5 text-xs text-zinc-700">{state?.intakeBrief?.phase==='REVIEW'?'Please review these organized details. Tell James what needs changing, or edit a field below.':state?.intakeBrief?.phase==='CONFIRMED'?'You confirmed this version. Any new correction will require another review.':'Key details appear quietly as the intake progresses. This is a brief, not the conversation transcript.'}</p>}
                 {notepadDemo?<>
                     {!state?.intakeBrief?.hasSubstantiveFact&&<p className={publicPresentation?styles.emptyNotes:'py-8 font-serif italic text-zinc-600'}>{publicPresentation?'Your notes will appear here.':state&&!state.intakeBrief?'Start a new call for the structured intake brief.':'Waiting for your first intake detail…'}</p>}
@@ -353,6 +354,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 </>:state?.brief.map(section=><section key={section.title} className="mb-5"><h3 className="border-b border-amber-200 pb-1 text-xs font-bold tracking-widest">{section.title}</h3><ul className="mt-2 space-y-2">{section.items.map((item,i)=><li key={i} className="text-sm">{item.label&&<span className="font-semibold">{item.label.replaceAll('_',' ')}: </span>}{item.text}</li>)}</ul></section>)}
                 {!publicPresentation&&<><p className="mt-5 text-xs text-zinc-600">Visitor-reported information only. Nothing submitted to Knowles; firm acceptance, review and follow-up are not confirmed. {state?.providerRelease?'Provider transcript verified separately.':''}</p>
                 {state&&<p className="border-t border-amber-300 pt-3 text-xs">Receipt revision {state.revision} · {state.stateHash.slice(0,12)} · {state.external_actions.length?'Demo email activity shown separately — nothing submitted to Knowles':'UNSUBMITTED · No external actions'}</p>}</>}
+                </div>
             </aside>}
         </div>
     </main>;
