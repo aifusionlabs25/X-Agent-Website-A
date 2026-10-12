@@ -13,12 +13,13 @@ import {verifyDemoGrant,bindDemoGrant,readDemoAccessMode,createVisitorDemoAuthor
 import {finalizeBrief,confirmBrief,applyBriefCorrection,reserveBriefInvitation,hasSubstantiveBriefFact} from './structured-brief.ts';
 import {cancelWebsiteClose} from './closing.ts';
 import {candidateRuntimeConfig,verifyCandidateRuntime,RUNTIME_CANDIDATE_ID} from './runtime-session.ts';
+import {releaseJamesBrowserSession} from './browser-recovery.ts';
 
 const COOKIE='xagent_james_canary';
 const TTL=24*60*60;
 const PREFIX='xagent:james:canary:v1:';
 function config() { const c=readAmyAnamSpineConfig(); if(!c.gatesOpen)throw new Error('Hosted session storage is unavailable'); return c; }
-export function createJamesServer(options: {personaId?:string;cookie?:string;prefix?:string;allowDemoEmail?:boolean;allowEmail?:boolean;runtimeClose?:boolean}={}) {
+export function createJamesServer(options: {personaId?:string;cookie?:string;prefix?:string;allowDemoEmail?:boolean;allowEmail?:boolean;runtimeClose?:boolean;allowBrowserRecovery?:boolean}={}) {
 const PERSONA_ID=options.personaId||CANARY_PERSONA_ID;
 if(options.runtimeClose&&PERSONA_ID!==RUNTIME_CANDIDATE_ID)throw new Error('Runtime close is candidate-only');
 const cookie=options.cookie||COOKIE, prefix=options.prefix||PREFIX;
@@ -67,13 +68,39 @@ function launch(session:Session) {
 }
 async function get(req:Request) {
     try {
-        const id=new URL(req.url).searchParams.get('id');
+        const search=new URL(req.url).searchParams, id=search.get('id');
         let current=await load(req,id);
+        const originalId=current.id;
+        if(options.allowBrowserRecovery&&search.get('notesOnly')!=='1'){
+            const visited=new Set([current.id]);
+            for(;;){
+                const successor=await redis(['GET',prefix+'restart:'+current.id]);
+                if(successor===null||successor===undefined)break;
+                if(!isUuid(successor))throw new Error('Saved James restart reference is invalid');
+                if(visited.has(successor))throw new Error('Saved James restart references contain a cycle');
+                if(visited.size>=8)throw new Error('Saved James restart chain is too long to restore safely');
+                visited.add(successor);
+                try{current=await load(req,successor);}
+                catch(error){
+                    if(error instanceof Error&&error.message==='Session is unavailable or expired')
+                        throw new Error('Restarted James session is unavailable or expired; previous notes are preserved');
+                    throw error;
+                }
+            }
+        }
         if(options.runtimeClose&&current.providerId&&current.state!=='CLOSED')
             current=await reconcileProviderEnded(current).catch(()=>current);
-        return json(view(current));
+        return json({...view(current),...(current.id!==originalId?{previousSessionId:originalId}:{})});
     }
-    catch(error){return json({error:error instanceof Error?error.message:'Session unavailable'},400);}
+    catch(error){
+        const message=error instanceof Error?error.message:'Session unavailable';
+        // Expired note recovery must not become an expiry of James himself.
+        // Storage outages and foreign-browser records remain errors, not reset permission.
+        const recoveryUnavailable=options.allowBrowserRecovery&&[
+            'Session browser authorization expired','Session is unavailable or expired',
+        ].includes(message);
+        return json({error:message,...(recoveryUnavailable?{recoveryUnavailable:true}:{})},400);
+    }
 }
 async function reconcileProviderEnded(current:Session):Promise<Session> {
     if(!options.runtimeClose||!current.providerId||current.state==='CLOSED')return current;
@@ -86,6 +113,7 @@ async function reconcileProviderEnded(current:Session):Promise<Session> {
     return next;
 }
 async function post(req:Request) {
+    let restartClaim:{key:string;id:string}|undefined;
     try {
         if(!isTrustedBrowserOrigin(req))return json({error:'Request origin is not allowed'},403);
         const body=await readBoundedJsonObject(req,20*1024);
@@ -113,6 +141,15 @@ async function post(req:Request) {
             const rate=await consumeAmyAnamDistributedRateLimit({fingerprint:requestFingerprint(req,prefix+'start'),limit:5,windowSeconds:600});
             if(!rate.allowed)return json({error:'Session start limit reached'},429);
             const id=randomUUID();
+            if(options.allowBrowserRecovery&&body.restartFrom!==undefined){
+                const previous=await load(req,body.restartFrom);
+                if(previous.state!=='CLOSED'&&!previous.browserRelease)
+                    throw new Error('End the saved James call before starting another; its notes are preserved');
+                const key=prefix+'restart:'+previous.id;
+                if(await redis(['SET',key,id,'NX','EX',TTL])!=='OK')
+                    throw new Error('Another tab already restarted this saved call. Reload to inspect the current call.');
+                restartClaim={key,id};
+            }
             const visitorAuthorization=visitorEmail?createVisitorDemoAuthorization(id):null;
             const demoTransport=demoGrant||visitorAuthorization?await preflightDemoTransport():null;
             let owner=browser(req), token:string|undefined;
@@ -145,9 +182,29 @@ async function post(req:Request) {
             if(typeof minted.sessionToken!=='string')throw new Error('Session token missing');
             const response=json({...view(state),sessionToken:minted.sessionToken});
             if(token)response.cookies.set(cookie,token,amyAnamCookieOptions());
+            restartClaim=undefined;
             return response;
         }
         const current=await load(req,body.id); let next=structuredClone(current);
+        if(body.action==='release-browser-session'){
+            if(!options.allowBrowserRecovery)throw new Error('Browser recovery is unavailable on this surface');
+            const cancelledNotice='Connection cancelled before James connected. Your saved notes remain available.';
+            if(current.state==='CLOSED'||current.browserRelease)
+                return json({...view(current),restartAllowed:true,operation_notice:current.browserRelease?.source==='BROWSER_CANCELLED_BEFORE_SDK'
+                    ?cancelledNotice:'Previous call ended. Your saved notes remain available.'});
+            const release=await releaseJamesBrowserSession(current,{providerIdHint:body.providerId,sdkNeverStarted:body.sdkNeverStarted===true,
+                request:provider,metadata:fetchAnamSessionMetadata});
+            // Call termination is distinct from verified final transcript/notes.
+            // Do not turn a failed launch or a pending transcript into a false CLOSED receipt.
+            let preserved=current;
+            if(current.providerId)try{preserved=await reconcileProviderEnded(current);}catch{/* Saved draft notes remain intact. */}
+            next=structuredClone(preserved);next.browserRelease=release;
+            next=receipt(preserved,next,{action:'release-browser-session',release});await save(preserved,next);
+            return json({...view(next),restartAllowed:true,operation_notice:release.source==='BROWSER_CANCELLED_BEFORE_SDK'
+                ?cancelledNotice:next.state==='CLOSED'
+                ?'Previous call ended. Your saved notes remain available.'
+                :'Previous connection ended. Your saved notes are preserved; final transcript verification is separate.'});
+        }
         if(body.action==='preview-demo-email'){
             if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
             const prepared=prepareDemoMessages(current);
@@ -161,6 +218,7 @@ async function post(req:Request) {
             return json(view(next));
         }
         if(body.action==='bind') {
+            if(current.browserRelease)throw new Error('This James launch has ended');
             if(!isUuid(body.providerId)|| (current.providerId&&current.providerId!==body.providerId))throw new Error('Provider session binding is invalid');
             const metadata=await fetchAnamSessionMetadata(body.providerId);
             if(current.runtimeBinding)verifyCandidateRuntime(metadata,current);else verifyAnamSessionMetadata(metadata,launch(current));
@@ -168,6 +226,7 @@ async function post(req:Request) {
             if(metadata.endTime)throw new Error('Provider session already ended');
             next.providerId=body.providerId;next.state='ACTIVE';
         } else if(body.action==='turn') {
+            if(current.browserRelease)throw new Error('This James call has ended; no new turns are accepted');
             if(!current.providerId)throw new Error('Session is not bound');
             const t=body.turn as Turn;
             if(!t||typeof t.id!=='string'||t.id.length>160||!['user','persona'].includes(t.role)||typeof t.content!=='string'||body.finalized!==true)throw new Error('Finalized turn required');
@@ -227,7 +286,12 @@ async function post(req:Request) {
             catch{return json({...view(next),operation_notice:'Session closed. Legacy owner email requires attention; inspect saved state before any further action.'});}
         }
         return json({...view(next),...(body.action==='reserve-brief-invitation'?{invitation_allowed:true}:{})});
-    } catch(error) { return json({error:error instanceof Error?error.message:'Canary operation failed'},400); }
+    } catch(error) {
+        if(restartClaim)try{
+            await redis(['EVAL',"if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end",1,restartClaim.key,restartClaim.id]);
+        }catch{/* The bounded reservation expires; never remove another attempt's claim. */}
+        return json({error:error instanceof Error?error.message:'Canary operation failed'},400);
+    }
 }
 async function recover(req:Request) {
     if(!options.runtimeClose)return json({error:'Unavailable'},404);

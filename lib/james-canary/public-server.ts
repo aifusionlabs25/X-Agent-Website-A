@@ -11,4 +11,5 @@ export const { get, post } = createJamesServer({
     allowDemoEmail: true,
     allowEmail: false,
     runtimeClose: true,
+    allowBrowserRecovery: true,
 });

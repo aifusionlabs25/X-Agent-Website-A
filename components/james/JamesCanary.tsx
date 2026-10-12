@@ -10,6 +10,7 @@ import { enqueueClosingMutation, playbackAllowsClose } from '@/lib/james-canary/
 import { explicitRuntimeDeparture, freshRuntimeCloseAttempt, runtimeCloseSignal, runtimeDepartureToArm } from '@/lib/james-canary/runtime-close';
 import type { RuntimeCloseAttempt } from '@/lib/james-canary/runtime-close';
 import styles from './JamesPresentation.module.css';
+import { JamesBrowserAttemptGate, browserStartAllowed, echoAdvisory } from '@/lib/james-canary/browser-lifecycle';
 
 type State=ReturnType<typeof view>;
 type EmailPreview={snapshotHash:string;callerAddress:string;sender:string;replyTo:string;messages:{lane:string;to:string;text:string}[]};
@@ -17,6 +18,12 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(notepadDemo?'Start a demo conversation when ready.':'Start a new canary conversation when ready.'),[history,setHistory]=useState<Turn[]>([]);
     const [padVisibility,setPadVisibility]=useState<PadVisibility>(()=>notepadDemo?initialPadVisibility():{open:true,revealed:true,manual:false}),[accessCode,setAccessCode]=useState(''),[preview,setPreview]=useState<EmailPreview|null>(null),[approved,setApproved]=useState(false);
     const [editSlot,setEditSlot]=useState('name'),[editValue,setEditValue]=useState(''),[editing,setEditing]=useState(false),[previewIndex,setPreviewIndex]=useState(0);
+    const [restoring,setRestoring]=useState(publicPresentation&&!previewStates),[previousId,setPreviousId]=useState(''),[audioAdvisory,setAudioAdvisory]=useState<string|null>(null);
+    const attempts=useRef(new JamesBrowserAttemptGate()),rejectBinding=useRef<((error:Error)=>void)|null>(null),lastProviderId=useRef<string|null>(null);
+    const bindingWork=useRef<Promise<unknown>>(Promise.resolve());
+    // Only this tab can attest that its exact cancelled attempt never reached the SDK.
+    // A restored record or a stopped/failed SDK client must never acquire this marker.
+    const unstartedCancelledId=useRef<string|null>(null);
     const padOpen=padVisibility.open;
     const client=useRef<AnamClient|null>(null), id=useRef(''), chain=useRef<Promise<unknown>>(Promise.resolve()), failed=useRef(false), stopped=useRef(false), closing=useRef(false);
     const latest=useRef<State|null>(null), seen=useRef(new Set<string>()), finalized=useRef(new Set<string>()), messages=useRef<Turn[]>([]);
@@ -75,7 +82,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     }
     async function api(action:string,body:object={},demoAccess?:string){
         if(previewStates)throw new Error('Offline preview cannot make session requests');
-        const response=await fetch(apiPath,{method:'POST',headers:{'Content-Type':'application/json',...(demoAccess?{'x-james-demo-access':demoAccess}:{})},body:JSON.stringify({action,id:id.current,...body})});
+        const response=await fetch(apiPath,{method:'POST',headers:{'Content-Type':'application/json',...(demoAccess?{'x-james-demo-access':demoAccess}:{})},body:JSON.stringify({action,id:id.current,...body}),...(publicPresentation?{signal:AbortSignal.timeout(45_000)}:{})});
         const data=await response.json(); if(!response.ok)throw new Error(data.error||'Canary request failed');return data;
     }
     function cancelPendingClose(){
@@ -123,6 +130,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         closeTimer.current=setTimeout(check,100);
     }
     async function close(automatic?:{epoch:number;farewellTurnId?:string;departureTurnId?:string;signal?:string}){
+        if(publicPresentation&&!automatic){await endBrowserCall();return;}
         if(closing.current||closeInFlight.current)return;closeInFlight.current=true;setBusy(true);
         const stillCurrent=()=>!automatic||(automatic.epoch===closeEpoch.current&&!visitorSpeaking.current
             &&(automatic.departureTurnId?latest.current?.websiteClosing?.departureTurnId===automatic.departureTurnId
@@ -142,13 +150,57 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             render(begun);
             closing.current=true;
             if(client.current&&!stopped.current){stopped.current=true;await client.current.stopStreaming();}
+            if(publicPresentation)attempts.current.cancel();
             if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
             if(audioMonitor.current)clearInterval(audioMonitor.current);audioMonitor.current=null;
             if(invitationTimer.current)clearTimeout(invitationTimer.current);invitationTimer.current=null;
             if(audio.current)void audio.current.context.close().catch(()=>{});audio.current=null;
             const s=await api('close');render(s);if(!notepadDemo)setPadVisibility(v=>({...v,open:true}));setNotice(s.operation_notice||(s.email_status==='SENT'?'Session closed. Owner-test email accepted by AgentMail. Nothing sent to Knowles.':'Session closed. Review the finalized intake brief; nothing has been emailed unless a send result is shown below.'));
         } catch(error){setNotice(error instanceof Error?error.message:'Closure needs attention');closing.current=false;}
-        finally{closeInFlight.current=false;setBusy(false);}
+        finally{if(publicPresentation)closing.current=false;closeInFlight.current=false;setBusy(false);}
+    }
+    async function releaseSavedCall(){
+        const result=await api('release-browser-session',{...(lastProviderId.current?{providerId:lastProviderId.current}:{}),
+            ...(unstartedCancelledId.current===id.current?{sdkNeverStarted:true}:{})});
+        if(result.restartAllowed!==true)throw new Error('Previous connection is not yet released. Your saved notes are preserved.');
+        render(result);return result;
+    }
+    async function endBrowserCall(){
+        if(closing.current||closeInFlight.current)return;
+        closing.current=true;closeInFlight.current=true;setBusy(true);setNotice('Ending the connection…');
+        const attempt=attempts.current.current,c=client.current;
+        const previousBinding=bindingWork.current,previousQueue=chain.current;
+        lastProviderId.current=c?.getActiveSessionId()||lastProviderId.current;
+        attempts.current.cancel(attempt);stopped.current=true;
+        rejectBinding.current?.(new Error('Connection cancelled by the visitor'));
+        closeEpoch.current++;runtimeAttempt.current=null;
+        if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
+        if(invitationTimer.current)clearTimeout(invitationTimer.current);invitationTimer.current=null;
+        if(audioMonitor.current)clearInterval(audioMonitor.current);audioMonitor.current=null;
+        if(audio.current)void audio.current.context.close().catch(()=>{});audio.current=null;
+        try{
+            // Hang up locally before waiting for bind, note persistence, or Anam verification.
+            if(c)await c.stopStreaming().catch(()=>{});
+            if(attempt)await attempt.settled; // A pending SDK start can otherwise arrive after cancellation.
+            await previousBinding.catch(()=>{});
+            await previousQueue.catch(()=>{});
+            if(id.current){const result=await releaseSavedCall();setNotice(result.operation_notice);}
+            else setNotice('Connection cancelled. Ready when you are.');
+        }catch(error){setNotice((error instanceof Error?error.message:'Previous call needs attention')+'. The browser audio is stopped; saved notes remain available.');}
+        finally{if(client.current===c)client.current=null;closing.current=false;closeInFlight.current=false;setBusy(false);}
+    }
+    async function showPreviousNotes(){
+        if(!previousId||busy||attempts.current.current)return;
+        if(state?.id!==id.current&&latest.current){render(latest.current);setNotice('Current notes restored. No call is connected.');return;}
+        setRestoring(true);
+        try{
+            const response=await fetch(apiPath+'?id='+encodeURIComponent(previousId)+'&notesOnly=1',{signal:AbortSignal.timeout(20_000)});
+            const saved=await response.json();if(!response.ok)throw new Error(saved.error||'Previous notes unavailable');
+            // Viewing an older notebook must not replace the launch predecessor.
+            // Its already-consumed restart claim belongs to the newer call.
+            setState(saved);setPadVisibility({...initialPadVisibility(),open:true,manual:true});setNotice('Viewing previous notes. No call is connected.');
+        }catch(error){setNotice(error instanceof Error?error.message:'Previous notes unavailable');}
+        finally{setRestoring(false);}
     }
     function queueHistory(){
         if(closing.current||failed.current)return;
@@ -181,18 +233,43 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         if(previewStates)return;
         let saved:string|null=null;
         try{
+            if(publicPresentation)setPreviousId(localStorage.getItem(storageKey+'-previous')||'');
             if(clearSavedSessionOnLoad)localStorage.removeItem(storageKey);
             else saved=localStorage.getItem(storageKey);
         }catch{/* Private/blocked storage must not crash the page. */}
         if(saved){id.current=saved;
-            void fetch(apiPath+'?id='+encodeURIComponent(saved)).then(async r=>{const s=await r.json();if(!r.ok)throw new Error(s.error);render(s);
+            void fetch(apiPath+'?id='+encodeURIComponent(saved),{signal:AbortSignal.timeout(20_000)}).then(async r=>{const s=await r.json();
+                if(!r.ok){
+                    if(publicPresentation&&s.recoveryUnavailable===true){
+                        // Keep the old recovery pointer separately, never erase its notes.
+                        // Only an explicit expired/unavailable record permits a fresh launch;
+                        // a transient failed restore still releases its saved UUID first.
+                        id.current='';setPreviousId(saved!);
+                        try{localStorage.setItem(storageKey+'-previous',saved!);localStorage.removeItem(storageKey);}catch{/* In-memory Start remains usable. */}
+                        setNotice('Previous note recovery is unavailable. James is ready for a new conversation.');return;
+                    }
+                    throw new Error(s.error);
+                }
+                if(publicPresentation&&s.id!==saved){
+                    id.current=s.id;lastProviderId.current=null;setPreviousId(s.previousSessionId||saved!);
+                    try{localStorage.setItem(storageKey,s.id);localStorage.setItem(storageKey+'-previous',s.previousSessionId||saved!);}catch{/* Keep the recovered launch in memory. */}
+                }
+                render(s);
                 if(!publicPresentation)try{const choice=JSON.parse(localStorage.getItem(storageKey+'-pad')||'null');if(choice?.id===saved&&typeof choice.open==='boolean'&&typeof choice.revealed==='boolean'&&choice.manual===true)setPadVisibility(choice);}catch{/* Ignore malformed presentation preferences. */}
-                setNotice(s.state==='CLOSED'?'Saved closed session restored.':'Saved session restored. The media stream is not automatically reconnected.');}).catch(error=>setNotice(error.message));}
-        return()=>{if(closeTimer.current)clearTimeout(closeTimer.current);if(audioMonitor.current)clearInterval(audioMonitor.current);if(invitationTimer.current)clearTimeout(invitationTimer.current);if(audio.current)void audio.current.context.close().catch(()=>{});if(client.current&&!stopped.current){stopped.current=true;void client.current.stopStreaming();}};
+                setNotice(s.state==='CLOSED'?'Saved closed session restored.':'Saved session restored. The media stream is not automatically reconnected.');}).catch(error=>setNotice(error.message)).finally(()=>setRestoring(false));}
+        else setRestoring(false);
+        return()=>{attempts.current.cancel();rejectBinding.current?.(new Error('James page closed'));if(closeTimer.current)clearTimeout(closeTimer.current);if(audioMonitor.current)clearInterval(audioMonitor.current);if(invitationTimer.current)clearTimeout(invitationTimer.current);if(audio.current)void audio.current.context.close().catch(()=>{});if(client.current&&!stopped.current){stopped.current=true;void client.current.stopStreaming();}};
     // This effect restores once; mutable SDK lifecycle is held in refs.
     },[apiPath,storageKey,clearSavedSessionOnLoad,previewStates,render,publicPresentation]);
     async function start(){
-        setBusy(true);setNotice('Connecting to the current James persona…');failed.current=false;stopped.current=false;closing.current=false;
+        if(publicPresentation&&!browserStartAllowed({restoring,busy:busy||closing.current,hasBrowserAttempt:Boolean(attempts.current.current)}))return;
+        const attempt=publicPresentation?attempts.current.begin():null;
+        if(publicPresentation&&!attempt)return;
+        let launchedClient:AnamClient|null=null;
+        let launchedId:string|null=null;
+        const previousBinding=bindingWork.current,previousQueue=chain.current,previousClient=client.current;
+        setBusy(true);setNotice('Connecting to the current James persona…');stopped.current=publicPresentation;closing.current=false;
+        setAudioAdvisory(null);
         personaSpeaking.current=false;visitorSpeaking.current=false;
         closeEpoch.current++;closeInFlight.current=false;speechStarts.current.clear();
         runtimeAttempt.current=null;
@@ -201,21 +278,48 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         if(notepadDemo)setPadVisibility(initialPadVisibility());setEditing(false);
         if(invitationTimer.current)clearTimeout(invitationTimer.current);invitationTimer.current=null;
         if(audio.current)void audio.current.context.close().catch(()=>{});audio.current=null;
-        seen.current.clear();finalized.current.clear();messages.current=[];setHistory([]);setPreview(null);setApproved(false);
         try{
+            if(publicPresentation){
+                if(previousClient){lastProviderId.current=previousClient.getActiveSessionId()||lastProviderId.current;await previousClient.stopStreaming().catch(()=>{});}
+                // Drain the prior launch's mutations BEFORE changing its UUID or queue.
+                // Late bind/note responses cannot overwrite the next conversation.
+                await previousBinding.catch(()=>{});await previousQueue.catch(()=>{});
+                if(client.current===previousClient)client.current=null;
+                // Old queued goodbye events may have armed these while draining.
+                closeEpoch.current++;runtimeAttempt.current=null;speechStarts.current.clear();
+                if(closeTimer.current)clearTimeout(closeTimer.current);closeTimer.current=null;
+                if(invitationTimer.current)clearTimeout(invitationTimer.current);invitationTimer.current=null;
+            }
+            if(attempt&&!attempts.current.isCurrent(attempt))return;
+            const predecessor=publicPresentation?id.current:'';
+            if(predecessor&&latest.current?.state!=='CLOSED'){
+                setNotice('Finishing the previous connection. Your notes are preserved…');await releaseSavedCall();
+            }
+            if(attempt&&!attempts.current.isCurrent(attempt))return;
+            failed.current=false;stopped.current=false;
+            bindingWork.current=Promise.resolve();rejectBinding.current=null;
+            seen.current.clear();finalized.current.clear();messages.current=[];setHistory([]);setPreview(null);setApproved(false);
             const operatorCode=emailAccessMode==='visitor'?undefined:accessCode||undefined;
             if(operatorCode)await api('demo-email-preflight',{},operatorCode);
-            const launched=await api('start',{},operatorCode);setAccessCode('');id.current=launched.id;
-            try{localStorage.setItem(storageKey,launched.id);}catch{/* The active call can continue without reload recovery. */}
+            const launched=await api('start',predecessor?{restartFrom:predecessor}:{},operatorCode);setAccessCode('');id.current=launched.id;launchedId=launched.id;lastProviderId.current=null;
+            unstartedCancelledId.current=null;
+            try{localStorage.setItem(storageKey,launched.id);if(predecessor&&predecessor!==launched.id){localStorage.setItem(storageKey+'-previous',predecessor);setPreviousId(predecessor);}}catch{/* The active call can continue without reload recovery. */}
             render(launched);
-            const c=createClient(launched.sessionToken);client.current=c;
-            let resolveBinding:()=>void,rejectBinding:(error:Error)=>void;
-            const binding=new Promise<void>((resolve,reject)=>{resolveBinding=resolve;rejectBinding=reject;});chain.current=binding;
+            if(attempt&&!attempts.current.isCurrent(attempt))return;
+            const c=createClient(launched.sessionToken);client.current=c;launchedClient=c;
+            let resolveBinding!:()=>void,failBinding!:(error:Error)=>void;
+            const binding=new Promise<void>((resolve,reject)=>{resolveBinding=resolve;failBinding=reject;});chain.current=binding;
+            void binding.catch(()=>{});rejectBinding.current=failBinding;
+            const ownsAttempt=()=>!attempt||attempts.current.isCurrent(attempt);
             c.addListener(AnamEvent.SESSION_READY,providerId=>{
-                void api('bind',{providerId}).then(s=>{render(s);setNotice('Connected. Speak naturally; only finalized visitor information updates the brief.');resolveBinding();})
-                    .catch(error=>{failed.current=true;setNotice(error.message);rejectBinding(error);if(!stopped.current){stopped.current=true;void c.stopStreaming();}});
+                if(attempt&&attempts.current.current===attempt)lastProviderId.current=providerId;
+                if(!ownsAttempt()){void c.stopStreaming().catch(()=>{});return;}
+                lastProviderId.current=providerId;
+                bindingWork.current=api('bind',{providerId}).then(s=>{if(!ownsAttempt())return;render(s);setNotice('Connected. Speak naturally; only finalized visitor information updates the brief.');resolveBinding();})
+                    .catch(error=>{if(!ownsAttempt())return;failed.current=true;setNotice(error.message);failBinding(error);if(!stopped.current){stopped.current=true;void c.stopStreaming();}});
             });
             c.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED,event=>{
+                if(!ownsAttempt())return;
                 if(stopped.current||closing.current)return;
                 if(event.role==='persona'){
                     // Once one farewell has finalized, suppress follow-up output
@@ -235,13 +339,15 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 }
             });
             c.addListener(AnamEvent.MESSAGE_HISTORY_UPDATED,items=>{
+                if(!ownsAttempt())return;
                 if(stopped.current||closing.current)return;
                 messages.current=items.filter(t=>t.role==='user'||t.role==='persona').map(t=>({id:t.id,role:t.role as Turn['role'],content:t.content}));
                 setHistory(messages.current);queueHistory();
             });
-            c.addListener(AnamEvent.USER_SPEECH_STARTED,()=>{visitorSpeaking.current=true;if(audio.current)audio.current.quietSince=null;if(latest.current?.websiteClosing)cancelPendingClose();});
-            c.addListener(AnamEvent.USER_SPEECH_ENDED,()=>{visitorSpeaking.current=false;});
+            c.addListener(AnamEvent.USER_SPEECH_STARTED,()=>{if(!ownsAttempt())return;visitorSpeaking.current=true;if(audio.current)audio.current.quietSince=null;if(latest.current?.websiteClosing)cancelPendingClose();});
+            c.addListener(AnamEvent.USER_SPEECH_ENDED,()=>{if(ownsAttempt())visitorSpeaking.current=false;});
             c.addListener(AnamEvent.AUDIO_STREAM_STARTED,stream=>{
+                if(!ownsAttempt())return;
                 try{
                     if(audio.current)void audio.current.context.close().catch(()=>{});
                     const context=new AudioContext(),source=context.createMediaStreamSource(stream),analyser=context.createAnalyser();
@@ -258,14 +364,38 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 }catch{/* A visible deterministic review still works without Web Audio. */}
             });
             c.registerToolCallHandler('james_handoff',{onStart:async payload=>{
-                try{await chain.current;if(failed.current)throw new Error('Finalized evidence unavailable');return JSON.stringify(await api('tool',{operation:payload.arguments.operation}));}
+                try{await chain.current;if(!ownsAttempt()||failed.current)throw new Error('Finalized evidence unavailable');return JSON.stringify(await api('tool',{operation:payload.arguments.operation}));}
                 catch{return JSON.stringify({status:'UNAVAILABLE',sent:false,instruction:'No verified write or send. Do not claim notes saved, email sent, firm review or follow-up.'});}
             }});
-            c.addListener(AnamEvent.MIC_PERMISSION_DENIED,()=>setNotice('Microphone access is blocked. Allow microphone access for this site.'));
-            c.addListener(AnamEvent.CONNECTION_CLOSED,()=>{if(!closing.current)setNotice('Media connection ended. Use Verify closure to preserve and verify the final brief.');});
+            c.addListener(AnamEvent.MIC_PERMISSION_DENIED,()=>{if(ownsAttempt())setNotice('Microphone access is blocked. Allow microphone access for this site.');});
+            c.addListener(AnamEvent.SERVER_WARNING,warning=>{if(ownsAttempt()&&publicPresentation){const advisory=echoAdvisory(warning);if(advisory)setAudioAdvisory(advisory);}});
+            c.addListener(AnamEvent.CONNECTION_CLOSED,()=>{
+                if(!ownsAttempt())return;
+                if(!publicPresentation){if(!closing.current)setNotice('Media connection ended. Use Verify closure to preserve and verify the final brief.');return;}
+                if(attempt)attempts.current.cancel(attempt);
+                failBinding(new Error('Media connection ended'));
+                if(!closing.current)setNotice('Media connection ended. Your notes are preserved. Use End conversation to verify closure, or Start James for a new call.');
+            });
             await c.streamToVideoElement('james-canary-video');
-        }catch(error){setNotice(error instanceof Error?error.message:'James could not connect');}
-        finally{setBusy(false);}
+            if(publicPresentation&&ownsAttempt()){
+                let timeout:ReturnType<typeof setTimeout>|undefined;
+                try{await Promise.race([binding,new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new Error('James did not finish connecting. Your notes are preserved; please try Start James again.')),20_000);})]);}
+                finally{if(timeout)clearTimeout(timeout);}
+            }
+        }catch(error){if(!attempt||attempts.current.isCurrent(attempt)){
+            if(publicPresentation)rejectBinding.current?.(error instanceof Error?error:new Error('James could not connect'));
+            setNotice(error instanceof Error?error.message:'James could not connect');if(attempt)attempts.current.cancel(attempt);
+        }}
+        finally{
+            if(attempt&&!attempts.current.isCurrent(attempt)&&launchedClient){
+                lastProviderId.current=launchedClient.getActiveSessionId()||lastProviderId.current;
+                await launchedClient.stopStreaming().catch(()=>{});
+                if(client.current===launchedClient)client.current=null;
+            }
+            if(attempt?.cancelled&&launchedId&&!launchedClient)unstartedCancelledId.current=launchedId;
+            if(attempt)attempts.current.settle(attempt);
+            setBusy(false);
+        }
     }
     async function previewEmails(){
         setBusy(true);setApproved(false);
@@ -300,7 +430,8 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         const next=previewStates?.[index].state;
         if(next)render(next);else{latest.current=null;setState(null);setPadVisibility(initialPadVisibility());}
     }
-    const active=state&&state.state!=='CLOSED';
+    const currentCall=publicPresentation?latest.current:state;
+    const active=currentCall&&currentCall.state!=='CLOSED';
     const publicNotice=notice==='Start a demo conversation when ready.'?'Ready when you are.'
         :notice==='Connecting to the current James persona…'?'Connecting…'
         :notice==='Connected. Speak naturally; only finalized visitor information updates the brief.'?'Connected'
@@ -319,12 +450,14 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 {!launchReady&&<p role="alert" className="mt-3 rounded border border-amber-200/40 p-3 text-sm text-amber-200">Layout preview only. Live calls are disabled until this demo’s session storage and Anam settings are configured.</p>}
                 {!publicPresentation&&<p role="status" className="my-3 text-sm text-zinc-200">{notice}</p>}
                 {!publicPresentation&&notepadDemo&&emailAccessMode!=='visitor'&&!active&&<details className="mb-4 rounded border border-white/20 p-3"><summary className="cursor-pointer text-sm">Operator email test (optional)</summary><label className="mt-3 block text-xs">{emailAccessMode==='reusable'?'Reusable demo access code':'One-use demo access code'}<input type="password" autoComplete="off" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={busy} className="mt-2 block w-full rounded border border-white/30 bg-zinc-900 p-2 text-white"/></label><p className="mt-2 text-xs text-zinc-400">{emailAccessMode==='reusable'?'Use the same private code for each new call. Each call requires its own summary review and approval. ':'Leave blank for a notes-only call. '}Codes are never saved in browser storage or URLs.</p>{emailAccessMode==='reusable'&&<p className="mt-2 text-xs text-zinc-400">Leave blank to keep this call notes-only. The reusable code does not expire; each call’s email authorization lasts up to 24 hours.</p>}</details>}
-                <div className={publicPresentation?styles.controls:'flex flex-wrap gap-3'}><button onClick={()=>void start()} disabled={busy||Boolean(active)||!launchReady} className={publicPresentation?`${styles.button} ${styles.startButton}`:'rounded bg-white px-5 py-3 font-semibold text-black disabled:opacity-40'}>Start James</button>
-                    <button onClick={()=>void close()} disabled={busy||!active||Boolean(previewStates)} className={publicPresentation?styles.button:'rounded border border-white/40 px-5 py-3 disabled:opacity-40'}>{state?.state==='CLOSING'?'Verify closure':'End conversation'}</button>
+                <div className={publicPresentation?styles.controls:'flex flex-wrap gap-3'}><button onClick={()=>void start()} disabled={publicPresentation?!launchReady||!browserStartAllowed({restoring,busy:busy||closing.current,hasBrowserAttempt:Boolean(attempts.current.current)}):busy||Boolean(active)||!launchReady} className={publicPresentation?`${styles.button} ${styles.startButton}`:'rounded bg-white px-5 py-3 font-semibold text-black disabled:opacity-40'}>Start James</button>
+                    <button onClick={()=>void close()} disabled={publicPresentation?restoring||closing.current||(!attempts.current.current&&!active)||Boolean(previewStates):busy||!active||Boolean(previewStates)} className={publicPresentation?styles.button:'rounded border border-white/40 px-5 py-3 disabled:opacity-40'}>{state?.state==='CLOSING'?'Verify closure':'End conversation'}</button>
                     <button aria-expanded={padOpen} aria-controls="james-legal-pad" onClick={changePad} className={publicPresentation?`${styles.button} ${styles.notesButton}`:'rounded border border-amber-300/60 px-5 py-3 text-amber-200'}>{padOpen?'Hide legal pad':'Show legal pad'}</button>
-                    {notepadDemo&&state?.intakeBrief?.hasSubstantiveFact&&state.intakeBrief.phase==='COLLECTING'&&<button onClick={()=>briefAction('finalize-brief')} disabled={busy||Boolean(previewStates)} className={publicPresentation?`${styles.button} ${styles.notesButton}`:'rounded border border-amber-300/40 px-4 py-3 text-amber-200 disabled:opacity-40'}>Review intake brief</button>}
-                    {publicPresentation&&<p role="status" className={styles.status}>{publicNotice}</p>}
+                    {notepadDemo&&state?.intakeBrief?.hasSubstantiveFact&&state.intakeBrief.phase==='COLLECTING'&&(!publicPresentation||state.id===id.current)&&<button onClick={()=>briefAction('finalize-brief')} disabled={busy||Boolean(previewStates)} className={publicPresentation?`${styles.button} ${styles.notesButton}`:'rounded border border-amber-300/40 px-4 py-3 text-amber-200 disabled:opacity-40'}>Review intake brief</button>}
+                    {publicPresentation&&previousId&&previousId!==id.current&&!attempts.current.current&&<button onClick={()=>void showPreviousNotes()} disabled={busy||restoring} className={`${styles.button} ${styles.notesButton}`}>{state?.id===previousId?'Current notes':'Previous notes'}</button>}
+                    {publicPresentation&&<p role="status" className={styles.status}>{restoring?'Loading saved notes…':publicNotice}</p>}
                 </div>
+                {publicPresentation&&audioAdvisory&&<p role="alert" className="mt-3 text-xs text-amber-200">{audioAdvisory}</p>}
                 {!padOpen&&state?.intakeBrief?.phase==='REVIEW'&&<p className="mt-3 text-sm text-amber-200">Your brief is ready for review. Show the legal pad to check and confirm it.</p>}
                 {!publicPresentation&&<><p className="mt-4 text-xs text-zinc-400">Use fictional case details only. This is not legal advice or a submission to Knowles. {!state?'Email availability is checked when you start James. Any email requires your review and approval.':state.demo_email_authorized?'Email testing is authorized for this session, but requires post-call review and explicit approval.':state.owner_test?'Legacy owner email test; inspect its send status.':'Email sending is off for this session.'} Notes expire 24 hours after their last saved update. Anam transcripts and emailed copies have separate retention rules.</p>
                 {state&&<p className="mt-2 text-xs text-zinc-400">{state.state} · {state.acceptedVisitorTurns} visitor turns · {state.config.voiceName} · Session {state.id.slice(-8)}</p>}</>}
@@ -341,7 +474,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 {notepadDemo?<>
                     {!state?.intakeBrief?.hasSubstantiveFact&&<p className={publicPresentation?styles.emptyNotes:'py-8 font-serif italic text-zinc-600'}>{publicPresentation?'Your notes will appear here.':state&&!state.intakeBrief?'Start a new call for the structured intake brief.':'Waiting for your first intake detail…'}</p>}
                     {state?.intakeBrief?.sections.map(section=><section key={section.title} className={publicPresentation?styles.padSection:'mb-6'}><h3 className="mb-3 border-b border-amber-700/20 pb-1 text-[11px] font-bold uppercase tracking-[0.15em]">{section.title}</h3><dl className="space-y-3">{section.rows.map(row=><div key={row.key}><dt className="text-[11px] font-semibold text-amber-950/80">{row.label}{['name','phone','email'].includes(row.key)&&row.sourceIds.length>0&&<span className="ml-2 font-normal text-zinc-600">{row.confirmed?'verified':'not yet verified'}</span>}</dt><dd className={publicPresentation?`${styles.noteValue} ${!row.sourceIds.length?styles.placeholder:''}`:'mt-0.5 text-sm leading-relaxed '+(!row.sourceIds.length?'italic text-zinc-500':'')}>{row.value}</dd></div>)}</dl></section>)}
-                    {state?.intakeBrief&&state.intakeBrief.phase!=='COLLECTING'&&<section className="mt-6 border-t border-amber-700/25 pt-4" aria-label="Intake brief review">
+                    {state?.intakeBrief&&state.intakeBrief.phase!=='COLLECTING'&&(!publicPresentation||state.id===id.current)&&<section className="mt-6 border-t border-amber-700/25 pt-4" aria-label="Intake brief review">
                         {!!state.intakeBrief.missing.length&&<p className="mb-3 text-xs text-amber-950">Partial intake · still open: {state.intakeBrief.missing.join(', ')}. Confirming this brief does not fill those gaps.</p>}
                         <div className="flex flex-wrap gap-2"><button onClick={()=>briefAction('confirm-brief',{snapshotHash:state.intakeBrief!.hash})} disabled={busy||state.intakeBrief.phase==='CONFIRMED'||Boolean(previewStates)||Boolean(state.demo_email_status.length)} className="rounded bg-amber-950 px-4 py-2 text-sm text-amber-50 disabled:opacity-40">{state.intakeBrief.phase==='CONFIRMED'?'Brief confirmed':'Confirm brief'}</button><button onClick={()=>{if(!editing&&active)cancelPendingClose();setEditing(v=>!v);}} disabled={busy||Boolean(state.demo_email_status.length)} className="rounded border border-amber-950/40 px-4 py-2 text-sm">Correct a field</button></div>
                         {editing&&<form onSubmit={event=>{event.preventDefault();briefAction('correct-brief',{slot:editSlot,value:editValue,snapshotHash:state.intakeBrief!.hash});}} className="mt-4 space-y-3">

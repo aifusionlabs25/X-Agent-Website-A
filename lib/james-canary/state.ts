@@ -7,6 +7,7 @@ import { trackWebsiteClose } from './closing.ts';
 import { repairCandidateIntake } from './candidate-intake.ts';
 import type { WebsiteClosing } from './closing.ts';
 import type { RuntimeBinding } from './runtime-session.ts';
+import type { JamesBrowserRelease } from './browser-recovery.ts';
 
 export const PERSONA_ID = 'ff9c480e-44d1-4a8c-8ae6-b5666fd2a92d';
 export const CURRENT_JAMES_PERSONA_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
@@ -41,6 +42,7 @@ export type Session = {
     intakeBrief?: BriefWorkflow;
     websiteClosing?: WebsiteClosing;
     runtimeBinding?: RuntimeBinding;
+    browserRelease?: JamesBrowserRelease;
     email?: { status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; snapshotHash: string; subject: string; bodyHash: string; reservedAt: string; messageId?: string; error?: string };
 };
 export function emptyIntake(): Intake { return { facts: [], history: [], declined: [], handoff: 'NOT_REQUESTED' }; }
@@ -593,7 +595,7 @@ export function receipt(previous: Session, next: Session, event: unknown): Sessi
 export function view(session: Session) {
     const deliveries=session.demoEmail?.deliveries;
     const demoStatus=deliveries?(['internal','caller'] as const).map(lane=>({lane,status:deliveries[lane].status,recipient:deliveries[lane].recipient})):[];
-    return { id:session.id,providerId:session.providerId,state:session.state,revision:session.revision,stateHash:session.stateHash,
+    return { id:session.id,providerId:session.providerId,state:session.state,revision:session.revision,stateHash:session.stateHash,browserRelease:session.browserRelease,
         config:session.config,personaId:session.personaId,websiteClosing:session.websiteClosing,intakeBrief:structuredBriefView(session),brief:brief(session.intake).map(section=>session.email?.status==='SENT'&&section.title==='HANDOFF STATUS'?{
             title:section.title,items:[{label:'OWNER TEST EMAIL SENT',text:'Sent to the authorized test mailbox only. Nothing sent to Knowles; no firm review or follow-up confirmed.'}]}:deliveries&&section.title==='HANDOFF STATUS'?{
             title:section.title,items:demoStatus.map(d=>({label:d.lane==='internal'?'INTERNAL DEMO EMAIL':'CALLER RECAP',text:d.status==='SENT'?'AgentMail accepted this demo email. Inbox delivery and human review are not confirmed.':d.status==='RESERVED'?'Send result unknown or pending. Do not retry.':'No verified send receipt. Do not retry.'}))}:section),readiness:readiness(session.intake),

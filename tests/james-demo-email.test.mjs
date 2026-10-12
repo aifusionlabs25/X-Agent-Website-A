@@ -240,7 +240,9 @@ test('new route targets current James; legacy routes and prompt/KB overrides sta
     assert.match(client,/notepadDemo&&emailAccessMode!=='visitor'&&!active&&<details/);
     assert.match(client,/const operatorCode=emailAccessMode==='visitor'\?undefined:accessCode\|\|undefined/);
     assert.match(client,/!state\?'Email availability is checked when you start James/);
-    assert.match(client,/Layout preview only/);assert.match(client,/disabled=\{busy\|\|Boolean\(active\)\|\|!launchReady\}/);
+    assert.match(client,/Layout preview only/);
+    assert.match(client,/disabled=\{publicPresentation\?!launchReady\|\|!browserStartAllowed\(/);
+    assert.match(client,/\):busy\|\|Boolean\(active\)\|\|!launchReady\}/);
     const page=readFileSync(new URL('../app/demo/james-notepad/page.tsx',import.meta.url),'utf8');assert.match(page,/await connection\(\)/);assert.match(page,/launchReady=\{launchReady\}/);
 });
 test('HTTP demo lifecycle: isolated original persona, no automatic sends, preview/consent, two sends, replay safe',async()=>{
