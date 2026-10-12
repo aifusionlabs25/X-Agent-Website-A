@@ -16,6 +16,9 @@ function stable(value:unknown):string {
 // Independently inventoried candidate folder: PRE_RAG_REFINEMENT.json,
 // candidateKb (2026-10-03). Unknown/new folder mappings fail closed.
 const candidateFolder='cca7a89f-fd89-45bd-a805-3c2dbd5bf4e0';
+// Anam's resolved scope includes this model in the verified 2026-10-12
+// session metadata. Accept only that value; document scope remains pinned.
+const candidateEmbeddingModel='text-embedding-3-large';
 const candidateDocuments=[
     '0c85280d-f3a4-4b16-92f3-ce302dd79b92','4bdbb67e-f465-4b08-90e3-9174b9b79d6e',
     '5c8b610e-26d3-458f-9f1c-f53c9345aa03','6b6ece9a-1ce6-4e64-8301-5d0b7dc4c7a8',
@@ -26,7 +29,8 @@ function resolvedCandidateScope(value:unknown):boolean {
     if(!Array.isArray(value)||value.length!==1)return false;
     const scope=value[0];
     if(!scope||typeof scope!=='object'||Array.isArray(scope)||scope.namespace!==''
-        ||Object.keys(scope).some(k=>k!=='namespace'&&k!=='documentIds'))return false;
+        ||Object.keys(scope).some(k=>k!=='namespace'&&k!=='documentIds'&&k!=='embeddingModel')
+        ||(Object.hasOwn(scope,'embeddingModel')&&scope.embeddingModel!==candidateEmbeddingModel))return false;
     const ids=scope.documentIds;
     return Array.isArray(ids)&&ids.length===candidateDocuments.length&&ids.every(id=>typeof id==='string')
         &&stable([...ids].sort())===stable(candidateDocuments);

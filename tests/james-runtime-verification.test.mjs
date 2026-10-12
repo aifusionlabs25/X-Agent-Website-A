@@ -42,6 +42,21 @@ test('provider-resolved false interruption setting is accepted for retained tool
     metadata.personaConfig.tools.forEach(t=>t.disableInterruptions=false);
     verifyCandidateRuntime(metadata,expected);
 });
+test('approved provider embedding-model metadata verifies without changing the binding',()=>{
+    const {config,binding,expected,metadata}=setup(),before=structuredClone(binding),request=structuredClone(config);
+    rag(metadata.personaConfig).scopes[0].embeddingModel='text-embedding-3-large';
+    metadata.personaConfig.tools.forEach(t=>t.disableInterruptions=false);
+    verifyCandidateRuntime(metadata,expected);
+    assert.deepEqual(binding,before);
+    assert.deepEqual(config,request);
+});
+test('unapproved or malformed embedding models remain rejected',()=>{
+    for(const value of ['text-embedding-3-small','',null,true,0,{},['text-embedding-3-large']]){
+        const {expected,metadata}=setup();
+        rag(metadata.personaConfig).scopes[0].embeddingModel=value;
+        assert.throws(()=>verifyCandidateRuntime(metadata,expected),/tool mismatch/);
+    }
+});
 test('enabled or malformed interruption settings remain rejected',()=>{
     for(const value of [true,null,'false',0]){
         const {expected,metadata}=setup();
@@ -69,8 +84,12 @@ const invalid=[
     ['unapproved retrieval tuning',t=>t.topK=100],
 ];
 for(const [label,mutate] of invalid)test('rejects '+label,()=>{
-    const {expected,metadata}=setup();mutate(rag(metadata.personaConfig));
-    assert.throws(()=>verifyCandidateRuntime(metadata,expected),/tool mismatch/);
+    for(const withEmbeddingModel of [false,true]){
+        const {expected,metadata}=setup();
+        if(withEmbeddingModel)rag(metadata.personaConfig).scopes[0].embeddingModel='text-embedding-3-large';
+        mutate(rag(metadata.personaConfig));
+        assert.throws(()=>verifyCandidateRuntime(metadata,expected),/tool mismatch/);
+    }
 });
 test('unknown expected folder cannot borrow the pinned scope mapping',()=>{
     const {expected,metadata}=setup();rag(expected.runtimeBinding).documentFolderIds=['unknown'];
