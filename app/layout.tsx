@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import './ai-transparency.css';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
+import AITransparencyNotice from '@/components/layout/AITransparencyNotice';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,6 +29,7 @@ export default function RootLayout({
         <SiteHeader />
         {children}
         <SiteFooter />
+        <AITransparencyNotice />
       </body>
     </html>
   );

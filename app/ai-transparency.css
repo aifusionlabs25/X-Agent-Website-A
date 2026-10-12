@@ -1,0 +1,61 @@
+:root {
+  --ai-notice-height: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+
+body {
+  padding-bottom: var(--ai-notice-height);
+}
+
+body [data-ai-screen] {
+  bottom: var(--ai-notice-height);
+}
+
+[data-testid='evan-move-planner'] {
+  bottom: var(--ai-notice-height);
+}
+
+[data-testid='evan-route-map'][data-evan-map-expanded='true'] {
+  bottom: var(--ai-notice-height);
+  height: calc(100dvh - var(--ai-notice-height));
+}
+
+[aria-controls='amy-profile-controls'] {
+  bottom: calc(12px + var(--ai-notice-height));
+}
+
+#amy-profile-controls {
+  bottom: calc(56px + var(--ai-notice-height));
+}
+
+.ai-transparency-notice {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 160;
+  display: flex;
+  min-height: var(--ai-notice-height);
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid rgb(255 255 255 / 6%);
+  background: #09090b;
+  padding: 5px 16px max(5px, env(safe-area-inset-bottom));
+  color: #a09f9f;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  pointer-events: none;
+}
+
+.ai-transparency-notice p {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --ai-notice-height: calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ai-transparency-notice {
+    padding-inline: 20px;
+    font-size: 10px;
+  }
+}

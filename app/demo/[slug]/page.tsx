@@ -91,6 +91,7 @@ export default function DemoPage({ params, searchParams }: Props) {
     const experience = (
         <main
             className={`fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden ${isEvan ? 'bg-[#100718]' : isDani ? `${daniStyles.root} ${daniStyles.sessionTexture} bg-[#08100d]` : 'bg-black'}`}
+            data-ai-screen
             data-anam-variant={sessionVariant ?? 'public'}
             data-anam-audio-bridge={audioBridge ?? 'default'}
             data-dani-surface={isDani ? 'live-session' : undefined}

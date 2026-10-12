@@ -189,6 +189,7 @@ export default function DaniMemoryControls({ placement = 'dock' }: DaniMemoryCon
             {open && (
                 <div
                     className={`${styles.root} ${styles.memoryBackdrop}`}
+                    data-ai-screen
                     onMouseDown={event => {
                         if (event.currentTarget === event.target) close();
                     }}
