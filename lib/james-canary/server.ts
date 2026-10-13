@@ -120,8 +120,9 @@ async function post(req:Request) {
         if(body.action==='demo-email-preflight'){
             if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
             const grant=verifyDemoGrant(req.headers.get('x-james-demo-access'));
-            return json({ready:true,...await preflightDemoTransport(),accessMode:grant.accessMode,
-                maxSessions:grant.accessMode==='reusable'?null:1,maxEmails:2,maxEmailsPerSession:2,retries:0});
+            const transport=await preflightDemoTransport(),count=transport.bundle==='three'?3:2;
+            return json({ready:true,...transport,accessMode:grant.accessMode,
+                maxSessions:grant.accessMode==='reusable'?null:1,maxEmails:count,maxEmailsPerSession:count,retries:0});
         }
         if(body.action==='owner-test-preflight'){
             if(options.allowDemoEmail)throw new Error('Legacy owner authorization is not valid on this surface');
@@ -150,8 +151,20 @@ async function post(req:Request) {
                     throw new Error('Another tab already restarted this saved call. Reload to inspect the current call.');
                 restartClaim={key,id};
             }
-            const visitorAuthorization=visitorEmail?createVisitorDemoAuthorization(id):null;
-            const demoTransport=demoGrant||visitorAuthorization?await preflightDemoTransport():null;
+            let visitorAuthorization:ReturnType<typeof createVisitorDemoAuthorization>|null=null;
+            let demoTransport:Awaited<ReturnType<typeof preflightDemoTransport>>|null=null;
+            let emailNotice:string|undefined;
+            try{
+                visitorAuthorization=visitorEmail?createVisitorDemoAuthorization(id):null;
+                demoTransport=demoGrant||visitorAuthorization?await preflightDemoTransport():null;
+            }catch(error){
+                // Public call availability must not depend on the optional mail service.
+                // Withhold the capability for this call; never imply email was enabled.
+                if(!visitorEmail||!options.allowBrowserRecovery)throw error;
+                visitorAuthorization=null;
+                emailNotice='Email is unavailable for this call. James and the legal pad remain available.';
+            }
+            const emailBundle=demoTransport?.bundle?{bundle:demoTransport.bundle,recipientMode:demoTransport.recipientMode}:{};
             let owner=browser(req), token:string|undefined;
             if(!owner){const created=createAmyAnamBrowserSessionWithSecret(secret());owner=created.session;token=created.token;}
             const p=await provider('/personas/'+PERSONA_ID,undefined,options.runtimeClose?'persona-fetch':undefined);
@@ -173,14 +186,14 @@ async function post(req:Request) {
                 const bound=bindDemoGrant(demoGrant,id);
                 const claimed=await redis(['SET',prefix+'demo-grant:'+bound.grantId,id,'NX','EX',TTL]);
                 if(claimed!=='OK')throw new Error('Demo authorization already consumed; create no new session with this code');
-                state.demoEmail={...bound,sender:demoTransport.sender,replyTo:demoTransport.replyTo};
+                state.demoEmail={...bound,...emailBundle,sender:demoTransport.sender,replyTo:demoTransport.replyTo};
             }
-            if(visitorAuthorization&&demoTransport)state.demoEmail={...visitorAuthorization,sender:demoTransport.sender,replyTo:demoTransport.replyTo};
+            if(visitorAuthorization&&demoTransport)state.demoEmail={...visitorAuthorization,...emailBundle,sender:demoTransport.sender,replyTo:demoTransport.replyTo};
             if(!state.config.voiceId||!p.brain?.systemPrompt)throw new Error('Published persona configuration is incomplete');
             state.stateHash=sha(JSON.stringify(state)); await save(null,state);
             const minted=await provider('/auth/session-token',{clientLabel:state.clientLabel,personaConfig:runtime?.config??{personaId:PERSONA_ID}},options.runtimeClose?'session-token':undefined);
             if(typeof minted.sessionToken!=='string')throw new Error('Session token missing');
-            const response=json({...view(state),sessionToken:minted.sessionToken});
+            const response=json({...view(state),sessionToken:minted.sessionToken,...(emailNotice?{operation_notice:emailNotice}:{})});
             if(token)response.cookies.set(cookie,token,amyAnamCookieOptions());
             restartClaim=undefined;
             return response;
@@ -208,12 +221,14 @@ async function post(req:Request) {
         if(body.action==='preview-demo-email'){
             if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
             const prepared=prepareDemoMessages(current);
-            return json({snapshotHash:prepared.snapshotHash,callerAddress:prepared.callerAddress,sender:prepared.sender,replyTo:prepared.replyTo,
-                messages:[{lane:'internal',to:prepared.internal.to,text:prepared.internal.text},{lane:'caller',to:prepared.caller.to,text:prepared.caller.text}]});
+            const lanes=prepared.admin?['caller','internal','admin'] as const:['internal','caller'] as const;
+            return json({snapshotHash:prepared.snapshotHash,messageHash:prepared.messageHash,callerAddress:prepared.callerAddress,sender:prepared.sender,replyTo:prepared.replyTo,
+                messages:lanes.map(lane=>{const m=prepared[lane]!;return {lane,to:m.to,subject:m.subject,text:m.text,
+                    attachments:m.attachments?.map(a=>({filename:a.filename,text:Buffer.from(a.content,'base64').toString('utf8')}))};})});
         }
         if(body.action==='send-demo-email'){
             if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
-            next=await sendDemoSummaries(current,{snapshotHash:body.snapshotHash,callerAddress:body.callerAddress,approved:body.approved},
+            next=await sendDemoSummaries(current,{snapshotHash:body.snapshotHash,messageHash:body.messageHash,callerAddress:body.callerAddress,approved:body.approved},
                 {save,stamp:receipt,reserveAllowance:callerAddress=>reserveVisitorEmailAllowance(callerAddress,{redis,prefix})});
             return json(view(next));
         }
@@ -274,7 +289,8 @@ async function post(req:Request) {
             else {
                 if(completed.status!=='ready'||(!completed.metadata.endTime&&!completed.metadata.exitStatus))throw new Error('Provider release/transcript not yet verified; local session remains CLOSING');
                 verifyFinalEvidence(current,completed.turns);
-                next.providerRelease={endTime:completed.metadata.endTime||completed.metadata.exitStatus||'',transcriptHash:sha(JSON.stringify(completed.turns)),verifiedAt:new Date().toISOString()};
+                next.providerRelease={startTime:completed.metadata.startTime||undefined,endTime:completed.metadata.endTime||completed.metadata.exitStatus||'',transcriptHash:sha(JSON.stringify(completed.turns)),verifiedAt:new Date().toISOString()};
+                if(next.demoEmail?.bundle==='three')next.providerTranscript=structuredClone(completed.turns);
                 next.state='CLOSED';next.closedAt=new Date().toISOString();
                 if(next.intakeBrief&&hasSubstantiveBriefFact(next.intake))next=finalizeBrief(next);
                 if(next.intake.handoff==='HANDOFF_REQUESTED'&&readiness(next.intake).ready)next.intake.handoff='PREPARED';
@@ -332,8 +348,9 @@ export function completeVerifiedSession(current:Session,completed:CompletedAnamT
         throw new Error('Provider end time is not confirmed; session remains open');
     verifyFinalEvidence(current,completed.turns);
     let next=structuredClone(current);
-    next.providerRelease={endTime:completed.metadata.endTime||completed.metadata.exitStatus||'',
+    next.providerRelease={startTime:completed.metadata.startTime||undefined,endTime:completed.metadata.endTime||completed.metadata.exitStatus||'',
         transcriptHash:sha(JSON.stringify(completed.turns)),verifiedAt:new Date().toISOString()};
+    if(next.demoEmail?.bundle==='three')next.providerTranscript=structuredClone(completed.turns);
     next.state='CLOSED';next.closedAt=new Date().toISOString();
     if(recoveryOrigin&&next.websiteClosing?.runtimeOwned)next.websiteClosing.closeOrigin??=recoveryOrigin;
     if(next.intakeBrief&&hasSubstantiveBriefFact(next.intake))next=finalizeBrief(next);

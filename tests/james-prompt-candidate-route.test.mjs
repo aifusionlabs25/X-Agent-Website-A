@@ -40,7 +40,8 @@ test('public James uses the bounded runtime without exposing candidate web route
     assert.match(productionServer, /runtimeClose: true/);
     assert.match(productionServer, /xagent_james_notepad_v2/);
     assert.match(productionServer, /xagent:james:notepad:v2:/);
-    assert.match(productionServer, /allowEmail: false/);
+    assert.match(productionServer, /allowEmail: process\.env\.JAMES_PUBLIC_DEMO_EMAIL_ENABLED === 'true'/);
+    assert.match(productionServer, /process\.env\.JAMES_DEMO_EMAIL_BUNDLE === 'three'/);
     assert.match(legacyServer, /personaId: CURRENT_JAMES_PERSONA_ID/);
     assert.match(legacyServer, /xagent:james:notepad-demo:v1:/);
 });

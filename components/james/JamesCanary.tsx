@@ -13,11 +13,14 @@ import styles from './JamesPresentation.module.css';
 import { JamesBrowserAttemptGate, browserStartAllowed, echoAdvisory } from '@/lib/james-canary/browser-lifecycle';
 
 type State=ReturnType<typeof view>;
-type EmailPreview={snapshotHash:string;callerAddress:string;sender:string;replyTo:string;messages:{lane:string;to:string;text:string}[]};
+type EmailPreview={snapshotHash:string;messageHash?:string;callerAddress:string;sender:string;replyTo:string;messages:{lane:string;to:string;subject:string;text:string;attachments?:{filename:string;text:string}[]}[]};
+const emailLabel=(lane:string)=>lane==='internal'?'Firm intake':lane==='admin'?'Admin record':'Client recap';
 export default function JamesCanary({apiPath='/api/james-canary',storageKey='james-hosted-canary-session-v1',clearSavedSessionOnLoad=false,notepadDemo=false,launchReady=true,emailAccessMode='one-use',previewStates,surfaceLabel,publicPresentation=false,notesFontClassName=''}:{apiPath?:string;storageKey?:string;clearSavedSessionOnLoad?:boolean;notepadDemo?:boolean;launchReady?:boolean;emailAccessMode?:'one-use'|'reusable'|'visitor';previewStates?:{label:string;state:State|null}[];surfaceLabel?:string;publicPresentation?:boolean;notesFontClassName?:string}={}){
     const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(notepadDemo?'Start a demo conversation when ready.':'Start a new canary conversation when ready.'),[history,setHistory]=useState<Turn[]>([]);
     const [padVisibility,setPadVisibility]=useState<PadVisibility>(()=>notepadDemo?initialPadVisibility():{open:true,revealed:true,manual:false}),[accessCode,setAccessCode]=useState(''),[preview,setPreview]=useState<EmailPreview|null>(null),[approved,setApproved]=useState(false);
     const [editSlot,setEditSlot]=useState('name'),[editValue,setEditValue]=useState(''),[editing,setEditing]=useState(false),[previewIndex,setPreviewIndex]=useState(0);
+    const emailDialog=useRef<HTMLDialogElement>(null);
+    useEffect(()=>{if(preview&&!emailDialog.current?.open)emailDialog.current?.showModal();},[preview]);
     const [restoring,setRestoring]=useState(publicPresentation&&!previewStates),[previousId,setPreviousId]=useState(''),[audioAdvisory,setAudioAdvisory]=useState<string|null>(null);
     const attempts=useRef(new JamesBrowserAttemptGate()),rejectBinding=useRef<((error:Error)=>void)|null>(null),lastProviderId=useRef<string|null>(null);
     const bindingWork=useRef<Promise<unknown>>(Promise.resolve());
@@ -399,7 +402,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     }
     async function previewEmails(){
         setBusy(true);setApproved(false);
-        try{setPreview(await api('preview-demo-email'));setNotice('Review both summaries and the caller address before approving the two demo emails.');}
+        try{setPreview(await api('preview-demo-email'));setNotice('Review each email, its recipient, and any transcript attachment before approving.');}
         catch(error){setNotice(error instanceof Error?error.message:'Email preview unavailable');}
         finally{setBusy(false);}
     }
@@ -407,8 +410,8 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         if(!preview||!approved)return;
         setBusy(true);
         try{
-            const s=await api('send-demo-email',{snapshotHash:preview.snapshotHash,callerAddress:preview.callerAddress,approved:true});render(s);setPreview(null);setApproved(false);
-            setNotice('Demo send attempts completed. See the separate internal and caller results below. AgentMail acceptance is not proof of inbox delivery.');
+            const s=await api('send-demo-email',{snapshotHash:preview.snapshotHash,messageHash:preview.messageHash,callerAddress:preview.callerAddress,approved:true});render(s);setPreview(null);setApproved(false);
+            setNotice('Demo send attempts completed. See each email result below. AgentMail acceptance is not proof of inbox delivery.');
         }catch(error){
             setPreview(null);setApproved(false);
             setNotice((error instanceof Error?error.message:'Email send needs attention')+'. Do not retry; reload to inspect the saved send results.');
@@ -462,9 +465,25 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 {!publicPresentation&&<><p className="mt-4 text-xs text-zinc-400">Use fictional case details only. This is not legal advice or a submission to Knowles. {!state?'Email availability is checked when you start James. Any email requires your review and approval.':state.demo_email_authorized?'Email testing is authorized for this session, but requires post-call review and explicit approval.':state.owner_test?'Legacy owner email test; inspect its send status.':'Email sending is off for this session.'} Notes expire 24 hours after their last saved update. Anam transcripts and emailed copies have separate retention rules.</p>
                 {state&&<p className="mt-2 text-xs text-zinc-400">{state.state} · {state.acceptedVisitorTurns} visitor turns · {state.config.voiceName} · Session {state.id.slice(-8)}</p>}</>}
                 {state?.speech_review_required&&<p role="alert" className="mt-3 border-l-2 border-amber-400 pl-3 text-sm text-amber-200">{publicPresentation?'Please review James’s response carefully.':'Possible instruction leakage detected in James’s captions. Email preparation is blocked for review. This does not filter or prevent spoken audio.'}</p>}
-                {!!state?.demo_email_status.length&&<ul className="mt-4 space-y-2 text-sm">{state.demo_email_status.map(result=><li key={result.lane}>{result.lane==='internal'?'Internal summary':'Caller recap'} to {result.recipient}: {result.status==='SENT'?'accepted by AgentMail':result.status==='RESERVED'?'pending or unknown — do not retry':'no verified receipt — do not retry'}.</li>)}</ul>}
-                {notepadDemo&&state?.state==='CLOSED'&&state.demo_email_authorized&&!state.demo_email_status.length&&<button onClick={()=>void previewEmails()} disabled={busy||state.speech_review_required||state.intakeBrief?.phase!=='CONFIRMED'||Boolean(state.intakeBrief?.missing.length)} className="mt-4 rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Review demo emails</button>}
-                {preview&&<section className="mt-5 rounded border border-amber-200/40 p-4" aria-label="Demo email review"><h2 className="font-serif text-xl">Review before sending</h2><p className="my-2 text-xs">From AI Fusion Labs Demo ({preview.sender}) · Replies to {preview.replyTo}</p>{preview.messages.map(m=><details key={m.lane} className="my-3"><summary>{m.lane==='internal'?'Internal review summary':'Caller recap'} → {m.to}</summary><pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap text-xs">{m.text}</pre></details>)}<label className="my-4 flex items-start gap-3 text-sm"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)} disabled={busy}/><span>I reviewed both summaries, confirm these are fictional demo case details, and authorize one internal email plus one recap to {preview.callerAddress}. I have permission to use this caller mailbox.</span></label><button onClick={()=>void sendEmails()} disabled={busy||!approved} className="rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Email both demo summaries</button></section>}
+                {!!state?.demo_email_status.length&&<ul className="mt-4 space-y-2 text-sm">{state.demo_email_status.map(result=><li key={result.lane}>{emailLabel(result.lane)} to {result.recipient}: {result.status==='SENT'?'accepted by AgentMail':result.status==='RESERVED'?'pending or unknown — do not retry':'no verified receipt — do not retry'}.</li>)}</ul>}
+                {notepadDemo&&state?.state==='CLOSED'&&state.demo_email_authorized&&(!publicPresentation||state.id===id.current)&&!state.demo_email_status.length&&<button onClick={()=>void previewEmails()} disabled={busy||state.speech_review_required||state.intakeBrief?.phase!=='CONFIRMED'||Boolean(state.intakeBrief?.missing.length)} className="mt-4 rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Review demo emails</button>}
+                {preview&&<dialog ref={emailDialog} aria-labelledby="james-email-review-title" onCancel={event=>{if(busy)event.preventDefault();else{setPreview(null);setApproved(false);}}} className="m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-xl border border-amber-200/40 bg-zinc-950 p-5 text-white backdrop:bg-black/70 sm:p-7">
+                    <div className="flex items-start justify-between gap-4"><h2 id="james-email-review-title" className="font-serif text-2xl">Review before sending</h2><button onClick={()=>{setPreview(null);setApproved(false);}} disabled={busy} className="rounded border border-white/30 px-3 py-1 text-sm disabled:opacity-40">Close review</button></div>
+                    <p className="my-2 break-words text-xs">From AI Fusion Labs Demo ({preview.sender}) · Replies to {preview.replyTo}</p>
+                    {preview.messages.map(m=><details key={m.lane} className="my-3">
+                        <summary className="cursor-pointer break-words">{emailLabel(m.lane)} → {m.to}</summary>
+                        <p className="mt-3 text-sm font-semibold">{m.subject}</p>
+                        <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{m.text}</pre>
+                        {m.attachments?.map(a=><details key={a.filename} className="my-3 rounded border border-amber-200/20 p-3">
+                            <summary className="cursor-pointer break-words">Transcript attachment · {a.filename}</summary>
+                            <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{a.text}</pre>
+                        </details>)}
+                    </details>)}
+                    <label className="my-4 flex items-start gap-3 text-sm"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)} disabled={busy}/>
+                        <span>I reviewed all {preview.messages.length} emails, their recipients, and any attachment. These are fictional demo details. I authorize one of each email to the addresses shown and have permission to use those mailboxes.</span>
+                    </label>
+                    <button onClick={()=>void sendEmails()} disabled={busy||!approved} className="rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Send {preview.messages.length} demo emails</button>
+                </dialog>}
                 {!publicPresentation&&<details className="mt-4"><summary className="text-sm">Conversation captions</summary>{history.map((t,i)=><p key={t.id+':'+i} className="my-2 text-sm"><strong>{t.role==='user'?'Visitor':'James'}: </strong>{t.content}</p>)}</details>}
             </section>
             {padOpen&&<aside id="james-legal-pad" className={publicPresentation?styles.pad:'relative rounded-b-lg border-t-[14px] border-amber-800 bg-[#fff1a8] py-6 pl-12 pr-6 text-zinc-900 shadow-xl'} style={publicPresentation?undefined:{backgroundImage:'linear-gradient(90deg, transparent 35px, #df827966 35px, #df827966 37px, transparent 37px), repeating-linear-gradient(transparent 0px, transparent 27px, #b7a56b44 27px, #b7a56b44 28px)'}} aria-label="James legal pad">

@@ -36,7 +36,10 @@ export type Session = {
     personaId: string; config: { promptHash: string; configHash: string; voiceId: string; voiceName: string };
     providerId?: string; state: 'LAUNCHING' | 'ACTIVE' | 'CLOSING_PENDING' | 'CLOSING' | 'CLOSED';
     turns: Turn[]; intake: Intake; receipts: { revision: number; previousHash: string; stateHash: string; eventHash: string; at: string }[];
-    providerRelease?: { endTime: string; transcriptHash: string; verifiedAt: string }; closedAt?: string;
+    providerRelease?: { startTime?: string; endTime: string; transcriptHash: string; verifiedAt: string }; closedAt?: string;
+    // Complete normalized provider conversation, retained only in encrypted session storage.
+    // Browser captions are not a substitute for this transcript when exporting email.
+    providerTranscript?: { role: 'user' | 'agent'; content: string }[];
     ownerTest?: { grantId: string; expiresAt: number };
     demoEmail?: DemoEmailState;
     intakeBrief?: BriefWorkflow;
@@ -594,11 +597,11 @@ export function receipt(previous: Session, next: Session, event: unknown): Sessi
 }
 export function view(session: Session) {
     const deliveries=session.demoEmail?.deliveries;
-    const demoStatus=deliveries?(['internal','caller'] as const).map(lane=>({lane,status:deliveries[lane].status,recipient:deliveries[lane].recipient})):[];
+    const demoStatus=deliveries?(['internal','caller','admin'] as const).flatMap(lane=>deliveries[lane]?[{lane,status:deliveries[lane]!.status,recipient:deliveries[lane]!.recipient}]:[]):[];
     return { id:session.id,providerId:session.providerId,state:session.state,revision:session.revision,stateHash:session.stateHash,browserRelease:session.browserRelease,
         config:session.config,personaId:session.personaId,websiteClosing:session.websiteClosing,intakeBrief:structuredBriefView(session),brief:brief(session.intake).map(section=>session.email?.status==='SENT'&&section.title==='HANDOFF STATUS'?{
             title:section.title,items:[{label:'OWNER TEST EMAIL SENT',text:'Sent to the authorized test mailbox only. Nothing sent to Knowles; no firm review or follow-up confirmed.'}]}:deliveries&&section.title==='HANDOFF STATUS'?{
-            title:section.title,items:demoStatus.map(d=>({label:d.lane==='internal'?'INTERNAL DEMO EMAIL':'CALLER RECAP',text:d.status==='SENT'?'AgentMail accepted this demo email. Inbox delivery and human review are not confirmed.':d.status==='RESERVED'?'Send result unknown or pending. Do not retry.':'No verified send receipt. Do not retry.'}))}:section),readiness:readiness(session.intake),
+            title:section.title,items:demoStatus.map(d=>({label:d.lane==='internal'?'INTERNAL DEMO EMAIL':d.lane==='admin'?'ADMIN DEMO RECORD':'CALLER RECAP',text:d.status==='SENT'?'AgentMail accepted this demo email. Inbox delivery and human review are not confirmed.':d.status==='RESERVED'?'Send result unknown or pending. Do not retry.':'No verified send receipt. Do not retry.'}))}:section),readiness:readiness(session.intake),
         acceptedVisitorTurns:session.turns.filter(t=>t.role==='user').length,providerRelease:session.providerRelease,
         handoff:session.intake.handoff,email_status:session.email?.status||'INACTIVE_NOT_SENT',
         email_receipt:session.email?.messageId||null,owner_test:Boolean(session.ownerTest),

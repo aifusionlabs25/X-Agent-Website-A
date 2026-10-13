@@ -3,13 +3,15 @@ import { brief, readiness, sha } from './state.ts';
 import type { Session } from './state.ts';
 import { instructionLeakageSuspected, candidateInstructionLeakageSuspected } from './speech-quality.ts';
 import { structuredBriefView } from './structured-brief.ts';
+import { buildJamesEmailTemplates } from './email-templates.ts';
 
 export const INTERNAL_DEMO_RECIPIENT = 'aifusionlabs@gmail.com';
 export const DEMO_SENDER_NAME = 'AI Fusion Labs Demo';
 type Environment = Record<string, string | undefined>;
 export type DemoAccessMode = 'one-use' | 'reusable' | 'visitor';
 export type DemoGrant = { id: string; expiresAt: number; accessMode: DemoAccessMode };
-export type DemoMessage = { to: string; subject: string; text: string; html: string };
+export type DemoAttachment = { filename: string; content_type: 'text/plain'; content: string };
+export type DemoMessage = { to: string; subject: string; text: string; html: string; attachments?: DemoAttachment[] };
 export type DemoDelivery = {
     status: 'RESERVED' | 'SENT' | 'FAILED_OR_UNKNOWN'; recipient: string;
     bodyHash: string; reservedAt: string; messageId?: string;
@@ -17,8 +19,9 @@ export type DemoDelivery = {
 export type DemoEmailState = {
     grantId: string; expiresAt: number; sender: string; replyTo: string;
     accessMode?: DemoAccessMode; accessDigest?: string;
+    bundle?: 'three'; recipientMode?: 'owner' | 'caller';
     snapshotHash?: string; consentAt?: string;
-    deliveries?: { internal: DemoDelivery; caller: DemoDelivery };
+    deliveries?: { internal: DemoDelivery; caller: DemoDelivery; admin?: DemoDelivery };
 };
 const addressPattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/i;
 function address(value: unknown): string {
@@ -34,7 +37,14 @@ export function readDemoEmailConfig(env: Environment = process.env) {
     const replyTo = address(env.JAMES_DEMO_REPLY_TO);
     if (apiKey.length < 16) throw new Error('James AgentMail credentials are missing');
     // Never reuse Amy's sender, endpoint overrides, or Knowles branding implicitly.
-    return { apiKey, sender, replyTo, apiBaseUrl: 'https://api.agentmail.to' as const };
+    const bundle = env.JAMES_DEMO_EMAIL_BUNDLE ?? 'two';
+    if (bundle !== 'two' && bundle !== 'three') throw new Error('James email bundle is invalid');
+    const recipientMode = env.JAMES_DEMO_EMAIL_RECIPIENT_MODE;
+    if (bundle === 'three' && recipientMode !== 'owner' && recipientMode !== 'caller') {
+        throw new Error('Choose the approved James demo recipient mode');
+    }
+    return { apiKey, sender, replyTo, apiBaseUrl: 'https://api.agentmail.to' as const,
+        ...(bundle === 'three' ? { bundle: 'three' as const, recipientMode: recipientMode as 'owner' | 'caller' } : {}) };
 }
 export function readDemoAccessMode(env: Environment = process.env): DemoAccessMode {
     const mode = env.JAMES_DEMO_EMAIL_ACCESS_MODE ?? 'one-use';
@@ -100,7 +110,26 @@ export async function preflightDemoTransport(options: { env?: Environment; fetch
         || inbox?.display_name !== DEMO_SENDER_NAME) {
         throw new Error('Dedicated James inbox must exist with display name AI Fusion Labs Demo');
     }
-    return { sender: config.sender, replyTo: config.replyTo, senderName: DEMO_SENDER_NAME, internalRecipient: INTERNAL_DEMO_RECIPIENT };
+    return { sender: config.sender, replyTo: config.replyTo, senderName: DEMO_SENDER_NAME, internalRecipient: INTERNAL_DEMO_RECIPIENT,
+        ...(config.bundle ? { bundle: config.bundle, recipientMode: config.recipientMode } : {}) };
+}
+export function verifiedTranscriptAttachment(session: Session): DemoAttachment {
+    const turns = session.providerTranscript;
+    if (!turns?.length || !session.providerRelease || sha(JSON.stringify(turns)) !== session.providerRelease.transcriptHash) {
+        throw new Error('Complete verified provider transcript required for the firm attachment; start a new demo call');
+    }
+    if (!/^[a-z0-9-]{1,100}$/i.test(session.id)) throw new Error('Invalid transcript reference');
+    const text = ['JAMES / KNOWLES LAW FIRM DEMO — FINALIZED CONVERSATION',
+        'For demo purposes only. Visitor-reported information; not legal advice or a submission to a firm.',
+        `Website session: ${session.id}`, `Provider session: ${session.providerId || 'Unavailable'}`,
+        `Started: ${session.providerRelease.startTime || 'Unavailable'}`,
+        `Ended: ${session.providerRelease.endTime}`,
+        `Transcript SHA-256: ${session.providerRelease.transcriptHash}`,
+        `Complete normalized provider conversation: ${turns.length} turns. No conversation turns omitted.`, '',
+        ...turns.map((turn, index) => `${index + 1}. ${turn.role === 'user' ? 'Visitor' : 'James'}: ${turn.content}`), '',
+    ].join('\n\n');
+    if (Buffer.byteLength(text, 'utf8') > 512 * 1024) throw new Error('Transcript exceeds attachment size limit; no truncated transcript sent');
+    return { filename: `james-transcript-${session.id}.txt`, content_type: 'text/plain', content: Buffer.from(text, 'utf8').toString('base64') };
 }
 const htmlEscape = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 function message(to: string, subject: string, text: string): DemoMessage {
@@ -117,6 +146,9 @@ export function prepareDemoMessages(session: Session, now = Date.now(), env: Env
     }
     if (authorization.accessMode === 'visitor') readVisitorEmailPolicy(env);
     if (authorization.sender !== config.sender || authorization.replyTo !== config.replyTo) throw new Error('Demo sender configuration changed; no send authorized');
+    if (authorization.bundle !== config.bundle || authorization.recipientMode !== config.recipientMode) {
+        throw new Error('Demo email routing changed; start a new call to authorize the current bundle');
+    }
     if (session.state !== 'CLOSED' || !session.providerRelease || !readiness(session.intake).ready) throw new Error('Verified closed and complete notes required');
     const structured = structuredBriefView(session);
     if (authorization.accessMode === 'visitor' && !structured) throw new Error('Confirmed structured intake brief required');
@@ -129,6 +161,24 @@ export function prepareDemoMessages(session: Session, now = Date.now(), env: Env
     const callerAddress = address(email.value);
     const sections = structured ? structured.sections.map(section => ({title:section.title,items:section.rows.map(row => ({label:row.label,text:row.value}))}))
         : brief(session.intake).filter(section => section.title !== 'HANDOFF STATUS');
+    if (config.bundle === 'three') {
+        const attachment = verifiedTranscriptAttachment(session);
+        // Check the full source before sending its attachment, not only browser captions.
+        if (candidateInstructionLeakageSuspected(session.providerTranscript!.map((turn, index) => ({
+            id: String(index), role: turn.role === 'agent' ? 'persona' as const : 'user' as const, content: turn.content,
+        })))) throw new Error('Possible instruction leakage in provider transcript: review before emailing');
+        const templates = buildJamesEmailTemplates({ sections, sessionId: session.id, providerId: session.providerId,
+            providerStartedAt: session.providerRelease!.startTime, providerEndedAt: session.providerRelease!.endTime,
+            transcriptHash: session.providerRelease!.transcriptHash, snapshotHash: session.stateHash,
+            transcriptFilename: attachment.filename, turnCount: session.providerTranscript!.length,
+            generatedAt: session.closedAt || session.providerRelease!.verifiedAt });
+        const callerRecipient = config.recipientMode === 'owner' ? INTERNAL_DEMO_RECIPIENT : callerAddress;
+        const messages = { internal: { ...templates.internal, to: INTERNAL_DEMO_RECIPIENT, attachments: [attachment] } as DemoMessage,
+            caller: { ...templates.caller, to: callerRecipient } as DemoMessage,
+            admin: { ...templates.admin, to: INTERNAL_DEMO_RECIPIENT } as DemoMessage };
+        return { ...messages, messageHash: sha(JSON.stringify(messages)),
+            snapshotHash: session.stateHash, callerAddress, sender: config.sender, replyTo: config.replyTo };
+    }
     const sectionText = (includeStatus: boolean) => sections.map(section => section.title + '\n' + section.items.map(item =>
         (item.label && (includeStatus || !['ANSWERED', 'DEFERRED_TO_FIRM', 'UNRESOLVED'].includes(item.label)) ? item.label.replaceAll('_', ' ') + ': ' : '') + item.text
     ).join('\n')).join('\n\n');
@@ -146,23 +196,38 @@ export function prepareDemoMessages(session: Session, now = Date.now(), env: Env
         'This recap does not mean a law firm has received or reviewed your information. Do not rely on this demo to take legal action or meet a deadline.',
         'AI Fusion Labs Demo',
     ].join('\n\n'));
-    return { internal, caller, snapshotHash: session.stateHash, callerAddress, sender: config.sender, replyTo: config.replyTo };
+    return { internal, caller, admin: undefined as DemoMessage | undefined, messageHash: undefined as string | undefined,
+        snapshotHash: session.stateHash, callerAddress, sender: config.sender, replyTo: config.replyTo };
+}
+function demoMessagePayload(message: DemoMessage, replyTo: string) {
+    if (message.subject.length > 200 || /[\r\n]/.test(message.subject) || message.text.length > 30_000 || message.html.length > 90_000) {
+        throw new Error('Summary exceeds email size limit');
+    }
+    if (message.attachments && (message.attachments.length !== 1 || message.attachments.some(a =>
+        !/^james-transcript-[a-z0-9-]{1,100}\.txt$/i.test(a.filename) || a.content_type !== 'text/plain'
+        || !a.content || Buffer.from(a.content, 'base64').toString('base64') !== a.content
+        || Buffer.byteLength(a.content, 'base64') > 512 * 1024))) throw new Error('Invalid James transcript attachment');
+    const payload = JSON.stringify({ to: [address(message.to)], reply_to: [replyTo], subject: message.subject,
+        text: message.text, html: message.html, track_opens: false,
+        ...(message.attachments ? { attachments: message.attachments } : {}) });
+    if (Buffer.byteLength(payload, 'utf8') > 1024 * 1024) throw new Error('Demo message exceeds request size limit');
+    return payload;
 }
 export async function sendDemoMessage(message: DemoMessage, options: { env?: Environment; fetchImpl?: typeof fetch; idempotencyKey: string }) {
     const config = readDemoEmailConfig(options.env);
     if (!/^[a-z0-9-]{1,200}$/.test(options.idempotencyKey)) throw new Error('Invalid demo send identifier');
     const response = await (options.fetchImpl || fetch)(`${config.apiBaseUrl}/v0/inboxes/${encodeURIComponent(config.sender)}/messages/send`, {
         method: 'POST', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': options.idempotencyKey },
-        body: JSON.stringify({ to: [address(message.to)], reply_to: [config.replyTo], subject: message.subject, text: message.text, html: message.html, track_opens: false }),
+        body: demoMessagePayload(message, config.replyTo),
         cache: 'no-store', signal: AbortSignal.timeout(8000),
     });
     const result = await response.json().catch(() => null);
     if (!response.ok || typeof result?.message_id !== 'string' || !result.message_id.trim()) throw new Error('No verified AgentMail send receipt; do not retry');
     return { messageId: result.message_id.trim().slice(0, 200) };
 }
-/** Both reservations are durably saved before either transport attempt. Reload,
+/** All reservations are durably saved before any transport attempt. Reload,
  * failure, storage loss after acceptance, and repeated requests never retry. */
-export async function sendDemoSummaries(session: Session, consent: { snapshotHash: unknown; callerAddress: unknown; approved: unknown }, deps: {
+export async function sendDemoSummaries(session: Session, consent: { snapshotHash: unknown; callerAddress: unknown; approved: unknown; messageHash?: unknown }, deps: {
     save: (previous: Session, next: Session) => Promise<void>;
     stamp: (previous: Session, next: Session, event: unknown) => Session;
     send?: typeof sendDemoMessage; env?: Environment; now?: number;
@@ -170,9 +235,13 @@ export async function sendDemoSummaries(session: Session, consent: { snapshotHas
 }) {
     if (session.demoEmail?.deliveries) return session;
     const prepared = prepareDemoMessages(session, deps.now ?? Date.now(), deps.env);
-    if (consent.approved !== true || consent.snapshotHash !== prepared.snapshotHash || consent.callerAddress !== prepared.callerAddress) {
-        throw new Error('Approve both current summaries and the confirmed caller address before sending');
+    if (consent.approved !== true || consent.snapshotHash !== prepared.snapshotHash || consent.callerAddress !== prepared.callerAddress
+        || (prepared.admin && consent.messageHash !== prepared.messageHash)) {
+        throw new Error('Approve all current demo emails and the confirmed caller address before sending');
     }
+    const lanes = prepared.admin ? ['internal', 'caller', 'admin'] as const : ['internal', 'caller'] as const;
+    // Validate the entire bundle before consuming allowance or reserving any lane.
+    for (const lane of lanes) demoMessagePayload(prepared[lane]!, prepared.replyTo);
     if (session.demoEmail?.accessMode === 'visitor') {
         if (!deps.reserveAllowance) throw new Error('Visitor email allowance is unavailable; no email was attempted');
         await deps.reserveAllowance(prepared.callerAddress);
@@ -181,16 +250,17 @@ export async function sendDemoSummaries(session: Session, consent: { snapshotHas
     const reserved = structuredClone(session);
     reserved.intake.handoff = 'PREPARED';
     Object.assign(reserved.demoEmail!, { snapshotHash: prepared.snapshotHash, consentAt: reservedAt, deliveries: {
-        internal: { status: 'RESERVED', recipient: prepared.internal.to, bodyHash: sha(prepared.internal.text), reservedAt },
-        caller: { status: 'RESERVED', recipient: prepared.caller.to, bodyHash: sha(prepared.caller.text), reservedAt },
+        internal: { status: 'RESERVED', recipient: prepared.internal.to, bodyHash: sha(prepared.admin ? JSON.stringify(prepared.internal) : prepared.internal.text), reservedAt },
+        caller: { status: 'RESERVED', recipient: prepared.caller.to, bodyHash: sha(prepared.admin ? JSON.stringify(prepared.caller) : prepared.caller.text), reservedAt },
+        ...(prepared.admin ? { admin: { status: 'RESERVED', recipient: prepared.admin.to, bodyHash: sha(JSON.stringify(prepared.admin)), reservedAt } } : {}),
     } });
     let current = deps.stamp(session, reserved, { action: 'demo-email-reservation', snapshotHash: prepared.snapshotHash, consent: true });
     await deps.save(session, current);
-    for (const lane of ['internal', 'caller'] as const) {
+    for (const lane of lanes) {
         const next = structuredClone(current);
-        const delivery = next.demoEmail!.deliveries![lane];
+        const delivery = next.demoEmail!.deliveries![lane]!;
         try {
-            const result = await (deps.send || sendDemoMessage)(prepared[lane], { env: deps.env, idempotencyKey: 'james-demo-' + session.demoEmail!.grantId + '-' + lane });
+            const result = await (deps.send || sendDemoMessage)(prepared[lane]!, { env: deps.env, idempotencyKey: 'james-demo-' + session.demoEmail!.grantId + '-' + lane });
             if (!result.messageId) throw new Error('Missing provider receipt');
             delivery.status = 'SENT'; delivery.messageId = result.messageId;
         } catch { delivery.status = 'FAILED_OR_UNKNOWN'; }

@@ -9,7 +9,9 @@ export const { get, post } = createJamesServer({
     cookie: 'xagent_james_notepad_v2',
     prefix: 'xagent:james:notepad:v2:',
     allowDemoEmail: true,
-    allowEmail: false,
+    // Separate public switch: existing environments and saved calls stay mail-off.
+    allowEmail: process.env.JAMES_PUBLIC_DEMO_EMAIL_ENABLED === 'true'
+        && process.env.JAMES_DEMO_EMAIL_BUNDLE === 'three',
     runtimeClose: true,
     allowBrowserRecovery: true,
 });
