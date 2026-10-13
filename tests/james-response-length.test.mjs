@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { candidateRuntimeConfig } from '../lib/james-canary/runtime-session.ts';
+import { candidateSpeakingPrompt } from '../lib/james-canary/speaking-style.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/james-candidate-runtime.json', import.meta.url), 'utf8'));
 const prompt = fixture.candidate.brain.systemPrompt;
@@ -28,7 +29,7 @@ test('source, safety, intake and closing instructions remain in the guarded cand
         'Runtime owns provider state, tool gates, hangup functions, UI state, and termination',
     ]) assert.ok(prompt.includes(requirement), requirement);
     const { config, binding } = candidateRuntimeConfig(structuredClone(fixture.candidate));
-    assert.equal(config.systemPrompt, prompt);
-    assert.equal(binding.promptHash, hash(prompt));
+    assert.equal(config.systemPrompt, candidateSpeakingPrompt(prompt));
+    assert.equal(binding.promptHash, hash(config.systemPrompt));
     assert.deepEqual(config.toolIds, fixture.candidate.tools.filter(tool => tool.name !== 'end_call').map(tool => tool._toolId));
 });

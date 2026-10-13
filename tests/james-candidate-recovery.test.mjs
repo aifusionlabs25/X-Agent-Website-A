@@ -67,11 +67,12 @@ test('scheduled candidate recovery closes an ended session once using mocked pro
         AMY_ANAM_SESSION_SECRET:signingSecret,AMY_ANAM_REDIS_REST_URL:'https://redis.invalid',
         AMY_ANAM_REDIS_REST_TOKEN:'fake',ANAM_API_KEY:'fake',CRON_SECRET:cronSecret});
     const key=createHmac('sha256',signingSecret).update(prefix).digest('hex');
-    const {binding}=candidateRuntimeConfig(structuredClone(fixture.candidate));
+    const {config:runtimeConfig,binding}=candidateRuntimeConfig(structuredClone(fixture.candidate));
     const session={...base(),runtimeBinding:binding};
     const stored=new Map([[prefix+session.id,seal(session,key,prefix)]]);
     const index=new Set([session.id]);
     const config=structuredClone(fixture.resolvedConfig);
+    config.systemPrompt=runtimeConfig.systemPrompt;
     config.llmConfig={id:binding.llmId,modelName:'qwen/qwen3.6-27b'};
     let ended=true,providerReads=0;
     globalThis.fetch=async(url,options={})=>{
@@ -132,8 +133,9 @@ test('bounded recovery rotates pending sessions so a later provider-ended sessio
         AMY_ANAM_SESSION_SECRET:signingSecret,AMY_ANAM_REDIS_REST_URL:'https://redis.invalid',
         AMY_ANAM_REDIS_REST_TOKEN:'fake',ANAM_API_KEY:'fake',CRON_SECRET:cronSecret});
     const key=createHmac('sha256',signingSecret).update(prefix).digest('hex');
-    const {binding}=candidateRuntimeConfig(structuredClone(fixture.candidate));
+    const {config:runtimeConfig,binding}=candidateRuntimeConfig(structuredClone(fixture.candidate));
     const config=structuredClone(fixture.resolvedConfig);
+    config.systemPrompt=runtimeConfig.systemPrompt;
     config.llmConfig={id:binding.llmId,modelName:'qwen/qwen3.6-27b'};
     const sessions=Array.from({length:21},(_,i)=>({
         ...base(),id:`11111111-2222-4333-8444-${String(i+1).padStart(12,'0')}`,
@@ -194,11 +196,12 @@ test('same-browser return reconciles an ended public James session once without 
         AMY_ANAM_REDIS_REST_TOKEN:'fake',ANAM_API_KEY:'fake'});
     const key=createHmac('sha256',signingSecret).update(prefix).digest('hex');
     const owner=createAmyAnamBrowserSessionWithSecret(key);
-    const {binding}=candidateRuntimeConfig(structuredClone(fixture.candidate));
+    const {config:runtimeConfig,binding}=candidateRuntimeConfig(structuredClone(fixture.candidate));
     const session={...base(),browserId:owner.session.id,clientLabel:'xagent-james-notepad:'+base().id,
         runtimeBinding:binding};
     const stored=new Map([[prefix+session.id,seal(session,key,prefix)]]);
     const config=structuredClone(fixture.resolvedConfig);
+    config.systemPrompt=runtimeConfig.systemPrompt;
     config.llmConfig={id:binding.llmId,modelName:'qwen/qwen3.6-27b'};
     let providerReads=0;
     globalThis.fetch=async(url,options={})=>{

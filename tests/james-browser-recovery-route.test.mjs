@@ -30,7 +30,7 @@ async function withRecoveryFixture(run) {
         AMY_ANAM_REDIS_REST_TOKEN: 'fake', ANAM_API_KEY: 'fake', JAMES_DEMO_EMAIL_ENABLED: 'false' });
     const key = secretFor(prefix), owner = createAmyAnamBrowserSessionWithSecret(key);
     const createdAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { binding } = candidateRuntimeConfig(structuredClone(fixture.candidate));
+    const { config: runtimeConfig, binding } = candidateRuntimeConfig(structuredClone(fixture.candidate));
     let session = { id, browserId: owner.session.id, clientLabel: 'xagent-james-notepad:' + id, createdAt,
         personaId: RUNTIME_CANDIDATE_ID, providerId, state: 'ACTIVE', revision: 0, stateHash: 'initial',
         config: { promptHash: sha(fixture.candidate.brain.systemPrompt), configHash: sha(JSON.stringify(fixture.candidate)),
@@ -43,6 +43,7 @@ async function withRecoveryFixture(run) {
     const providerCalls = [], redisWrites = [], redisReads = [];
     const cookie = cookieName + '=' + owner.token;
     const config = structuredClone(fixture.resolvedConfig);
+    config.systemPrompt = runtimeConfig.systemPrompt;
     config.llmConfig = { id: binding.llmId, modelName: 'qwen/qwen3.6-27b' };
     const endedMetadata = () => ({ id: providerId, personaId: null, clientLabel: session.clientLabel,
         startTime: session.createdAt, endTime: new Date(Date.now() - 60000).toISOString(), exitStatus: 'CLOSED_BY_ENGINE',

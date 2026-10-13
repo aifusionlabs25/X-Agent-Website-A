@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AnamSessionMetadata } from '../anam/session-api.ts';
+import { candidateSpeakingPrompt } from './speaking-style.ts';
 export const RUNTIME_CANDIDATE_ID='016e2c66-166b-43bd-8ebf-70b56c46575c';
 const PROMPT_HASH='4ff9a5aee9a23b95e1b8c85b7c3ac67869424fff319d786a1aadacbe4958b1b7';
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
@@ -63,9 +64,10 @@ export function candidateRuntimeConfig(p:Candidate){
         throw new Error('Candidate tool references missing or duplicated; runtime-close launch refused');
     const tools=retained.map(tool=>{const copy={...tool};delete copy._toolId;return copy;});
     const copied=Object.fromEntries(settings.filter(k=>p[k]!==undefined).map(k=>[k,p[k]]));
+    const systemPrompt=candidateSpeakingPrompt(p.brain.systemPrompt);
     const config={name:p.name,avatarId:p.avatar.id,avatarModel:p.avatarModel,voiceId:p.voice.id,llmId:p.llmId,
-        systemPrompt:p.brain.systemPrompt,languageCode:p.languageCode,toolIds,...copied};
-    const binding:RuntimeBinding={promptHash:hash(p.brain.systemPrompt),llmId:p.llmId,avatarVersion:p.avatarModel,
+        systemPrompt,languageCode:p.languageCode,toolIds,...copied};
+    const binding:RuntimeBinding={promptHash:hash(systemPrompt),llmId:p.llmId,avatarVersion:p.avatarModel,
         avatarEngineKey:'one-shot_H9bKrmW2JXiZ8RuESg82FAXO1E47khXy_james1790216133096',
         ttsProviderVoiceId:p.voice.providerVoiceId,ttsProviderModelId:p.voice.providerModelId,tools,settings:copied};
     return {config,binding};

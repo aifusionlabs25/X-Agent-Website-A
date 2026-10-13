@@ -9,6 +9,7 @@ function setup(){
     const expected={clientLabel:'offline-verification',createdAt:'2026-10-03T06:00:00Z',runtimeBinding:binding};
     const metadata={id:'offline',personaId:null,clientLabel:expected.clientLabel,startTime:expected.createdAt,
         endTime:null,exitStatus:null,personaConfig:structuredClone(fixture.resolvedConfig)};
+    metadata.personaConfig.systemPrompt=config.systemPrompt;
     metadata.personaConfig.brainType='ANAM_GPT_4O_MINI_V1';
     metadata.personaConfig.llmConfig={id:binding.llmId,modelName:'qwen/qwen3.6-27b'};
     return {config,binding,expected,metadata};

@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { get, post } from '../lib/james-canary/public-server.ts';
 import { JAMES_PROMPT_CANDIDATE_ID } from '../lib/james-canary/prompt-candidate-server.ts';
 import { get as legacyGet } from '../lib/james-canary/demo-server.ts';
+import { candidateSpeakingPrompt } from '../lib/james-canary/speaking-style.ts';
 
 const CANDIDATE_ID = '016e2c66-166b-43bd-8ebf-70b56c46575c';
 const CANONICAL_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
@@ -83,7 +84,7 @@ test('public launch is server-bound to the bounded persona and cannot read legac
         if (target === 'https://api.anam.ai/v1/auth/session-token') {
             const config=body.personaConfig;
             assert.equal(config.personaId,undefined);
-            assert.equal(config.systemPrompt,candidate.brain.systemPrompt);
+            assert.equal(config.systemPrompt,candidateSpeakingPrompt(candidate.brain.systemPrompt));
             assert.equal(config.avatarId,candidate.avatar.id);
             assert.equal(config.voiceId,candidate.voice.id);
             assert.equal(config.llmId,candidate.llmId);
