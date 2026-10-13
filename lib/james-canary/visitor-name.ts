@@ -7,8 +7,24 @@ export type VisitorNameAnswer = {
 
 const acknowledgments = /^(?:(?:yeah|yep|yes|um|uh|erm|okay|ok|sure|well|right)[,.\s]+)*/iu;
 const unavailableName = /^(?:unknown|unsure|not (?:sure|known|provided|available|interested)|no(?: name| thanks)?|none|declined|rather not|prefer not|yes|yeah|okay|sure|well|sorry|fine|hello|hi|understood|go ahead|continue|thanks|thank you|goodbye|bye|(?:(?:really|very|still)\s+)?(?:worried|scared|afraid|anxious|upset|shaken))$/iu;
-const contactBoundary = /[.!?,;]|\s+(?:and|but)\b|\s+(?=my\s+(?:cell(?:\s*phone)?|phone|number|callback|email)\b)/iu;
+const phoneValue = String.raw`(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}`;
+const emailValue = String.raw`(?:[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:\b[a-z]\s+)?[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)*\s+at\s+[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)+)`;
+const contactLabels = String.raw`(?:my\s+)?(?:cell(?:\s*phone)?|phone|number|callback|email)\b`;
+const contactBoundary = new RegExp(String.raw`[.!?,;]|\s+(?:and|but)\b|\s+(?=`+contactLabels+'|'+phoneValue+String.raw`(?=$|[\s.!?,;])|`+emailValue+String.raw`(?=$|[\s.!?,;]))`,'iu');
+const phoneLabel = String.raw`(?:my\s+)?(?:cell(?:\s*phone)?(?: number)?|phone(?: number)?|callback(?: number)?|number)\s*(?:is|['’]s|:)?\s*`;
+const emailLabel = String.raw`(?:my\s+)?email(?: address)?\s*(?:is|['’]s|:)?\s*`;
+const phoneClause = new RegExp('^(?:'+phoneLabel+')?'+phoneValue+String.raw`(?=$|[\s.!?,;])`,'iu');
+const emailClause = new RegExp('^(?:'+emailLabel+')?'+emailValue+String.raw`(?=$|[\s.!?,;])`,'iu');
+const labeledContact = new RegExp(String.raw`\b(?:`+phoneLabel+phoneValue+'|'+emailLabel+emailValue+')','iu');
+const spokenEmailOnly = /^[\p{L}\p{N}_.’'+-]+(?:\s+[\p{L}\p{N}_.’'+-]+)*\s+at\s+[a-z0-9]+(?:(?:\.|\s+(?:dot|period)\s+)[a-z0-9]+)+[.!?\s]*$/iu;
 const nonIdentityOpening = /^(?:we|he|she|they|it|there|my|your|his|her|their|the|in|from|at|if|could|would|should|do|does|did|are|was|were|not|no|never|maybe|perhaps|please|really|very|still|just|because|unknown|unsure|declined|don['’]t|didn['’]t|can['’]t|won['’]t)\b/iu;
+
+function contactAtStart(text: string): {kind: 'phone' | 'email'; length: number} | null {
+    const phone = phoneClause.exec(text), email = emailClause.exec(text);
+    if (phone) return {kind:'phone',length:phone[0].length};
+    if (email) return {kind:'email',length:email[0].length};
+    return null;
+}
 
 /** A pure contact suffix may contain more than one independent contact clause.
  * Never discard sibling case facts or an incomplete/ambiguous contact answer. */
@@ -16,12 +32,10 @@ function personalContacts(tail: string): ('phone' | 'email')[] | null {
     const contacts: ('phone' | 'email')[] = [];
     let remaining = tail;
     for (let i = 0; i < 4; i++) {
-        const phone = /^my\s+(?:cell(?:\s*phone)?(?: number)?|phone(?: number)?|callback(?: number)?|number)\s*(?:is|['’]s|:)?\s*((?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4})(?=$|[\s.!?,;])/iu.exec(remaining);
-        const email = /^my\s+email(?: address)?\s*(?:is|['’]s|:)?\s*[\w.+-]+@[\w.-]+\.[a-z]{2,}(?=$|[\s.!?,;])/iu.exec(remaining);
-        const matched = phone || email;
-        if (!matched) return null;
-        contacts.push(phone ? 'phone' : 'email');
-        remaining = remaining.slice(matched[0].length).replace(/^[\s.!?,;]+/u, '')
+        const contact = contactAtStart(remaining);
+        if (!contact) return null;
+        contacts.push(contact.kind);
+        remaining = remaining.slice(contact.length).replace(/^[\s.!?,;]+/u, '')
             .replace(/^(?:and|but)\s+/iu, '').trim();
         if (!remaining) return [...new Set(contacts)];
     }
@@ -62,8 +76,11 @@ export function visitorNameAnswer(text: string, prior: string): VisitorNameAnswe
     const introduction = /^(?:(?:it(?:['’]?s| is)|that(?:['’]s| is)|my(?: full)? name(?: is|['’]s)|I(?:['’]m| am)|this is|call me|you can call me)\s+)?/iu.exec(input.slice(ack.length))![0];
     const start = ack.length + introduction.length;
     // ASR capitalization and punctuation are not identity evidence. Locate the
-    // name's original span before an explicit contact marker, then validate it.
+    // name's original span before a field label or known contact value.
     const rest = input.slice(start);
+    // A contact-only answer has no independent name span. In particular, a dot
+    // in an email address must never make its local part look like a first name.
+    if (contactAtStart(rest)) return null;
     const boundary = contactBoundary.exec(rest);
     const span = (boundary ? rest.slice(0,boundary.index) : rest).trimEnd();
     const matched = /^([\p{L}][\p{L}'’-]+(?:\s+(?:(?:de|del|da|dos|van|von|la|le)\s+)*[\p{L}][\p{L}'’-]+){0,3})$/iu.exec(span);
@@ -72,14 +89,18 @@ export function visitorNameAnswer(text: string, prior: string): VisitorNameAnswe
     const value = matched[1], end = start + value.length;
     const suffix = input.slice(end);
     const tail = suffix.replace(/^\s*(?:[.!?,;]\s*)?(?:(?:and|but)\s+)?/iu, '').trim();
+    const contacts = personalContacts(tail);
+    // A spaced spoken email alone is not a name. A complete, separate phone
+    // followed by an email, however, establishes an actual contact list.
+    if (spokenEmailOnly.test(rest) && !labeledContact.test(rest)
+        && !(contacts?.includes('phone') && contacts.includes('email'))) return null;
     if (!tail || /^[.!?\s]*$/u.test(tail)) return {value,clause:input,pureContact:true};
     // A later explicit identity may be a correction. Leave that turn to the
     // existing explicit-name extraction instead of overwriting it with this one.
     if (/\bmy\s+(?:full\s+)?name\b/iu.test(tail)) return null;
     // Refuse a second possible name/place rather than guessing which value
     // belongs in the visitor's identity field.
-    if (!/^(?:my\s+(?:cell(?:\s*phone)?|phone|number|callback|email|name)\b|I\b|I['’]m\b|we\b|they\b|he\b|she\b|there\b|the\b|also\b)/iu.test(tail)) return null;
-    const contacts = personalContacts(tail);
+    if (!contactAtStart(tail) && !/^(?:my\s+(?:cell(?:\s*phone)?|phone|number|callback|email|name)\b|I\b|I['’]m\b|we\b|they\b|he\b|she\b|there\b|the\b|also\b)/iu.test(tail)) return null;
     if (contacts) return {value,clause:input,pureContact:true,contacts};
     return {value,clause:input.slice(0,end)+(suffix.match(/^\s*[.!?,;]/u)?.[0]||''),pureContact:false};
 }
