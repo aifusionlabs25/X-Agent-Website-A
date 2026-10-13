@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Fact, Field, Intake, Turn } from './state.ts';
+import {visitorNameAnswer,asksAnotherPersonsName,reportsAnotherPersonsName} from './visitor-name.ts';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 
@@ -43,35 +44,26 @@ export function repairCandidateIntake(before: Intake, extracted: Intake, turn: T
     };
     const binding = (intent: string) => ({text:prior,hash:digest(prior),intent});
 
-    // A direct personal-name answer may include the callback in the same reply.
-    // Recognize only this pure contact shape after an explicit "your name"
-    // question; never borrow a name from email, the persona, or a third party.
-    const combinedName = /^(?:(?:[Yy]eah|[Yy]es|[Uu]m|[Uu]h|[Oo]kay|[Ss]ure|[Ww]ell)[,.\s]+)*(?:(?:[Ii]t(?:['’]s| is)|[Mm]y(?: full)? name is)\s+)?([\p{Lu}][\p{L}'’-]+(?:\s+[\p{Lu}][\p{L}'’-]+){0,3})(?:[,;]\s*(?:and\s+)?|\s+and\s+)[Mm]y\s+(?:cell(?: phone)?(?: number)?|phone(?: number)?|callback(?: number)?)\s*(?:is|['’]s|:)\s*(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}[.!\s]*$/u.exec(text.trim());
-    if (combinedName && /\byour\s+(?:full\s+)?name\b[^?]*\?/i.test(prior)
-        && !/^(?:unknown|unsure|not (?:sure|known|provided|available|interested)|no(?: name| thanks)?|none|declined|rather not|prefer not|yes|yeah|okay|sure|well|sorry|hello|hi)$/i.test(combinedName[1])
-        && !/\b(?:where|location|which city)\b/i.test(prior)
-        && next.facts.some(f => f.turnId === turn.id && f.field === 'primary_phone')) {
+    const namedAnswer = visitorNameAnswer(text,prior);
+    if (namedAnswer) {
         const oldName = next.facts.findLast(f => f.field === 'visitor_preferred_identifier');
-        if (!oldName || oldName.value.toLowerCase() !== combinedName[1].toLowerCase()) {
+        if (!oldName || oldName.value.toLowerCase() !== namedAnswer.value.toLowerCase()) {
             next.facts = next.facts.filter(f => f.field !== 'visitor_preferred_identifier');
-            add('visitor_preferred_identifier',combinedName[1],'name',{
+            add('visitor_preferred_identifier',namedAnswer.value,'name',{
                 questionBinding:binding('identity'),...(oldName ? {supersedes:oldName.id} : {})});
         }
-        // Raw turns/history remain unchanged. This wholly personal-contact
-        // reply is not a case fact or an unanswered case-detail question.
-        drop(f => ['material_facts','uncertainties'].includes(f.field));
-    }
-
-    // A later explicit answer to the same name question supersedes an earlier
-    // short ASR fragment. Keep the first fragment in private history.
-    const namedReply = /^(?:[Ii]t(?:['’]s| is)|[Tt]hat(?:['’]s| is))\s+([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+){0,3})[.!]*$/u.exec(text.trim());
-    if (namedReply && /\b(?:name|called)\b[^?]*\?/i.test(prior)
-        && !/\b(?:where|location|which city)\b/i.test(prior)) {
-        const oldName = next.facts.findLast(f => f.field === 'visitor_preferred_identifier');
-        next.facts = next.facts.filter(f => f.field !== 'visitor_preferred_identifier'
-            && !(f.turnId === turn.id && f.field === 'material_facts' && /^(?:it|that)(?:['’]s| is)\b/i.test(f.value)));
-        add('visitor_preferred_identifier',namedReply[1],'name',{
-            questionBinding:binding('identity'),...(oldName ? {supersedes:oldName.id} : {})});
+        const capturedContact = !namedAnswer.contact || (namedAnswer.contact==='phone'
+            ?next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_phone')
+            :next.emailCandidate?.turnId===turn.id||next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_email'));
+        const normalizeClause=(value:string)=>value.trim().replace(/[.!?,;]+$/u,'').toLowerCase();
+        drop(f => ['material_facts','uncertainties'].includes(f.field)
+            && (namedAnswer.pureContact&&capturedContact||normalizeClause(f.evidence)===normalizeClause(namedAnswer.clause)));
+    } else if (reportsAnotherPersonsName(text)||asksAnotherPersonsName(prior)&&!/\bmy\s+(?:full\s+)?name\b/iu.test(text)) {
+        // Correct only a same-turn third-party misclassification. Preserve the
+        // previously reported visitor identity and all raw/history evidence.
+        drop(f=>f.field==='visitor_preferred_identifier');
+        if(!next.facts.some(f=>f.field==='visitor_preferred_identifier'))
+            next.facts.push(...before.facts.filter(f=>f.field==='visitor_preferred_identifier').map(f=>structuredClone(f)));
     }
 
     // A preference to supply contact details later is not a document, even
