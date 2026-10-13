@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Fact, Field, Intake, Turn } from './state.ts';
-import {visitorNameAnswer,asksAnotherPersonsName,reportsAnotherPersonsName} from './visitor-name.ts';
+import {visitorNameAnswer,visitorNameControl,visitorContactOnlyAnswer,asksAnotherPersonsName,reportsAnotherPersonsName} from './visitor-name.ts';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 
@@ -10,6 +10,9 @@ export function repairCandidateIntake(before: Intake, extracted: Intake, turn: T
     // Firm/KB orientation and pure general questions are conversation, not a
     // visitor's case facts. Keep the raw turn; do not project it into the pad.
     const text = turn.content;
+    // The isolated "Quick" in the recorded hurried call is a dialog-control
+    // request, not a place or case fact. Keep the raw turn but no new pad fact.
+    if(/^quick[.!?\s]*$/iu.test(text.trim()))return structuredClone(before);
     const caseReport = /\b(?:I (?:was|got|have been) (?:in |at )?(?:a |an |the )?(?:accident|crash|arrested|charged|injured|hit|rear-ended)|I (?:have|received|got) (?:a |an |the |my )?(?:police report|citation|court date|hearing|insurance card)|my (?:case|accident|injury|court|citation|report|arrest|charge|hearing))\b/i.test(text);
     const metaRequest = /\b(?:knowledge base|internal instructions|hidden instructions|approved (?:firm )?information|your own information|what does (?:the )?firm say)\b/i.test(text)
         && /\b(?:show|tell|check|what|which|how|can|could|according to)\b/i.test(text);
@@ -43,6 +46,11 @@ export function repairCandidateIntake(before: Intake, extracted: Intake, turn: T
         next.history.push(structuredClone(fact));
     };
     const binding = (intent: string) => ({text:prior,hash:digest(prior),intent});
+    const sourcePhone=/(?:\+?1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}\b/u.exec(text);
+    const sourcePhoneDigits=sourcePhone?.[0].replace(/\D/gu,'').replace(/^1(?=\d{10}$)/u,'');
+    const contactCaptured=(contact:'phone'|'email')=>contact==='phone'
+        ?next.facts.some(f=>f.field==='primary_phone'&&(f.turnId===turn.id||sourcePhoneDigits===f.value))
+        :next.emailCandidate?.turnId===turn.id||next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_email');
 
     const namedAnswer = visitorNameAnswer(text,prior);
     if (namedAnswer) {
@@ -52,12 +60,29 @@ export function repairCandidateIntake(before: Intake, extracted: Intake, turn: T
             add('visitor_preferred_identifier',namedAnswer.value,'name',{
                 questionBinding:binding('identity'),...(oldName ? {supersedes:oldName.id} : {})});
         }
-        const capturedContact = (namedAnswer.contacts || []).every(contact => contact==='phone'
-            ?next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_phone')
-            :next.emailCandidate?.turnId===turn.id||next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_email'));
+        // A complete source-bound personal contact list supplies its own field
+        // context even when the persona asked for "contact info", not "phone".
+        // Repair only the explicit numeric phone span; never infer it from an
+        // email address or from a standalone third-party/case utterance.
+        if(namedAnswer.contacts?.includes('phone')&&!next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_phone')){
+            const oldPhone=next.facts.findLast(f=>f.field==='primary_phone');
+            if(sourcePhone&&sourcePhoneDigits&&oldPhone?.value!==sourcePhoneDigits){
+                next.facts=next.facts.filter(f=>f.field!=='primary_phone');
+                add('primary_phone',sourcePhone[0],'phone',{value:sourcePhoneDigits,...(oldPhone?{supersedes:oldPhone.id}:{})});
+            }
+        }
+        const capturedContact = (namedAnswer.contacts || []).every(contactCaptured);
         const normalizeClause=(value:string)=>value.trim().replace(/[.!?,;]+$/u,'').toLowerCase();
         drop(f => ['material_facts','uncertainties'].includes(f.field)
             && (namedAnswer.pureContact&&capturedContact||normalizeClause(f.evidence)===normalizeClause(namedAnswer.clause)));
+        if(namedAnswer.pureContact&&capturedContact)
+            drop(f=>f.field==='known_documents_as_reported');
+    } else if (visitorNameControl(text)) {
+        // Confirmation/control words cannot supersede the reported identity.
+        // Preserve a genuine individual-field confirmation from structured repair.
+        drop(f=>f.field==='visitor_preferred_identifier'&&f.status!=='VISITOR_CONFIRMED');
+        if(!next.facts.some(f=>f.field==='visitor_preferred_identifier'))
+            next.facts.push(...before.facts.filter(f=>f.field==='visitor_preferred_identifier').map(f=>structuredClone(f)));
     } else if (reportsAnotherPersonsName(text)||asksAnotherPersonsName(prior)&&!/\bmy\s+(?:full\s+)?name\b/iu.test(text)) {
         // Correct only a same-turn third-party misclassification. Preserve the
         // previously reported visitor identity and all raw/history evidence.
@@ -65,6 +90,9 @@ export function repairCandidateIntake(before: Intake, extracted: Intake, turn: T
         if(!next.facts.some(f=>f.field==='visitor_preferred_identifier'))
             next.facts.push(...before.facts.filter(f=>f.field==='visitor_preferred_identifier').map(f=>structuredClone(f)));
     }
+    const contactOnly=visitorContactOnlyAnswer(text);
+    if(contactOnly?.length&&contactOnly.every(contactCaptured))
+        drop(f=>f.field==='known_documents_as_reported');
 
     // A preference to supply contact details later is not a document, even
     // though the sentence contains the word "email".
