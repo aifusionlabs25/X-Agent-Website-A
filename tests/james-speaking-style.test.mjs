@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {candidateSpeakingPrompt} from '../lib/james-canary/speaking-style.ts';
 import {candidateRuntimeConfig,verifyCandidateRuntime} from '../lib/james-canary/runtime-session.ts';
-import {applyTurn,emptyIntake,sha,view} from '../lib/james-canary/state.ts';
+import {applyTurn,emptyIntake,sha,view,intentStates,conversationGuidance} from '../lib/james-canary/state.ts';
 
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/james-candidate-runtime.json',import.meta.url),'utf8'));
 const original=fixture.candidate.brain.systemPrompt;
@@ -49,6 +49,30 @@ test('speaking-style amendment replaces precisely one paragraph and leaves all o
 test('missing, duplicated, or already amended speaking-style baseline fails closed',()=>{
     for(const prompt of [original.replace(paragraph,''),original+'\n\n'+paragraph,candidateSpeakingPrompt(original)])
         assert.throws(()=>candidateSpeakingPrompt(prompt),/speaking-style baseline/i);
+});
+
+test('routine acknowledgment policy uses standalone short varied examples and ends before a factual mini-summary',()=>{
+    const amended=candidateSpeakingPrompt(original);
+    assert.match(amended,/varied standalone one-to-three-word acknowledgment/i);
+    for(const word of ['Got it.','Noted.','Understood.'])assert.ok(amended.includes(word),word);
+    assert.match(amended,/End the acknowledgment there; do not append/i);
+    for(const prohibited of ['that you…','you said…','I’ve noted that…','I’ve recorded…','factual mini-summary'])
+        assert.ok(amended.includes(prohibited),prohibited);
+    assert.match(amended,/Do not re-list captured details, repeat the same concern/i);
+});
+
+test('clear unknown, none and decline are quiet resolved answers rather than automatic recap or re-question triggers',()=>{
+    const amended=candidateSpeakingPrompt(original);
+    assert.match(amended,/A clear unknown, none, or decline is captured quietly, not automatically summarized or asked again/i);
+    assert.match(amended,/Uncertainty alone does not make a routine answer an ambiguity requiring a recap/i);
+    assert.match(amended,/Clarify only a genuinely unresolved material detail/i);
+    assert.match(amended,/necessary exact contact confirmation, repeat only the relevant detail/i);
+    assert.match(amended,/single concise closing recap; after a correction, reconfirm only what changed/i);
+});
+
+test('acknowledgment wording means understanding and cannot certify a saved note or outside action',()=>{
+    const amended=candidateSpeakingPrompt(original);
+    assert.match(amended,/Short acknowledgments convey understanding, not proof of a saved note, submission, firm review, or external action/i);
 });
 
 test('source, uncertainty, retrieval, contact, and closing safeguards remain unchanged',()=>{
@@ -114,6 +138,31 @@ test('a focused question preserves reported uncertainty without a spoken mini-re
     assert.ok(facts.some(f=>f.status==='NEEDS_CLARIFICATION'));
     for(const fact of facts){assert.equal(fact.sourceHash,sha(text));assert.ok(text.includes(fact.evidence));}
     assert.equal(row(s,'name').value,'Michael Carter');assert.equal(row(s,'phone').value,'602-555-0138');
+});
+
+for(const [question,answer,intent,status]of [
+    ['When did this happen?',"I don't know.",'timing_urgency','UNKNOWN'],
+    ['Were you injured?','No.','injury_treatment','EXPLICIT_NONE'],
+    ['What is your name?','I decline.','identity','DECLINED'],
+]){
+    test('clear '+status+' answer stays source-grounded and is not queued for re-questioning: '+answer,()=>{
+        let s=say(base(),'persona',question);s=say(s,'user',answer);
+        assert.equal(intentStates(s.intake)[intent],status);
+        const fact=s.intake.facts.find(f=>f.turnId===s.turns.at(-1).id&&f.answerState===status);
+        assert.ok(fact);assert.equal(fact.sourceHash,sha(answer));assert.equal(fact.evidence,answer);
+        const guidance=conversationGuidance(s);
+        assert.ok(guidance.completed_intents_do_not_reask.includes(intent));
+        assert.notEqual(guidance.next_question_intent,intent);
+        assert.equal(s.turns.filter(t=>t.role==='persona').length,1,'no echo is needed to retain the answer');
+    });
+}
+
+test('standalone acknowledgment speech does not alter caller facts or manufacture note-write evidence',()=>{
+    let s=shortIntake();const before=structuredClone(s.intake),hash=view(s).intakeBrief.hash;
+    for(const acknowledgment of ['Got it.','Noted.','Understood.']){
+        s=say(s,'persona',acknowledgment);
+        assert.deepEqual(s.intake,before);assert.equal(view(s).intakeBrief.hash,hash);
+    }
 });
 
 test('necessary targeted contact confirmations still work with concise speaking',()=>{
