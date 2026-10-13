@@ -52,7 +52,7 @@ export function repairCandidateIntake(before: Intake, extracted: Intake, turn: T
             add('visitor_preferred_identifier',namedAnswer.value,'name',{
                 questionBinding:binding('identity'),...(oldName ? {supersedes:oldName.id} : {})});
         }
-        const capturedContact = !namedAnswer.contact || (namedAnswer.contact==='phone'
+        const capturedContact = (namedAnswer.contacts || []).every(contact => contact==='phone'
             ?next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_phone')
             :next.emailCandidate?.turnId===turn.id||next.facts.some(f=>f.turnId===turn.id&&f.field==='primary_email'));
         const normalizeClause=(value:string)=>value.trim().replace(/[.!?,;]+$/u,'').toLowerCase();
