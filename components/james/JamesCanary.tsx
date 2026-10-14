@@ -21,6 +21,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     const [editSlot,setEditSlot]=useState('name'),[editValue,setEditValue]=useState(''),[editing,setEditing]=useState(false),[previewIndex,setPreviewIndex]=useState(0);
     const emailDialog=useRef<HTMLDialogElement>(null);
     const [endedEmailId,setEndedEmailId]=useState('');
+    const [startedSessionId,setStartedSessionId]=useState('');
     useEffect(()=>{if(preview&&!emailDialog.current?.open)emailDialog.current?.showModal();},[preview]);
     const [restoring,setRestoring]=useState(publicPresentation&&!previewStates),[previousId,setPreviousId]=useState(''),[audioAdvisory,setAudioAdvisory]=useState<string|null>(null);
     const attempts=useRef(new JamesBrowserAttemptGate()),rejectBinding=useRef<((error:Error)=>void)|null>(null),lastProviderId=useRef<string|null>(null);
@@ -290,7 +291,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         let launchedClient:AnamClient|null=null;
         let launchedId:string|null=null;
         const previousBinding=bindingWork.current,previousQueue=chain.current,previousClient=client.current;
-        setBusy(true);setNotice('Connecting to the current James persona…');stopped.current=publicPresentation;closing.current=false;
+        setBusy(true);setStartedSessionId('');setNotice('Connecting to the current James persona…');stopped.current=publicPresentation;closing.current=false;
         setAudioAdvisory(null);
         personaSpeaking.current=false;visitorSpeaking.current=false;
         closeEpoch.current++;closeInFlight.current=false;speechStarts.current.clear();
@@ -324,6 +325,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             const operatorCode=emailAccessMode==='visitor'?undefined:accessCode||undefined;
             if(operatorCode)await api('demo-email-preflight',{},operatorCode);
             const launched=await api('start',predecessor?{restartFrom:predecessor}:{},operatorCode);setAccessCode('');id.current=launched.id;launchedId=launched.id;lastProviderId.current=null;
+            setStartedSessionId(launched.id);
             unstartedCancelledId.current=null;
             try{localStorage.setItem(storageKey,launched.id);if(predecessor&&predecessor!==launched.id){localStorage.setItem(storageKey+'-previous',predecessor);setPreviousId(predecessor);}}catch{/* The active call can continue without reload recovery. */}
             render(launched);
@@ -461,11 +463,12 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     }
     const currentCall=publicPresentation?latest.current:state;
     const active=currentCall&&currentCall.state!=='CLOSED';
+    const showCurrentFeedback=!publicPresentation||state?.id===startedSessionId;
     const publicNotice=notice==='Start a demo conversation when ready.'?'Ready when you are.'
         :notice==='Connecting to the current James persona…'?'Connecting…'
         :notice==='Connected. Speak naturally; only finalized visitor information updates the brief.'?'Connected'
-        :notice==='Saved closed session restored.'?'Your previous notes are saved.'
-        :notice==='Saved session restored. The media stream is not automatically reconnected.'?'Saved notes restored. The call is not connected.'
+        :notice==='Saved closed session restored.'?''
+        :notice==='Saved session restored. The media stream is not automatically reconnected.'?''
         :notice.startsWith('Session closed. Review the finalized intake brief;')?'Conversation ended. Your notes are ready.'
         :notice;
     return <main data-ai-screen className={'fixed inset-0 z-[110] overflow-auto bg-zinc-950 text-white '+(publicPresentation?`${styles.publicPage} ${notesFontClassName}`:'p-4 sm:p-6')}>
@@ -482,19 +485,19 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 <div className={publicPresentation?styles.controls:'flex flex-wrap gap-3'}><button onClick={()=>void start()} disabled={publicPresentation?!launchReady||!browserStartAllowed({restoring,busy:busy||closing.current,hasBrowserAttempt:Boolean(attempts.current.current)}):busy||Boolean(active)||!launchReady} className={publicPresentation?`${styles.button} ${styles.startButton}`:'rounded bg-white px-5 py-3 font-semibold text-black disabled:opacity-40'}>Start James</button>
                     <button onClick={()=>void close()} disabled={publicPresentation?restoring||closing.current||(!attempts.current.current&&!active)||Boolean(previewStates):busy||!active||Boolean(previewStates)} className={publicPresentation?styles.button:'rounded border border-white/40 px-5 py-3 disabled:opacity-40'}>{state?.state==='CLOSING'?'Verify closure':'End conversation'}</button>
                     <button aria-expanded={padOpen} aria-controls="james-legal-pad" onClick={changePad} className={publicPresentation?`${styles.button} ${styles.notesButton}`:'rounded border border-amber-300/60 px-5 py-3 text-amber-200'}>{padOpen?'Hide legal pad':'Show legal pad'}</button>
-                    {notepadDemo&&state?.intakeBrief?.hasSubstantiveFact&&state.intakeBrief.phase==='COLLECTING'&&(!publicPresentation||state.id===id.current)&&<button onClick={()=>briefAction('finalize-brief')} disabled={busy||Boolean(previewStates)} className={publicPresentation?`${styles.button} ${styles.notesButton}`:'rounded border border-amber-300/40 px-4 py-3 text-amber-200 disabled:opacity-40'}>Review intake brief</button>}
+                    {showCurrentFeedback&&notepadDemo&&state?.intakeBrief?.hasSubstantiveFact&&state.intakeBrief.phase==='COLLECTING'&&(!publicPresentation||state.id===id.current)&&<button onClick={()=>briefAction('finalize-brief')} disabled={busy||Boolean(previewStates)} className={publicPresentation?`${styles.button} ${styles.notesButton}`:'rounded border border-amber-300/40 px-4 py-3 text-amber-200 disabled:opacity-40'}>Review intake brief</button>}
                     {publicPresentation&&previousId&&previousId!==id.current&&!attempts.current.current&&<button onClick={()=>void showPreviousNotes()} disabled={busy||restoring} className={`${styles.button} ${styles.notesButton}`}>{state?.id===previousId?'Current notes':'Previous notes'}</button>}
                     {publicPresentation&&<p role="status" className={styles.status}>{restoring?'Loading saved notes…':publicNotice}</p>}
                 </div>
                 {publicPresentation&&audioAdvisory&&<p role="alert" className="mt-3 text-xs text-amber-200">{audioAdvisory}</p>}
-                {!padOpen&&state?.intakeBrief?.phase==='REVIEW'&&<p className="mt-3 text-sm text-amber-200">Your brief is ready for review. Show the legal pad to check and confirm it.</p>}
+                {showCurrentFeedback&&!padOpen&&state?.intakeBrief?.phase==='REVIEW'&&<p className="mt-3 text-sm text-amber-200">Your brief is ready for review. Show the legal pad to check and confirm it.</p>}
                 {!publicPresentation&&<><p className="mt-4 text-xs text-zinc-400">Use fictional case details only. This is not legal advice or a submission to Knowles. {!state?'Email availability is checked when you start James. Any email requires your review and approval.':state.demo_email_authorized?'Email testing is authorized for this session, but requires post-call review and explicit approval.':state.owner_test?'Legacy owner email test; inspect its send status.':'Email sending is off for this session.'} Notes expire 24 hours after their last saved update. Anam transcripts and emailed copies have separate retention rules.</p>
                 {state&&<p className="mt-2 text-xs text-zinc-400">{state.state} · {state.acceptedVisitorTurns} visitor turns · {state.config.voiceName} · Session {state.id.slice(-8)}</p>}</>}
-                {state?.speech_review_required&&<p role="alert" className="mt-3 border-l-2 border-amber-400 pl-3 text-sm text-amber-200">{publicPresentation?'Please review James’s response carefully.':'Possible instruction leakage detected in James’s captions. Email preparation is blocked for review. This does not filter or prevent spoken audio.'}</p>}
-                {!!state?.demo_email_status.length&&<ul className="mt-4 space-y-2 text-sm">{state.demo_email_status.map(result=><li key={result.lane}>{emailLabel(result.lane)} to {result.recipient}: {result.status==='SENT'?'accepted by AgentMail':result.status==='RESERVED'?'pending or unknown — do not retry':'no verified receipt — do not retry'}.</li>)}</ul>}
-                {automaticEmailPending&&<p role="status" className="mt-4 text-sm text-zinc-400">Preparing the three demo emails for the owner inbox automatically…</p>}
-                {state?.demo_email_error&&<p role="alert" className="mt-4 text-sm text-amber-200">{state.demo_email_error}</p>}
-                {notepadDemo&&state?.state==='CLOSED'&&state.demo_email_authorized&&!state.demo_email_automatic&&(!publicPresentation||state.id===id.current)&&!state.demo_email_status.length&&<button onClick={()=>void previewEmails()} disabled={busy||state.speech_review_required||state.intakeBrief?.phase!=='CONFIRMED'||Boolean(state.intakeBrief?.missing.length)} className="mt-4 rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Review demo emails</button>}
+                {showCurrentFeedback&&state?.speech_review_required&&<p role="alert" className="mt-3 border-l-2 border-amber-400 pl-3 text-sm text-amber-200">{publicPresentation?'Please review James’s response carefully.':'Possible instruction leakage detected in James’s captions. Email preparation is blocked for review. This does not filter or prevent spoken audio.'}</p>}
+                {!publicPresentation&&!!state?.demo_email_status.length&&<ul className="mt-4 space-y-2 text-sm">{state.demo_email_status.map(result=><li key={result.lane}>{emailLabel(result.lane)} to {result.recipient}: {result.status==='SENT'?'accepted by AgentMail':result.status==='RESERVED'?'pending or unknown — do not retry':'no verified receipt — do not retry'}.</li>)}</ul>}
+                {showCurrentFeedback&&automaticEmailPending&&<p role="status" className="mt-4 text-sm text-zinc-400">Preparing the three demo emails for the owner inbox automatically…</p>}
+                {showCurrentFeedback&&state?.demo_email_error&&<p role="alert" className="mt-4 text-sm text-amber-200">{state.demo_email_error}</p>}
+                {showCurrentFeedback&&notepadDemo&&state?.state==='CLOSED'&&state.demo_email_authorized&&!state.demo_email_automatic&&(!publicPresentation||state.id===id.current)&&!state.demo_email_status.length&&<button onClick={()=>void previewEmails()} disabled={busy||state.speech_review_required||state.intakeBrief?.phase!=='CONFIRMED'||Boolean(state.intakeBrief?.missing.length)} className="mt-4 rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Review demo emails</button>}
                 {preview&&<dialog ref={emailDialog} aria-labelledby="james-email-review-title" onCancel={event=>{if(busy)event.preventDefault();else{setPreview(null);setApproved(false);}}} className="m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-xl border border-amber-200/40 bg-zinc-950 p-5 text-white backdrop:bg-black/70 sm:p-7">
                     <div className="flex items-start justify-between gap-4"><h2 id="james-email-review-title" className="font-serif text-2xl">Review before sending</h2><button onClick={()=>{setPreview(null);setApproved(false);}} disabled={busy} className="rounded border border-white/30 px-3 py-1 text-sm disabled:opacity-40">Close review</button></div>
                     <p className="my-2 break-words text-xs">From AI Fusion Labs Demo ({preview.sender}) · Replies to {preview.replyTo}</p>
