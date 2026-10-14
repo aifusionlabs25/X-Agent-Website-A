@@ -102,10 +102,9 @@ function callerDetails(rows: Row[]): Row[] {
     }
     return selected;
 }
-function clientName(rows: Row[]): string | undefined {
-    const row = rows.find(row => normalized(row.section) === 'client'
-        && normalized(row.label) === 'full name' && known(row));
-    return row?.text;
+function clientNameRow(rows: Row[]): Row | undefined {
+    return rows.find(row => normalized(row.section) === 'client'
+        && normalized(row.label) === 'full name');
 }
 function safeFirstName(name: string | undefined): string | undefined {
     if (!name || name.length > 100 || !/^[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*(?: [\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*){0,5}$/u.test(name.trim())) return undefined;
@@ -199,7 +198,8 @@ export function buildJamesEmailTemplates(input: JamesEmailTemplateInput): JamesE
     validate(input);
     const rows: Row[] = input.sections.flatMap(section => section.items.map(item => ({ section: section.title, ...item })));
     const details = callerDetails(rows);
-    const name = clientName(rows);
+    const nameRow = clientNameRow(rows);
+    const name = nameRow && known(nameRow) ? nameRow.text : undefined;
     const firstName = safeFirstName(name);
     const greeting = firstName ? `Thank you, ${firstName}.` : 'Thank you for speaking with James.';
     const ended = isoDate(input.providerEndedAt, 'provider end timestamp');
@@ -238,6 +238,7 @@ export function buildJamesEmailTemplates(input: JamesEmailTemplateInput): JamesE
 
     const adminSubject = 'James | Conversation session record';
     const metadata = [
+        { label: 'Contact name', text: nameRow?.text || 'Not yet provided' },
         { label: 'Date', text: date(ended) },
         { label: 'Provider started', text: started ? timestamp(started) : 'Not available' },
         { label: 'Provider ended', text: timestamp(ended) },

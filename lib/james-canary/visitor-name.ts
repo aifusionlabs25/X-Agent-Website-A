@@ -97,12 +97,40 @@ function asksVisitorContact(prior: string): boolean {
         && /\b(?:your|you|callback|firm|follow[ -]?up)\b/iu.test(question);
 }
 
+/** An explicit own-contact introduction can occur inside a case answer. Require
+ * an independent name followed by a contact value; never derive it from email,
+ * quoted speech, a hypothetical, or another person's contact information. */
+function volunteeredContactName(text: string, prior: string): VisitorNameAnswer | null {
+    const input = text.trim();
+    const outsideQuotes = input.replace(/"[^"]*"|“[^”]*”|(?:^|[\s,(])'[^']*'|‘[^’]*’/gu, value => ' '.repeat(value.length));
+    const introductions = [...outsideQuotes.matchAll(/\bmy\s+(?:contact\s+)?(?:info(?:rmation)?|details)\s*(?:is\b|are\b|:)\s*/giu)];
+    if (introductions.length !== 1) return null;
+    const introduction = introductions[0], prefix = input.slice(0, introduction.index);
+    const clausePrefix = prefix.split(/[.!?;]/u).at(-1) || '';
+    if (/\b(?:if|whether|unless)\s*[, :]*$/iu.test(clausePrefix)
+        || /\b(?:suppose|imagine|pretend|hypothetically|example|said|says|told|wrote|quoted|reads?)\b/iu.test(clausePrefix)
+        || /\b(?:do not|don['’]t|will not|won['’]t|rather not|prefer not|cannot|can['’]t|not sure|maybe)\b/iu.test(clausePrefix)) return null;
+    const body = input.slice(introduction.index + introduction[0].length);
+    const answer = directVisitorNameAnswer(body, prior, true);
+    if (!answer) return null;
+    const tail = body.slice(body.indexOf(answer.value) + answer.value.length)
+        .replace(/^[\s.!?,;]+/u, '').replace(/^(?:and|but)\s+/iu, '');
+    if (!contactAtStart(tail)) return null;
+    return { ...answer, clause: input.slice(introduction.index, introduction.index + introduction[0].length) + answer.clause,
+        // Do not let a pure contact suffix erase substantive earlier clauses.
+        pureContact: answer.pureContact && !prefix.replace(acknowledgments, '').trim() };
+}
+
+export function visitorNameAnswer(text: string, prior: string): VisitorNameAnswer | null {
+    return volunteeredContactName(text, prior) || directVisitorNameAnswer(text, prior);
+}
+
 /** Read one direct visitor name clause, not an entire speech turn. The caller
  * stores only the exact captured span; sibling contacts/case facts stay separate. */
-export function visitorNameAnswer(text: string, prior: string): VisitorNameAnswer | null {
+function directVisitorNameAnswer(text: string, prior: string, explicitContact = false): VisitorNameAnswer | null {
     const input = text.trim();
     if(wholeControlAnswer.test(input))return null;
-    const nameContext=asksVisitorName(prior),contactContext=asksVisitorContact(prior);
+    const nameContext=explicitContact||asksVisitorName(prior),contactContext=asksVisitorContact(prior);
     const ack = acknowledgments.exec(input)![0];
     // A selected contact-intake option is a dialog act, not part of the name.
     const choice=contactContext?/^(?:contact(?: info| information| details)? first)[,.:\s]+/iu.exec(input.slice(ack.length))?.[0]||'':'';

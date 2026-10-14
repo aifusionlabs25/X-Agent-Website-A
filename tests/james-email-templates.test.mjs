@@ -75,6 +75,8 @@ test('firm preserves every source section and row including uncertainty and nega
 test('admin reflects actual Phoenix date, provider duration and all supplied identifiers', () => {
     const input = fixture();
     const result = buildJamesEmailTemplates(input).admin;
+    assert.match(result.text, /Contact name: Michael Carter/u);
+    assert.ok(result.html.includes('Michael Carter'));
     assert.match(result.text, /Date: October 13, 2026/u);
     assert.match(result.text, /Provider started: October 13, 2026 at 10:00:00/u);
     assert.match(result.text, /Provider ended: October 13, 2026 at 10:04:18/u);
@@ -131,7 +133,20 @@ test('only Full name in Client controls greeting, never another person or addres
     const result = buildJamesEmailTemplates(input);
     assert.match(result.caller.text, /Thank you for speaking with James\./u);
     assert.doesNotMatch(result.caller.text, /Thank you, Another|Thank you, michael/iu);
+    assert.match(result.admin.text, /Contact name: Not yet provided/u);
+    assert.doesNotMatch(result.admin.text, /Contact name: Another Person/u);
 });
+
+for(const value of ['Not yet provided','Visitor declined','Not known by the visitor','Élodie O’Neill',"Mary O'Neill",'<img src=x onerror=alert(1)>']){
+    test('admin contact name preserves the exact Client row and escapes HTML: '+value,()=>{
+        const input=fixture();row(input,'Client','Full name').text=value;
+        const result=buildJamesEmailTemplates(input).admin;
+        assert.ok(result.text.includes('Contact name: '+value));
+        assert.ok(result.html.includes(escape(value)));
+        assert.doesNotMatch(result.html,/<img|<script/u);
+        assert.doesNotMatch(result.text,/Identity verified/u);
+    });
+}
 
 test('Unicode names, apostrophes and exact non-English source facts survive rendering', () => {
     const input = fixture();
