@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
-import { unseal } from '../lib/james-canary/server.ts';
+import { unseal, createJamesServer } from '../lib/james-canary/server.ts';
 import { RUNTIME_CANDIDATE_ID } from '../lib/james-canary/runtime-session.ts';
 import { INTERNAL_DEMO_RECIPIENT } from '../lib/james-canary/demo-email.ts';
 import { sha } from '../lib/james-canary/state.ts';
@@ -85,8 +85,12 @@ async function withPublicRoute(options, run) {
         }
         if (target === 'https://api.anam.ai/v1/sessions/' + providerId + '/transcript') {
             assert.equal(released, true);
+            if(options.transcriptFails)return new Response('offline failure',{status:500});
             return Response.json({ sessionId: providerId, transcriptsEnabled: true,
                 totalMessages: messages.length, messages, endTime: endedAt });
+        }
+        if(target==='https://api.anam.ai/v1/sessions/'+providerId+'/stop'){
+            released=true;endedAt=new Date().toISOString();return Response.json({ok:true});
         }
         if (target === 'https://api.agentmail.to/v0/inboxes/james-demo%40agentmail.to') {
             inboxReads++;
@@ -107,7 +111,10 @@ async function withPublicRoute(options, run) {
         throw new Error('Unexpected network target; no real request permitted: ' + target);
     };
     try {
-        const { get, post } = await import(new URL('../lib/james-canary/public-server.ts?offline-email=' + (++importSequence), import.meta.url));
+        const tasks=[];
+        const { createPublicJamesServer } = await import(new URL('../lib/james-canary/public-server.ts?offline-email=' + (++importSequence), import.meta.url));
+        const {get,post}=options.manual?createJamesServer({personaId:RUNTIME_CANDIDATE_ID,cookie:'xagent_james_notepad_v2',prefix,allowDemoEmail:true,allowEmail:true,runtimeClose:true,allowBrowserRecovery:true})
+            :createPublicJamesServer(task=>tasks.push(task));
         const request = (body, auth = cookie, origin = 'https://demo.invalid') => new Request('https://demo.invalid/api/james-notepad', {
             method: 'POST', headers: { origin, 'Content-Type': 'application/json', ...(auth ? { cookie: auth } : {}) },
             body: JSON.stringify(body),
@@ -163,6 +170,8 @@ async function withPublicRoute(options, run) {
             return current;
         };
         await run({ start, turn, closeComplete, confirmComplete, action, postResult, stored, db, sends, messages,
+            drain:async()=>{while(tasks.length)await tasks.shift()();},tasks,
+            ended:()=>{released=true;endedAt=new Date().toISOString();},
             launches: () => launches, inboxReads: () => inboxReads,
             getView: async (auth = cookie) => {
                 const response = await get(new Request('https://demo.invalid/api/james-notepad?id=' + currentId, { headers: auth ? { cookie: auth } : {} }));
@@ -176,7 +185,7 @@ async function withPublicRoute(options, run) {
 }
 
 test('public runtime three-email lifecycle requires verified close, confirmed notes and exact explicit approval; replay sends nothing', async () => {
-    await withPublicRoute({}, async h => {
+    await withPublicRoute({manual:true}, async h => {
         const launched = await h.start(); assert.equal(launched.demo_email_authorized, true);
         assert.equal(h.stored().demoEmail.bundle, 'three'); assert.equal(h.stored().demoEmail.recipientMode, 'owner');
         assert.equal(h.sends.length, 0);
@@ -231,6 +240,58 @@ test('optional public AgentMail preflight outage withholds email without blockin
         const noted = await h.turn('user', 'I was rear-ended.');
         assert.equal(noted.acceptedVisitorTurns, 1); assert.equal(noted.intakeBrief.hasSubstantiveFact, true);
         assert.equal((await h.postResult('preview-demo-email')).status, 400); assert.equal(h.sends.length, 0);
+    });
+});
+
+test('public owner demo automatically sends three messages after verified close without review or send actions',async()=>{
+    await withPublicRoute({},async h=>{
+        const start=await h.start();assert.equal(start.demo_email_automatic,true);
+        const closed=await h.closeComplete();assert.notEqual(closed.intakeBrief.phase,'CONFIRMED');
+        assert.equal(h.sends.length,0,'transport runs after the response');
+        await h.drain();assert.equal(h.sends.length,3);
+        assert.ok(h.sends.every(m=>m.body.to.length===1&&m.body.to[0]===INTERNAL_DEMO_RECIPIENT));
+        assert.equal(h.stored().demoEmail.consentSource,'OWNER_AUTOMATIC');
+        assert.equal(h.stored().intakeBrief.confirmation,undefined,'no fabricated visitor confirmation');
+        assert.ok(h.sends[0].body.attachments[0].content);
+        await h.getView();await h.action('verify-ended');await h.drain();assert.equal(h.sends.length,3);
+    });
+});
+
+test('provider-ended event sends even with incomplete notes and no caller email, without closing a live session',async()=>{
+    await withPublicRoute({},async h=>{
+        await h.start();await h.action('bind',{providerId});
+        await h.turn('user','I was rear-ended in Phoenix.');
+        h.ended();await h.action('verify-ended');await h.drain();
+        assert.equal(h.stored().state,'CLOSED');assert.equal(h.sends.length,3);
+        assert.ok(h.sends.every(m=>m.body.to[0]===INTERNAL_DEMO_RECIPIENT));
+        assert.equal(h.stored().intakeBrief.confirmation,undefined);
+    });
+});
+
+test('routing to caller never acquires an automatic owner capability',async()=>{
+    await withPublicRoute({recipientMode:'caller'},async h=>{
+        assert.equal((await h.start()).demo_email_automatic,false);
+        await h.closeComplete();await h.drain();assert.equal(h.sends.length,0);
+    });
+});
+
+test('End conversation releases provider and automatically delivers; repeated release is at most once',async()=>{
+    await withPublicRoute({},async h=>{
+        await h.start();await h.action('bind',{providerId});await h.turn('user','I need help with a collision.');
+        const ended=await h.action('release-browser-session');assert.equal(ended.restartAllowed,true);
+        await h.action('release-browser-session');
+        await h.drain();assert.equal(h.sends.length,3);
+        assert.equal(h.db.get(prefix+'demo-email-budget:total'),'1');
+    });
+});
+
+test('unverified transcript records a visible failure and sends nothing',async()=>{
+    await withPublicRoute({transcriptFails:true},async h=>{
+        await h.start();await h.action('bind',{providerId});await h.turn('user','I need help.');h.ended();
+        await h.action('verify-ended');await h.drain();
+        assert.equal(h.sends.length,0);assert.match(h.stored().demoEmail.automaticError,/No delivery is confirmed/);
+        assert.ok((await h.getView()).data.demo_email_error);
+        await h.drain();assert.equal(h.sends.length,0);
     });
 });
 

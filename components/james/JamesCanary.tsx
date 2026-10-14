@@ -20,6 +20,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
     const [padVisibility,setPadVisibility]=useState<PadVisibility>(()=>notepadDemo?initialPadVisibility():{open:true,revealed:true,manual:false}),[accessCode,setAccessCode]=useState(''),[preview,setPreview]=useState<EmailPreview|null>(null),[approved,setApproved]=useState(false);
     const [editSlot,setEditSlot]=useState('name'),[editValue,setEditValue]=useState(''),[editing,setEditing]=useState(false),[previewIndex,setPreviewIndex]=useState(0);
     const emailDialog=useRef<HTMLDialogElement>(null);
+    const [endedEmailId,setEndedEmailId]=useState('');
     useEffect(()=>{if(preview&&!emailDialog.current?.open)emailDialog.current?.showModal();},[preview]);
     const [restoring,setRestoring]=useState(publicPresentation&&!previewStates),[previousId,setPreviousId]=useState(''),[audioAdvisory,setAudioAdvisory]=useState<string|null>(null);
     const attempts=useRef(new JamesBrowserAttemptGate()),rejectBinding=useRef<((error:Error)=>void)|null>(null),lastProviderId=useRef<string|null>(null);
@@ -40,6 +41,24 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
         if(notepadDemo)setPadVisibility(v=>revealForFirstFact(v,Boolean(s.intakeBrief?.hasSubstantiveFact),!publicPresentation||fromFinalizedVisitor));
         setPreview(null);setApproved(false);
     },[notepadDemo,publicPresentation]);
+    const automaticEmailPending=Boolean(state?.demo_email_automatic&&!state.demo_email_error
+        &&(!state.demo_email_status.length||state.demo_email_status.some(d=>d.status==='RESERVED'))
+        &&(state.state==='CLOSED'||state.browserRelease||state.id===endedEmailId));
+    useEffect(()=>{
+        if(!automaticEmailPending||!state?.id||previewStates)return;
+        const sessionId=state.id;let cancelled=false,checks=0;
+        let timer:ReturnType<typeof setTimeout>;
+        const check=async()=>{
+            try{
+                const response=await fetch(apiPath+'?id='+encodeURIComponent(sessionId)+'&notesOnly=1',{cache:'no-store',signal:AbortSignal.timeout(20_000)});
+                const saved=await response.json();
+                if(!cancelled&&response.ok&&id.current===sessionId)render(saved);
+            }catch{/* Delivery runs on the server; a status read never sends again. */}
+            if(!cancelled&&++checks<30)timer=setTimeout(check,3000);
+        };
+        timer=setTimeout(check,3000);
+        return ()=>{cancelled=true;clearTimeout(timer);};
+    },[automaticEmailPending,state?.id,apiPath,previewStates,render]);
     function changePad(){
         const next=togglePad(padVisibility);setPadVisibility(next);
         if(id.current&&!previewStates)try{localStorage.setItem(storageKey+'-pad',JSON.stringify({id:id.current,...next}));}catch{/* Visibility is local presentation only. */}
@@ -158,7 +177,7 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
             if(audioMonitor.current)clearInterval(audioMonitor.current);audioMonitor.current=null;
             if(invitationTimer.current)clearTimeout(invitationTimer.current);invitationTimer.current=null;
             if(audio.current)void audio.current.context.close().catch(()=>{});audio.current=null;
-            const s=await api('close');render(s);if(!notepadDemo)setPadVisibility(v=>({...v,open:true}));setNotice(s.operation_notice||(s.email_status==='SENT'?'Session closed. Owner-test email accepted by AgentMail. Nothing sent to Knowles.':'Session closed. Review the finalized intake brief; nothing has been emailed unless a send result is shown below.'));
+            const s=await api('close');render(s);if(!notepadDemo)setPadVisibility(v=>({...v,open:true}));setNotice(s.operation_notice||(s.demo_email_automatic?'Session closed. The three owner-demo emails are being prepared automatically.':s.email_status==='SENT'?'Session closed. Owner-test email accepted by AgentMail. Nothing sent to Knowles.':'Session closed. Review the finalized intake brief; nothing has been emailed unless a send result is shown below.'));
         } catch(error){setNotice(error instanceof Error?error.message:'Closure needs attention');closing.current=false;}
         finally{if(publicPresentation)closing.current=false;closeInFlight.current=false;setBusy(false);}
     }
@@ -377,6 +396,13 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 if(!publicPresentation){if(!closing.current)setNotice('Media connection ended. Use Verify closure to preserve and verify the final brief.');return;}
                 if(attempt)attempts.current.cancel(attempt);
                 failBinding(new Error('Media connection ended'));
+                if(!closing.current&&latest.current?.demo_email_automatic&&latest.current.providerId){
+                    const endedId=id.current;
+                    setEndedEmailId(endedId);
+                    void chain.current.then(async()=>{
+                        if(id.current===endedId)render(await api('verify-ended'));
+                    }).catch(()=>setNotice('Call ended. Automatic email verification needs attention.'));
+                }
                 if(!closing.current)setNotice('Media connection ended. Your notes are preserved. Use End conversation to verify closure, or Start James for a new call.');
             });
             await c.streamToVideoElement('james-canary-video');
@@ -466,7 +492,9 @@ export default function JamesCanary({apiPath='/api/james-canary',storageKey='jam
                 {state&&<p className="mt-2 text-xs text-zinc-400">{state.state} · {state.acceptedVisitorTurns} visitor turns · {state.config.voiceName} · Session {state.id.slice(-8)}</p>}</>}
                 {state?.speech_review_required&&<p role="alert" className="mt-3 border-l-2 border-amber-400 pl-3 text-sm text-amber-200">{publicPresentation?'Please review James’s response carefully.':'Possible instruction leakage detected in James’s captions. Email preparation is blocked for review. This does not filter or prevent spoken audio.'}</p>}
                 {!!state?.demo_email_status.length&&<ul className="mt-4 space-y-2 text-sm">{state.demo_email_status.map(result=><li key={result.lane}>{emailLabel(result.lane)} to {result.recipient}: {result.status==='SENT'?'accepted by AgentMail':result.status==='RESERVED'?'pending or unknown — do not retry':'no verified receipt — do not retry'}.</li>)}</ul>}
-                {notepadDemo&&state?.state==='CLOSED'&&state.demo_email_authorized&&(!publicPresentation||state.id===id.current)&&!state.demo_email_status.length&&<button onClick={()=>void previewEmails()} disabled={busy||state.speech_review_required||state.intakeBrief?.phase!=='CONFIRMED'||Boolean(state.intakeBrief?.missing.length)} className="mt-4 rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Review demo emails</button>}
+                {automaticEmailPending&&<p role="status" className="mt-4 text-sm text-zinc-400">Preparing the three demo emails for the owner inbox automatically…</p>}
+                {state?.demo_email_error&&<p role="alert" className="mt-4 text-sm text-amber-200">{state.demo_email_error}</p>}
+                {notepadDemo&&state?.state==='CLOSED'&&state.demo_email_authorized&&!state.demo_email_automatic&&(!publicPresentation||state.id===id.current)&&!state.demo_email_status.length&&<button onClick={()=>void previewEmails()} disabled={busy||state.speech_review_required||state.intakeBrief?.phase!=='CONFIRMED'||Boolean(state.intakeBrief?.missing.length)} className="mt-4 rounded bg-amber-200 px-5 py-3 font-semibold text-zinc-950 disabled:opacity-40">Review demo emails</button>}
                 {preview&&<dialog ref={emailDialog} aria-labelledby="james-email-review-title" onCancel={event=>{if(busy)event.preventDefault();else{setPreview(null);setApproved(false);}}} className="m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-xl border border-amber-200/40 bg-zinc-950 p-5 text-white backdrop:bg-black/70 sm:p-7">
                     <div className="flex items-start justify-between gap-4"><h2 id="james-email-review-title" className="font-serif text-2xl">Review before sending</h2><button onClick={()=>{setPreview(null);setApproved(false);}} disabled={busy} className="rounded border border-white/30 px-3 py-1 text-sm disabled:opacity-40">Close review</button></div>
                     <p className="my-2 break-words text-xs">From AI Fusion Labs Demo ({preview.sender}) · Replies to {preview.replyTo}</p>

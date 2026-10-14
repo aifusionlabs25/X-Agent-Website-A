@@ -20,6 +20,8 @@ export type DemoEmailState = {
     grantId: string; expiresAt: number; sender: string; replyTo: string;
     accessMode?: DemoAccessMode; accessDigest?: string;
     bundle?: 'three'; recipientMode?: 'owner' | 'caller';
+    automaticOwner?: true; automaticError?: string;
+    consentSource?: 'OWNER_AUTOMATIC' | 'BROWSER_APPROVAL';
     snapshotHash?: string; consentAt?: string;
     deliveries?: { internal: DemoDelivery; caller: DemoDelivery; admin?: DemoDelivery };
 };
@@ -66,15 +68,18 @@ export function createVisitorDemoAuthorization(sessionId: string, now = Date.now
         accessMode: 'visitor' as const };
 }
 export async function reserveVisitorEmailAllowance(callerAddress: string, options: {
-    redis: (command: (string | number)[]) => Promise<unknown>; prefix: string; env?: Environment;
+    redis: (command: (string | number)[]) => Promise<unknown>; prefix: string; env?: Environment; ownerOnly?: boolean;
 }) {
     const policy = readVisitorEmailPolicy(options.env);
+    const config = options.ownerOnly ? readDemoEmailConfig(options.env) : null;
+    if (options.ownerOnly && (address(callerAddress) !== INTERNAL_DEMO_RECIPIENT || config?.bundle !== 'three' || config.recipientMode !== 'owner'))
+        throw new Error('Owner allowance cannot authorize a different recipient');
     const recipientHash = sha(address(callerAddress));
     // Check and reserve both bounds atomically. Counters contain no intake data
     // or raw recipient address, expire after 24 hours, and fail closed on error.
     const script = "local total=tonumber(redis.call('GET',KEYS[1]) or '0'); local recipient=tonumber(redis.call('GET',KEYS[2]) or '0'); if total>=tonumber(ARGV[1]) or recipient>=tonumber(ARGV[2]) then return 0 end; local a=redis.call('INCR',KEYS[1]); local b=redis.call('INCR',KEYS[2]); if a==1 then redis.call('EXPIRE',KEYS[1],ARGV[3]) end; if b==1 then redis.call('EXPIRE',KEYS[2],ARGV[3]) end; return 1";
     const result = await options.redis(['EVAL', script, 2, options.prefix + 'demo-email-budget:total',
-        options.prefix + 'demo-email-budget:recipient:' + recipientHash, policy.summaryPairs, policy.perRecipient, policy.windowSeconds]);
+        options.prefix + 'demo-email-budget:recipient:' + recipientHash, policy.summaryPairs, options.ownerOnly ? policy.summaryPairs : policy.perRecipient, policy.windowSeconds]);
     if (result !== 1) throw new Error('Demo email allowance reached or unavailable; no email was attempted');
 }
 export function verifyDemoGrant(token: unknown, now = Date.now(), env: Environment = process.env): DemoGrant {
@@ -149,16 +154,18 @@ export function prepareDemoMessages(session: Session, now = Date.now(), env: Env
     if (authorization.bundle !== config.bundle || authorization.recipientMode !== config.recipientMode) {
         throw new Error('Demo email routing changed; start a new call to authorize the current bundle');
     }
-    if (session.state !== 'CLOSED' || !session.providerRelease || !readiness(session.intake).ready) throw new Error('Verified closed and complete notes required');
+    const automatic = authorization.automaticOwner === true;
+    if (automatic && (config.bundle !== 'three' || config.recipientMode !== 'owner')) throw new Error('Automatic delivery is owner-only');
+    if (session.state !== 'CLOSED' || !session.providerRelease || (!automatic && !readiness(session.intake).ready)) throw new Error('Verified closed and complete notes required');
     const structured = structuredBriefView(session);
     if (authorization.accessMode === 'visitor' && !structured) throw new Error('Confirmed structured intake brief required');
-    if (structured && (structured.phase !== 'CONFIRMED' || structured.missing.length)) throw new Error('Review and confirm the complete current intake brief before preparing email');
+    if (!automatic && structured && (structured.phase !== 'CONFIRMED' || structured.missing.length)) throw new Error('Review and confirm the complete current intake brief before preparing email');
     if (session.websiteClosing?.runtimeOwned
         ? candidateInstructionLeakageSuspected(session.turns):instructionLeakageSuspected(session.turns))
         throw new Error('Possible instruction leakage: review this conversation before emailing summaries');
     const email = session.intake.facts.find(f => f.field === 'primary_email' && f.status === 'VISITOR_CONFIRMED');
-    if (!email || session.intake.emailCandidate || session.intake.declined.includes('primary_email')) throw new Error('Caller email must be explicitly confirmed');
-    const callerAddress = address(email.value);
+    if (!automatic && (!email || session.intake.emailCandidate || session.intake.declined.includes('primary_email'))) throw new Error('Caller email must be explicitly confirmed');
+    const callerAddress = automatic ? INTERNAL_DEMO_RECIPIENT : address(email!.value);
     const sections = structured ? structured.sections.map(section => ({title:section.title,items:section.rows.map(row => ({label:row.label,text:row.value}))}))
         : brief(session.intake).filter(section => section.title !== 'HANDOFF STATUS');
     if (config.bundle === 'three') {
@@ -249,12 +256,14 @@ export async function sendDemoSummaries(session: Session, consent: { snapshotHas
     const reservedAt = new Date(deps.now ?? Date.now()).toISOString();
     const reserved = structuredClone(session);
     reserved.intake.handoff = 'PREPARED';
-    Object.assign(reserved.demoEmail!, { snapshotHash: prepared.snapshotHash, consentAt: reservedAt, deliveries: {
+    Object.assign(reserved.demoEmail!, { snapshotHash: prepared.snapshotHash, consentAt: reservedAt,
+        consentSource: session.demoEmail!.automaticOwner ? 'OWNER_AUTOMATIC' : 'BROWSER_APPROVAL', deliveries: {
         internal: { status: 'RESERVED', recipient: prepared.internal.to, bodyHash: sha(prepared.admin ? JSON.stringify(prepared.internal) : prepared.internal.text), reservedAt },
         caller: { status: 'RESERVED', recipient: prepared.caller.to, bodyHash: sha(prepared.admin ? JSON.stringify(prepared.caller) : prepared.caller.text), reservedAt },
         ...(prepared.admin ? { admin: { status: 'RESERVED', recipient: prepared.admin.to, bodyHash: sha(JSON.stringify(prepared.admin)), reservedAt } } : {}),
     } });
-    let current = deps.stamp(session, reserved, { action: 'demo-email-reservation', snapshotHash: prepared.snapshotHash, consent: true });
+    let current = deps.stamp(session, reserved, { action: 'demo-email-reservation', snapshotHash: prepared.snapshotHash,
+        consentSource: reserved.demoEmail!.consentSource });
     await deps.save(session, current);
     for (const lane of lanes) {
         const next = structuredClone(current);
@@ -271,4 +280,15 @@ export async function sendDemoSummaries(session: Session, consent: { snapshotHas
         current = stamped;
     }
     return current;
+}
+
+/** Only a server-issued, call-bound owner capability permits automatic mail.
+ * This does not confirm intake facts or authorize mail to a visitor/firm. */
+export async function sendAutomaticOwnerEmails(session: Session, deps: Parameters<typeof sendDemoSummaries>[2]) {
+    if (!session.demoEmail?.automaticOwner || session.demoEmail.bundle !== 'three' || session.demoEmail.recipientMode !== 'owner')
+        throw new Error('Automatic owner delivery is not authorized for this call');
+    if (session.demoEmail.deliveries) return session;
+    const prepared = prepareDemoMessages(session, deps.now ?? Date.now(), deps.env);
+    return sendDemoSummaries(session, { approved: true, snapshotHash: prepared.snapshotHash,
+        callerAddress: prepared.callerAddress, messageHash: prepared.messageHash }, deps);
 }

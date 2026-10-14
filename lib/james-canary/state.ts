@@ -606,6 +606,7 @@ export function view(session: Session) {
         handoff:session.intake.handoff,email_status:session.email?.status||'INACTIVE_NOT_SENT',
         email_receipt:session.email?.messageId||null,owner_test:Boolean(session.ownerTest),
         demo_email_authorized:Boolean(session.demoEmail),demo_email_status:demoStatus,
+        demo_email_automatic:Boolean(session.demoEmail?.automaticOwner),demo_email_error:session.demoEmail?.automaticError,
         speech_review_required:session.websiteClosing?.runtimeOwned
             ? candidateInstructionLeakageSuspected(session.turns):instructionLeakageSuspected(session.turns),
         external_actions:session.email?.status==='SENT'?[{type:'OWNER_TEST_EMAIL',recipient:'aifusionlabs@gmail.com',receipt:session.email.messageId}]:demoStatus.filter(d=>d.status==='SENT').map(d=>({type:'DEMO_EMAIL',recipient:d.recipient})) };

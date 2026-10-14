@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { NextResponse } from 'next/server.js';
+import { NextResponse, after } from 'next/server.js';
 import { AMY_ANAM_BROWSER_COOKIE, amyAnamCookieOptions, createAmyAnamBrowserSessionWithSecret,
     readAmyAnamBrowserSession, readAmyAnamSpineConfig, createAmyAnamLaunch, isTrustedBrowserOrigin,
     readBoundedJsonObject, isUuid, requestFingerprint } from '../anam/session-spine.ts';
@@ -9,7 +9,7 @@ import type { CompletedAnamTranscript } from '../anam/session-api.ts';
 import { PERSONA_ID as CANARY_PERSONA_ID, emptyIntake, applyTurn, receipt, readiness, conversationGuidance, spokenPhone, sha, view } from './state.ts';
 import type { Session, Turn } from './state.ts';
 import {verifyOwnerGrant,emailConfiguration,sendPreparedOwnerTest} from './owner-email.ts';
-import {verifyDemoGrant,bindDemoGrant,readDemoAccessMode,createVisitorDemoAuthorization,reserveVisitorEmailAllowance,preflightDemoTransport,prepareDemoMessages,sendDemoSummaries} from './demo-email.ts';
+import {verifyDemoGrant,bindDemoGrant,readDemoAccessMode,createVisitorDemoAuthorization,reserveVisitorEmailAllowance,preflightDemoTransport,prepareDemoMessages,sendDemoSummaries,sendAutomaticOwnerEmails} from './demo-email.ts';
 import {finalizeBrief,confirmBrief,applyBriefCorrection,reserveBriefInvitation,hasSubstantiveBriefFact} from './structured-brief.ts';
 import {cancelWebsiteClose} from './closing.ts';
 import {candidateRuntimeConfig,verifyCandidateRuntime,RUNTIME_CANDIDATE_ID} from './runtime-session.ts';
@@ -19,7 +19,7 @@ const COOKIE='xagent_james_canary';
 const TTL=24*60*60;
 const PREFIX='xagent:james:canary:v1:';
 function config() { const c=readAmyAnamSpineConfig(); if(!c.gatesOpen)throw new Error('Hosted session storage is unavailable'); return c; }
-export function createJamesServer(options: {personaId?:string;cookie?:string;prefix?:string;allowDemoEmail?:boolean;allowEmail?:boolean;runtimeClose?:boolean;allowBrowserRecovery?:boolean}={}) {
+export function createJamesServer(options: {personaId?:string;cookie?:string;prefix?:string;allowDemoEmail?:boolean;allowEmail?:boolean;runtimeClose?:boolean;allowBrowserRecovery?:boolean;automaticOwnerEmail?:boolean;afterResponse?:(task:()=>Promise<void>)=>void}={}) {
 const PERSONA_ID=options.personaId||CANARY_PERSONA_ID;
 if(options.runtimeClose&&PERSONA_ID!==RUNTIME_CANDIDATE_ID)throw new Error('Runtime close is candidate-only');
 const cookie=options.cookie||COOKIE, prefix=options.prefix||PREFIX;
@@ -90,6 +90,7 @@ async function get(req:Request) {
         }
         if(options.runtimeClose&&current.providerId&&current.state!=='CLOSED')
             current=await reconcileProviderEnded(current).catch(()=>current);
+        if(current.state==='CLOSED'||current.browserRelease)scheduleOwnerEmails(req,current);
         return json({...view(current),...(current.id!==originalId?{previousSessionId:originalId}:{})});
     }
     catch(error){
@@ -102,15 +103,46 @@ async function get(req:Request) {
         return json({error:message,...(recoveryUnavailable?{recoveryUnavailable:true}:{})},400);
     }
 }
-async function reconcileProviderEnded(current:Session):Promise<Session> {
+async function reconcileProviderEnded(current:Session,pollDelaysMs=[0]):Promise<Session> {
     if(!options.runtimeClose||!current.providerId||current.state==='CLOSED')return current;
-    const completed=await fetchCompletedAnamTranscript(current.providerId,launch(current),{pollDelaysMs:[0],
+    const completed=await fetchCompletedAnamTranscript(current.providerId,launch(current),{pollDelaysMs,
         verifyMetadata:(metadata:Parameters<typeof verifyCandidateRuntime>[0])=>verifyCandidateRuntime(metadata,current)});
     if(completed.status!=='ready')return current;
     const next=receipt(current,completeVerifiedSession(current,completed,'PROVIDER_ENDED_RECOVERY'),
         {action:'reconcile-provider-end',origin:'PROVIDER_ENDED_RECOVERY'});
     await save(current,next);
     return next;
+}
+function scheduleOwnerEmails(req:Request,session:Session) {
+    if(!emailAllowed||!session.demoEmail?.automaticOwner||session.demoEmail.deliveries||session.demoEmail.automaticError||!session.providerId)return;
+    (options.afterResponse||after)(async()=>{
+        try{
+            if(await redis(['SET',prefix+'automatic-email-worker:'+session.id,'1','NX','EX',180])!=='OK')return;
+            // Reload after the closing response. Durable CAS reservations, not this
+            // callback, arbitrate duplicate close events and simultaneous tabs.
+            let current=await load(req,session.id);
+            if(current.demoEmail?.deliveries||current.demoEmail?.automaticError)return;
+            try{current=await reconcileProviderEnded(current,[0,1000,2000,4000,8000]);}
+            catch(error){
+                // A status read may have finalized the same transcript first.
+                current=await load(req,session.id);
+                if(current.state!=='CLOSED')throw error;
+            }
+            if(current.state!=='CLOSED')throw new Error('Final transcript is not ready');
+            await sendAutomaticOwnerEmails(current,{save,stamp:receipt,
+                reserveAllowance:callerAddress=>reserveVisitorEmailAllowance(callerAddress,{redis,prefix,ownerOnly:true})});
+        }catch{
+            console.error('[james-auto-email] Delivery needs attention',session.id);
+            try{
+                const current=await load(req,session.id);
+                // Another worker may have won the reservation. Never overwrite it.
+                if(!current.demoEmail||current.demoEmail.deliveries||current.demoEmail.automaticError)return;
+                const next=structuredClone(current);
+                next.demoEmail!.automaticError='Automatic email could not be completed. No delivery is confirmed; please ask the demo operator to inspect this call.';
+                await save(current,receipt(current,next,{action:'automatic-email-blocked'}));
+            }catch{console.error('[james-auto-email] Could not save delivery status',session.id);}
+        }
+    });
 }
 async function post(req:Request) {
     let restartClaim:{key:string;id:string}|undefined;
@@ -164,7 +196,8 @@ async function post(req:Request) {
                 visitorAuthorization=null;
                 emailNotice='Email is unavailable for this call. James and the legal pad remain available.';
             }
-            const emailBundle=demoTransport?.bundle?{bundle:demoTransport.bundle,recipientMode:demoTransport.recipientMode}:{};
+            const emailBundle=demoTransport?.bundle?{bundle:demoTransport.bundle,recipientMode:demoTransport.recipientMode,
+                ...(options.automaticOwnerEmail&&demoTransport.bundle==='three'&&demoTransport.recipientMode==='owner'?{automaticOwner:true as const}:{})}:{};
             let owner=browser(req), token:string|undefined;
             if(!owner){const created=createAmyAnamBrowserSessionWithSecret(secret());owner=created.session;token=created.token;}
             const p=await provider('/personas/'+PERSONA_ID,undefined,options.runtimeClose?'persona-fetch':undefined);
@@ -199,12 +232,19 @@ async function post(req:Request) {
             return response;
         }
         const current=await load(req,body.id); let next=structuredClone(current);
+        if(body.action==='verify-ended'){
+            if(!options.allowBrowserRecovery)throw new Error('Browser recovery is unavailable on this surface');
+            scheduleOwnerEmails(req,current);
+            return json(view(current));
+        }
         if(body.action==='release-browser-session'){
             if(!options.allowBrowserRecovery)throw new Error('Browser recovery is unavailable on this surface');
             const cancelledNotice='Connection cancelled before James connected. Your saved notes remain available.';
-            if(current.state==='CLOSED'||current.browserRelease)
+            if(current.state==='CLOSED'||current.browserRelease){
+                scheduleOwnerEmails(req,current);
                 return json({...view(current),restartAllowed:true,operation_notice:current.browserRelease?.source==='BROWSER_CANCELLED_BEFORE_SDK'
                     ?cancelledNotice:'Previous call ended. Your saved notes remain available.'});
+            }
             const release=await releaseJamesBrowserSession(current,{providerIdHint:body.providerId,sdkNeverStarted:body.sdkNeverStarted===true,
                 request:provider,metadata:fetchAnamSessionMetadata});
             // Call termination is distinct from verified final transcript/notes.
@@ -213,6 +253,7 @@ async function post(req:Request) {
             if(current.providerId)try{preserved=await reconcileProviderEnded(current);}catch{/* Saved draft notes remain intact. */}
             next=structuredClone(preserved);next.browserRelease=release;
             next=receipt(preserved,next,{action:'release-browser-session',release});await save(preserved,next);
+            scheduleOwnerEmails(req,next);
             return json({...view(next),restartAllowed:true,operation_notice:release.source==='BROWSER_CANCELLED_BEFORE_SDK'
                 ?cancelledNotice:next.state==='CLOSED'
                 ?'Previous call ended. Your saved notes remain available.'
@@ -297,6 +338,7 @@ async function post(req:Request) {
             }
         } else throw new Error('Unsupported session operation');
         next=receipt(current,next,body);await save(current,next);
+        if(body.action==='close')scheduleOwnerEmails(req,next);
         if(body.action==='close'&&next.ownerTest&&next.intake.handoff==='PREPARED'){
             try{next=await sendPreparedOwnerTest(next,{save,stamp:receipt});}
             catch{return json({...view(next),operation_notice:'Session closed. Legacy owner email requires attention; inspect saved state before any further action.'});}
