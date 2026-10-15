@@ -5,7 +5,22 @@ import { readAmyAnamSpineConfig } from '@/lib/anam/session-spine';
 import { readDemoAccessMode } from '@/lib/james-canary/demo-email';
 import { jamesNotesFont } from '@/components/james/presentation-font';
 
-export const metadata: Metadata = { title: 'James — legal pad demo', robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+    title: 'James — AI Intake Demo',
+    description: 'Meet James, an AI intake demo that turns a conversation into a legal pad. Try fictional details only. Not legal advice.',
+    openGraph: {
+        title: 'James — AI Intake Demo',
+        description: 'Meet James, an AI intake demo that turns a conversation into a legal pad. Try fictional details only. Not legal advice.',
+        siteName: 'AI Fusion Labs',
+        type: 'website',
+    },
+    twitter: {
+        card: 'summary',
+        title: 'James — AI Intake Demo',
+        description: 'Meet James, an AI intake demo that turns a conversation into a legal pad. Try fictional details only. Not legal advice.',
+    },
+    robots: { index: false, follow: false },
+};
 export default async function Page() {
     await connection();
     const launchReady = readAmyAnamSpineConfig().gatesOpen && Boolean(process.env.ANAM_API_KEY);

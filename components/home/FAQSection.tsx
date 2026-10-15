@@ -6,11 +6,11 @@ import { ChevronDown } from 'lucide-react';
 const faqs = [
     {
         question: 'What makes X Agents different from other AI chatbots?',
-        answer: 'X Agents deliver lifelike, real-time video and voice interactions—not just text. Every agent is bound to an approved Knowledge Bank, which means zero hallucinations and zero off-script responses. They\'re purpose-built for sales, ops, and service workflows, not generic chat.',
+        answer: 'X Agents deliver lifelike, real-time video and voice interactions—not just text. Agents are configured with approved business information and workflow-specific instructions for sales, operations, and service.',
     },
     {
-        question: 'How do you prevent hallucinations?',
-        answer: 'Each X Agent is grounded in a curated Knowledge Bank specific to your business. The agent can only reference verified data, product specs, and approved scripts. If it doesn\'t know the answer, it gracefully escalates instead of guessing.',
+        question: 'How do you reduce inaccurate answers?',
+        answer: 'We use curated business information, scoped instructions, and testing to reduce inaccurate answers. AI can still make mistakes, so important information should be verified by a person. These safeguards do not guarantee error-free responses.',
     },
     {
         question: 'What integrations are supported?',

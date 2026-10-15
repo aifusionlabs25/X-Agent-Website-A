@@ -12,7 +12,7 @@ const steps = [
         icon: Wrench,
         step: '02',
         title: 'We Build Your Custom Agent',
-        desc: 'Using our proprietary engine, we design and train a lifelike AI agent loaded with your exact Knowledge Bank—zero hallucinations.',
+        desc: 'We configure a lifelike AI agent around your approved business information and workflows, with testing and human review.',
     },
     {
         icon: Plug,

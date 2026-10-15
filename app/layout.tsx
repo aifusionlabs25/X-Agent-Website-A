@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   description: 'X Agents: Lifelike AI for sales/ops automation. Beta pilots for SMBs—join now.',
   openGraph: {
     title: 'X Agents by AI Fusion Labs — Autonomous AI for SMB Automation',
-    description: 'Deploy lifelike AI agents for smarter sales & ops. Zero hallucinations, easy integrations, real-time voice & video.',
+    description: 'Explore lifelike AI agents for sales and operations, with real-time voice, video, and business-tool integrations.',
     siteName: 'AI Fusion Labs',
   },
 };
