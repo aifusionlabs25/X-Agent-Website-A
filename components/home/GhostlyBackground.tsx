@@ -1,11 +1,38 @@
+'use client';
+
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import styles from './HomeIntroSplash.module.css';
+
+type IntroStage = 'logo' | 'blackout' | 'reveal' | 'complete';
+
+const LOGO_HOLD_MS = 1_600;
+const REVEAL_START_MS = 2_150;
+const INTRO_COMPLETE_MS = 2_950;
 
 export default function GhostlyBackground() {
+    const [stage, setStage] = useState<IntroStage>('logo');
+
+    useEffect(() => {
+        const blackoutTimer = window.setTimeout(() => setStage('blackout'), LOGO_HOLD_MS);
+        const revealTimer = window.setTimeout(() => setStage('reveal'), REVEAL_START_MS);
+        const completeTimer = window.setTimeout(() => setStage('complete'), INTRO_COMPLETE_MS);
+
+        return () => {
+            window.clearTimeout(blackoutTimer);
+            window.clearTimeout(revealTimer);
+            window.clearTimeout(completeTimer);
+        };
+    }, []);
+
+    if (stage === 'complete') return null;
+
     return (
         <div
             aria-hidden="true"
-            className="absolute inset-0 z-0 flex select-none items-center justify-center overflow-hidden bg-black px-5 sm:px-10"
+            className={`${styles.splash} ${styles[stage]}`}
             data-home-loading-brand
+            data-stage={stage}
         >
             <Image
                 src="/brand/x-agents-metallic-loading.webp"
@@ -15,7 +42,7 @@ export default function GhostlyBackground() {
                 priority
                 fetchPriority="high"
                 sizes="100vw"
-                className="h-auto w-[min(96vw,1200px)] object-contain sm:w-[min(88vw,1200px)]"
+                className={styles.logo}
             />
         </div>
     );
