@@ -364,9 +364,13 @@ test('homepage first paint uses the metallic X Agents brand artwork', () => {
   assert.match(loadingBrand, /REVEAL_START_MS\s*=\s*2_150/);
   assert.match(loadingBrand, /INTRO_COMPLETE_MS\s*=\s*2_950/);
   assert.match(loadingBrand, /'logo'\s*\|\s*'blackout'\s*\|\s*'reveal'\s*\|\s*'complete'/);
+  assert.match(loadingBrand, /STAGE_CLASS_NAMES:\s*Record<IntroStage, string>/);
+  assert.doesNotMatch(loadingBrand, /styles\[stage\]/);
   assert.doesNotMatch(loadingBrand, /<svg|>X AGENT</);
   assert.match(loadingStyles, /\.blackout \.logo/);
   assert.match(loadingStyles, /\.reveal\s*\{[^}]*opacity:\s*0/s);
+  assert.match(loadingStyles, /width:\s*100vw/);
+  assert.match(loadingStyles, /height:\s*100dvh/);
   assert.match(loadingStyles, /transition:\s*opacity 750ms/);
   assert.match(loadingStyles, /prefers-reduced-motion:\s*reduce/);
 });
