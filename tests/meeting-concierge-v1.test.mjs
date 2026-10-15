@@ -353,6 +353,15 @@ test('homepage credibility copy stays grounded and uses the approved efficiency 
   assert.doesNotMatch(specs, /50–70% Efficiency Gains/);
 });
 
+test('homepage first paint uses the metallic X Agents brand artwork', () => {
+  const loadingBrand = read('components/home/GhostlyBackground.tsx');
+  assert.match(loadingBrand, /\/brand\/x-agents-metallic-loading\.webp/);
+  assert.match(loadingBrand, /fetchPriority="high"/);
+  assert.match(loadingBrand, /priority/);
+  assert.match(loadingBrand, /data-home-loading-brand/);
+  assert.doesNotMatch(loadingBrand, /<svg|>X AGENT</);
+});
+
 test('homepage tiles prioritize Amy, Evan, and James without disturbing the remaining order', () => {
   const home = read('app/page.tsx');
   assert.match(home, /HOMEPAGE_AGENT_PRIORITY\s*=\s*\[['"]amy['"],\s*['"]evan['"],\s*['"]james['"]\]/);
