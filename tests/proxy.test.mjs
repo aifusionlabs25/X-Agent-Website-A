@@ -70,6 +70,10 @@ test('proxy passes through normally and returns the branded 503 only in maintena
         const maintenanceHtml = await maintenance.text();
         assert.match(maintenanceHtml, /System Upgrade in Progress/);
         assert.match(maintenanceHtml, /X-Agent platform is currently down/);
+
+        process.env.MAINTENANCE_MODE = ' TRUE\r\n';
+        const windowsPipelineMaintenance = proxy();
+        assert.equal(windowsPipelineMaintenance.status, 503);
     } finally {
         if (previousMaintenanceMode === undefined) {
             delete process.env.MAINTENANCE_MODE;
