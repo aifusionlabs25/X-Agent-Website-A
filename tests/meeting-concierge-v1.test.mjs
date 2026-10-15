@@ -360,9 +360,9 @@ test('homepage first paint uses the metallic X Agents brand artwork', () => {
   assert.match(loadingBrand, /fetchPriority="high"/);
   assert.match(loadingBrand, /priority/);
   assert.match(loadingBrand, /data-home-loading-brand/);
-  assert.match(loadingBrand, /LOGO_HOLD_MS\s*=\s*1_600/);
-  assert.match(loadingBrand, /REVEAL_START_MS\s*=\s*2_150/);
-  assert.match(loadingBrand, /INTRO_COMPLETE_MS\s*=\s*2_950/);
+  assert.match(loadingBrand, /LOGO_HOLD_MS\s*=\s*1_250/);
+  assert.match(loadingBrand, /REVEAL_START_MS\s*=\s*1_800/);
+  assert.match(loadingBrand, /INTRO_COMPLETE_MS\s*=\s*2_600/);
   assert.match(loadingBrand, /'logo'\s*\|\s*'blackout'\s*\|\s*'reveal'\s*\|\s*'complete'/);
   assert.match(loadingBrand, /STAGE_CLASS_NAMES:\s*Record<IntroStage, string>/);
   assert.doesNotMatch(loadingBrand, /styles\[stage\]/);

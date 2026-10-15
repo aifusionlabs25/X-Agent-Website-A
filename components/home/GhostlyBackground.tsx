@@ -6,9 +6,9 @@ import styles from './HomeIntroSplash.module.css';
 
 type IntroStage = 'logo' | 'blackout' | 'reveal' | 'complete';
 
-const LOGO_HOLD_MS = 1_600;
-const REVEAL_START_MS = 2_150;
-const INTRO_COMPLETE_MS = 2_950;
+const LOGO_HOLD_MS = 1_250;
+const REVEAL_START_MS = 1_800;
+const INTRO_COMPLETE_MS = 2_600;
 
 const STAGE_CLASS_NAMES: Record<IntroStage, string> = {
     logo: '',
