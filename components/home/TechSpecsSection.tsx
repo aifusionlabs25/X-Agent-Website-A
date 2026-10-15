@@ -8,13 +8,13 @@ const specs = [
     },
     {
         icon: Brain,
-        title: 'Knowledge-First Intelligence',
-        desc: 'Every agent is bound to an approved Knowledge Bank. No hallucinations, no guessing — only verified, on-brand responses.',
+        title: 'Knowledge-Grounded Intelligence',
+        desc: 'Every agent works from an approved Knowledge Bank, follows clear guardrails, and routes uncertain questions for human confirmation.',
     },
     {
         icon: TrendingUp,
-        title: '50–70% Efficiency Gains',
-        desc: 'X Agents consistently deliver measurable performance improvements — automating follow-ups, qualifying leads, and routing support 24/7.',
+        title: '30–50% Efficiency Gains',
+        desc: 'X Agents are designed to reduce repetitive work — automating follow-ups, qualifying leads, and routing support 24/7.',
     },
     {
         icon: Globe,

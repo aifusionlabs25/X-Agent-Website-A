@@ -7,14 +7,30 @@ import FAQSection from '@/components/home/FAQSection';
 import BetaSignupSection from '@/components/home/BetaSignupSection';
 import { ALL_AGENTS, SALES_AGENTS, SERVICE_AGENTS, type AgentData } from '@/lib/agents';
 
+const HOMEPAGE_AGENT_PRIORITY = ['amy', 'evan', 'james'] as const;
+const HOMEPAGE_AGENT_PRIORITY_INDEX = new Map<string, number>(
+  HOMEPAGE_AGENT_PRIORITY.map((slug, index) => [slug, index]),
+);
+
+function prioritizeHomepageAgents(agents: AgentData[]) {
+  return agents
+    .map((agent, originalIndex) => ({ agent, originalIndex }))
+    .sort((left, right) => {
+      const leftPriority = HOMEPAGE_AGENT_PRIORITY_INDEX.get(left.agent.slug) ?? Number.MAX_SAFE_INTEGER;
+      const rightPriority = HOMEPAGE_AGENT_PRIORITY_INDEX.get(right.agent.slug) ?? Number.MAX_SAFE_INTEGER;
+      return leftPriority - rightPriority || left.originalIndex - right.originalIndex;
+    })
+    .map(({ agent }) => agent);
+}
+
 export default function HomePage() {
   const hideAmy = process.env.NEXT_PUBLIC_HIDE_AMY === 'true';
 
   const filterAgents = (agents: AgentData[]) => hideAmy ? agents.filter(a => a.slug !== 'amy') : agents;
 
-  const displaySales = filterAgents(SALES_AGENTS);
-  const displayService = filterAgents(SERVICE_AGENTS);
-  const displayAll = filterAgents(ALL_AGENTS);
+  const displaySales = prioritizeHomepageAgents(filterAgents(SALES_AGENTS));
+  const displayService = prioritizeHomepageAgents(filterAgents(SERVICE_AGENTS));
+  const displayAll = prioritizeHomepageAgents(filterAgents(ALL_AGENTS));
 
   return (
     <main className="min-h-screen bg-zinc-950">

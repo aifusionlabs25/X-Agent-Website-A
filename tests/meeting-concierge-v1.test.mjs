@@ -345,6 +345,31 @@ test('Evan entry preserves the regular session and adds a Mullins-branded meetin
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
 });
 
+test('homepage credibility copy stays grounded and uses the approved efficiency range', () => {
+  const specs = read('components/home/TechSpecsSection.tsx');
+  assert.match(specs, /Knowledge-Grounded Intelligence/);
+  assert.match(specs, /30–50% Efficiency Gains/);
+  assert.doesNotMatch(specs, /no hallucinations/i);
+  assert.doesNotMatch(specs, /50–70% Efficiency Gains/);
+});
+
+test('homepage tiles prioritize Amy, Evan, and James without disturbing the remaining order', () => {
+  const home = read('app/page.tsx');
+  assert.match(home, /HOMEPAGE_AGENT_PRIORITY\s*=\s*\[['"]amy['"],\s*['"]evan['"],\s*['"]james['"]\]/);
+  assert.match(home, /prioritizeHomepageAgents\(filterAgents\(SALES_AGENTS\)\)/);
+  assert.match(home, /prioritizeHomepageAgents\(filterAgents\(SERVICE_AGENTS\)\)/);
+  assert.match(home, /prioritizeHomepageAgents\(filterAgents\(ALL_AGENTS\)\)/);
+});
+
+test('Evan meeting concierge has a compact laptop-height presentation', () => {
+  const css = read('components/evan/EvanMeetingScheduler.module.css');
+  assert.match(css, /@media \(min-width:\s*901px\) and \(max-height:\s*960px\)/);
+  assert.match(css, /\.schedulerPanel\s*\{[^}]*min-height:\s*100svh;[^}]*padding:/s);
+  assert.match(css, /\.title\s*\{[^}]*font-size:/s);
+  assert.match(css, /\.confirmFacts\s*\{[^}]*margin-top:/s);
+  assert.match(css, /\.confirmFacts\s*>\s*div\s*\{[^}]*padding:/s);
+});
+
 test('installation guide exists and defines the next-agent isolation checklist', () => {
   const path = 'docs/meeting-concierge/v1/INSTALLATION.md';
   assert.ok(existsSync(resolve(root, path)));
