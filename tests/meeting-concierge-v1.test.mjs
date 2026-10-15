@@ -360,9 +360,9 @@ test('homepage first paint uses the metallic X Agents brand artwork', () => {
   assert.match(loadingBrand, /fetchPriority="high"/);
   assert.match(loadingBrand, /priority/);
   assert.match(loadingBrand, /data-home-loading-brand/);
-  assert.match(loadingBrand, /LOGO_HOLD_MS\s*=\s*1_250/);
-  assert.match(loadingBrand, /REVEAL_START_MS\s*=\s*1_800/);
-  assert.match(loadingBrand, /INTRO_COMPLETE_MS\s*=\s*2_600/);
+  assert.match(loadingBrand, /LOGO_HOLD_MS\s*=\s*1_200/);
+  assert.match(loadingBrand, /REVEAL_START_MS\s*=\s*1_750/);
+  assert.match(loadingBrand, /INTRO_COMPLETE_MS\s*=\s*2_700/);
   assert.match(loadingBrand, /'logo'\s*\|\s*'blackout'\s*\|\s*'reveal'\s*\|\s*'complete'/);
   assert.match(loadingBrand, /STAGE_CLASS_NAMES:\s*Record<IntroStage, string>/);
   assert.doesNotMatch(loadingBrand, /styles\[stage\]/);
@@ -371,7 +371,7 @@ test('homepage first paint uses the metallic X Agents brand artwork', () => {
   assert.match(loadingStyles, /\.reveal\s*\{[^}]*opacity:\s*0/s);
   assert.match(loadingStyles, /width:\s*100vw/);
   assert.match(loadingStyles, /height:\s*100dvh/);
-  assert.match(loadingStyles, /transition:\s*opacity 750ms/);
+  assert.match(loadingStyles, /transition:\s*opacity 900ms/);
   assert.match(loadingStyles, /prefers-reduced-motion:\s*reduce/);
 });
 
