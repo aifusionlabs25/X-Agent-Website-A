@@ -135,6 +135,33 @@
     .schedulerPanel { padding: 1.25rem; }
     .logo { width: 5.5rem; }
 }
+@media (min-width: 901px) and (max-height: 960px) {
+    .schedulerPanel { min-height: 100svh; padding: clamp(.85rem, 1.8vh, 1.2rem) clamp(1.5rem, 3vw, 3rem); overflow-y: auto; }
+    .logo { top: .8rem; right: 1.25rem; width: 5.75rem; padding: .25rem; }
+    .scheduler { width: min(100%, 58rem); }
+    .backLink { margin-bottom: .45rem; }
+    .topline { margin-bottom: .55rem; }
+    .title { margin-top: .35rem; font-size: clamp(2.65rem, 3.5vw, 3.85rem); line-height: .9; }
+    .formStack { gap: .65rem; margin-top: .8rem; }
+    .providerGrid button { min-height: 3.95rem; padding: .55rem .7rem; }
+    .timingGrid button { min-height: 4rem; padding: .65rem .8rem; }
+    .roleGrid button { min-height: 4.65rem; padding: .7rem .8rem; }
+    .durationGrid button { min-height: 3.65rem; padding: .55rem .65rem; }
+    .scheduler input, .scheduler textarea { min-height: 2.8rem; padding: .62rem .8rem; }
+    .scheduler textarea { min-height: 3.8rem; }
+    .note, .joinNowNote, .verifyPanel, .verifiedCard { padding: .65rem .8rem; }
+    .actions { margin-top: .6rem; padding-top: .6rem; }
+    .primaryButton, .secondaryButton, .dangerButton { min-height: 2.7rem; padding: .55rem 1rem; }
+    .confirmIcon { width: 2.8rem; height: 2.8rem; margin-bottom: .65rem; }
+    .intro { margin-top: .6rem; font-size: .8rem; line-height: 1.45; }
+    .restoredNote { margin-top: .35rem; }
+    .liveStatus { margin-top: .55rem; padding: .65rem .8rem; }
+    .confirmFacts { gap: .5rem; margin-top: .8rem; }
+    .confirmFacts > div { padding: .65rem .8rem; }
+    .confirmFacts dd { margin-top: .3rem; font-size: .76rem; }
+    .error { margin-top: .55rem; padding: .55rem .7rem; }
+    .dangerPanel { margin-top: .6rem; padding: .65rem .75rem; }
+}
 @media (min-width: 1024px) and (max-height: 800px) {
     .portraitCopy h2 { font-size: clamp(3rem, 5vw, 4.4rem); }
     .backLink { margin-bottom: .65rem; }
