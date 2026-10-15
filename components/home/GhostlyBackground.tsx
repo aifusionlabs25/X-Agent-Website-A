@@ -10,6 +10,13 @@ const LOGO_HOLD_MS = 1_600;
 const REVEAL_START_MS = 2_150;
 const INTRO_COMPLETE_MS = 2_950;
 
+const STAGE_CLASS_NAMES: Record<IntroStage, string> = {
+    logo: '',
+    blackout: styles.blackout,
+    reveal: styles.reveal,
+    complete: '',
+};
+
 export default function GhostlyBackground() {
     const [stage, setStage] = useState<IntroStage>('logo');
 
@@ -30,7 +37,7 @@ export default function GhostlyBackground() {
     return (
         <div
             aria-hidden="true"
-            className={`${styles.splash} ${styles[stage]}`}
+            className={`${styles.splash} ${STAGE_CLASS_NAMES[stage]}`.trim()}
             data-home-loading-brand
             data-stage={stage}
         >
