@@ -124,6 +124,11 @@ if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
     Stop-WithMessage 'Vercel CLI is not installed or is not available in PATH.'
 }
 
+$VercelCommand = (Get-Command vercel.cmd -ErrorAction SilentlyContinue).Source
+if ([string]::IsNullOrWhiteSpace($VercelCommand)) {
+    Stop-WithMessage 'The Windows Vercel command shim (vercel.cmd) is not available in PATH.'
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot '.vercel\project.json'))) {
     Stop-WithMessage "The expected Vercel project link was not found at $ProjectRoot\.vercel\project.json."
 }
@@ -131,9 +136,38 @@ if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot '.vercel\project.json')
 Write-ControlLog "Requested production state '$State'."
 Write-Host ''
 Write-Host '1/3 Updating the production safety switch...' -ForegroundColor Cyan
-$DesiredValue | & vercel env update $MaintenanceVariable production --yes --scope $Scope --cwd $ProjectRoot --no-color
-if ($LASTEXITCODE -ne 0) {
-    Stop-WithMessage 'Vercel did not accept the maintenance-mode update. The website was not redeployed.'
+$valueFile = [System.IO.Path]::GetTempFileName()
+try {
+    # Windows PowerShell pipelines append CRLF. Redirect an exact, newline-free value
+    # so the production variable is always either the four bytes true or five bytes false.
+    [System.IO.File]::WriteAllText(
+        $valueFile,
+        $DesiredValue,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+
+    $updateArguments = @(
+        'env',
+        'update',
+        $MaintenanceVariable,
+        'production',
+        '--yes',
+        '--scope',
+        $Scope,
+        '--cwd',
+        "`"$ProjectRoot`"",
+        '--no-color'
+    )
+    $updateProcess = Start-Process -FilePath $VercelCommand -ArgumentList $updateArguments -RedirectStandardInput $valueFile -NoNewWindow -Wait -PassThru
+
+    if ($updateProcess.ExitCode -ne 0) {
+        Stop-WithMessage 'Vercel did not accept the maintenance-mode update. The website was not redeployed.'
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $valueFile) {
+        Remove-Item -LiteralPath $valueFile -Force
+    }
 }
 
 Write-Host ''

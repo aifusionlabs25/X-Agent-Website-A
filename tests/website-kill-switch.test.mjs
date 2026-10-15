@@ -11,8 +11,12 @@ test('website controller exposes explicit offline and online states', () => {
     assert.match(controller, /ValidateSet\('offline', 'online'\)/);
     assert.match(controller, /MAINTENANCE_MODE/);
     assert.match(controller, /xagent\.aifusionlabs\.app/);
-    assert.match(controller, /env update \$MaintenanceVariable production/);
+    assert.match(controller, /\$updateArguments = @\(/);
+    assert.match(controller, /\$MaintenanceVariable,/);
     assert.match(controller, /redeploy \$SiteUrl --target production/);
+    assert.match(controller, /RedirectStandardInput \$valueFile/);
+    assert.match(controller, /UTF8Encoding/);
+    assert.doesNotMatch(controller, /\$DesiredValue \| & vercel env update/);
 });
 
 test('website controller requires typed confirmation and verifies the public result', () => {

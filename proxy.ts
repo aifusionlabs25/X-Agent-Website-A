@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 
 export function proxy() {
-    if (process.env.MAINTENANCE_MODE === 'true') {
+    const maintenanceMode = process.env.MAINTENANCE_MODE?.trim().toLowerCase();
+
+    if (maintenanceMode === 'true') {
         // Return a sleek, branded HTML response
         return new NextResponse(
             `<!DOCTYPE html>
