@@ -13,6 +13,10 @@ interface EvanRouteMapProps {
     stops: MovePlanStop[];
 }
 
+// An unmarked service-area overview, never the visitor's inferred/GPS location.
+const PHOENIX_AREA_CENTER: [number, number] = [33.4484, -112.0740];
+const PHOENIX_AREA_ZOOM = 9;
+
 const markerColor = (stop: MovePlanStop) => {
     if (stop.kind === 'Origin') return '#5d24d6';
     if (stop.kind === 'Destination') return '#e4a323';
@@ -29,7 +33,9 @@ const escapeMapHtml = (value: string) => value
 export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const [mapReady, setMapReady] = useState(false);
+    const [mapLoadFailed, setMapLoadFailed] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
+    const waitingForLocations = stops.length === 0;
     const mappedStops = useMemo(() => stops.flatMap((stop, index) => {
         const coordinates = getMovePlanStopCoordinates(stop);
         return coordinates ? [{ stop, index, coordinates }] : [];
@@ -57,11 +63,13 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
 
     useEffect(() => {
         const container = mapContainerRef.current;
-        if (!container || !mappedStops.length) return undefined;
+        if (!container) return undefined;
 
         let disposed = false;
         let map: import('leaflet').Map | null = null;
+        let resizeTimer: number | null = null;
         setMapReady(false);
+        setMapLoadFailed(false);
 
         void import('leaflet').then((L) => {
             if (disposed) return;
@@ -115,7 +123,9 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                     );
             });
 
-            if (latLngs.length === 1) {
+            if (latLngs.length === 0) {
+                map.setView(PHOENIX_AREA_CENTER, PHOENIX_AREA_ZOOM);
+            } else if (latLngs.length === 1) {
                 map.setView(latLngs[0], streetLevelCount ? 15 : 10);
             } else {
                 map.fitBounds(L.latLngBounds(latLngs), {
@@ -124,17 +134,21 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                 });
             }
 
-            window.setTimeout(() => map?.invalidateSize(), 80);
+            resizeTimer = window.setTimeout(() => map?.invalidateSize(), 80);
             setMapReady(true);
+        }).catch(() => {
+            if (disposed) return;
+            map?.remove();
+            map = null;
+            setMapLoadFailed(true);
         });
 
         return () => {
             disposed = true;
+            if (resizeTimer !== null) window.clearTimeout(resizeTimer);
             map?.remove();
         };
     }, [isExpanded, mappedStops, streetLevelCount]);
-
-    if (!mappedStops.length) return null;
 
     const mapPanel = (
         <div
@@ -154,13 +168,13 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                     </span>
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ffdc8a]">Live route map</p>
-                        <p className="text-sm font-semibold">{mappedStops.length} mapped {mappedStops.length === 1 ? 'location' : 'locations'}</p>
+                        <p className="text-sm font-semibold">{waitingForLocations ? 'Waiting for pickup and destination' : `${mappedStops.length} mapped ${mappedStops.length === 1 ? 'location' : 'locations'}`}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="hidden items-center gap-2 rounded-full border border-white/15 bg-white/7 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/70 sm:inline-flex">
                         <LocateFixed size={13} className={mapReady ? 'text-[#ffc857]' : 'animate-pulse text-white/35'} />
-                        {streetLevelCount ? `${streetLevelCount} street-level ${streetLevelCount === 1 ? 'pin' : 'pins'}` : 'City-level working route'}
+                        {waitingForLocations ? 'Phoenix-area overview' : streetLevelCount ? `${streetLevelCount} street-level ${streetLevelCount === 1 ? 'pin' : 'pins'}` : mappedStops.length ? 'City-level working route' : 'Locations need confirmation'}
                     </span>
                     <button
                         type="button"
@@ -183,25 +197,25 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                     className={isExpanded
                         ? 'evan-route-map h-full min-h-[420px] w-full bg-[#eee7f8]'
                         : 'evan-route-map h-[310px] w-full bg-[#eee7f8] sm:h-[360px]'}
-                    aria-label="Working map of move locations"
+                    aria-label={waitingForLocations ? 'Phoenix-area overview; no move locations added yet' : 'Working map of move locations'}
                 />
                 {!mapReady && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#eee7f8] text-sm font-semibold text-[#684a83]">
-                        Building the working route…
+                        {mapLoadFailed ? 'The map is temporarily unavailable. You can keep planning with Evan.' : 'Loading the map…'}
                     </div>
                 )}
                 <div className="pointer-events-none absolute left-3 top-3 z-[500] hidden max-w-[220px] sm:block border border-[#321064]/10 bg-white/92 px-3 py-2 shadow-[0_8px_24px_rgba(42,16,80,0.13)] backdrop-blur">
                     <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#7540cf]">Planning preview</p>
-                    <p className="mt-1 text-[11px] leading-4 text-[#6c5a79]">Confirmed addresses use street-level pins. The line shows stop order—not driving directions.</p>
+                    <p className="mt-1 text-[11px] leading-4 text-[#6c5a79]">{waitingForLocations ? 'Phoenix-area overview only—not your current location. No move pins yet.' : 'Confirmed addresses use street-level pins. The line shows stop order—not driving directions.'}</p>
                 </div>
             </div>
 
             <div className="flex flex-col gap-3 border-t border-[#321064]/10 bg-[#faf7fd] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#71617c]">
+                {waitingForLocations ? <p className="text-xs leading-5 text-[#71617c]">Share your pickup and destination with Evan. This is an unmarked area preview, not your current location.</p> : <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#71617c]">
                     <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#5d24d6]" /> Origin</span>
                     <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#9568df]" /> Additional stop</span>
                     <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#e4a323]" /> Destination</span>
-                </div>
+                </div>}
                 {googleMapsUrl && (
                     <a
                         href={googleMapsUrl}

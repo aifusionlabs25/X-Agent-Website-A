@@ -42,6 +42,7 @@ import {
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
 import { runEvanToolWithDeadline, EvanToolExecutionError } from '@/lib/anam/evan-tool-execution';
 import { createEvanResponseRecovery } from '@/lib/anam/evan-response-recovery';
+import { createEvanPlannerAutoOpen } from '@/lib/anam/evan-planner-auto-open';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 import {
     createAmyFarewellCloseCoordinator,
@@ -98,6 +99,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [workbenchAppliedChanges, setWorkbenchAppliedChanges] = useState<AmyWorkbenchFactChange[]>([]);
     const [workbenchVisualSlideIndex, setWorkbenchVisualSlideIndex] = useState(0);
     const [evanPlannerOpen, setEvanPlannerOpen] = useState(false);
+    const evanPlannerAutoOpenRef = useRef<ReturnType<typeof createEvanPlannerAutoOpen> | null>(null);
     const [evanPlannerView, setEvanPlannerView] = useState<EvanMovePlannerView>('brief');
     const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[]>([]);
     const workbenchEnabled = isAmyCara4Variant(sessionVariant)
@@ -251,6 +253,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             }
             return latestTurns.slice(-120);
         };
+
+        // Browser-only presentation: no model/tool round trip, speech, or address
+        // inference. Each session gets one opportunity; manual use consumes it too.
+        const evanPlannerAutoOpen = evanPlannerEnabled ? createEvanPlannerAutoOpen({
+            onOpenRoute: () => {
+                if (!isMounted || closeHandled || requestedCloseReason) return;
+                setEvanPlannerView('route');
+                setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                setEvanPlannerOpen(true);
+            },
+        }) : null;
+        evanPlannerAutoOpenRef.current = evanPlannerAutoOpen;
 
         const completeOnce = (closeReason: string): Promise<void> => {
             if (!sessionSpineActive || !launchId || !providerSessionId) {
@@ -685,6 +699,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     let routeStopsForReceipt = evanAddressStopsRef.current;
 
                                     if (isMounted) {
+                                        evanPlannerAutoOpen?.markOpened();
                                         setEvanPlannerView(view);
                                         setEvanPlannerOpen(true);
                                     }
@@ -875,6 +890,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
+                    if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
+                        evanPlannerAutoOpen?.observeMessage(messageEvent);
+                    }
                     const deliverAmyUnsafeOutputRecovery = (reason: AmyUnsafeSpokenOutputReason) => {
                         if (amyUnsafeOutputRecoveryTimer !== null) {
                             window.clearTimeout(amyUnsafeOutputRecoveryTimer);
@@ -1146,6 +1164,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleConnectionClosed = async (reason: ConnectionClosedCode) => {
                     if (closeHandled) return;
                     closeHandled = true;
+                    evanPlannerAutoOpen?.dispose();
                     evanSessionAbort.abort();
                     evanResponseRecovery?.dispose();
                     amyArtifactOperation.cancel();
@@ -1501,6 +1520,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         {
                             onStart: async () => {
                                 requestedCloseReason = 'user_requested_end';
+                                evanPlannerAutoOpen?.dispose();
                                 evanResponseRecovery?.close();
                                 evanSessionAbort.abort();
                                 const armed = evanCloseCoordinator?.arm() === true;
@@ -1643,6 +1663,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
         return () => {
             isMounted = false;
+            evanPlannerAutoOpen?.dispose();
+            if (evanPlannerAutoOpenRef.current === evanPlannerAutoOpen) evanPlannerAutoOpenRef.current = null;
             evanSessionAbort.abort();
             evanResponseRecovery?.dispose();
             amyArtifactOperation.cancel();
@@ -1760,7 +1782,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             {evanPlannerEnabled && !evanPlannerOpen && !error && !isConnecting && (
                 <button
                     type="button"
-                    onClick={() => setEvanPlannerOpen(true)}
+                    onClick={() => {
+                        evanPlannerAutoOpenRef.current?.markOpened();
+                        setEvanPlannerOpen(true);
+                    }}
                     className="absolute right-5 top-20 z-30 inline-flex items-center gap-2 rounded-xl border border-[#ffc857]/35 bg-[#5d24d6]/88 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.12em] text-white shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 hover:border-[#ffc857]/70 hover:bg-[#6f34e8]"
                     data-testid="open-evan-move-planner"
                 >
@@ -1778,7 +1803,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     turns={workbenchTurns}
                     addressStops={evanAddressStops}
                     requestedView={evanPlannerView}
-                    onClose={() => setEvanPlannerOpen(false)}
+                    onClose={() => {
+                        evanPlannerAutoOpenRef.current?.dismiss();
+                        setEvanPlannerOpen(false);
+                    }}
                 />
             )}
 

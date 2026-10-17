@@ -156,7 +156,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = [], requ
                         </nav>
 
                         <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-7 sm:py-7">
-                            {model.status === 'listening' ? <EmptyState view={view} /> : (
+                            {model.status === 'listening' && view !== 'route' ? <EmptyState view={view} /> : (
                                 <AnimatePresence mode="wait">
                                     <motion.div
                                         key={view}
@@ -210,12 +210,12 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = [], requ
                                             <section>
                                                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">Pickup to placement</p>
                                                 <h3 className="mt-1 font-serif text-3xl">Move route</h3>
-                                                <p className="mt-2 text-sm leading-6 text-[#746180]">Confirmed street addresses become live pins. Approximate city pins remain clearly labeled until an address can be matched.</p>
+                                                <p className="mt-2 text-sm leading-6 text-[#746180]">{model.stops.length ? 'Confirmed street addresses become live pins. Approximate city pins remain clearly labeled until an address can be matched.' : 'Tell Evan your pickup and destination. Locations will appear here as your move takes shape.'}</p>
 
                                                 <EvanRouteMap stops={model.stops} />
 
-                                                <div className="relative mt-7 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
-                                                    {model.stops.length ? model.stops.map((stop, index) => (
+                                                {model.stops.length > 0 ? <div className="relative mt-7 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
+                                                    {model.stops.map((stop, index) => (
                                                         <div key={`${stop.kind}-${stop.displayAddress ?? stop.address ?? stop.city}-${index}`} className="relative pb-8 last:pb-0">
                                                             <div className={`absolute -left-[45px] top-0 flex h-7 w-7 items-center justify-center rounded-full border-4 border-[#faf7fd] text-xs font-bold text-white ${stop.kind === 'Origin' ? 'bg-[#5d24d6]' : stop.kind === 'Destination' ? 'bg-[#f6b93b]' : 'bg-[#9b6ee5]'}`}>
                                                                 {index + 1}
@@ -235,8 +235,8 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = [], requ
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )) : <EmptyState view="route" />}
-                                                </div>
+                                                    ))}
+                                                </div> : null}
                                             </section>
                                         )}
 
