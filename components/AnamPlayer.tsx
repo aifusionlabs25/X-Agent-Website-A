@@ -274,7 +274,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         };
 
         // Browser-only presentation: no model/tool round trip, speech, or address
-        // inference. Each session gets one opportunity; manual use consumes it too.
+        // confirmation. Each session gets one opportunity; manual use consumes it too.
         const evanPlannerAutoOpen = evanPlannerEnabled ? createEvanPlannerAutoOpen({
             onOpenRoute: () => {
                 if (!isMounted || closeHandled || requestedCloseReason) return;
@@ -1082,6 +1082,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             const completedTurn = currentMessageRef.current.trim();
                             recordTurn(messageEvent.role, currentMessageRef.current);
                             if (transcriptRole(messageEvent.role) === 'user') {
+                                if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
+                                    // A visitor can volunteer the route before Evan asks, or answer
+                                    // before the provider's final persona marker. Reuse the current
+                                    // user-grounded plan without another tool/model request.
+                                    evanPlannerAutoOpen?.observeRouteStops(buildEvanMovePlan(
+                                        transcriptRef.current.slice(-120) as AmyWorkbenchTurn[],
+                                        evanAddressStopsRef.current,
+                                    ).stops);
+                                }
                                 const previousEvanTurn = [...transcriptRef.current].reverse().find(turn => turn.role === 'agent')?.content ?? '';
                                 evanResponseRecovery?.userTurnCompleted(completedTurn, previousEvanTurn, messageEvent.id);
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;

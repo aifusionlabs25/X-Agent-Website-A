@@ -29,3 +29,14 @@ test('manual and tool opening consume automatic presentation; dismissal prevents
     // Explicit requests remain independent of the one-time automatic policy.
     assert.doesNotMatch(tool, /observeMessage\(|observeAgentText\(/);
 });
+
+test('route fallback uses the current plan only after a completed user turn in an active Evan session', () => {
+    const fallback = player.slice(player.indexOf("if (messageEvent.endOfSpeech) {\n                        let amyFarewellRecovery"), player.indexOf('const previousEvanTurn ='));
+    assert.match(fallback, /recordTurn\(messageEvent\.role, currentMessageRef\.current\)/);
+    assert.match(fallback, /if \(transcriptRole\(messageEvent\.role\) === 'user'\)/);
+    assert.match(fallback, /if \(evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason\)/);
+    assert.match(fallback, /observeRouteStops\(buildEvanMovePlan\(/);
+    assert.match(fallback, /transcriptRef\.current\.slice\(-120\)/);
+    assert.match(fallback, /evanAddressStopsRef\.current/);
+    assert.doesNotMatch(fallback, /\.talk\(|addContext\(|fetch\(|setAmyWorkbench/);
+});

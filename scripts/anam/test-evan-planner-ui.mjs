@@ -289,6 +289,57 @@ try {
     await capture('evan-corrected-city-route');
 
     await ready('evan');
+    await message('persona', 'If you’d like to discuss a new move, ', 'natural-route-question', false);
+    assert.equal(await planner.count(), 0);
+    await message('persona', 'could you share the city you’re moving from and the city you’re moving to?', 'natural-route-question');
+    await planner.waitFor({ state: 'visible' });
+    await map.locator('.leaflet-container').waitFor({ state: 'visible' });
+    assert.match(await map.innerText(), /Waiting for pickup and destination/);
+    assert.equal(await map.locator('.leaflet-marker-icon').count(), 0);
+    await message('user', 'Fine, from Gilbert to Mesa, but why should I trust you won’t just shrug again?', 'natural-route-answer');
+    await waitForRoute(['Gilbert', 'Mesa']);
+    pass('The exact conditional live-test question opens Route and its natural answer populates Gilbert to Mesa');
+
+    await ready('evan');
+    await message('persona', 'Hi, I am Evan. How can I help with your move today?', 'fallback-greeting');
+    await message('user', 'I am moving from Gilbert', 'unsolicited-route', false);
+    // Cross the pending transcript refresh to prove incomplete answers do not
+    // open the planner before the visitor has finished giving both endpoints.
+    await page.waitForTimeout(450);
+    assert.equal(await planner.count(), 0);
+    await message('user', ' to Mesa.', 'unsolicited-route');
+    await planner.waitFor({ state: 'visible' });
+    await waitForRoute(['Gilbert', 'Mesa']);
+    assert.deepEqual(await page.evaluate(() => window.__evanHarness.talks), []);
+    pass('Completed chunked visitor origin and destination open Route without an agent location question or tool call');
+    await capture('evan-visitor-route-fallback');
+    await page.getByRole('button', { name: 'Close Move Planner' }).click();
+    await planner.waitFor({ state: 'detached' });
+    await message('user', 'Actually, I am moving from Tempe to Phoenix instead.', 'dismissed-new-route');
+    await message('persona', 'If you’d like to discuss a new move, could you share the city you’re moving from and the city you’re moving to?', 'dismissed-new-question');
+    await page.waitForTimeout(450);
+    assert.equal(await planner.count(), 0);
+    await open.click();
+    await waitForRoute(['Tempe', 'Phoenix']);
+    pass('Dismissal blocks both new visitor routes and new natural questions while keeping the latest route available manually');
+
+    await ready('evan');
+    await message('persona', 'If you’d like to discuss a new move, could you share the city ', 'unfinished-question', false);
+    await message('user', 'I am moving from Gilbert', 'answer-before-question-final', false);
+    assert.equal(await planner.count(), 0);
+    await message('user', ' to Mesa.', 'answer-before-question-final');
+    // Assert the fallback has already opened before the delayed persona final;
+    // that final cannot be the cause of this successful route presentation.
+    await planner.waitFor({ state: 'visible' });
+    await waitForRoute(['Gilbert', 'Mesa']);
+    await page.getByRole('button', { name: 'Close Move Planner' }).click();
+    await planner.waitFor({ state: 'detached' });
+    await message('persona', 'you’re moving from and the city you’re moving to?', 'unfinished-question');
+    await page.waitForTimeout(450);
+    assert.equal(await planner.count(), 0);
+    pass('A visitor answer before the persona final opens Route, and the late question final respects dismissal');
+
+    await ready('evan');
     await message('user', 'The pickup address is 100 Test Lane, Gilbert. The destination address is 200 Sample Road, Queen Creek.', 'confirmed-addresses');
     const addressReceipt = await callRoute(fakeStops());
     assert.equal(addressReceipt.streetPins, 2);
@@ -351,14 +402,17 @@ try {
     pass('A view-only request supersedes a pending lookup with an explicit unresolved receipt and preserves the verified origin pin');
 
     await ready('amy');
+    await message('persona', 'If you’d like to discuss a new move, could you share the city you’re moving from and the city you’re moving to?', 'amy-natural-question');
+    await message('user', 'I am moving from Gilbert', 'amy-user', false);
+    await message('user', ' to Mesa.', 'amy-user');
     await message('persona', 'Where are you moving from, and where are you moving to?', 'amy-question');
-    await message('user', 'I am moving from Gilbert to Queen Creek.', 'amy-user');
+    await page.waitForTimeout(450);
     assert.equal(await open.count(), 0);
     assert.equal(await planner.count(), 0);
     assert.equal(await map.count(), 0);
-    pass('Actual shared AnamPlayer keeps Evan auto-open and map isolated from Amy');
+    pass('Actual shared AnamPlayer keeps natural-question and visitor-route auto-open isolated from Amy');
 
-    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 3);
+    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 6);
     assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode'].includes(request.path)));
     assert.deepEqual(report.blockedRequests, []);
     assert.deepEqual(report.consoleErrors, []);
