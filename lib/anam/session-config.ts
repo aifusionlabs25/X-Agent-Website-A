@@ -43,11 +43,15 @@ export function resolveAnamSessionPersona({
         ? requestedVariant.trim()
         : '';
 
-    if (!variant) {
+    if (requestedVariant != null && typeof requestedVariant !== 'string') {
+        return { ok: false, status: 400, error: 'Unsupported Anam session variant' };
+    }
+
+    if (!variant && personaId !== AMY_PUBLIC_PERSONA_ID) {
         return { ok: true, personaId };
     }
 
-    if (variant !== AMY_CARA4_VARIANT) {
+    if (variant && variant !== AMY_CARA4_VARIANT) {
         return { ok: false, status: 400, error: 'Unsupported Anam session variant' };
     }
 
@@ -55,6 +59,8 @@ export function resolveAnamSessionPersona({
         return { ok: false, status: 400, error: 'The Cara 4 canary is available only for Amy' };
     }
 
+    // Amy always uses the protected configuration, including older links that
+    // omit the variant. The public registry ID must never mint a legacy token.
     const canaryPersonaId = amyCara4PersonaId?.trim();
     if (!canaryPersonaId || canaryPersonaId === AMY_PUBLIC_PERSONA_ID) {
         return { ok: false, status: 503, error: 'Amy Cara 4 canary is not configured' };
