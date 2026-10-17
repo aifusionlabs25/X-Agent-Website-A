@@ -36,7 +36,7 @@ The update command defaults to a read-only dry run. Applying requires the explic
 ## 2026-10-17 replacement-candidate result
 
 - Candidate name: `Evan Mullins Moving Concierge - Replacement Candidate`
-- Managed prompt SHA-256: `b71a0bf5a0907fbf6537dc006ed0649dfb66ee05630b802e2630ae75153833d2`
+- Managed prompt SHA-256: `870f9f5e43caf1cf911a67d77b5687757388978e7e4882db4ff9399e84792834`
 - Knowledge bundle SHA-256: `9554e57575dc25b84b23212cd223b06b7ab8b0fc49c7d490fe093cb80b830035`
 - Knowledge folder: `c9ad40d1-05ba-4cd6-84b4-f9fa90b1a112`
 - Knowledge tool: `fc93e067-9254-4635-a4a6-645970d12548`

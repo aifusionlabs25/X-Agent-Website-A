@@ -40,6 +40,8 @@ import {
     routeToolStopsToMovePlanStops,
 } from '@/lib/anam/evan-address-route';
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
+import { runEvanToolWithDeadline, EvanToolExecutionError } from '@/lib/anam/evan-tool-execution';
+import { createEvanResponseRecovery } from '@/lib/anam/evan-response-recovery';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 import {
     createAmyFarewellCloseCoordinator,
@@ -172,6 +174,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeCloseToolHandler: (() => void) | null = null;
         let requestedCloseReason: string | null = null;
         let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
+        let evanResponseRecovery: ReturnType<typeof createEvanResponseRecovery> | null = null;
+        const evanSessionAbort = new AbortController();
+        let evanRouteGeneration = 0;
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let amyCloseCoordinator: ReturnType<typeof createAmyFarewellCloseCoordinator> | null = null;
         let suppressingAmyUnsafeOutput = false;
@@ -503,6 +508,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 activeClient = anamClient;
                 if (isEvan) {
+                    evanResponseRecovery = createEvanResponseRecovery({
+                        canRecover: () => isMounted && !closeHandled && !requestedCloseReason
+                            && !publicAudioBlocked && document.visibilityState === 'visible',
+                        onRecover: () => {
+                            console.warn('[Evan Anam] Unexpected skipped answer recovery', { contentLogged: false });
+                            void anamClient.talk('Sorry about that pause. I am still here and listening.')
+                                .catch(() => console.error('[Evan Anam] Pause recovery was not confirmed'));
+                        },
+                    });
                     evanCloseCoordinator = createEvanFarewellCloseCoordinator({
                         stopStreaming: () => anamClient.stopStreaming(),
                         onStopError: () => console.error('[Evan Anam] Farewell close was not confirmed'),
@@ -657,79 +671,114 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 if (evanPlannerEnabled) {
                     cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler('show_move_planner', {
                         onStart: async (payload) => {
-                            const requested = payload.arguments?.view;
-                            const view: EvanMovePlannerView = requested === 'route'
-                                || requested === 'inventory'
-                                || requested === 'readiness'
-                                ? requested
-                                : 'brief';
-                            const requestedRouteStops = parseEvanRouteToolStops(payload.arguments?.stops);
-                            let routeStopsForReceipt = evanAddressStopsRef.current;
+                            const routeGeneration = ++evanRouteGeneration;
+                            try {
+                                return await runEvanToolWithDeadline(async signal => {
+                                    signal.throwIfAborted();
+                                    const requested = payload.arguments?.view;
+                                    const view: EvanMovePlannerView = requested === 'route'
+                                        || requested === 'inventory'
+                                        || requested === 'readiness'
+                                        ? requested
+                                        : 'brief';
+                                    const requestedRouteStops = parseEvanRouteToolStops(payload.arguments?.stops);
+                                    let routeStopsForReceipt = evanAddressStopsRef.current;
 
-                            if (isMounted) {
-                                setEvanPlannerView(view);
-                                setEvanPlannerOpen(true);
-                            }
+                                    if (isMounted) {
+                                        setEvanPlannerView(view);
+                                        setEvanPlannerOpen(true);
+                                    }
 
-                            if (requestedRouteStops.length) {
-                                const pendingStops = routeToolStopsToMovePlanStops(requestedRouteStops);
-                                routeStopsForReceipt = pendingStops;
-                                evanAddressStopsRef.current = pendingStops;
-                                if (isMounted) setEvanAddressStops(pendingStops);
+                                    if (requestedRouteStops.length) {
+                                        const pendingStops = routeToolStopsToMovePlanStops(requestedRouteStops);
+                                        routeStopsForReceipt = pendingStops;
+                                        evanAddressStopsRef.current = pendingStops;
+                                        if (isMounted) setEvanAddressStops(pendingStops);
 
-                                try {
-                                    const response = await fetch('/api/anam/evan/route-geocode', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        credentials: 'same-origin',
-                                        cache: 'no-store',
-                                        body: JSON.stringify({ stops: requestedRouteStops }),
+                                        try {
+                                            const response = await fetch('/api/anam/evan/route-geocode', {
+                                                signal,
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                credentials: 'same-origin',
+                                                cache: 'no-store',
+                                                body: JSON.stringify({ stops: requestedRouteStops }),
+                                            });
+                                            const result = await response.json().catch(() => null) as { stops?: unknown } | null;
+                                            const resolvedStops = response.ok ? parseResolvedEvanRouteStops(result?.stops) : [];
+                                            routeStopsForReceipt = resolvedStops.length === requestedRouteStops.length
+                                                ? resolvedStops
+                                                : pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                        } catch {
+                                            routeStopsForReceipt = pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                        }
+                                        signal.throwIfAborted();
+                                        if (routeGeneration !== evanRouteGeneration || !isMounted || closeHandled) throw new Error('View superseded');
+                                        evanAddressStopsRef.current = routeStopsForReceipt;
+                                        if (isMounted) setEvanAddressStops(routeStopsForReceipt);
+                                    }
+
+                                    if (isMounted) {
+                                        // Read the authoritative refs when React applies the update. This
+                                        // prevents an earlier tool snapshot from replacing a newer turn.
+                                        setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                                        await new Promise<void>((resolve) => {
+                                            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                                        });
+                                    }
+
+                                    // Re-read after opening so speech chunks arriving during the tool call
+                                    // are included both in the visible planner and in the tool receipt.
+                                    signal.throwIfAborted();
+                                    if (routeGeneration !== evanRouteGeneration || !isMounted || closeHandled) throw new Error('View superseded');
+                                    const refreshedTurns = snapshotEvanPlannerTurns();
+                                    if (isMounted) setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                                    const receiptModel = buildEvanMovePlan(refreshedTurns, routeStopsForReceipt);
+                                    const streetPins = routeStopsForReceipt.filter((stop) => (
+                                        stop.precision === 'address' || stop.precision === 'address-range'
+                                    )).length;
+                                    const unresolvedAddresses = routeStopsForReceipt.filter((stop) => stop.precision === 'unresolved').length;
+                                    return JSON.stringify({
+                                        status: requestedRouteStops.length ? 'move_route_refreshed' : 'move_planner_opened',
+                                        view,
+                                        currentSessionUserTurns: refreshedTurns.filter((turn) => turn.role === 'user').length,
+                                        streetPins,
+                                        unresolvedAddresses,
+                                        visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
+                                        visibleStops: routeStopsForReceipt.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
+                                        instruction: unresolvedAddresses
+                                            ? 'The requested working Move Planner view is open, but one or more street addresses could not be verified. Say that briefly and ask the visitor to restate only the unresolved address. Do not claim the route is confirmed.'
+                                            : streetPins
+                                                ? 'The requested working Move Planner route is open with receipt-supported street-level pins. Confirm that briefly. Do not call it a confirmed driving route, quote, booking, or operational approval.'
+                                                : 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
                                     });
-                                    const result = await response.json().catch(() => null) as { stops?: unknown } | null;
-                                    const resolvedStops = response.ok ? parseResolvedEvanRouteStops(result?.stops) : [];
-                                    routeStopsForReceipt = resolvedStops.length === requestedRouteStops.length
-                                        ? resolvedStops
-                                        : pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
-                                } catch {
-                                    routeStopsForReceipt = pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                }, { signal: evanSessionAbort.signal });
+                            } catch (failure) {
+                                if (evanSessionAbort.signal.aborted || closeHandled || requestedCloseReason || !isMounted) {
+                                    return JSON.stringify({ status: 'session_closing', retryAllowed: false,
+                                        instruction: 'This operation was cancelled because the session is closing. Do not speak or retry. Follow only the existing farewell protocol.' });
                                 }
-                                evanAddressStopsRef.current = routeStopsForReceipt;
-                                if (isMounted) setEvanAddressStops(routeStopsForReceipt);
-                            }
-
-                            if (isMounted) {
-                                // Read the authoritative refs when React applies the update. This
-                                // prevents an earlier tool snapshot from replacing a newer turn.
-                                setWorkbenchTurns(() => snapshotEvanPlannerTurns());
-                                await new Promise<void>((resolve) => {
-                                    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                                if (routeGeneration !== evanRouteGeneration) {
+                                    return JSON.stringify({ status: 'update_superseded', retryAllowed: false,
+                                        instruction: 'A newer planner request superseded this update. Do not speak about this old result or retry; use only the newer request receipt.' });
+                                }
+                                if (isMounted && !closeHandled && !evanSessionAbort.signal.aborted && routeGeneration === evanRouteGeneration) {
+                                    const unresolved = evanAddressStopsRef.current.map(stop => stop.precision === 'pending'
+                                        ? { ...stop, precision: 'unresolved' as const } : stop);
+                                    evanAddressStopsRef.current = unresolved;
+                                    setEvanAddressStops(unresolved);
+                                }
+                                console.warn('[Evan Anam] Planner update not confirmed', {
+                                    reason: failure instanceof EvanToolExecutionError ? failure.code : 'failed', contentLogged: false,
+                                });
+                                return JSON.stringify({
+                                    status: 'move_planner_update_unconfirmed', retryAllowed: false,
+                                    instruction: 'The latest planner update could not be confirmed. Briefly explain that and continue the moving conversation from details already shared. Do not claim pins or route changes were applied, ask the caller to repeat the whole move, or retry automatically.',
                                 });
                             }
-
-                            // Re-read after opening so speech chunks arriving during the tool call
-                            // are included both in the visible planner and in the tool receipt.
-                            const refreshedTurns = snapshotEvanPlannerTurns();
-                            if (isMounted) setWorkbenchTurns(() => snapshotEvanPlannerTurns());
-                            const receiptModel = buildEvanMovePlan(refreshedTurns, routeStopsForReceipt);
-                            const streetPins = routeStopsForReceipt.filter((stop) => (
-                                stop.precision === 'address' || stop.precision === 'address-range'
-                            )).length;
-                            const unresolvedAddresses = routeStopsForReceipt.filter((stop) => stop.precision === 'unresolved').length;
-                            return JSON.stringify({
-                                status: requestedRouteStops.length ? 'move_route_refreshed' : 'move_planner_opened',
-                                view,
-                                currentSessionUserTurns: refreshedTurns.filter((turn) => turn.role === 'user').length,
-                                streetPins,
-                                unresolvedAddresses,
-                                visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
-                                visibleStops: routeStopsForReceipt.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
-                                instruction: unresolvedAddresses
-                                    ? 'The requested working Move Planner view is open, but one or more street addresses could not be verified. Say that briefly and ask the visitor to restate only the unresolved address. Do not claim the route is confirmed.'
-                                    : streetPins
-                                        ? 'The requested working Move Planner route is open with receipt-supported street-level pins. Confirm that briefly. Do not call it a confirmed driving route, quote, booking, or operational approval.'
-                                        : 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
-                            });
                         },
+                        onComplete: async () => {},
+                        onFail: async () => {},
                     }));
                 }
                 const memoryPolicyContext = tokenPayload.memoryPolicyContextAvailable === true
@@ -776,6 +825,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         setError(`VoiceMeeter bridge could not start: ${permissionError}`);
                     } else if (isAmyCara4) {
                         setError('Microphone access is blocked. Allow microphone access for this site in your browser, then restart the Amy session.');
+                    } else if (isEvan) {
+                        setError('Microphone access is blocked. Allow microphone access for this site in your browser, then restart the Evan session.');
                     } else {
                         return;
                     }
@@ -879,6 +930,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             .catch(() => console.error('[Amy Anam] Unsafe-output recovery was not confirmed'));
                     };
                     const normalizedRole = transcriptRole(messageEvent.role);
+                    if (normalizedRole === 'agent' && messageEvent.content.trim()) {
+                        evanResponseRecovery?.agentResponseStarted();
+                    }
                     if (isAmyCara4 && normalizedRole === 'agent') {
                         if (suppressingAmyUnsafeOutput) {
                             if (messageEvent.endOfSpeech) {
@@ -971,6 +1025,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             const completedTurn = currentMessageRef.current.trim();
                             recordTurn(messageEvent.role, currentMessageRef.current);
                             if (transcriptRole(messageEvent.role) === 'user') {
+                                const previousEvanTurn = [...transcriptRef.current].reverse().find(turn => turn.role === 'agent')?.content ?? '';
+                                evanResponseRecovery?.userTurnCompleted(completedTurn, previousEvanTurn, messageEvent.id);
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
                                 const completedUserTurn = currentMessageRef.current.trim();
                                 if (isAmyCara4) {
@@ -1037,7 +1093,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 } else if (!hasAmyCapabilityOverviewIntent(completedUserTurn)) {
                                     lastAmyCapabilityIntentTurn = '';
                                 }
-                                if (hasExplicitAmyCloseIntent(completedUserTurn)) {
+                                if (isAmyCara4 && hasExplicitAmyCloseIntent(completedUserTurn)) {
                                     pendingAmyHardCloseIntent = true;
                                     requestedCloseReason = 'user_requested_end';
                                     try {
@@ -1046,14 +1102,14 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         console.error('[Amy Anam] Hard-close context was not confirmed');
                                     }
                                 }
-                                if (hasAmySoftCloseIntent(completedUserTurn)) {
+                                if (isAmyCara4 && hasAmySoftCloseIntent(completedUserTurn)) {
                                     try {
                                         anamClient.addContext('The visitor expressed a soft close. Call end_amy_session silently exactly once. Follow its authoritative receipt: give one compact closing motion that ends with the exact farewell, ask no question, and never call the tool a second time.');
                                     } catch {
                                         console.error('[Amy Anam] Closing motion context was not confirmed');
                                     }
                                 }
-                                if (hasAmySpokenEmailAttempt(completedUserTurn)) {
+                                if (isAmyCara4 && hasAmySpokenEmailAttempt(completedUserTurn)) {
                                     try {
                                         anamClient.addContext('Private contact rule: the visitor spoke an email-like phrase. Do not parse, repeat, spell, confirm, or store it. The verified website check-in address remains authoritative.');
                                     } catch {
@@ -1090,6 +1146,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleConnectionClosed = async (reason: ConnectionClosedCode) => {
                     if (closeHandled) return;
                     closeHandled = true;
+                    evanSessionAbort.abort();
+                    evanResponseRecovery?.dispose();
                     amyArtifactOperation.cancel();
                     evanCloseCoordinator?.dispose();
                     daniCloseCoordinator?.dispose();
@@ -1443,6 +1501,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         {
                             onStart: async () => {
                                 requestedCloseReason = 'user_requested_end';
+                                evanResponseRecovery?.close();
+                                evanSessionAbort.abort();
                                 const armed = evanCloseCoordinator?.arm() === true;
                                 console.info('[Evan Anam] Farewell close armed', { armed });
                                 return JSON.stringify({
@@ -1456,36 +1516,62 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         'send_mullins_follow_up_email',
                         {
                             onStart: async payload => {
+                                if (evanSessionAbort.signal.aborted || closeHandled || requestedCloseReason || !isMounted) {
+                                    return JSON.stringify({ status: 'session_closing', retryAllowed: false,
+                                        instruction: 'Do not speak, schedule follow-up, or retry. Follow only the existing farewell protocol.' });
+                                }
                                 if (tokenPayload.agentMailAvailable !== true) {
                                     return JSON.stringify({
                                         status: 'email_unavailable',
-                                        instruction: 'Say that email is temporarily unavailable. Do not claim anything was sent.',
+                                        instruction: 'No verified website recap is available for this session. Say that briefly and continue the moving conversation. Do not ask for an email address or claim anything was sent.',
                                     });
                                 }
                                 if (completedUserTurns < 1) {
-                                    throw new Error('Continue the moving conversation before offering an email follow-up.');
+                                    return JSON.stringify({ status: 'conversation_not_started', instruction: 'Continue the moving conversation before discussing follow-up. Do not retry this tool now.' });
                                 }
                                 if (payload.arguments.userConfirmed !== true) {
-                                    throw new Error('Ask the visitor for explicit permission before scheduling the Mullins follow-up.');
+                                    return JSON.stringify({ status: 'permission_not_confirmed', instruction: 'Do not schedule or claim follow-up without the verified website opt-in. Continue the moving conversation without asking for an email address.' });
                                 }
                                 if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
-                                    throw new Error('The secure session is not ready. Continue the conversation and try once more.');
+                                    return JSON.stringify({ status: 'session_not_ready', retryAllowed: false, instruction: 'The follow-up could not be confirmed. Continue the conversation without claiming an email was scheduled and do not retry automatically.' });
                                 }
-                                await bindingPromise;
-                                const result = await sendAmyAnamFollowUpEmail({
-                                    launchId, sessionId: providerSessionId, userConfirmed: true,
-                                });
-                                console.info('[Evan Anam AgentMail] Three-message post-session intent recorded', {
-                                    status: result.status, duplicate: result.duplicate, contactContentLogged: false,
-                                });
-                                return JSON.stringify({
-                                    status: result.status, queued: true, sent: false, duplicate: result.duplicate,
-                                    receiptId: result.receiptId,
-                                    instruction: result.duplicate
-                                        ? 'Confirm briefly that the conversation recap is already scheduled for after the session. Do not say it was sent, and do not mention a quote or estimate being emailed.'
-                                        : 'Confirm briefly that the conversation recap will be emailed after this session ends. If a quote, estimate, or walkthrough was discussed, say Mullins staff must separately review that request. Never say a quote, estimate, price, booking, or appointment will be emailed, included, prepared, sent, or confirmed. Continue naturally.',
-                                });
+                                const emailLaunchId = launchId;
+                                const emailSessionId = providerSessionId;
+                                try {
+                                    const result = await runEvanToolWithDeadline(async signal => {
+                                        await bindingPromise;
+                                        signal.throwIfAborted();
+                                        return sendAmyAnamFollowUpEmail({
+                                            launchId: emailLaunchId, sessionId: emailSessionId, userConfirmed: true,
+                                            fetchImpl: (input, init) => fetch(input, { ...init, signal }),
+                                        });
+                                    }, { signal: evanSessionAbort.signal });
+                                    console.info('[Evan Anam AgentMail] Three-message post-session intent recorded', {
+                                        status: result.status, duplicate: result.duplicate, contactContentLogged: false,
+                                    });
+                                    return JSON.stringify({
+                                        status: result.status, queued: true, sent: false, duplicate: result.duplicate,
+                                        receiptId: result.receiptId,
+                                        instruction: result.duplicate
+                                            ? 'Confirm briefly that the conversation recap is already scheduled for after the session. Do not say it was sent, and do not mention a quote or estimate being emailed.'
+                                            : 'Confirm briefly that the conversation recap will be emailed after this session ends. If a quote, estimate, or walkthrough was discussed, say Mullins staff must separately review that request. Never say a quote, estimate, price, booking, or appointment will be emailed, included, prepared, sent, or confirmed. Continue naturally.',
+                                    });
+                                } catch (failure) {
+                                    if (evanSessionAbort.signal.aborted || closeHandled || requestedCloseReason || !isMounted) {
+                                        return JSON.stringify({ status: 'session_closing', retryAllowed: false,
+                                            instruction: 'This operation was cancelled because the session is closing. Do not speak or retry. Follow only the existing farewell protocol.' });
+                                    }
+                                    console.warn('[Evan Anam] Follow-up confirmation unavailable', {
+                                        reason: failure instanceof EvanToolExecutionError ? failure.code : 'failed', contentLogged: false,
+                                    });
+                                    return JSON.stringify({
+                                        status: 'email_confirmation_unavailable', sent: false, retryAllowed: false,
+                                        instruction: 'Say you could not confirm the follow-up status, then continue the moving conversation. Do not claim that email was sent, scheduled, cancelled, or failed to send. Do not ask for an address or retry automatically.',
+                                    });
+                                }
                             },
+                            onComplete: async () => {},
+                            onFail: async () => {},
                         },
                     );
                 }
@@ -1497,12 +1583,30 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     });
                 };
 
+                const handleEvanSpeechStarted = (correlationId: string) => evanResponseRecovery?.userSpeechStarted(correlationId);
+                const handleEvanSpeechEnded = (correlationId: string) => evanResponseRecovery?.userSpeechEnded(correlationId);
+                const handleEvanToolStarted = (event: { toolCallId: string; toolName: string; userActionCorrelationId?: string }) => {
+                    evanResponseRecovery?.toolStarted(event);
+                    if (isEvan) console.info('[Evan Anam] Tool started', { tool: event.toolName, contentLogged: false });
+                };
+                const handleEvanToolFinished = (event: { toolCallId: string; toolName: string; userActionCorrelationId?: string }) => {
+                    evanResponseRecovery?.toolFinished(event);
+                    if (isEvan) console.info('[Evan Anam] Tool settled', { tool: event.toolName, contentLogged: false });
+                };
+
                 anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                 anamClient.addListener(AnamEvent.INPUT_AUDIO_STREAM_STARTED, handleInputAudioStreamStarted);
                 anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
                 anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                 anamClient.addListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
                 anamClient.addListener(AnamEvent.SERVER_WARNING, handleServerWarning);
+                if (isEvan) {
+                    anamClient.addListener(AnamEvent.USER_SPEECH_STARTED, handleEvanSpeechStarted);
+                    anamClient.addListener(AnamEvent.USER_SPEECH_ENDED, handleEvanSpeechEnded);
+                    anamClient.addListener(AnamEvent.TOOL_CALL_STARTED, handleEvanToolStarted);
+                    anamClient.addListener(AnamEvent.TOOL_CALL_COMPLETED, handleEvanToolFinished);
+                    anamClient.addListener(AnamEvent.TOOL_CALL_FAILED, handleEvanToolFinished);
+                }
                 removeClientListeners = () => {
                     anamClient.removeListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
                     anamClient.removeListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
@@ -1511,6 +1615,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                     anamClient.removeListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
                     anamClient.removeListener(AnamEvent.SERVER_WARNING, handleServerWarning);
+                    if (isEvan) {
+                        anamClient.removeListener(AnamEvent.USER_SPEECH_STARTED, handleEvanSpeechStarted);
+                        anamClient.removeListener(AnamEvent.USER_SPEECH_ENDED, handleEvanSpeechEnded);
+                        anamClient.removeListener(AnamEvent.TOOL_CALL_STARTED, handleEvanToolStarted);
+                        anamClient.removeListener(AnamEvent.TOOL_CALL_COMPLETED, handleEvanToolFinished);
+                        anamClient.removeListener(AnamEvent.TOOL_CALL_FAILED, handleEvanToolFinished);
+                    }
                     cancelWorkbenchHandlers.forEach((cancel) => cancel());
                 };
 
@@ -1532,6 +1643,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
         return () => {
             isMounted = false;
+            evanSessionAbort.abort();
+            evanResponseRecovery?.dispose();
             amyArtifactOperation.cancel();
             window.removeEventListener('pagehide', handlePageHide);
             window.removeEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
