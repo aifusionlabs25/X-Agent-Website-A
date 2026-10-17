@@ -9,7 +9,7 @@ The default Git Preview had no session-spine signing/storage configuration. Both
 
 Use the existing protected `amy-ceo-rehearsal` custom environment in project `x-agent-website-a`, team `robs-projects-e72bad73`, for this candidate test. Despite its historical name, this environment already holds the required session and mail credentials. Do not copy production credentials, change its branch matcher, assign public domains, change the production main-only guard, or promote this test build. It has no configured custom domains.
 
-For this deployment only, set `ANAM_RECOVERY_NAMESPACE=evan-6097-candidate` and deploy with `--skip-domain`. This separates finalization due queues, Dani email retry queues, and recovery drain locks from the public site's queues. Per-session keys remain keyed by unique session IDs; this is queue isolation, not a separate database. Leave the setting absent for the normal production queue. Empty or invalid configured values fail closed.
+For this deployment only, set `ANAM_RECOVERY_NAMESPACE=evan-6097-candidate` for runtime and build, and explicitly use `--target amy-ceo-rehearsal`. CLI 62.7.0 rejects `--skip-domain` for custom Preview targets; do not switch to production to work around that error. Verify the target remains a Preview environment with no public custom domains, and do not run alias or promote commands. This separates finalization due queues, Dani email retry queues, and recovery drain locks from the public site's queues. Per-session keys remain keyed by unique session IDs; this is queue isolation, not a separate database. Leave the setting absent for the normal production queue. Empty or invalid configured values fail closed.
 
 ## Required verification
 

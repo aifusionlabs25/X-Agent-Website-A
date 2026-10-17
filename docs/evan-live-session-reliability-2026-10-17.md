@@ -41,9 +41,19 @@ The earlier production baseline was `dpl_3AmVsSi9cbASHK7ZTiufPy24gmho`. A subseq
 
 - 328 Evan release tests passed.
 - Full shared suite: 559 passed, one existing skip.
-- Browser replay passed all checkpoints, including automatic route opening, live corrections, contact updates, missed-final recovery, safe natural closing, and no repeated question during a legitimate listening pause.
+- Browser replay passed all 48 checkpoints, including automatic route opening, live corrections, contact updates, missed-final recovery, safe natural closing, and no repeated question during a legitimate listening pause.
 - Next.js 16.4.1 production build passed (45 routes); scoped lint and whitespace checks passed.
 - Real SDK run `544f34a6-430b-4173-9c32-e682a85befad` completed seven checkpoints with no targeted flags.
 - After the final prompt clarification, run `140dc82a-6b37-4b2a-a956-0750f63e14f3` completed seven checkpoints: one phone readback, no repeated question, one farewell, and automatic stop after farewell. The provider attempted one premature end-tool call; the browser refused it, and Evan continued correctly. This remains a model-compliance warning, not an unqualified pass. No forced recovery was needed in that call.
 
-Deployment results follow after protected-preview verification.
+## Protected preview verification
+
+- Runtime commit: `2245a4f`.
+- Deployment: `dpl_53YZkLtmBUzjoNLLtWVCGyDotL7N`, READY.
+- URL: https://x-agent-website-crqotl7sb-robs-projects-e72bad73.vercel.app/demo/evan (use the temporary protected share link supplied in chat).
+- Custom Preview target: `amy-ceo-rehearsal`; isolated recovery namespace: `evan-6097-candidate`. No production promotion or public domain assignment.
+- Framework: Next.js 16.4.1; Vercel build output 22 seconds, build-start to ready approximately 31 seconds.
+- Deployed guest and synthetic-email checks both passed signed-cookie round trip, correct candidate token issuance, and consent isolation. These checks start no engine and send no email.
+- Public domain rechecked after deploy: still `dpl_532oXZx47MLz9UWBmRWkzDx4dqLF`, main `eb3ce310a94acff6a98f9929f08f4a0c41f927c6`; this preview did not replace it.
+
+For human retest, share a route, correct the destination, add a possible stop, provide a phone-only callback preference, and finish naturally. Verify the screen changes during the call and one goodbye is followed by disconnect. Do not interpret this checkpoint as actual email-delivery or microphone-recognition verification.
