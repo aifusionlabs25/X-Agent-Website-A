@@ -32,6 +32,7 @@
     "anam:update:dani": "node scripts/anam/update-dani-persona.mjs",
     "anam:audit:dani": "node scripts/anam/audit-dani-persona.mjs",
     "anam:audit:evan": "node scripts/anam/audit-evan-persona.mjs",
+    "anam:smoke:evan-websocket": "node scripts/anam/smoke-evan-websocket.mjs",
     "dani:memory-review": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/ops/dani-memory-review.mjs",
     "verify:deploy-contract": "node scripts/ops/verify-deploy-contract.mjs"
   },

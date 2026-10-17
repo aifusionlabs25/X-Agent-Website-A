@@ -35,6 +35,29 @@ export const EVAN_REQUIRED_TOOL_NAMES = [
     'show_move_planner',
 ] as const;
 
+export const EVAN_EXPECTED_NAME = 'Evan Mullins Moving Concierge - Replacement Candidate';
+export const EVAN_EXPECTED_AVATAR_ID = 'a2146a9f-c46b-4d6a-b2c7-c66c6a559665';
+export const EVAN_EXPECTED_VOICE_ID = '615ad2e8-c34a-4993-8aa3-36fd4dc3a876';
+export const EVAN_EXPECTED_LLM_ID = 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7';
+export const EVAN_EXPECTED_PROMPT_SHA256 = 'b71a0bf5a0907fbf6537dc006ed0649dfb66ee05630b802e2630ae75153833d2';
+export const EVAN_MINIMUM_PUBLISHED_AT = '2026-09-11T01:09:12.390Z';
+
+export const EVAN_REQUIRED_TOOL_IDS = {
+    Knowledge_Evan_Mullins_Moving: 'fc93e067-9254-4635-a4a6-645970d12548',
+    skip_turn: '69a89bda-9e11-443f-84c0-1cbea75e4fcb',
+    end_mullins_session: 'ac5c9f09-fc18-4702-8818-8d8b812164a9',
+    send_mullins_follow_up_email: 'bc0b4e00-3a04-4139-a699-b90c5c7b6415',
+    show_move_planner: 'db2dce25-ffd0-4913-89c5-e5901b42f127',
+} as const;
+
+export const EVAN_REQUIRED_VOICE_DETECTION = {
+    endOfSpeechSensitivity: 0.05,
+    silenceBeforeAutoEndTurnSeconds: 3,
+    silenceBeforeSkipTurnSeconds: 0,
+    silenceBeforeSessionEndSeconds: 0,
+    speechEnhancementLevel: 0.7,
+} as const;
+
 export const EVAN_REQUIRED_PROMPT_MARKERS = [
     '<!-- EVAN_ANAM_CORE_START -->',
     '<!-- EVAN_ANAM_CORE_END -->',
@@ -139,9 +162,16 @@ export type EvanPersonaReadiness = {
     ready: boolean;
     personaIdMatches: boolean;
     identityMatches: boolean;
+    publishedRevisionMatches: boolean;
     cara4AvatarConfigured: boolean;
+    avatarIdMatches: boolean;
+    voiceIdMatches: boolean;
+    llmIdMatches: boolean;
+    promptHashMatches: boolean;
+    voiceDetectionConfigured: boolean;
     sessionDataRetentionConfigured: boolean;
     anamTranscriptionPipelineConfigured: boolean;
+    toolAttachmentMatches: boolean;
     missingToolNames: string[];
     missingPromptMarkers: string[];
 };
@@ -180,7 +210,7 @@ function toolNamesFromPersona(persona: PersonaPayload): Set<string> {
     );
 }
 
-function daniToolAttachmentMatches(
+function personaToolAttachmentMatches(
     persona: PersonaPayload,
     requiredToolIds: Readonly<Record<string, string>>,
 ): boolean {
@@ -267,12 +297,22 @@ export function inspectEvanPersonaReadiness(
         ? persona.brain.systemPrompt
         : '';
     const personaIdMatches = persona.id === EVAN_PERSONA_ID;
-    const identityMatches = typeof persona.name === 'string'
-        && /evan/i.test(persona.name)
-        && /mullins/i.test(persona.name);
+    const identityMatches = persona.name === EVAN_EXPECTED_NAME;
+    const publishedAtMs = typeof persona.publishedAt === 'string'
+        ? Date.parse(persona.publishedAt)
+        : Number.NaN;
+    const publishedRevisionMatches = Number.isFinite(publishedAtMs)
+        && publishedAtMs >= Date.parse(EVAN_MINIMUM_PUBLISHED_AT);
     const sessionDataRetentionConfigured = persona.zeroDataRetention === false;
     const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
     const cara4AvatarConfigured = persona.avatarModel === 'cara-4';
+    const avatarIdMatches = avatarIdFromPersona(persona) === EVAN_EXPECTED_AVATAR_ID;
+    const voiceIdMatches = voiceIdFromPersona(persona) === EVAN_EXPECTED_VOICE_ID;
+    const llmIdMatches = llmIdFromPersona(persona) === EVAN_EXPECTED_LLM_ID;
+    const promptHashMatches = managedPromptSha256(prompt) === EVAN_EXPECTED_PROMPT_SHA256;
+    const voiceDetectionConfigured = Object.entries(EVAN_REQUIRED_VOICE_DETECTION)
+        .every(([name, value]) => persona.voiceDetectionOptions?.[name] === value);
+    const exactToolAttachmentMatches = personaToolAttachmentMatches(persona, EVAN_REQUIRED_TOOL_IDS);
     const missingToolNames = EVAN_REQUIRED_TOOL_NAMES
         .filter(name => !toolNames.has(name));
     const missingPromptMarkers = EVAN_REQUIRED_PROMPT_MARKERS
@@ -281,14 +321,28 @@ export function inspectEvanPersonaReadiness(
     return {
         ready: personaIdMatches
             && identityMatches
+            && publishedRevisionMatches
             && cara4AvatarConfigured
+            && avatarIdMatches
+            && voiceIdMatches
+            && llmIdMatches
+            && promptHashMatches
+            && voiceDetectionConfigured
+            && exactToolAttachmentMatches
             && missingToolNames.length === 0
             && sessionDataRetentionConfigured
             && anamTranscriptionPipelineConfigured
             && missingPromptMarkers.length === 0,
         personaIdMatches,
         identityMatches,
+        publishedRevisionMatches,
         cara4AvatarConfigured,
+        avatarIdMatches,
+        voiceIdMatches,
+        llmIdMatches,
+        promptHashMatches,
+        voiceDetectionConfigured,
+        toolAttachmentMatches: exactToolAttachmentMatches,
         missingToolNames,
         missingPromptMarkers,
         sessionDataRetentionConfigured,
@@ -342,7 +396,7 @@ export function inspectDaniPersonaReadiness(
         .every(([name, value]) => persona.voiceDetectionOptions?.[name] === value);
     const sessionDataRetentionConfigured = persona.zeroDataRetention === false;
     const anamTranscriptionPipelineConfigured = persona.enableAudioPassthrough === false;
-    const toolAttachmentMatches = daniToolAttachmentMatches(persona, DANI_REQUIRED_TOOL_IDS);
+    const toolAttachmentMatches = personaToolAttachmentMatches(persona, DANI_REQUIRED_TOOL_IDS);
     const missingToolNames = DANI_REQUIRED_TOOL_NAMES.filter(name => !toolNames.has(name));
     const missingPromptMarkers = DANI_REQUIRED_PROMPT_MARKERS.filter(marker => !prompt.includes(marker));
 
