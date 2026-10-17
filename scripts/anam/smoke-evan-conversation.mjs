@@ -155,7 +155,7 @@ try {
         if (/\b(?:your name|who am i (?:speaking|talking)|what (?:can|should) i call you|who (?:is|am i) speaking)\b/i.test(reply)) {
             await send('My name is Avery Example.', 'fictional_name');
         }
-        await send('I am moving from Phoenix, Arizona, to Mesa, Arizona.', 'explicit_route');
+        await send('I am moving from Phoenix, Arizona, to Mesa, Arizona. I do not have a moving date yet.', 'explicit_route_and_unknown_date');
         await send('There may be a storage stop in Gilbert, but it is only a possibility.', 'tentative_stop');
         await send('I will handle the packing myself.', 'customer_handles_packing');
         await send("That's all for now. Goodbye.", 'farewell', true);
@@ -175,12 +175,23 @@ try {
 
 const personaTurns = (report.session?.messages || []).filter(turn => turn.role === 'persona');
 const flags = [];
+const unknownDateTurn = report.sentTurns.find(turn => /\bI do not have a moving date yet\b/i.test(turn.text));
 for (const turn of personaTurns) {
     const text = turn.content.normalize('NFKC').replace(/[\u2018\u2019]/g, "'");
     const questions = (text.match(/[^?]*\?/g) || []).map(question => question.toLowerCase().replace(/[^a-z\s]/g, '').trim());
     const routeQuestions = questions.filter(text => /\b(?:where|which|what|share|tell)\b/.test(text) && /\b(?:city|cities|moving|move)\b/.test(text) && /\bfrom\b/.test(text) && /\bto\b/.test(text));
     if (routeQuestions.length > 1 || questions.some((text, index) => text && questions.indexOf(text) !== index)) flags.push({ type: 'repeated_question_within_turn', messageId: turn.id });
     if (/\bi(?:'m| am) moving from\b/i.test(text)) flags.push({ type: 'possible_caller_role_simulation', messageId: turn.id });
+    // This fixed scenario explicitly leaves the move date unknown. A new
+    // move-timing question afterward is a review flag, not an ASR diagnosis or
+    // a universal classifier for every use of timing language. Callback timing
+    // is a different question and is excluded. Human transcript review remains
+    // required even when these deliberately narrow heuristics find no issues.
+    if (unknownDateTurn && turn.startedMs >= unknownDateTurn.elapsedMs && questions.some(question =>
+        /\b(?:date|dates|timeframe|time frame|when|which week|what week|which day|what day|which month|what month)\b/.test(question)
+        && !/\b(?:callback|call back|phone|contact|reach you)\b/.test(question))) {
+        flags.push({ type: 'reasked_timing_after_explicit_unknown', messageId: turn.id });
+    }
 }
 report.heuristicFlags = flags;
 report.reviewStatus = report.result === 'completed' && !flags.length ? 'No targeted heuristic flags; manual review still required.' : 'Review required; not a passing live-behavior claim.';

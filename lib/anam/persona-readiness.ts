@@ -39,7 +39,7 @@ export const EVAN_EXPECTED_NAME = 'Evan Mullins Moving Concierge - Replacement C
 export const EVAN_EXPECTED_AVATAR_ID = 'a2146a9f-c46b-4d6a-b2c7-c66c6a559665';
 export const EVAN_EXPECTED_VOICE_ID = '615ad2e8-c34a-4993-8aa3-36fd4dc3a876';
 export const EVAN_EXPECTED_LLM_ID = 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7';
-export const EVAN_EXPECTED_PROMPT_SHA256 = 'ff48c0733f7959d1e8e86c8f4873af899f756032f95f8501436d24b1330ddb9c';
+export const EVAN_EXPECTED_PROMPT_SHA256 = '57e5551ec033f1553713b559f87aaa9172de665c5edd0d32678ca65cb331fcb2';
 export const EVAN_MINIMUM_PUBLISHED_AT = '2026-09-11T01:09:12.390Z';
 
 export const EVAN_REQUIRED_TOOL_IDS = {

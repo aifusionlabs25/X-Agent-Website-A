@@ -27,6 +27,22 @@ test('only the caller can supply or explicitly confirm their facts', () => {
     assert.match(style, /use only details the caller supplied or explicitly confirmed/);
 });
 
+test('intake questions do not combine unrelated topics into one turn', () => {
+    const style = section('Spoken conversation style');
+    assert.match(style, /Ask about one intake topic at a time/);
+    assert.match(style, /Do not combine unrelated fields into one question/);
+    assert.match(style, /pickup city and the move date/);
+});
+
+test('unknown or unanswered intake fields do not cause repeated questioning pressure', () => {
+    const style = section('Spoken conversation style');
+    assert.match(style, /acknowledge those details and follow their lead/);
+    assert.match(style, /Do not immediately repeat the unanswered question or keep returning to it on successive turns/);
+    assert.match(style, /accept that field as unknown and continue/);
+    assert.match(style, /do not ask for it again unless they bring it back up/);
+    assert.match(style, /Missing information does not prevent a helpful conversation/);
+});
+
 test('multi-fact answers do not force a full recap or a mandatory next question', () => {
     const style = section('Spoken conversation style');
     assert.match(style, /retain all of them without reciting every fact/);

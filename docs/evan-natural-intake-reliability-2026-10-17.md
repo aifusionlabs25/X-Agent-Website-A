@@ -13,6 +13,7 @@ The archived provider transcript alone cannot establish whether the repeated out
 ## Changes
 
 - The candidate prompt asks once, ends the turn, and waits. It prohibits simulating the caller, removes the requirement to recap every supplied fact and always ask another question, preserves uncertainty, and requires city clarification rather than silent substitution.
+- A bounded real-SDK test of the first revision did not reproduce the within-turn self-answer, but manual transcript review found repeated date requests while the fixed visitor inputs supplied other information. A second prompt refinement explicitly accepts unknown fields, follows new caller details instead of repeating an unanswered question on successive turns, and prohibits combining unrelated intake topics. The follow-up test explicitly supplies an unknown date to exercise that boundary.
 - Prompt readiness pins are updated together. No model, voice, avatar, tool schema, knowledge bank, email authorization, or closing protocol is changed.
 - The planner accepts a narrowly bounded city readback only after an explicit visitor confirmation, with both proposed cities already grounded in earlier visitor move context. Agent-only cities, compound/stale confirmations, and ordinary acknowledgments do not establish a route. There is no Mason-to-Mesa spelling alias.
 - Possible additional stops are displayed separately and excluded from map pins and Google Maps directions. Explicit commitment, correction, or cancellation updates their state.
@@ -26,7 +27,7 @@ Focused regressions, full shared tests, build, lint, browser replay, and a bound
 
 The city-recovery guard is deliberately conservative: unresolved or lowercase unknown place names may still require the visitor to explicitly say the city. Tentative plans are not operational approvals. A human voice retest remains necessary before production promotion.
 
-Local release results: 280 Evan checks passed; all 40 browser checkpoints passed; the full shared suite passed (559 passed, one pre-existing skip); optimized build generated 45 routes; scoped lint and whitespace checks passed. The focused shared-player lint invocation retains its existing `react-hooks/set-state-in-effect` exception without changing lint configuration.
+Local release results: 282 Evan checks passed; all 40 browser checkpoints passed; the full shared suite passed (559 passed, one pre-existing skip); optimized build generated 45 routes; scoped lint and whitespace checks passed. The focused shared-player lint invocation retains its existing `react-hooks/set-state-in-effect` exception without changing lint configuration.
 
 ## Release boundary
 
