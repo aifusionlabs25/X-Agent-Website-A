@@ -29,6 +29,23 @@ function same(left, right) {
     return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 
+const AVATAR_MEDIA_HOST = 'anam-prod.3b4e2c62766b488dfadbba0f05120797.r2.cloudflarestorage.com';
+const MEDIA_SIGNING_PARAMETERS = new Set([
+    'X-Amz-Algorithm', 'X-Amz-Content-Sha256', 'X-Amz-Credential', 'X-Amz-Date',
+    'X-Amz-Expires', 'X-Amz-Signature', 'X-Amz-SignedHeaders', 'x-amz-checksum-mode', 'x-id',
+]);
+
+function stableAvatarMediaUrl(value) {
+    if (typeof value !== 'string') return value;
+    let url;
+    try { url = new URL(value); } catch { return value; }
+    // Only these two Anam-owned avatar URLs rotate their presigned query values.
+    // Keep the scheme, host, path, fragment, and every non-signing query parameter.
+    if (url.protocol !== 'https:' || url.hostname !== AVATAR_MEDIA_HOST) return value;
+    for (const name of MEDIA_SIGNING_PARAMETERS) url.searchParams.delete(name);
+    return url.toString();
+}
+
 export function parseArgs(args) {
     if (args.some(arg => arg !== '--apply' && arg !== '--help') || new Set(args).size !== args.length) {
         throw new Error('Only --apply or --help are supported. Dry-run is the default.');
@@ -82,11 +99,18 @@ export function validateCandidate(persona, manifest) {
 export function preservedConfiguration(persona) {
     const brain = { ...(persona.brain ?? {}) };
     delete brain.systemPrompt;
+    const avatar = persona.avatar && typeof persona.avatar === 'object' ? { ...persona.avatar } : persona.avatar ?? null;
+    if (avatar && typeof avatar === 'object') {
+        for (const field of ['idleVideoUrl', 'videoUrl']) {
+            if (Object.hasOwn(avatar, field)) avatar[field] = stableAvatarMediaUrl(avatar[field]);
+        }
+    }
     const fields = ['id', 'name', 'avatarModel', 'avatar', 'avatarId', 'voice', 'voiceId', 'llm', 'llmId',
         'initialMessage', 'skipGreeting', 'uninterruptibleGreeting', 'voiceDetectionOptions',
         'voiceGenerationOptions', 'zeroDataRetention', 'enableAudioPassthrough', 'languageCode'];
     return canonical({
         ...Object.fromEntries(fields.map(field => [field, persona[field] ?? null])),
+        avatar,
         brain,
         tools: [...(persona.tools ?? [])].sort((a, b) => String(toolId(a)).localeCompare(String(toolId(b)))),
     });

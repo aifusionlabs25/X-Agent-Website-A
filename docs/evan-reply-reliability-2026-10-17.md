@@ -23,10 +23,19 @@ Provider analytics showed a complete contact-information answer followed by a su
 
 ## Verification
 
-The existing regression suite passed (552 passed, one skipped). New targeted tests cover the prompt contract, recovery event ordering, deadlines, late results, cancellation, code integration, and safe provider updating. The optimized Next.js build and TypeScript check passed. Windows sandbox restrictions required running the full filesystem tests and build outside the sandbox.
+The existing regression suite passed (552 passed, one skipped). The Evan release suite passed 108 tests, including targeted tests for the prompt contract, recovery event ordering, deadlines, late results, cancellation, code integration, and safe provider updating. The optimized Next.js build and TypeScript check passed. Windows sandbox restrictions required running the full filesystem tests and build outside the sandbox. Targeted lint checks pass for the new helpers and geocoding path; the shared player's pre-existing `react-hooks/set-state-in-effect` lint issue remains unchanged.
 
 Automated tests do not establish that the model will always choose correctly. A fresh live voice retest is required before production promotion: give contact information, confirm with a short yes, ask for a map update, explicitly ask Evan to wait, then resume and end naturally. Check that the farewell is not interrupted by a late tool response. Multi-address map lookups may show an unconfirmed result when their provider is too slow.
 
 Prompt SHA-256: `870f9f5e43caf1cf911a67d77b5687757388978e7e4882db4ff9399e84792834`.
 
 Old candidate deployment URLs pin the old prompt hash and should not be used after publication. Use the new verified candidate URL supplied with this release. Production remains unchanged pending a successful live retest.
+
+## Deployed candidate
+
+- Runtime commit: `2b993f039ed6a3c1b46abb97a1b491e545a10540`.
+- Deployment: `dpl_4zagVDo2jJ7aWnvt7VQUmBPR6LB5`, READY.
+- URL: `https://x-agent-website-fjv2dpgsy-robs-projects-e72bad73.vercel.app/demo/evan` (Vercel-protected; use the temporary share link supplied privately).
+- The provider's managed prompt hash matches, all eight knowledge documents are ready, and the five expected tools remain attached.
+- Both guest and synthetic-email check-in passed, including signed-cookie round trips, candidate session-token issuance, and consent isolation. No actual emails or live conversations were started by that smoke test.
+- Production was verified unchanged at `dpl_3AmVsSi9cbASHK7ZTiufPy24gmho`.

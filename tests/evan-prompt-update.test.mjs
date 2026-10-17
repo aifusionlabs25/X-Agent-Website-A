@@ -238,6 +238,70 @@ test('preservation comparison ignores object-key and tool order, not tool conten
     assert.notDeepEqual(preservedConfiguration(before), preservedConfiguration(after));
 });
 
+const mediaHost = 'anam-prod.3b4e2c62766b488dfadbba0f05120797.r2.cloudflarestorage.com';
+const signedMediaUrl = (filename, signature) => `https://${mediaHost}/avatars/evan/${filename}?quality=high&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=temporary-${signature}&X-Amz-Date=${signature}&X-Amz-Expires=3600&X-Amz-Signature=${signature}&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject#preview`;
+
+test('fresh signing parameters in the two avatar media URLs do not look like a configuration change', () => {
+    const before = makePersona();
+    before.avatar.idleVideoUrl = signedMediaUrl('idle.mp4', 'first');
+    before.avatar.videoUrl = signedMediaUrl('talking.mp4', 'first');
+    const original = structuredClone(before);
+    const after = structuredClone(before);
+    after.avatar.idleVideoUrl = signedMediaUrl('idle.mp4', 'second');
+    after.avatar.videoUrl = signedMediaUrl('talking.mp4', 'second');
+    assert.deepEqual(preservedConfiguration(before), preservedConfiguration(after));
+    assert.deepEqual(before, original, 'comparison must not alter the backup or source persona');
+});
+
+test('avatar media path, host, scheme, fragment, identity and non-signing query changes still fail preservation', () => {
+    const before = makePersona();
+    before.avatar.idleVideoUrl = signedMediaUrl('idle.mp4', 'first');
+    before.avatar.videoUrl = signedMediaUrl('talking.mp4', 'first');
+    for (const field of ['idleVideoUrl', 'videoUrl']) {
+        for (const transform of [value => value.replace('.mp4?', '-different.mp4?'),
+            value => value.replace(mediaHost, 'other.example.com'),
+            value => value.replace('https:', 'http:'), value => value.replace('#preview', '#different'),
+            value => value.replace('quality=high', 'quality=low'),
+            value => value.replace('quality=high', 'quality=high&unknown-option=new'),
+            value => value.replace('quality=high', 'quality=high&X-Amz-Unknown=new')]) {
+            const after = structuredClone(before);
+            after.avatar[field] = transform(after.avatar[field]);
+            assert.notDeepEqual(preservedConfiguration(before), preservedConfiguration(after));
+        }
+    }
+    const after = structuredClone(before);
+    after.avatar.id = 'different-avatar';
+    assert.notDeepEqual(preservedConfiguration(before), preservedConfiguration(after));
+});
+
+test('presigned values elsewhere and unrecognized media hosts are never normalized', () => {
+    for (const field of ['thumbnailUrl', 'previewUrl']) {
+        const before = makePersona();
+        before.avatar[field] = signedMediaUrl('still.jpg', 'first');
+        const after = structuredClone(before);
+        after.avatar[field] = signedMediaUrl('still.jpg', 'second');
+        assert.notDeepEqual(preservedConfiguration(before), preservedConfiguration(after));
+    }
+    const before = makePersona();
+    before.avatar.videoUrl = signedMediaUrl('talking.mp4', 'first').replace(mediaHost, 'other.example.com');
+    const after = structuredClone(before);
+    after.avatar.videoUrl = signedMediaUrl('talking.mp4', 'second').replace(mediaHost, 'other.example.com');
+    assert.notDeepEqual(preservedConfiguration(before), preservedConfiguration(after));
+});
+
+test('apply verification tolerates rotating signatures but not changed avatar media filenames', async () => {
+    const { options } = fixture({ persona: (persona, { personaReads }) => {
+        persona.avatar.videoUrl = signedMediaUrl('talking.mp4', String(personaReads));
+        persona.avatar.idleVideoUrl = signedMediaUrl('idle.mp4', String(personaReads));
+    } });
+    const result = await updateEvanPrompt({ ...options, apply: true });
+    assert.equal(result.preservedConfigurationVerified, true);
+    const changed = fixture({ persona: (persona, { personaReads, applied }) => {
+        persona.avatar.videoUrl = signedMediaUrl(applied ? 'different.mp4' : 'talking.mp4', String(personaReads));
+    } });
+    await assert.rejects(updateEvanPrompt({ ...changed.options, apply: true }), /non-prompt configuration changed/);
+});
+
 test('transport refuses other personas, tools, creation, deletion, or additional PUT fields', async () => {
     const fetchCalls = [];
     const request = createAnamRequest('test-key-never-print', async (...args) => {
