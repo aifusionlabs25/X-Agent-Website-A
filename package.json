@@ -33,6 +33,8 @@
     "anam:audit:dani": "node scripts/anam/audit-dani-persona.mjs",
     "anam:audit:evan": "node scripts/anam/audit-evan-persona.mjs",
     "anam:smoke:evan-websocket": "node scripts/anam/smoke-evan-websocket.mjs",
+    "anam:smoke:evan-website": "node scripts/anam/smoke-evan-website.mjs",
+    "test:evan:release": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/anam-recovery-isolation.test.mjs tests/evan-website-smoke.test.mjs tests/evan-anam-config.test.mjs tests/evan-agentmail.test.mjs tests/evan-session-close.test.mjs tests/evan-move-planner.test.mjs",
     "dani:memory-review": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/ops/dani-memory-review.mjs",
     "verify:deploy-contract": "node scripts/ops/verify-deploy-contract.mjs"
   },
