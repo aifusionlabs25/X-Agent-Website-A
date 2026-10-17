@@ -4,6 +4,8 @@ import Image from 'next/image';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail, ShieldCheck, Truck, UserRound } from 'lucide-react';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
+import { EvanPlannerContactContext } from '@/components/evan/EvanPlannerContactContext';
+import type { EvanPlannerCheckIn } from '@/lib/anam/evan-planner-contact';
 
 type SubmitMode = 'email' | 'guest' | null;
 
@@ -16,6 +18,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
     const [email, setEmail] = useState('');
     const [followUpConsent, setFollowUpConsent] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [plannerCheckIn, setPlannerCheckIn] = useState<EvanPlannerCheckIn | undefined>(undefined);
 
     useEffect(() => {
         if (localTestMode) return;
@@ -41,7 +44,11 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
             if (!response.ok || payload.authenticated !== true) {
                 throw new Error(typeof payload.error === 'string' ? payload.error : 'Evan could not be started');
             }
+            // Keep only what this visitor entered, in this mounted gate. The
+            // signed server cookie remains the authority for email delivery.
+            setPlannerCheckIn(mode === 'email' ? { displayName: displayName.trim(), email: email.trim() } : undefined);
             setEmail('');
+            setDisplayName('');
             setReady(true);
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Evan could not be started');
@@ -62,7 +69,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
             </div>
         </main>
     );
-    if (ready) return <>{children}</>;
+    if (ready) return <EvanPlannerContactContext.Provider value={plannerCheckIn}>{children}</EvanPlannerContactContext.Provider>;
 
     return (
         <main className="relative flex min-h-[100svh] items-center justify-center overflow-x-hidden bg-[#100718] px-4 py-5 text-white sm:px-6 lg:h-[100svh] lg:overflow-hidden">

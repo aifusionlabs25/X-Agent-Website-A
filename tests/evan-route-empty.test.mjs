@@ -98,12 +98,14 @@ test('empty Route tab renders the map before any user move details, without a du
     assert.match(textOf(tree), /Tell Evan your pickup and destination/);
 });
 
-test('the other three planner tabs retain their listening empty states', () => {
+test('brief and services stay useful before spoken move details while next steps waits for context', () => {
     for (const view of ['brief', 'inventory', 'readiness']) {
         const harness = componentHarness(plannerSource);
         const tree = harness.render({ isOpen: true, turns: [], requestedView: view, onClose: () => undefined });
         assert.equal(nodes(tree).some(node => node.type === RouteMapStub), false);
-        assert.equal(nodes(tree).some(node => typeof node.type === 'function' && node.type.name === 'EmptyState'), true);
+        assert.equal(nodes(tree).some(node => typeof node.type === 'function' && node.type.name === 'EmptyState'), view === 'readiness');
+        if (view === 'brief') assert.ok(nodes(tree).some(node => typeof node.type === 'function' && node.type.name === 'ContactCard'));
+        if (view === 'inventory') assert.match(textOf(tree), /Ask Mullins about/);
     }
 });
 

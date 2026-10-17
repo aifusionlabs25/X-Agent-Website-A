@@ -44,6 +44,7 @@ await new Promise((resolve, reject) => {
             'process.env.NODE_ENV': JSON.stringify('development'),
             'process.env.NEXT_PUBLIC_EVAN_MOVE_PLANNER_ENABLED': JSON.stringify('true'),
             'process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED': JSON.stringify('true'),
+            'process.env.NEXT_PUBLIC_EVAN_LOCAL_TEST_MODE': JSON.stringify('false'),
         })],
         optimization: { minimize: false }, performance: { hints: false },
     });
@@ -67,6 +68,10 @@ const server = http.createServer(async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         if (url.pathname === '/api/anam-token') {
             res.end(JSON.stringify({ sessionToken: 'fixture-only', sessionSpineEnabled: false, agentMailAvailable: false }));
+        } else if (url.pathname === '/api/anam/evan/access') {
+            // Fake check-in boundary only. Do not retain or log the input body.
+            for await (const chunk of req) { void chunk; }
+            res.end(JSON.stringify({ authenticated: req.method === 'POST', rawEmailReturned: false }));
         } else if (url.pathname === '/api/anam/evan/route-geocode') {
             let body = '';
             for await (const chunk of req) body += chunk;
@@ -155,7 +160,7 @@ try {
             return Math.abs(panel.getBoundingClientRect().left - expectedLeft) < 0.5;
         });
         try {
-            await page.waitForFunction(() => {
+            if (await page.locator('.leaflet-container').count()) await page.waitForFunction(() => {
                 const tiles = [...document.querySelectorAll('.leaflet-tile')];
                 return tiles.length > 0 && tiles.every(tile => tile.complete && tile.naturalWidth > 0
                     && Number(getComputedStyle(tile).opacity) > 0.99);
@@ -419,7 +424,7 @@ try {
     assert.ok(inventoryReceipt.visibleStops.every(stop => !stop.includes('(pending)')));
     const abandonedReceipt = JSON.parse(await page.evaluate(() => window.__abandonedRoute));
     assert.equal(abandonedReceipt.status, 'update_superseded');
-    await planner.getByRole('heading', { name: 'Move list', exact: true }).waitFor();
+    await planner.getByRole('heading', { name: 'Your move, at a glance', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Route', exact: true }).click();
     await waitForRoute(['100 Test Lane', '800 Abandoned Road']);
     await planner.getByText('Address needs confirmation', { exact: true }).waitFor();
@@ -448,6 +453,75 @@ try {
     await page.getByTestId('session-exited').waitFor();
     assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
     pass('Mobile planner keeps a visible working Exit button without requiring planner dismissal');
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.goto(`${origin}/?gate=1`, { waitUntil: 'networkidle' });
+    await page.getByLabel('Name', { exact: true }).fill('Avery Example');
+    await page.getByLabel('Email', { exact: true }).fill('avery@example.test');
+    await page.getByRole('checkbox').check();
+    await page.getByRole('button', { name: 'Email my recap and continue' }).click();
+    await page.waitForFunction(() => window.__evanHarness?.ready === true);
+    await message('user', 'I am moving from Mesa to Gilbert next month. It is a two bedroom house. We need full packing and have a treadmill. There are stairs.', 'contact-route');
+    await planner.waitFor({ state: 'visible' });
+    await planner.getByRole('button', { name: 'Move brief', exact: true }).click();
+    await planner.getByText('avery@example.test', { exact: true }).waitFor();
+    await planner.getByText('Avery Example', { exact: true }).waitFor();
+    await message('user', 'My phone number is 480-555-0142. Call me in the morning.', 'contact-phone');
+    await page.waitForFunction(() => document.querySelector('[data-testid="evan-move-planner"]').textContent.includes('0142'));
+    await message('user', 'Actually, my phone number is 602-555-', 'contact-correction', false);
+    await page.waitForTimeout(700);
+    assert.match(await planner.getByTestId('evan-contact-phone').innerText(), /0142/);
+    await message('user', '0198.', 'contact-correction');
+    await page.waitForFunction(() => {
+        const text = document.querySelector('[data-testid="evan-move-planner"]').textContent;
+        return text.includes('0198') && !text.includes('0142');
+    });
+    await message('user', "I'm good.", 'contact-acknowledgement');
+    assert.equal(await planner.getByText('Avery Example', { exact: true }).isVisible(), true);
+    assert.doesNotMatch(await planner.innerText(), /\d+%|of 6 planning|Brief completeness/i);
+    assert.doesNotMatch(await page.evaluate(() => JSON.stringify(window.__evanHarness.contexts)), /avery@example|Avery Example|555/);
+    assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
+    pass('Completed contact corrections update live without partial-number or acknowledgement corruption, and no contact is sent to avatar context or browser storage');
+    for (const viewport of [{ width: 1366, height: 768 }, { width: 1100, height: 620 }, { width: 390, height: 844 }]) {
+        await page.setViewportSize(viewport);
+        for (const tab of ['Move brief', 'Move list', 'Next steps']) {
+            await planner.getByRole('button', { name: tab, exact: true }).click();
+            await page.waitForTimeout(500);
+            const fits = await page.evaluate(() => {
+                const panel = document.querySelector('[data-testid="evan-move-planner"]');
+                const content = document.querySelector('[data-testid="evan-planner-content"]');
+                const footer = document.querySelector('[data-testid="evan-planner-footer"]');
+                return { noHorizontalOverflow: content.scrollWidth <= content.clientWidth + 1,
+                    footerOnScreen: footer.getBoundingClientRect().bottom <= innerHeight + 1,
+                    separateFooter: content.getBoundingClientRect().bottom <= footer.getBoundingClientRect().top + 1,
+                    noScore: !/\d+%|of 6 planning|Brief completeness/.test(panel.textContent) };
+            });
+            assert.deepEqual(fits, { noHorizontalOverflow: true, footerOnScreen: true, separateFooter: true, noScore: true });
+            await capture(`evan-${tab.toLowerCase().replaceAll(' ', '-')}-${viewport.width}x${viewport.height}`);
+        }
+    }
+    pass('Brief, move list, and next steps fit their scroll regions with no score or footer overlap on laptop, short-window, and mobile views');
+    await planner.getByRole('button', { name: 'Move list', exact: true }).click();
+    await planner.getByText('Ask Mullins about', { exact: true }).waitFor();
+    await planner.getByRole('button', { name: 'Move brief', exact: true }).click();
+    await planner.getByTestId('evan-planner-contact').waitFor({ state: 'visible' });
+    await message('user', 'Remove my email.', 'contact-hide-email');
+    await page.waitForFunction(() => !document.querySelector('[data-testid="evan-planner-contact"]').textContent.includes('avery@example.test'));
+    await page.evaluate(() => {
+        for (let index = 0; index < 405; index++) window.__evanHarness.message({
+            role: 'persona', content: 'We can review the move details.', id: `long-call-${index}`, endOfSpeech: true,
+        });
+    });
+    await message('user', 'My email is alternate@example.test.', 'contact-after-hide');
+    await planner.getByText('alternate@example.test', { exact: true }).waitFor();
+    assert.doesNotMatch(await planner.getByTestId('evan-planner-contact').innerText(), /avery@example\.test/);
+    pass('A hidden check-in email stays hidden through a long call and a newly supplied spoken address');
+    await page.goto(`${origin}/?gate=1`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Continue without email' }).click();
+    await page.waitForFunction(() => window.__evanHarness?.ready === true);
+    await open.click();
+    assert.doesNotMatch(await planner.innerText(), /avery@example|Avery Example|0198/);
+    pass('A fresh guest session does not inherit previous visitor contact information');
     await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.clock.install();
@@ -524,6 +598,17 @@ try {
     assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
     pass('Exact latest goodbye closes within the brief drain even when Anam reuses its message ID; old markers and partial farewell cannot close');
 
+    for (const ending of ["No, that's enough for now. Just have someone call in the morning. Thank you.", "That's everything. We're good to end."]) {
+        await ready('evan');
+        await message('persona', 'Is there anything else you would like to add?', 'natural-close-question');
+        await message('user', ending, 'natural-close-user');
+        assert.equal((await endCall()).status, 'farewell_required');
+        await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'natural-close-farewell');
+        await page.clock.fastForward(1_100);
+        assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
+    }
+    pass('Both observed natural closing phrases authorize a single farewell and automatic close without a second goodbye');
+
     await ready('amy');
     await message('persona', 'If you’d like to discuss a new move, could you share the city you’re moving from and the city you’re moving to?', 'amy-natural-question');
     await message('user', 'I am moving from Gilbert', 'amy-user', false);
@@ -535,8 +620,8 @@ try {
     assert.equal(await map.count(), 0);
     pass('Actual shared AnamPlayer keeps natural-question and visitor-route auto-open isolated from Amy');
 
-    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 10);
-    assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode'].includes(request.path)));
+    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 14);
+    assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode', '/api/anam/evan/access'].includes(request.path)));
     assert.deepEqual(report.blockedRequests, []);
     assert.deepEqual(report.consoleErrors, []);
     pass('Only local fake tokens/geocodes; no live provider, email, external geocoder, or unexpected network requests');

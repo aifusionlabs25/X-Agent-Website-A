@@ -7,7 +7,6 @@ import {
     AlertTriangle,
     Boxes,
     Check,
-    ChevronRight,
     ClipboardCheck,
     Clock3,
     House,
@@ -15,7 +14,6 @@ import {
     PackageCheck,
     Route,
     ShieldCheck,
-    Sparkles,
     Truck,
     X,
 } from 'lucide-react';
@@ -26,6 +24,7 @@ import {
     EvanMovePlannerView,
     MovePlanStop,
 } from '@/lib/anam/evan-move-planner';
+import type { EvanPlannerContact } from '@/lib/anam/evan-planner-contact';
 import EvanRouteMap from '@/components/evan/EvanRouteMap';
 import EvanSessionExit from '@/components/evan/EvanSessionExit';
 
@@ -33,6 +32,7 @@ interface EvanMovePlannerProps {
     isOpen: boolean;
     turns: EvanMovePlannerTurn[];
     addressStops?: MovePlanStop[] | null;
+    contact?: EvanPlannerContact;
     requestedView?: EvanMovePlannerView;
     onClose: () => void;
     onExitSession?: () => void;
@@ -43,41 +43,84 @@ const TABS: Array<{ id: EvanMovePlannerView; label: string; icon: typeof Truck }
     { id: 'brief', label: 'Move brief', icon: ClipboardCheck },
     { id: 'route', label: 'Route', icon: Route },
     { id: 'inventory', label: 'Move list', icon: Boxes },
-    { id: 'readiness', label: 'Readiness', icon: ShieldCheck },
+    { id: 'readiness', label: 'Next steps', icon: ShieldCheck },
 ];
 
 const EMPTY_COPY: Record<EvanMovePlannerView, string> = {
     brief: 'Share the move basics and Evan will assemble the working brief here.',
     route: 'Origin, destination, and additional stops will appear as they are discussed.',
     inventory: 'Services, specialty items, access factors, and care priorities will collect here.',
-    readiness: 'The planner will identify captured signals and useful follow-up questions.',
+    readiness: 'Useful details to discuss with Evan and the Mullins team will appear here.',
 };
 
 function EmptyState({ view }: { view: EvanMovePlannerView }) {
     return (
-        <div className="flex min-h-[330px] flex-col items-center justify-center border border-dashed border-[#6531c5]/25 bg-[#f5f0fb]/70 px-8 text-center">
-            <div className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[#6531c5]/15 bg-[#ffffff] shadow-[0_18px_60px_rgba(25,59,42,0.12)]">
-                <Truck size={32} strokeWidth={1.6} className="text-[#5d24d6]" />
+        <div className="flex flex-col items-center justify-center border border-dashed border-[#6531c5]/25 bg-[#f5f0fb]/70 px-6 py-8 text-center">
+            <div className="relative mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[#6531c5]/15 bg-[#ffffff] shadow-[0_12px_30px_rgba(42,16,80,0.08)]">
+                <Truck size={25} strokeWidth={1.6} className="text-[#5d24d6]" />
                 <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border-4 border-[#ffffff] bg-[#f6b93b]" />
             </div>
-            <p className="font-serif text-2xl text-[#2a1050]">Ready when you are.</p>
-            <p className="mt-3 max-w-sm text-sm leading-6 text-[#6f5e7d]">{EMPTY_COPY[view]}</p>
+            <p className="font-serif text-[22px] text-[#2a1050]">Ready when you are.</p>
+            <p className="mt-2 max-w-sm text-[13px] leading-5 text-[#6f5e7d]">{EMPTY_COPY[view]}</p>
         </div>
     );
 }
 
 function DetailChip({ children }: { children: string }) {
     return (
-        <span className="inline-flex items-center gap-2 border border-[#6531c5]/15 bg-[#ffffff] px-3 py-2 text-sm font-medium text-[#43207f] shadow-[0_5px_16px_rgba(31,72,50,0.06)]">
+        <span className="inline-flex items-center gap-1.5 border border-[#6531c5]/15 bg-[#ffffff] px-2 py-1 text-[12px] leading-5 font-medium text-[#43207f]">
             <Check size={14} className="text-[#f6b93b]" />
             {children}
         </span>
     );
 }
 
-export default function EvanMovePlanner({ isOpen, turns, addressStops = null, requestedView, onClose, onExitSession, isFinalizing = false }: EvanMovePlannerProps) {
+function ContactCard({ contact }: { contact?: EvanPlannerContact }) {
+    const fields = [
+        { key: 'displayName', label: 'Name', value: contact?.displayName },
+        { key: 'phone', label: 'Phone', value: contact?.phone },
+        { key: 'email', label: 'Email', value: contact?.email },
+        { key: 'contactPreference', label: 'Preferred contact', value: contact?.contactPreference },
+        { key: 'callbackWindow', label: 'Best time to reach you', value: contact?.callbackWindow },
+    ] as const;
+
+    return (
+        <section className="min-w-0 self-start border border-[#321064]/15 bg-[#fffaf0]" aria-label="Your contact details" data-testid="evan-planner-contact">
+            <div className="border-b border-[#321064]/10 px-3 py-2.5">
+                <h4 className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#43207f]">Your contact details</h4>
+                <p className="mt-1 text-[11px] leading-4 text-[#746180]">Optional. Tell Evan if a detail needs correcting.</p>
+            </div>
+            <dl className="divide-y divide-[#321064]/10 px-3">
+                {fields.filter((field) => !contact?.hiddenFields.includes(field.key)).map((field) => (
+                    <div key={field.key} className="py-2" data-testid={`evan-contact-${field.key}`}>
+                        <dt className="text-[10px] font-bold uppercase tracking-[0.07em] text-[#7c6c89]">{field.label}</dt>
+                        <dd className="mt-0.5 break-words text-[13px] font-medium leading-5 text-[#43207f] [overflow-wrap:anywhere]">
+                            {field.value || <span className="font-normal text-[#8a7a95]">Not shared yet</span>}
+                        </dd>
+                        {field.key === 'email' && field.value && (
+                            <p className="mt-0.5 text-[10px] leading-4 text-[#746180]">
+                                {contact?.emailSource === 'check-in' ? 'From private check-in' : 'Heard in conversation · please confirm'}
+                            </p>
+                        )}
+                    </div>
+                ))}
+            </dl>
+            {contact?.proposedEmail && !contact.hiddenFields.includes('email') && (
+                <div className="mx-3 mb-3 border-l-2 border-[#d99b20] pl-2 text-[11px] leading-4 text-[#6f5475]">
+                    <p className="font-semibold">Spoken email change · needs confirmation</p>
+                    <p className="mt-1 break-words [overflow-wrap:anywhere]">{contact.proposedEmail}</p>
+                    <p className="mt-1">Your recap address has not changed.</p>
+                </div>
+            )}
+            <p className="border-t border-[#321064]/10 px-3 py-2 text-[10px] leading-4 text-[#746180]">Working notes for Mullins to confirm. Your email recap settings stay unchanged.</p>
+        </section>
+    );
+}
+
+export default function EvanMovePlanner({ isOpen, turns, addressStops = null, contact, requestedView, onClose, onExitSession, isFinalizing = false }: EvanMovePlannerProps) {
     const [view, setView] = useState<EvanMovePlannerView>(requestedView ?? 'brief');
     const model = useMemo(() => buildEvanMovePlan(turns, addressStops), [turns, addressStops]);
+    const briefHighlights = model.highlights.filter((signal) => signal.label.toLowerCase() !== 'route');
 
     useEffect(() => {
         if (!isOpen || !requestedView) return undefined;
@@ -149,6 +192,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                                     key={id}
                                     type="button"
                                     onClick={() => setView(id)}
+                                    aria-pressed={view === id}
                                     className={`relative inline-flex min-h-11 min-w-max items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.09em] transition ${view === id ? 'text-[#321064]' : 'text-[#776886] hover:text-[#6230bb]'}`}
                                 >
                                     <Icon size={15} />
@@ -159,7 +203,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                         </nav>
 
                         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5" data-testid="evan-planner-content">
-                            {model.status === 'listening' && view !== 'route' ? <EmptyState view={view} /> : (
+                            {model.status === 'listening' && view === 'readiness' ? <EmptyState view={view} /> : (
                                 <AnimatePresence mode="wait">
                                     <motion.div
                                         key={view}
@@ -169,43 +213,38 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                                         transition={{ duration: 0.2 }}
                                     >
                                         {view === 'brief' && (
-                                            <section>
-                                                <div className="grid gap-3 sm:grid-cols-3">
-                                                    <div className="border border-[#321064]/15 bg-[#ffffff] p-4 shadow-[0_8px_25px_rgba(31,72,50,0.07)] sm:col-span-2">
-                                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#7540cf]">Route at a glance</p>
-                                                        <p className="mt-2 font-serif text-2xl leading-tight text-[#2a1050]">
-                                                            {model.stops.length ? model.stops.map((stop) => stop.city).join(' \u2192 ') : 'Route still being clarified'}
+                                            <section data-testid="evan-planner-brief-view">
+                                                <div className="flex items-start gap-3 border border-[#321064]/15 bg-[#ffffff] px-3 py-2.5">
+                                                    <Route size={18} className="mt-0.5 flex-none text-[#d99b20]" />
+                                                    <div className="min-w-0">
+                                                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#7540cf]">Route at a glance</p>
+                                                        <p className="mt-0.5 break-words font-serif text-[22px] leading-7 text-[#2a1050]">
+                                                            {model.stops.length ? model.stops.map((stop) => stop.city).join(' \u2192 ') : 'Where are you moving from and to?'}
                                                         </p>
                                                     </div>
-                                                    <div className="border border-[#321064]/15 bg-[#f6b93b] p-4 text-white shadow-[0_8px_25px_rgba(139,63,25,0.2)]">
-                                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/75">Brief completeness</p>
-                                                        <p className="mt-1 font-serif text-4xl">{model.readiness}%</p>
-                                                        <p className="mt-1 text-xs text-white/75">{model.capturedCategories} of {model.totalCategories} planning areas</p>
-                                                    </div>
                                                 </div>
 
-                                                <div className="mt-7 flex items-end justify-between gap-4">
-                                                    <div>
-                                                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">What Evan heard</p>
-                                                        <h3 className="mt-1 font-serif text-3xl">Working move brief</h3>
+                                                <h3 className="mt-4 font-serif text-[24px] leading-8">Working move brief</h3>
+                                                <p className="mt-0.5 text-[12px] leading-5 text-[#746180]">Your details take shape as you talk. You can correct or add to them at any time.</p>
+                                                <div className="mt-3 grid items-start gap-3 sm:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+                                                    <div className="min-w-0">
+                                                        <dl className="divide-y divide-[#321064]/10 border border-[#321064]/15 bg-[#ffffff]">
+                                                            {briefHighlights.length ? briefHighlights.map((signal) => (
+                                                                <div key={signal.label} className="grid gap-0.5 px-3 py-2.5 sm:grid-cols-[100px_minmax(0,1fr)] sm:gap-3">
+                                                                    <dt className="text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-[#7c6c89]">{signal.label}</dt>
+                                                                    <dd className="break-words text-[13px] font-medium leading-5 text-[#43207f]">{signal.value}</dd>
+                                                                </div>
+                                                            )) : <div className="px-3 py-4 text-[13px] leading-5 text-[#746180]"><dt className="sr-only">Move details</dt><dd>Tell Evan about your move date, home, and any help you need. Those details will appear here.</dd></div>}
+                                                        </dl>
+                                                        {model.carePriorities.length > 0 && (
+                                                            <div className="mt-3 border-l-2 border-[#f6b93b] bg-[#eee5fb] px-3 py-2.5">
+                                                                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#6d35c5]">What matters to you</p>
+                                                                <div className="mt-2 flex flex-wrap gap-1.5">{model.carePriorities.map((item) => <DetailChip key={item}>{item}</DetailChip>)}</div>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <Sparkles size={22} className="mb-1 text-[#d99b20]" />
+                                                    <ContactCard contact={contact} />
                                                 </div>
-                                                <div className="mt-4 divide-y divide-[#321064]/10 border-y border-[#321064]/15 bg-[#ffffff]">
-                                                    {model.highlights.length ? model.highlights.map((signal) => (
-                                                        <div key={signal.label} className="grid gap-1 px-4 py-4 sm:grid-cols-[150px_1fr] sm:gap-5">
-                                                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#7c6c89]">{signal.label}</p>
-                                                            <p className="text-sm font-semibold leading-6 text-[#244b38]">{signal.value}</p>
-                                                        </div>
-                                                    )) : <p className="p-5 text-sm text-[#746180]">The working brief will fill in as move details are discussed.</p>}
-                                                </div>
-
-                                                {model.carePriorities.length > 0 && (
-                                                    <div className="mt-6 border-l-4 border-[#f6b93b] bg-[#eee5fb] p-4">
-                                                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6d35c5]">Customer care priorities</p>
-                                                        <div className="mt-3 flex flex-wrap gap-2">{model.carePriorities.map((item) => <DetailChip key={item}>{item}</DetailChip>)}</div>
-                                                    </div>
-                                                )}
                                             </section>
                                         )}
 
@@ -243,67 +282,73 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                                         )}
 
                                         {view === 'inventory' && (
-                                            <section>
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">Scope signals</p>
-                                                <h3 className="mt-1 font-serif text-3xl">Move list</h3>
-                                                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                                            <section data-testid="evan-planner-inventory-view">
+                                                <h3 className="font-serif text-[24px] leading-8">Your move, at a glance</h3>
+                                                <p className="mt-0.5 text-[12px] leading-5 text-[#746180]">What you have discussed with Evan so far.</p>
+                                                <div className="mt-3 grid items-start gap-3 sm:grid-cols-2">
                                                     {[
-                                                        { title: 'Requested support', items: model.services, icon: PackageCheck },
+                                                        { title: 'Help requested', items: model.services, icon: PackageCheck },
                                                         { title: 'Special handling', items: model.specialtyItems, icon: Boxes },
-                                                        { title: 'Access factors', items: model.accessFactors, icon: House },
-                                                        { title: 'Care priorities', items: model.carePriorities, icon: ShieldCheck },
+                                                        { title: 'Getting in and out', items: model.accessFactors, icon: House },
+                                                        { title: 'What matters to you', items: model.carePriorities, icon: ShieldCheck },
                                                     ].map(({ title, items, icon: Icon }) => (
-                                                        <div key={title} className="min-h-44 border border-[#321064]/15 bg-[#ffffff] p-5 shadow-[0_8px_24px_rgba(31,72,50,0.06)]">
-                                                            <div className="flex items-center gap-3 border-b border-[#321064]/10 pb-3">
-                                                                <Icon size={18} className="text-[#d99b20]" />
-                                                                <h4 className="text-xs font-bold uppercase tracking-[0.14em] text-[#43207f]">{title}</h4>
+                                                        <div key={title} className="min-w-0 border border-[#321064]/15 bg-[#ffffff] px-3 py-2.5">
+                                                            <div className="flex items-center gap-2 border-b border-[#321064]/10 pb-2">
+                                                                <Icon size={16} className="flex-none text-[#d99b20]" />
+                                                                <h4 className="text-[10px] font-bold uppercase leading-4 tracking-[0.1em] text-[#43207f]">{title}</h4>
                                                             </div>
                                                             {items.length ? (
-                                                                <ul className="mt-4 space-y-3">{items.map((item) => (
-                                                                    <li key={item} className="flex items-start gap-2 text-sm leading-5 text-[#685577]"><Check size={14} className="mt-0.5 flex-none text-[#d99b20]" />{item}</li>
+                                                                <ul className="mt-2 space-y-1.5">{items.map((item) => (
+                                                                    <li key={item} className="flex items-start gap-2 text-[13px] leading-5 text-[#685577]"><Check size={13} className="mt-1 flex-none text-[#d99b20]" />{item}</li>
                                                                 ))}</ul>
-                                                            ) : <p className="mt-4 text-sm leading-6 text-[#9689a1]">Not discussed yet.</p>}
+                                                            ) : <p className="mt-2 text-[12px] leading-5 text-[#8a7a95]">Nothing noted yet.</p>}
                                                         </div>
                                                     ))}
+                                                </div>
+                                                <div className="mt-4 border border-[#d99b20]/30 bg-[#fffaf0] px-3 py-3" data-testid="evan-planner-service-options">
+                                                    <h4 className="font-serif text-[20px] leading-6 text-[#2a1050]">Ask Mullins about</h4>
+                                                    <p className="mt-1 text-[11px] leading-4 text-[#746180]">Options to discuss—not added to your move. The team confirms availability and pricing.</p>
+                                                    <ul className="mt-3 grid gap-x-4 gap-y-2 text-[12px] leading-5 text-[#43207f] sm:grid-cols-2">
+                                                        <li><span className="font-semibold">Packing &amp; unpacking</span><br />Help with selected rooms or the whole home.</li>
+                                                        <li><span className="font-semibold">Loading &amp; unloading</span><br />Labor for your truck or storage container.</li>
+                                                        <li><span className="font-semibold">Specialty-item care</span><br />Discuss fragile, valuable, or oversized items.</li>
+                                                        <li><span className="font-semibold">Boxes, tape &amp; packing supplies</span><br />Availability to confirm with Mullins.</li>
+                                                    </ul>
                                                 </div>
                                             </section>
                                         )}
 
                                         {view === 'readiness' && (
-                                            <section>
-                                                <div className="flex flex-col gap-5 border border-[#321064]/15 bg-[#2a1050] p-5 text-white shadow-[0_16px_50px_rgba(24,58,40,0.22)] sm:flex-row sm:items-center sm:justify-between">
-                                                    <div>
-                                                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#ffdc8a]">Intake readiness</p>
-                                                        <h3 className="mt-1 font-serif text-3xl">{model.readiness}% complete</h3>
-                                                        <p className="mt-2 max-w-md text-sm leading-6 text-white/65">A useful working measure - not a quote, booking, or operational approval.</p>
-                                                    </div>
-                                                    <div className="relative h-24 w-24 flex-none rounded-full" style={{ background: `conic-gradient(#ffc857 ${model.readiness}%, rgba(255,255,255,.12) 0)` }}>
-                                                        <div className="absolute inset-[7px] flex items-center justify-center rounded-full bg-[#2a1050] font-serif text-2xl">{model.capturedCategories}/{model.totalCategories}</div>
-                                                    </div>
+                                            <section data-testid="evan-planner-next-steps-view">
+                                                <h3 className="font-serif text-[24px] leading-8">Let’s plan the next step</h3>
+                                                <p className="mt-1 text-[12px] leading-5 text-[#746180]">A few useful details to talk through—not a checklist you have to finish during this call.</p>
+
+                                                <div className="mt-3 border border-[#321064]/15 bg-white">
+                                                    <h4 className="border-b border-[#321064]/10 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#43207f]">Details to talk through</h4>
+                                                    <ul className="divide-y divide-[#321064]/10">
+                                                        {model.openItems.length ? model.openItems.map((item) => (
+                                                            <li key={item} className="flex items-start gap-2.5 px-3 py-2.5">
+                                                                <span className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-[#d99b20]" />
+                                                                <p className="min-w-0 text-[13px] leading-5 text-[#5a3d75]">{item}</p>
+                                                            </li>
+                                                        )) : (
+                                                            <li className="px-3 py-3 text-[13px] leading-5 text-[#5a3d75]">Review your move brief with Evan and share anything else you would like the Mullins team to know.</li>
+                                                        )}
+                                                    </ul>
                                                 </div>
 
-                                                <div className="mt-7">
-                                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">Useful next details</p>
-                                                    <h3 className="mt-1 font-serif text-3xl">Before Mullins reviews</h3>
-                                                    <div className="mt-4 space-y-3">
-                                                        {model.openItems.length ? model.openItems.map((item, index) => (
-                                                            <div key={item} className="flex items-start gap-4 border border-[#321064]/15 bg-[#ffffff] p-4 shadow-[0_7px_22px_rgba(31,72,50,0.06)]">
-                                                                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#ece1fa] text-xs font-bold text-[#6d35c5]">{index + 1}</span>
-                                                                <p className="flex-1 text-sm font-medium leading-6 text-[#5a3d75]">{item}</p>
-                                                                <ChevronRight size={16} className="mt-1 flex-none text-[#b9abc5]" />
-                                                            </div>
-                                                        )) : (
-                                                            <div className="flex items-center gap-3 border border-[#7540cf]/20 bg-[#efe8fb] p-5 text-sm font-semibold text-[#5d24d6]">
-                                                                <ClipboardCheck size={19} /> The working brief has the core planning signals for staff review.
-                                                            </div>
-                                                        )}
+                                                <div className="mt-3 flex items-start gap-3 border-l-2 border-[#f6b93b] bg-[#eee5fb] px-3 py-3">
+                                                    <ShieldCheck size={18} className="mt-0.5 flex-none text-[#6d35c5]" />
+                                                    <div>
+                                                        <h4 className="text-[12px] font-semibold text-[#43207f]">Mullins confirms the details</h4>
+                                                        <p className="mt-1 text-[12px] leading-5 text-[#746180]">The team can discuss an estimate or walkthrough and review pricing, availability, and special handling. Nothing is booked by this planner.</p>
                                                     </div>
                                                 </div>
 
                                                 {model.uncertainties.length > 0 && (
-                                                    <div className="mt-6 border border-[#d9a62f]/35 bg-[#fff4d8] p-4">
-                                                        <div className="flex items-center gap-2 text-[#6d35c5]"><AlertTriangle size={17} /><p className="text-xs font-bold uppercase tracking-[0.14em]">Customer-stated uncertainty</p></div>
-                                                        <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6f5475]">{model.uncertainties.map((item) => <li key={item}>&quot;{item}&quot;</li>)}</ul>
+                                                    <div className="mt-3 border border-[#d9a62f]/35 bg-[#fff4d8] px-3 py-2.5">
+                                                        <div className="flex items-center gap-2 text-[#6d35c5]"><AlertTriangle size={15} /><p className="text-[10px] font-bold uppercase tracking-[0.1em]">Still deciding? That’s okay.</p></div>
+                                                        <ul className="mt-2 space-y-1.5 text-[12px] leading-5 text-[#6f5475]">{model.uncertainties.map((item) => <li key={item}>&quot;{item}&quot;</li>)}</ul>
                                                     </div>
                                                 )}
                                             </section>

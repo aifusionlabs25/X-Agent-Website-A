@@ -4,6 +4,23 @@ import { createEvanFarewellCloseCoordinator } from '../lib/anam/evan-session-clo
 
 const FAREWELL = 'Thank you for speaking with Mullins Moving. Take care.';
 
+test('content-free diagnostics distinguish completed farewell from fallback without blocking closure', () => {
+    for (const mode of ['farewell_complete', 'fallback_timeout']) {
+        const timers = scheduler();
+        let stops = 0;
+        const reasons = [];
+        const coordinator = createEvanFarewellCloseCoordinator({
+            stopStreaming: () => { stops++; }, schedule: timers.schedule, cancel: timers.cancel,
+            onStopReason: reason => { reasons.push(reason); throw new Error('Diagnostic failed'); },
+        });
+        coordinator.arm();
+        if (mode === 'farewell_complete') coordinator.completeFarewell(FAREWELL);
+        timers.runDelay(mode === 'farewell_complete' ? 1_000 : 12_000);
+        assert.deepEqual(reasons, [mode]);
+        assert.equal(stops, 1);
+    }
+});
+
 function scheduler() {
     let nextId = 1;
     const pending = new Map();

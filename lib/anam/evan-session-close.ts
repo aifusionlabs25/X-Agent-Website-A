@@ -14,6 +14,7 @@ export type EvanFarewellCloseCoordinator = {
 export function createEvanFarewellCloseCoordinator(input: {
     stopStreaming: () => void | Promise<void>;
     onStopError?: () => void;
+    onStopReason?: (reason: 'farewell_complete' | 'fallback_timeout') => void;
     fallbackMs?: number;
     audioDrainMs?: number;
     schedule?: typeof setTimeout;
@@ -41,11 +42,12 @@ export function createEvanFarewellCloseCoordinator(input: {
         audioDrainTimer = null;
     };
 
-    const stopOnce = (scheduledGeneration: number) => {
+    const stopOnce = (scheduledGeneration: number, reason: 'farewell_complete' | 'fallback_timeout') => {
         if (generation !== scheduledGeneration || (phase !== 'armed' && phase !== 'draining')) return;
         phase = 'stopped';
         generation += 1;
         clearTimers();
+        try { input.onStopReason?.(reason); } catch { /* Diagnostics must not block teardown. */ }
         try {
             void Promise.resolve(input.stopStreaming()).catch(() => input.onStopError?.());
         } catch {
@@ -58,7 +60,7 @@ export function createEvanFarewellCloseCoordinator(input: {
             if (phase !== 'idle') return false;
             phase = 'armed';
             const armedGeneration = ++generation;
-            fallbackTimer = schedule(() => stopOnce(armedGeneration), fallbackMs);
+            fallbackTimer = schedule(() => stopOnce(armedGeneration, 'fallback_timeout'), fallbackMs);
             return true;
         },
         completeFarewell: (text, interrupted = false) => {
@@ -67,7 +69,7 @@ export function createEvanFarewellCloseCoordinator(input: {
             const farewellGeneration = ++generation;
             clearTimer(fallbackTimer);
             fallbackTimer = null;
-            audioDrainTimer = schedule(() => stopOnce(farewellGeneration), audioDrainMs);
+            audioDrainTimer = schedule(() => stopOnce(farewellGeneration, 'farewell_complete'), audioDrainMs);
             return true;
         },
         cancelPending: () => {

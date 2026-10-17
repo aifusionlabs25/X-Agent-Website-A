@@ -73,7 +73,24 @@ export function hasEvanCloseIntent(userText: string, previousAgentText = ''): bo
     // statement so "everything about packing" or a new detail cannot close it.
     const wrapUp = `(?:that(?:'s| is) (?:all|it|everything)|(?:i(?:'m| am)|we(?:'re| are)) (?:all set|done|finished)|all set|nothing else|no (?:more|other|further) questions)(?: for (?:now|today))?`;
     const setForNow = `(?:i(?:'m| am)|we(?:'re| are)) set for (?:now|today)`;
-    if (new RegExp(`^(?:(?:no|nope)[, ]+)?(?:${wrapUp}|${setForNow})${courtesy}$`).test(request)) return true;
+    const enoughForNow = `that(?:'s| is) enough for (?:now|today)`;
+    const completeWrapUp = new RegExp(`^(?:(?:no|nope)[, ]+)?(?:${wrapUp}|${setForNow}|${enoughForNow})${courtesy}$`);
+    if (completeWrapUp.test(request)) return true;
+
+    // A visitor may finish with a callback instruction, not another question.
+    // Accept only a small, whole-clause handoff vocabulary after a complete
+    // wrap-up. New move details, scoped "all for packing", and requests to
+    // continue must never become permission to hang up.
+    const clauses = request.split(/[.!;]+/).map(part => part.trim()).filter(Boolean);
+    const handoffCourtesy = /^(?:thanks(?: again)?|thank you)(?: for your help)?(?:[, ]+evan)?$/;
+    const callbackWindow = '(?:in (?:the )?(?:morning|afternoon|evening)|(?:tomorrow|today)(?: (?:morning|afternoon|evening))?|next week|later|(?:on )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?: (?:morning|afternoon|evening))?)';
+    const callbackHandoff = new RegExp(`^(?:(?:just|please) ){0,2}(?:have (?:someone|the team|mullins|the mullins team) call|ask (?:someone|the team|mullins|the mullins team) to call|call)(?: (?:me|us))?(?: ${callbackWindow})?(?:[, ]+please)?$`);
+    if (clauses.length > 1 && clauses.length <= 4 && completeWrapUp.test(clauses[0])
+        && clauses.slice(1).every(clause => callbackHandoff.test(clause) || handoffCourtesy.test(clause))) return true;
+
+    // This explicit final clause can follow supplied details. It is not a
+    // generic "good" confirmation and must be the final standalone statement.
+    if (/^(?:we(?:'re| are)|i(?:'m| am)) (?:good|ready) to (?:end|finish)(?: (?:the|this|our) (?:call|conversation|session|chat))?(?: now)?$/.test(clauses.at(-1) ?? '')) return true;
 
     // A genuine final goodbye is explicit authorization even after a short
     // handoff acknowledgement, but questions/reporting/continuation veto above.

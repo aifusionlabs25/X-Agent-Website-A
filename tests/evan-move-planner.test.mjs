@@ -18,6 +18,18 @@ test('Evan Move Planner starts empty without inventing move details', () => {
     assert.deepEqual(model.highlights, []);
 });
 
+test('a storage-first route preserves the eventual home destination and flags uncertainty', () => {
+    const model = buildEvanMovePlan([{ role: 'user', content: 'from Mesa probably to storage in Gilbert first then eventually a house in Queen Creek but that is all tentative' }]);
+    assert.deepEqual(model.stops, [
+        { city: 'Mesa', kind: 'Origin' },
+        { city: 'Gilbert', kind: 'Additional stop' },
+        { city: 'Queen Creek', kind: 'Destination' },
+    ]);
+    assert.ok(model.uncertainties.some(item => /probably|tentative/.test(item)));
+    assert.ok(!model.openItems.some(item => /final destination/.test(item)));
+    assert.ok(model.stops.every(stop => !stop.confirmed && !stop.coordinates));
+});
+
 test('Evan Move Planner builds a multi-stop senior move brief from current-session facts', () => {
     const model = buildEvanMovePlan([
         {

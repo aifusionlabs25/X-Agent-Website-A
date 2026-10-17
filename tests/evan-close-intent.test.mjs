@@ -59,6 +59,37 @@ test('natural wrap-up additions retain scope, question, quote, and continuation 
     ]) assert.equal(hasEvanCloseIntent(phrase, 'Is there anything else?'), false, phrase);
 });
 
+test('observed natural endings allow a bounded callback handoff without a second goodbye', () => {
+    for (const phrase of [
+        "No, that's enough for now. Just have someone call in the morning. Thank you.",
+        "That's enough for today, thank you.",
+        "That's all for now. Please have the team call me tomorrow morning. Thanks, Evan.",
+        "I'm set for now. Just call me later.",
+        "Nothing else. Ask the Mullins team to call us on Monday. Thank you.",
+        "Range is better, mid-month flexible. You've got the route, treadmill, stairs and phone-only callback. That's everything. We're good to end.",
+        "We're good to end.", "I'm ready to end the call now.",
+    ]) assert.equal(hasEvanCloseIntent(phrase), true, phrase);
+});
+
+test('callback handoffs and final clauses retain all continuation and scope boundaries', () => {
+    for (const phrase of [
+        'Please have someone call me in the morning.',
+        'Just call me tomorrow. Thank you.',
+        "That's enough for now with the packing.",
+        "That's all for packing. Have someone call tomorrow.",
+        "No, that's enough for today. There are stairs at the destination.",
+        "That's enough for now. Just have someone call tomorrow. What about boxes?",
+        "That's enough for today, but I have another question.",
+        "That's enough for now. Ask the team to confirm the inventory.",
+        "That's all. Call me when you're good to end.",
+        "We're good to end the packing.",
+        "We're good to end?", "If we're good to end.",
+        "We're good to end, but one more thing.",
+        "We're not ready to end.", 'She said we are good to end.',
+        '"We are good to end."',
+    ]) assert.equal(hasEvanCloseIntent(phrase, 'Is there anything else?'), false, phrase);
+});
+
 test('short negatives authorize closing only in a final anything-else context', () => {
     for (const phrase of ['No.', 'No thanks.', 'No, thank you.', 'Nope.', 'No thanks, Evan.']) {
         for (const prior of [

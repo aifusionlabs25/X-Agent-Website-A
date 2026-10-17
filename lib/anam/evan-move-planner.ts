@@ -172,7 +172,7 @@ function cityRole(before: string, after: string): MovePlanStop['kind'] | null {
     if (/\b(?:additional|extra|storage|donation|garage)\b[^,.;!?]{0,45}$|\b(?:stop|stopping|pick up)\s+(?:in|at|from)\s*$/i.test(before)
         || /^\s*(?:storage|donation|garage|stop)\b/i.test(after)) return 'Additional stop';
     if (/\b(?:from|origin(?:ating)?(?: is)?(?: in| at)?|moving out of(?: (?:his|her|my|our|the) (?:house|home) in)?|leaving|starting in|starts? in|pickup(?: is)?(?: from| in| at)?)\s*$/i.test(before)) return 'Origin';
-    if (/\b(?:destination(?: is)?(?: in| at)?|delivery(?: is)?(?: in| at)?|moving into(?: (?:a|the|our|my|his|her) (?:home|house) in)?|new home(?: is| in| at)?|delivering to|deliver to|ending in|to)\s*$/i.test(before)) return 'Destination';
+    if (/\b(?:destination(?: is)?(?: in| at)?|delivery(?: is)?(?: in| at)?|moving into(?: (?:a|the|our|my|his|her) (?:home|house) in)?|eventually (?:to |into )?(?:a|the|our|my) (?:home|house|apartment) in|new home(?: is| in| at)?|delivering to|deliver to|ending in|to)\s*$/i.test(before)) return 'Destination';
     return null;
 }
 
@@ -442,7 +442,7 @@ function labelsFrom(userTurns: string[], rules: Array<[RegExp, string]>, limit =
 function uncertaintySignals(userTurns: string[]) {
     return unique(userTurns.flatMap((turn) => turn
         .split(/(?<=[.!?])\s+/)
-        .filter((sentence) => /\b(?:not sure|I think|maybe|might|have to check|don't know|do not know)\b/i.test(sentence))
+        .filter((sentence) => /\b(?:not sure|I think|maybe|might|probably|tentative|have to check|don't know|do not know)\b/i.test(sentence))
         .map((sentence) => compact(sentence, 115))), 4);
 }
 
@@ -500,14 +500,13 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[], confirmedStops: 
     const readiness = Math.round((capturedCategories / categories.length) * 100);
 
     const openItems = unique([
-        !hasOrigin ? 'Confirm the move origin.' : '',
-        !hasDestination ? 'Confirm the final destination.' : '',
-        !timing ? 'Capture the preferred move date or window.' : '',
-        !propertyScope ? 'Confirm the approximate home or business size.' : '',
-        !services.length ? 'Clarify packing, labor, storage, or other requested services.' : '',
-        !accessFactors.length ? 'Check stairs, elevators, parking, gates, and loading access.' : '',
-        specialtyItems.length ? 'Mullins must review specialty-item handling requirements.' : '',
-        ...uncertainties.map((item) => `Clarify: ${item}`),
+        !hasOrigin ? 'Your pickup location, when you know it.' : '',
+        !hasDestination ? 'Your final destination, when you know it.' : '',
+        !timing ? 'Your preferred move date or date range.' : '',
+        !propertyScope ? 'Approximate home size or number of rooms.' : '',
+        !services.length ? 'Any packing, unpacking, or loading help you would like.' : '',
+        !accessFactors.length ? 'Stairs, elevators, parking, and loading arrangements.' : '',
+        specialtyItems.length ? 'Ask Mullins to review handling needs for your special items.' : '',
     ], 6);
 
     return {

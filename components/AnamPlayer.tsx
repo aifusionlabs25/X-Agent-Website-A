@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     createClient,
     AnamClient,
@@ -10,6 +10,8 @@ import { BrainCircuit, Truck } from 'lucide-react';
 import AmyAnamWorkbenchV2 from '@/components/amy/AmyAnamWorkbenchV2';
 import EvanMovePlanner from '@/components/evan/EvanMovePlanner';
 import EvanSessionExit from '@/components/evan/EvanSessionExit';
+import { useEvanPlannerCheckIn } from '@/components/evan/EvanPlannerContactContext';
+import { buildEvanPlannerContact } from '@/lib/anam/evan-planner-contact';
 import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
@@ -95,6 +97,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [workbenchView, setWorkbenchView] = useState<AmyWorkbenchView>('capabilities');
     const workbenchViewRef = useRef<AmyWorkbenchView>('capabilities');
     const [workbenchTurns, setWorkbenchTurns] = useState<AmyWorkbenchTurn[]>([]);
+    const [evanContactTurns, setEvanContactTurns] = useState<AmyWorkbenchTurn[]>([]);
     const [roadmapTopic, setRoadmapTopic] = useState('');
     const [catalogQuery, setCatalogQuery] = useState('');
     const [workbenchRequestedView, setWorkbenchRequestedView] = useState<AmyWorkbenchView | undefined>(undefined);
@@ -109,6 +112,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
     const evanPlannerEnabled = personaId === EVAN_PERSONA_ID
         && process.env.NEXT_PUBLIC_EVAN_MOVE_PLANNER_ENABLED !== 'false';
+    const evanPlannerCheckIn = useEvanPlannerCheckIn();
+    const evanPlannerContact = useMemo(() => evanPlannerEnabled
+        ? buildEvanPlannerContact(evanContactTurns, evanPlannerCheckIn) : undefined,
+    [evanPlannerEnabled, evanContactTurns, evanPlannerCheckIn]);
     const setAmyWorkbenchOpen = useCallback((nextOpen: boolean) => {
         if (nextOpen && !workbenchOpenRef.current) {
             workbenchOpenGenerationRef.current += 1;
@@ -234,6 +241,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setAmyWorkbenchOpen(false);
         setAmyWorkbenchView('capabilities');
         setWorkbenchTurns([]);
+        setEvanContactTurns([]);
         setRoadmapTopic('');
         setCatalogQuery('');
         setWorkbenchRequestedView(undefined);
@@ -265,6 +273,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             }
             transcriptRef.current = [...transcriptRef.current.slice(-399), turn];
             if (evanPlannerEnabled) {
+                // Contact details update after a complete utterance, never from
+                // half a dictated phone number, email, or callback window.
+                // Keep this session's display corrections/hide requests even
+                // when the general transcript reaches its rolling limit.
+                setEvanContactTurns((current) => [...current, turn]);
                 // The live poll may already show this turn's partial text.
                 // Replace it from the authoritative history instead of appending
                 // a duplicate that could undo a chronological correction.
@@ -577,6 +590,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             return anamClient.stopStreaming();
                         },
                         onStopError: () => console.error('[Evan Anam] Farewell close was not confirmed'),
+                        onStopReason: reason => console.info('[Evan Anam] Close trigger', { reason, contentLogged: false }),
                     });
                 }
                 if (isDani) {
@@ -1246,7 +1260,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 const farewellText = evanCloseBaselineMessage?.id === messageEvent.id
                                     ? evanPersonaMessage.text.slice(evanCloseBaselineMessage.length)
                                     : evanPersonaMessage.text;
-                                evanCloseCoordinator?.completeFarewell(farewellText, evanPersonaMessage.interrupted);
+                                const wasArmed = evanCloseCoordinator?.isArmed();
+                                const farewellAccepted = evanCloseCoordinator?.completeFarewell(farewellText, evanPersonaMessage.interrupted);
+                                if (wasArmed) console.info('[Evan Anam] Farewell completion observed', {
+                                    accepted: farewellAccepted === true, interrupted: evanPersonaMessage.interrupted,
+                                    hasPostArmText: Boolean(farewellText.trim()), contentLogged: false,
+                                });
                             }
                             daniCloseCoordinator?.completeFarewell();
                             if (!amyFarewellRecovery) amyCloseCoordinator?.completeFarewell();
@@ -1626,7 +1645,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     && evanCloseCandidate.correlationId !== toolCorrelation;
                                 if (evanUserSpeaking || !evanCloseCandidate || staleTool
                                     || !hasEvanCloseIntent(evanCloseCandidate.text, evanCloseCandidate.previousAgentText)) {
-                                    console.info('[Evan Anam] Premature close request rejected', { contentLogged: false });
+                                    console.info('[Evan Anam] Premature close request rejected', {
+                                        visitorSpeaking: evanUserSpeaking, completedVisitorTurn: Boolean(evanCloseCandidate),
+                                        staleTool: Boolean(staleTool), contentLogged: false,
+                                    });
                                     return JSON.stringify({ status: 'continue_conversation', retryAllowed: false,
                                         instruction: 'The visitor has not finished the conversation. Do not say goodbye or call this tool again now. Listen to their next details and continue helping with the move. A contact confirmation, email preference, or your own anything-else question is not permission to end.' });
                                 }
@@ -1930,6 +1952,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     isOpen={evanPlannerOpen}
                     turns={workbenchTurns}
                     addressStops={evanAddressStops}
+                    contact={evanPlannerContact}
                     requestedView={evanPlannerView}
                     onExitSession={onClose}
                     isFinalizing={isFinalizing}
