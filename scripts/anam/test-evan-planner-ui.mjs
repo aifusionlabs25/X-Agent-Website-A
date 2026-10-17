@@ -331,6 +331,42 @@ try {
     pass('The exact conditional live-test question opens Route and its natural answer populates Gilbert to Mesa');
 
     await ready('evan');
+    await message('user', "Hi Evan, I'm just looking. One bedroom, probably Mesa. I'm still figuring it out.", 'natural-intake-start');
+    await message('persona', 'May I have your name?', 'natural-intake-name-question');
+    await message('user', 'Anna Example.', 'natural-intake-name');
+    await message('persona', "Thanks, Anna. Which city are you moving from, and which city are you moving to?Anna, could you share the city you're moving from and the city you're moving to?Sure thing. I'm moving from Phoenix AZ and to Mesa AZ.", 'natural-intake-faulty-output');
+    if (await planner.count() === 0) await open.click();
+    await page.getByRole('button', { name: 'Route', exact: true }).click();
+    assert.equal(await map.locator('.leaflet-marker-icon').count(), 0);
+    pass('The recorded agent self-answer cannot create visitor route pins');
+    await message('user', 'Right, yes, Phoenix to Mason.', 'natural-intake-unclear-city');
+    await message('persona', "Just to confirm, you're moving from Phoenix, Arizona to Mesa, Arizona, correct?", 'natural-intake-clarification');
+    await message('user', "That's right.", 'natural-intake-confirmed');
+    await waitForRoute(['Phoenix', 'Mesa']);
+    await message('user', "mid-month but flexible uh i might need a storage stop in gilbert first but i'm not sure yet", 'natural-intake-timing');
+    await message('persona', 'Should I note a storage stop in Gilbert as a possible additional stop for now?', 'natural-intake-possible');
+    await message('user', 'Yeah.', 'natural-intake-yes');
+    await message('user', 'please, as possible.', 'natural-intake-still-possible');
+    await waitForRoute(['Phoenix', 'Mesa']);
+    await planner.getByTestId('evan-possible-stops').waitFor();
+    assert.match(await planner.getByTestId('evan-possible-stops').innerText(), /Gilbert/);
+    await message('user', "I'll handle packing.", 'natural-intake-self-packing');
+    await page.getByRole('button', { name: 'Move brief', exact: true }).click();
+    await planner.getByRole('heading', { name: 'Working move brief' }).waitFor();
+    assert.match(await planner.innerText(), /One bedroom/i);
+    assert.match(await planner.innerText(), /mid-month.*flexible/i);
+    assert.match(await planner.innerText(), /Packing yourself/i);
+    await capture('evan-natural-intake-brief');
+    await page.getByRole('button', { name: 'Move list', exact: true }).click();
+    await planner.getByTestId('evan-packing-plan').waitFor();
+    assert.match(await planner.getByTestId('evan-packing-plan').innerText(), /Packing yourself/);
+    await capture('evan-natural-intake-services');
+    await page.getByRole('button', { name: 'Route', exact: true }).click();
+    await waitForRoute(['Phoenix', 'Mesa']);
+    await capture('evan-natural-intake-route');
+    pass('The recorded clarification, flexible timing, possible storage, and self-packing remain accurate across all planner views');
+
+    await ready('evan');
     await message('persona', 'Hi, I am Evan. How can I help with your move today?', 'fallback-greeting');
     await message('user', 'I am moving from Gilbert', 'unsolicited-route', false);
     // Cross the pending transcript refresh to prove incomplete answers do not
@@ -620,7 +656,7 @@ try {
     assert.equal(await map.count(), 0);
     pass('Actual shared AnamPlayer keeps natural-question and visitor-route auto-open isolated from Amy');
 
-    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 14);
+    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 15);
     assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode', '/api/anam/evan/access'].includes(request.path)));
     assert.deepEqual(report.blockedRequests, []);
     assert.deepEqual(report.consoleErrors, []);

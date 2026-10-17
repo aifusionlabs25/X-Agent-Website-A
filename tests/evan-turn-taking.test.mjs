@@ -11,7 +11,7 @@ test('a completed contact answer requires a response even when its callback phra
     assert.match(prompt, /A completed answer, confirmation, correction, contact detail, communication preference, or callback window requires a brief relevant response/i);
     assert.match(prompt, /even if it begins with "sure," "yeah," or "okay," or its final words are unclear/i);
     assert.match(prompt, /Do not skip an entire turn because one detail needs clarification/i);
-    assert.match(prompt, /Never silently guess or change a person's name, phone number, email address, street address, date, time/i);
+    assert.match(prompt, /Never silently guess or change a person's name, phone number, email address, city, street address, date, time/i);
     assert.match(prompt, /never repeat a spoken email address/i);
 });
 

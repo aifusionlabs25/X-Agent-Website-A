@@ -29,8 +29,10 @@ export type MovePlanCoordinates = {
 export interface EvanMovePlanModel {
     status: 'listening' | 'building';
     stops: MovePlanStop[];
+    possibleStops: MovePlanStop[];
     timing: string;
     propertyScope: string;
+    packingPlan: string;
     services: string[];
     specialtyItems: string[];
     accessFactors: string[];
@@ -109,11 +111,13 @@ const compact = (value: string, length = 150) => {
 
 const unique = (values: string[], limit = 8) => [...new Set(values.filter(Boolean))].slice(0, limit);
 
-const sentences = (text: string) => text.split(/(?<=[.!?;])\s+|\s+(?:but|however)\s+/i).filter(Boolean);
+const sentences = (text: string) => text.split(/(?<=[.!?;])\s+|\s+(?:but|however)\s+|(?:,\s*|\s+and\s+)(?=(?:(?:we|i)\s+)?(?:maybe|possibly|perhaps|might|may)\b)|(?<=\bflexible)\s+(?=(?:(?:uh|um)\s+)?(?:i|we|there)\s+(?:might|may|could)\b)/i).filter(Boolean);
 const isUncommittedQuestion = (text: string) => /^(?:what if|suppose|hypothetically|do you|does mullins|can (?:you|we)|could (?:you|we)|would (?:you|we)|is there|are there|what about)\b/i.test(text.trim())
     && !/\b(?:add|remove|delete|replace|change|update|correct|reorder|put|make|switch|skip|move .+ (?:before|after))\b/i.test(text);
 const isHypothetical = (text: string) => /^(?:what if|suppose|hypothetically)\b/i.test(text.trim()) || isUncommittedQuestion(text)
     || /\b(?:might|maybe|possibly|considering)\b/i.test(text)
+    || /\bmay\s+(?:be|need|want|have|include|require)\b/i.test(text)
+    || /\b(?:possible|potential|tentative|unconfirmed)\s+(?:(?:extra|additional|storage|donation)\s+)*(?:stop|pickup|drop[- ]?off)\b/i.test(text)
     || /\b(?:we|i) (?:may|could|would) (?:move|relocate|need|want)\b/i.test(text);
 
 // Only a local, explicit negative cue changes a captured fact. A negative cue
@@ -353,17 +357,123 @@ export function applyEvanRouteTurn(stops: MovePlanStop[], userTurn: string, prev
     return next.length === stops.length && next.every((stop, index) => stop === stops[index]) ? stops : next;
 }
 
-function routeStops(turns: EvanMovePlannerTurn[]): MovePlanStop[] {
+function isExplicitRouteConfirmation(text: string): boolean {
+    return /^(?:yes[,\s]+)?(?:that(?:'s| is)\s+(?:right|correct)|correct|you(?:'ve| have) got (?:it|that) right)[.!\s]*$/i.test(text.trim().replace(/’/g, "'"));
+}
+
+function confirmedCityReadback(stops: MovePlanStop[], lastUser: string, agent: string, user: string, grounded: Set<string>): MovePlanStop[] {
+    if (!isExplicitRouteConfirmation(user) || !/\bto\b/i.test(lastUser) || isHypothetical(lastUser)) return stops;
+    const userMentions = cityMentions(lastUser);
+    if (userMentions.length !== 1) return stops;
+    const userAnchor = userMentions[0];
+    const userPrefix = lastUser.slice(0, userAnchor.index).trim().replace(/’/g, "'");
+    const userSuffix = lastUser.slice(userAnchor.end).trim();
+    const knownOriginAttempt = /^(?:(?:right|yes|yeah|correct|actually|sorry|no)[,.—-]?\s*)*(?:(?:i(?:'m| am)|we(?:'re| are))\s+moving\s+|moving\s+)?(?:from\s*)?$/i.test(userPrefix)
+        && /^(?:,\s*(?:Arizona|AZ)\s*)?\s*[Tt]o\s+[A-Z][A-Za-z-]*(?:\s+[A-Z][A-Za-z-]*){0,2}[.!]?$/.test(userSuffix);
+    if (!knownOriginAttempt) return stops;
+    const normalizedAgent = agent.replace(/’/g, "'");
+    const readback = cityMentions(normalizedAgent);
+    if (readback.length !== 2 || !readback.every(({ city }) => grounded.has(city))) return stops;
+    const before = normalizedAgent.slice(0, readback[0].index).trim();
+    const between = normalizedAgent.slice(readback[0].end, readback[1].index).trim();
+    const after = normalizedAgent.slice(readback[1].end).trim().replace(/^,\s*(?:Arizona|AZ)\b[,\s]*/i, '');
+    if (!/^(?:(?:so|okay|ok|got it|just to confirm|to confirm|let me confirm|i have|i've got|you(?:'re| are) moving|the route is|your move is|moving)[,:.—-]?\s*)*(?:from\s*)?$/i.test(before)
+        || !/^(?:,\s*(?:Arizona|AZ)\s+)?(?:to|->|\u2192)$/i.test(between)
+        || !/^[,.;—-]?\s*(?:(?:is that|does that sound)\s+(?:right|correct)|right|correct)\s*\?$/i.test(after)) return stops;
+    const origin = stops.find(stop => stop.kind === 'Origin');
+    const destination = stops.find(stop => stop.kind === 'Destination');
+    // Only fill the unresolved side of the visitor's immediately preceding
+    // route attempt, retaining the known anchor. No fuzzy city normalization.
+    if (!destination && (!origin || sameCity(origin.city, userAnchor.city)) && sameCity(userAnchor.city, readback[0].city)) {
+        return applyEvanRouteTurn(stops, `From ${readback[0].city} to ${readback[1].city}.`);
+    }
+    return stops;
+}
+
+function possibleStopStatement(text: string): boolean {
+    if (/^(?:what if|suppose|hypothetically|do you|does mullins|would you|is there|are there)\b/i.test(text.trim())) return false;
+    if (/\?\s*$/.test(text) && !/^(?:can|could) you (?:please )?(?:note|list|keep|mark)\b/i.test(text.trim())) return false;
+    return /\b(?:might|may|maybe|possibly|possible|possibility|potential|tentative|unconfirmed|considering|not confirmed)\b/i.test(text)
+        && /\b(?:stop|storage|pickup|drop[- ]?off|donation)\b/i.test(text);
+}
+
+function routeStops(turns: EvanMovePlannerTurn[]): { stops: MovePlanStop[]; possibleStops: MovePlanStop[] } {
     let stops: MovePlanStop[] = [];
+    let possibleStops: MovePlanStop[] = [];
     let previousAgentTurn = '';
+    let previousUserTurn = '';
+    const groundedCities = new Set<string>();
     for (const turn of turns) {
         if (turn.role === 'agent') previousAgentTurn = turn.content;
         else {
-            stops = applyEvanRouteTurn(stops, compact(turn.content, 1_000), previousAgentTurn);
+            const content = compact(turn.content, 1_000);
+            stops = confirmedCityReadback(stops, previousUserTurn, previousAgentTurn, content, groundedCities);
+            for (const sentence of sentences(content)) {
+                const mentions = cityMentions(sentence);
+                if (/\b(?:clear|reset|start over)\b.*\b(?:route|map|all (?:stops|locations))\b/i.test(sentence)) possibleStops = [];
+                const cancellation = /\b(?:remove|delete|skip|cancel|drop|no longer need|don't need|do not need)\b/i.test(sentence)
+                    || /^\s*no\b.+\bstop\b/i.test(sentence);
+                if (cancellation) {
+                    if (mentions.length) possibleStops = possibleStops.filter(stop => !mentions.some(mention => sameCity(stop.city, mention.city)));
+                    else {
+                        const purpose = stopPurpose(sentence);
+                        const matching = possibleStops.filter(stop => purpose && stop.label?.toLowerCase() === purpose.toLowerCase());
+                        if (/\b(?:all|any)\b.*\bstops?\b/i.test(sentence)) possibleStops = purpose ? possibleStops.filter(stop => !matching.includes(stop)) : [];
+                        else if (matching.length === 1) possibleStops = possibleStops.filter(stop => stop !== matching[0]);
+                        else if (/\b(?:that|the)\b.*\b(?:stops?|storage)\b/i.test(sentence) && possibleStops.length === 1) possibleStops = [];
+                    }
+                }
+                const between = mentions.length === 2 ? sentence.slice(mentions[0].end, mentions[1].index) : '';
+                const backwardReplacement = mentions.length === 2 && /\b(?:instead of|rather than|not)\s*$/i.test(between);
+                const replacement = mentions.length === 2 && (backwardReplacement
+                    || /\b(?:change|replace|switch|swap)\b/i.test(sentence) && /\b(?:with|to|for)\b/i.test(between));
+                let replacedPossible = false;
+                if (replacement) {
+                    const old = possibleStops.find(stop => sameCity(stop.city, mentions[backwardReplacement ? 1 : 0].city));
+                    const newCity = mentions[backwardReplacement ? 0 : 1].city;
+                    if (old) {
+                        possibleStops = possibleStops.filter(stop => stop === old || !sameCity(stop.city, newCity))
+                            .map(stop => stop === old ? { ...stop, city: newCity } : stop);
+                        replacedPossible = true;
+                    }
+                }
+                const tentative = possibleStopStatement(sentence) && mentions.length <= 1;
+                if (tentative && !cancellation && mentions.length <= 1) {
+                    for (const mention of mentions) {
+                        if (isNegativeMention(sentence, mention.index, mention.end - mention.index)) continue;
+                        if (!possibleStops.some(stop => sameCity(stop.city, mention.city))) {
+                            possibleStops.push({ city: mention.city, kind: 'Additional stop', confirmed: false,
+                                ...(stopPurpose(sentence) ? { label: stopPurpose(sentence) } : {}) });
+                        }
+                    }
+                }
+                const definiteStop = !tentative && !isHypothetical(sentence) && !cancellation
+                    && /\b(?:add|include|confirm|definitely|go ahead|will need|do need)\b/i.test(sentence)
+                    && /\b(?:stop|storage|pickup|drop[- ]?off|donation)\b/i.test(sentence);
+                if (definiteStop) {
+                    const selected = mentions.length
+                        ? possibleStops.filter(stop => mentions.some(mention => sameCity(stop.city, mention.city)))
+                        : possibleStops.length === 1 && /\b(?:that|the)\b/i.test(sentence) ? possibleStops : [];
+                    for (const stop of selected) stops = applyEvanRouteTurn(stops, `Add an additional stop in ${stop.city}.`);
+                    possibleStops = possibleStops.filter(stop => !selected.includes(stop));
+                }
+                // A possible-location correction stays possible. It must not
+                // leak into live pins or directions via the ordinary parser.
+                if (!tentative && !replacedPossible) {
+                    stops = applyEvanRouteTurn(stops, sentence, previousAgentTurn);
+                }
+                if (!isUncommittedQuestion(sentence) && !/^\s*(?:what if|suppose|hypothetically)\b/i.test(sentence)
+                    && (/\b(?:mov(?:e|ing)|from|to|origin|destination|bedrooms?|house|home|apartment|storage|stop)\b/i.test(sentence)
+                        || mentions.length === 1 && locationQuestionRole(previousAgentTurn))) {
+                    for (const mention of mentions) if (!isNegativeMention(sentence, mention.index, mention.end - mention.index)) groundedCities.add(mention.city);
+                }
+            }
+            possibleStops = possibleStops.filter(stop => !stops.some(actual => actual.kind === 'Additional stop' && sameCity(actual.city, stop.city)));
+            previousUserTurn = content;
             previousAgentTurn = '';
         }
     }
-    return stops.map(({ city, kind }) => ({ city, kind }));
+    return { stops: stops.map(({ city, kind }) => ({ city, kind })), possibleStops: possibleStops.slice(0, 8) };
 }
 
 const LABEL_RULES: Array<[RegExp, string]> = [
@@ -416,6 +526,34 @@ const CARE_RULES: Array<[RegExp, string]> = [
     [/\bmultiple destinations?\b|\bseveral stops?\b/i, 'Multi-stop coordination'],
 ];
 
+function isVisitorPacking(text: string): boolean {
+    return /\b(?:i|we)(?:'ll|'m|'re|\s+will|\s+can|\s+am|\s+are|\s+plan\s+to|\s+intend\s+to)?\s+(?:handle|handling|do|doing|manage|managing|tak(?:e|ing)\s+care\s+of)\s+(?:(?:all|most|some|the|our|my|of)\s+)*packing\b/i.test(text)
+        || /\b(?:i|we)(?:'ll|'m|'re|\s+will|\s+can|\s+am|\s+are)\s+(?:pack|packing)\b/i.test(text)
+        || /\b(?:packing|pack)\b.{0,45}\b(?:myself|ourselves|on\s+(?:my|our)\s+own)\b/i.test(text);
+}
+
+function rejectsVisitorPacking(text: string): boolean {
+    return /\b(?:i|we)(?:'m|'re|\s+am|\s+are|\s+will)?\s+(?:cannot|can't|won't|don't|do not|will not|no longer)\b.{0,30}\bpack(?:ing)?\b/i.test(text);
+}
+
+function packingPlanFrom(userTurns: string[], services: string[]): string {
+    let selfPacking = false;
+    for (const turn of userTurns) {
+        for (const sentence of sentences(turn)) {
+            if (isHypothetical(sentence)) continue;
+            for (const clause of sentence.split(/\s+and\s+/i)) {
+                if (/\?\s*$/.test(clause) || /\b(?:i|we)\s+(?:may|could)\s+(?:do|handle|manage|pack)/i.test(clause)) continue;
+                if (rejectsVisitorPacking(clause)) selfPacking = false;
+                else if (isVisitorPacking(clause) && !/\b(?:not|don't|do not|can't|cannot)\b/i.test(clause)) selfPacking = true;
+                else if (/\b(?:need|want|request|add|include)\b.*\bfull(?:[- ]service)? packing\b/i.test(clause)) selfPacking = false;
+            }
+        }
+    }
+    const assistance = services.includes('Full packing') || services.includes('Packing support');
+    return selfPacking ? assistance ? 'Packing some items yourself; assistance requested' : 'Packing yourself'
+        : assistance ? 'Packing assistance requested' : '';
+}
+
 function labelsFrom(userTurns: string[], rules: Array<[RegExp, string]>, limit = 8) {
     const active = new Set<string>();
     for (const turn of userTurns) {
@@ -425,7 +563,12 @@ function labelsFrom(userTurns: string[], rules: Array<[RegExp, string]>, limit =
                 .map((match) => ({ label, value: match[0], index: match.index ?? 0 })))
                 .sort((left, right) => left.index - right.index);
             for (const match of matches) {
-                if (isNegativeMention(sentence, match.index, match.value.length)) {
+                const localStart = sentence.slice(0, match.index).toLowerCase().lastIndexOf(' and ') + 5;
+                const localClause = sentence.slice(localStart > 4 ? localStart : 0).split(/\s+and\s+/i)[0];
+                const visitorPacking = (match.label === 'Packing support' || match.label === 'Full packing') && isVisitorPacking(localClause);
+                const packingLabel = match.label === 'Packing support' || match.label === 'Full packing';
+                if (packingLabel && (/\?\s*$/.test(localClause) && visitorPacking || /\b(?:i|we)\s+(?:may|could)\s+(?:do|handle|manage|pack)/i.test(localClause))) continue;
+                if (isNegativeMention(sentence, match.index, match.value.length) || visitorPacking || packingLabel && rejectsVisitorPacking(localClause)) {
                     active.delete(match.label);
                     if (match.label === 'Packing support') active.delete('Full packing');
                 } else {
@@ -451,18 +594,20 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[], confirmedStops: 
         .filter((turn) => turn.role === 'user')
         .map((turn) => compact(turn.content, 1_000))
         .filter(Boolean);
-    const transcriptStops = routeStops(turns);
-    const stops = confirmedStops !== null ? confirmedStops.slice(0, 8) : transcriptStops;
+    const transcriptRoute = routeStops(turns);
+    const stops = confirmedStops !== null ? confirmedStops.slice(0, 8) : transcriptRoute.stops;
+    const possibleStops = transcriptRoute.possibleStops.filter(stop => !stops.some(actual => actual.kind === 'Additional stop' && sameCity(actual.city, stop.city)));
     const services = labelsFrom(userTurns, LABEL_RULES);
     if (services.includes('Full packing')) {
         const genericPacking = services.indexOf('Packing support');
         if (genericPacking >= 0) services.splice(genericPacking, 1);
     }
+    const packingPlan = packingPlanFrom(userTurns, services);
     const specialtyItems = labelsFrom(userTurns, SPECIALTY_RULES);
     const accessFactors = labelsFrom(userTurns, ACCESS_RULES);
     const carePriorities = labelsFrom(userTurns, CARE_RULES);
     const uncertainties = uncertaintySignals(userTurns);
-    const timing = latestMatch(userTurns, [
+    const baseTiming = latestMatch(userTurns, [
         /\bless than \d+ days?\b/i,
         /\bwithin (?:the next )?\d+ days?\b/i,
         /\b(?:target(?: date)?(?: is|:)?|targeting|scheduled for|needs? to be|has to be) (?:the )?\d{1,2}(?:st|nd|rd|th)?\b/i,
@@ -470,10 +615,22 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[], confirmedStops: 
         /\bon (?:the )?\d{1,2}(?:st|nd|rd|th)?(?: of [A-Z][a-z]+)?\b/i,
         /\b(?:next|this) (?:week|month|weekend)\b/i,
         /\b(?:one|two|three|four|five|six|seven|eight|nine|ten) weeks?\b/i,
-        /\bflexible[^.!?]{0,40}\b(?:week|month|date|timing)\b/i,
+        /\bmid[- ]month\b/i,
+        /\b(?:the\s+)?middle\s+of\s+(?:(?:this|next|the)\s+)?month\b/i,
     ], 'timing');
+    let flexibleDate = false;
+    for (const turn of userTurns) {
+        for (const sentence of sentences(turn)) {
+            if (/\b(?:call|callback|email|phone)\b/i.test(sentence) || isHypothetical(sentence)) continue;
+            if (/\b(?:date|dates|timing|move|schedule|day|days)\b[^.!?]{0,45}\bflexible\b|\bflexible\b[^.!?]{0,45}\b(?:week|month|date|dates|timing|day|days)\b|^(?:(?:i'm|i am|we're|we are|pretty|quite|still|very)\s+)*flexible[.!\s]*$/i.test(sentence.trim())) {
+                flexibleDate = !/\b(?:not|isn't|aren't|no longer)\b/i.test(sentence);
+            }
+        }
+    }
+    const timing = flexibleDate ? baseTiming ? `${baseTiming}; date flexible` : 'Date flexible' : baseTiming;
     const propertyScope = latestMatch(userTurns, [
-        /\b(?:studio|one|two|three|four|five|six|\d+)[ -]bedroom (?:apartment|condo|home|house)?\b/i,
+        /\b(?:one|two|three|four|five|six|\d+)[ -]bedrooms?(?:\s+(?:apartment|condo|home|house))?\b/i,
+        /\bstudio(?:\s+apartment)?\b/i,
         /\b(?:apartment|condo|townhome|single[- ]family home|house|office|commercial space)\b/i,
     ], 'property');
 
@@ -481,6 +638,7 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[], confirmedStops: 
         stops.length ? { label: 'Route', value: stops.map((stop) => stop.city).join(' \u2192 ') } : null,
         timing ? { label: 'Timing', value: timing } : null,
         propertyScope ? { label: 'Property / scope', value: propertyScope } : null,
+        packingPlan ? { label: 'Packing plan', value: packingPlan } : null,
         services.length ? { label: 'Requested support', value: services.join(', ') } : null,
         specialtyItems.length ? { label: 'Special handling', value: specialtyItems.join(', ') } : null,
         accessFactors.length ? { label: 'Access', value: accessFactors.join(', ') } : null,
@@ -512,8 +670,10 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[], confirmedStops: 
     return {
         status: userTurns.length ? 'building' : 'listening',
         stops,
+        possibleStops,
         timing,
         propertyScope,
+        packingPlan,
         services,
         specialtyItems,
         accessFactors,

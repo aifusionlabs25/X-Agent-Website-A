@@ -19,7 +19,7 @@
     "speechEnhancementLevel": 0.7
   },
   "promptFile": "EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md",
-  "expectedPromptSha256": "870f9f5e43caf1cf911a67d77b5687757388978e7e4882db4ff9399e84792834",
+  "expectedPromptSha256": "ff48c0733f7959d1e8e86c8f4873af899f756032f95f8501436d24b1330ddb9c",
   "zeroDataRetention": false,
   "enableAudioPassthrough": false,
   "knowledgeToolName": "Knowledge_Evan_Mullins_Moving",

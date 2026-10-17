@@ -88,8 +88,8 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /Ask one useful moving-detail question at a time/i);
     assert.match(prompt, /complete date including month and flexibility/i);
     assert.match(prompt, /Never silently guess or change a person's name/i);
-    assert.match(prompt, /explicitly restate each key supplied fact by name/i);
-    assert.match(prompt, /Never replace named cities with vague phrases/i);
+    assert.match(prompt, /retain all of them without reciting every fact/i);
+    assert.match(prompt, /keeping named cities specific when discussing the route/i);
     assert.match(prompt, /send_mullins_follow_up_email/);
     assert.match(prompt, /three messages are scheduled/i);
     assert.match(prompt, /Email follow-up is optional/i);

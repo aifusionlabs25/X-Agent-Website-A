@@ -221,6 +221,13 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                                         <p className="mt-0.5 break-words font-serif text-[22px] leading-7 text-[#2a1050]">
                                                             {model.stops.length ? model.stops.map((stop) => stop.city).join(' \u2192 ') : 'Where are you moving from and to?'}
                                                         </p>
+                                                        {model.possibleStops.length > 0 && (
+                                                            <p className="mt-1 text-[12px] leading-5 text-[#7b5714]" data-testid="evan-possible-stops">
+                                                                <span className="font-semibold">Still considering: </span>
+                                                                {model.possibleStops.map((stop) => `${stop.label || 'Stop'} in ${stop.city}`).join('; ')}.
+                                                                {' '}Not added to your route.
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -251,7 +258,12 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                         {view === 'route' && (
                                             <section data-testid="evan-planner-route-view">
                                                 <h3 className="font-serif text-xl leading-7">Move route</h3>
-                                                <p className="mt-1 text-xs leading-4 text-[#746180]">{model.stops.length ? 'Live planning pins. City locations stay approximate until street addresses are confirmed.' : 'Tell Evan your pickup and destination. Your locations will appear here.'}</p>
+                                                {model.possibleStops.length > 0 ? (
+                                                    <p className="mt-1 text-xs leading-4 text-[#7b5714]" data-testid="evan-possible-stops">
+                                                        <span className="font-semibold">Possible, not on this route: </span>
+                                                        {model.possibleStops.map((stop) => `${stop.label || 'stop'} in ${stop.city}`).join('; ')}.
+                                                    </p>
+                                                ) : <p className="mt-1 text-xs leading-4 text-[#746180]">{model.stops.length ? 'Live planning pins. City locations stay approximate until street addresses are confirmed.' : 'Tell Evan your pickup and destination. Your locations will appear here.'}</p>}
 
                                                 <EvanRouteMap stops={model.stops} />
 
@@ -285,6 +297,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                             <section data-testid="evan-planner-inventory-view">
                                                 <h3 className="font-serif text-[24px] leading-8">Your move, at a glance</h3>
                                                 <p className="mt-0.5 text-[12px] leading-5 text-[#746180]">What you have discussed with Evan so far.</p>
+                                                {model.packingPlan && <p className="mt-2 border-l-2 border-[#f6b93b] bg-[#fffaf0] px-3 py-2 text-[12px] leading-5 text-[#43207f]" data-testid="evan-packing-plan">{model.packingPlan}</p>}
                                                 <div className="mt-3 grid items-start gap-3 sm:grid-cols-2">
                                                     {[
                                                         { title: 'Help requested', items: model.services, icon: PackageCheck },

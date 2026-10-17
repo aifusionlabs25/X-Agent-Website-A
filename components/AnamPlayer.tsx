@@ -832,7 +832,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         currentSessionUserTurns: refreshedTurns.filter((turn) => turn.role === 'user').length,
                                         streetPins,
                                         unresolvedAddresses,
-                                        visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
+                                        visibleFacts: [
+                                            ...receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
+                                            ...receiptModel.possibleStops.map((stop) => `Possible ${stop.label || 'stop'} in ${stop.city}; not on the mapped route`),
+                                        ],
                                         visibleStops: receiptModel.stops.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
                                         instruction: unresolvedAddresses
                                             ? 'The requested working Move Planner view is open, but one or more street addresses could not be verified. Say that briefly and ask the visitor to restate only the unresolved address. Do not claim the route is confirmed.'
