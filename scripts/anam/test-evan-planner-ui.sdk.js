@@ -15,6 +15,7 @@ export class AnamClient {
     ready = false;
     nextToolId = 1;
     stopCount = 0;
+    interruptCount = 0;
     addListener(event, listener) {
         if (!this.listeners.has(event)) this.listeners.set(event, new Set());
         this.listeners.get(event).add(listener);
@@ -36,7 +37,7 @@ export class AnamClient {
     async talk(text) { this.talks.push(text); }
     addContext(text) { this.contexts.push(text); }
     muteInputAudio() {}
-    interruptPersona() {}
+    interruptPersona() { this.interruptCount++; }
     message(message) { this.emit(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, message); }
     async callTool(name, args, metadata = {}) {
         const handler = this.handlers.get(name);

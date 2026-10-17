@@ -66,8 +66,9 @@ export function isEvanRouteIntakeQuestion(text: string): boolean {
 /**
  * Create only inside an Evan session. observeMessage is the SDK-facing entry point;
  * it acts only on a complete, uninterrupted persona message. A second entry point
- * accepts the planner's captured route after a completed user turn, so visitors
- * who volunteer both endpoints do not depend on Evan asking a particular question.
+ * accepts the planner's user-grounded locations after a completed user turn, so
+ * visitors do not need to finish both endpoints or hear a particular question.
+ * Possible stops can open the view, but are never promoted into its mapped route.
  * Manual/tool opening or dismissal consumes this one-time automatic display opportunity.
  * Existing explicit controls stay independent and can still reopen the planner afterward.
  */
@@ -102,14 +103,29 @@ export function createEvanPlannerAutoOpen(input: { onOpenRoute: () => void }) {
         activeMessage = null;
         completedIds.clear();
     };
+    const hasUsefulLocation = (stops: ReadonlyArray<{ kind: string; city: string }>) => stops.some(stop =>
+        ['Origin', 'Destination', 'Additional stop'].includes(stop.kind)
+        && stop.city.trim().length > 0);
     return {
         /** For an already-completed agent turn, or focused classifier tests. */
         observeAgentText,
-        /** Display only: uses the existing user-grounded plan, never geocodes or confirms addresses. */
+        /**
+         * Presentation only. Pass the existing user-grounded plan, not locations
+         * extracted from an agent's readback or tool arguments. A useful location
+         * is enough to show the planning view; an origin/destination pair is not
+         * required. Merely opening the view changes no facts, pins, or certainty.
+         */
+        observePlanningDetails: (plan: {
+            stops: ReadonlyArray<{ kind: string; city: string }>;
+            possibleStops?: ReadonlyArray<{ kind: string; city: string }>;
+        }): boolean => {
+            if (disposed || consumed) return false;
+            return hasUsefulLocation(plan.stops) || hasUsefulLocation(plan.possibleStops ?? []) ? openRoute() : false;
+        },
+        /** Compatibility entry point for a user-grounded mapped location, not necessarily a complete route. */
         observeRouteStops: (stops: ReadonlyArray<{ kind: string; city: string }>): boolean => {
             if (disposed || consumed) return false;
-            const hasEndpoint = (kind: string) => stops.some(stop => stop.kind === kind && stop.city.trim().length > 0);
-            return hasEndpoint('Origin') && hasEndpoint('Destination') ? openRoute() : false;
+            return hasUsefulLocation(stops) ? openRoute() : false;
         },
         observeMessage: (message: {
             id: string;

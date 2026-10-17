@@ -538,11 +538,13 @@ function rejectsVisitorPacking(text: string): boolean {
 
 function packingPlanFrom(userTurns: string[], services: string[]): string {
     let selfPacking = false;
+    let declinedPacking = false;
     for (const turn of userTurns) {
         for (const sentence of sentences(turn)) {
             if (isHypothetical(sentence)) continue;
             for (const clause of sentence.split(/\s+and\s+/i)) {
                 if (/\?\s*$/.test(clause) || /\b(?:i|we)\s+(?:may|could)\s+(?:do|handle|manage|pack)/i.test(clause)) continue;
+                if (/\b(?:no|without|skip|cancel|remove|(?:do not|don't) (?:need|want)|no longer need)\s+(?:any\s+|the\s+)?packing(?:\s+(?:help|support|assistance|services?))?\b|\bpacking(?:\s+(?:help|support|assistance|services?))?\s+(?:is\s+)?(?:not needed|no longer needed)\b/i.test(clause)) declinedPacking = true;
                 if (rejectsVisitorPacking(clause)) selfPacking = false;
                 else if (isVisitorPacking(clause) && !/\b(?:not|don't|do not|can't|cannot)\b/i.test(clause)) selfPacking = true;
                 else if (/\b(?:need|want|request|add|include)\b.*\bfull(?:[- ]service)? packing\b/i.test(clause)) selfPacking = false;
@@ -551,7 +553,7 @@ function packingPlanFrom(userTurns: string[], services: string[]): string {
     }
     const assistance = services.includes('Full packing') || services.includes('Packing support');
     return selfPacking ? assistance ? 'Packing some items yourself; assistance requested' : 'Packing yourself'
-        : assistance ? 'Packing assistance requested' : '';
+        : assistance ? 'Packing assistance requested' : declinedPacking ? 'No packing help requested' : '';
 }
 
 function labelsFrom(userTurns: string[], rules: Array<[RegExp, string]>, limit = 8) {
@@ -565,10 +567,18 @@ function labelsFrom(userTurns: string[], rules: Array<[RegExp, string]>, limit =
             for (const match of matches) {
                 const localStart = sentence.slice(0, match.index).toLowerCase().lastIndexOf(' and ') + 5;
                 const localClause = sentence.slice(localStart > 4 ? localStart : 0).split(/\s+and\s+/i)[0];
+                if (['Storage stop', 'Donation items'].includes(match.label)
+                    && /\b(?:if needed|if necessary|if required|only if)\b/i.test(localClause)) {
+                    // "Storage first, if needed" is a possible stop, not a
+                    // request for storage service. Other access facts still apply.
+                    active.delete(match.label);
+                    continue;
+                }
                 const visitorPacking = (match.label === 'Packing support' || match.label === 'Full packing') && isVisitorPacking(localClause);
                 const packingLabel = match.label === 'Packing support' || match.label === 'Full packing';
+                const declinedPackingHelp = packingLabel && /^\s+(?:help|support|assistance|services?)\s+(?:(?:is|are)\s+)?(?:not needed|no longer needed)\b/i.test(sentence.slice(match.index + match.value.length));
                 if (packingLabel && (/\?\s*$/.test(localClause) && visitorPacking || /\b(?:i|we)\s+(?:may|could)\s+(?:do|handle|manage|pack)/i.test(localClause))) continue;
-                if (isNegativeMention(sentence, match.index, match.value.length) || visitorPacking || packingLabel && rejectsVisitorPacking(localClause)) {
+                if (isNegativeMention(sentence, match.index, match.value.length) || visitorPacking || declinedPackingHelp || packingLabel && rejectsVisitorPacking(localClause)) {
                     active.delete(match.label);
                     if (match.label === 'Packing support') active.delete('Full packing');
                 } else {
@@ -662,7 +672,7 @@ export function buildEvanMovePlan(turns: EvanMovePlannerTurn[], confirmedStops: 
         !hasDestination ? 'Your final destination, when you know it.' : '',
         !timing ? 'Your preferred move date or date range.' : '',
         !propertyScope ? 'Approximate home size or number of rooms.' : '',
-        !services.length ? 'Any packing, unpacking, or loading help you would like.' : '',
+        !services.length && !packingPlan ? 'Any packing, unpacking, or loading help you would like.' : '',
         !accessFactors.length ? 'Stairs, elevators, parking, and loading arrangements.' : '',
         specialtyItems.length ? 'Ask Mullins to review handling needs for your special items.' : '',
     ], 6);

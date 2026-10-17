@@ -80,3 +80,16 @@ test('turn-boundary hardening preserves contact privacy, address confirmation, a
     assert.match(closing, /`farewell_required`[^\n]+Thank you for speaking with Mullins Moving\. Take care\./);
     assert.match(closing, /Never ask permission to end/);
 });
+
+test('a rejected premature close is not treated as a failed tool or a reason to repeat a phone question', () => {
+    const closing = section('Non-negotiable call-ending protocol');
+    assert.match(closing, /`continue_conversation` is a deliberate refusal, not a tool failure/);
+    assert.match(closing, /do not say goodbye, retry the tool, restart a readback, or repeat a question/);
+    assert.match(closing, /Only wait silently if you have already asked a NEW question after the caller's latest completed answer/);
+    assert.match(closing, /Only `farewell_required` authorizes/);
+    assert.doesNotMatch(closing, /If the tool is unavailable or fails, say the same brief farewell/);
+    const accuracy = section('Accuracy and speech-recognition safety');
+    assert.match(accuracy, /Stop immediately after that question/);
+    assert.match(accuracy, /do not read the number a second time in another format/);
+    assert.match(accuracy, /or call any tool while awaiting their answer/);
+});

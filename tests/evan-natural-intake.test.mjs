@@ -7,6 +7,46 @@ const agent = content => ({ role: 'agent', content });
 const route = user('We are moving from Phoenix to Mesa.');
 const possible = user('We might need a storage stop in Gilbert.');
 
+test('latest tentative intake retains useful details without inventing an endpoint or requested service', () => {
+    const turns = [
+        user("Hi Evan, I'm just starting to look. One bedroom, probably Mesa. I'm still figuring it out."),
+        user('mm-hmm'),
+        user('mid-month but flexible.'),
+        user('Actually, I might need storage in Gilbert first.'),
+        agent('Understood. Would you like the storage pickup in Gilbert before the move, and then the one-bedroom move from Mesa later in the month?'),
+        user("Hmm, that's right. Storage first, if needed, then the Mesa apartment. There's stairs at Mesa. Okay."),
+        agent('Do you anticipate needing any packing help or labor-only assistance for the Mesa apartment?'),
+        user('No packing help, phone only please, no email. Mornings are best.'),
+    ];
+    const plan = buildEvanMovePlan(turns);
+    assert.deepEqual(plan.stops, []);
+    assert.deepEqual(plan.possibleStops.map(stop => stop.city), ['Gilbert']);
+    assert.equal(plan.possibleStops[0].confirmed, false);
+    assert.match(plan.timing, /mid-month; date flexible/i);
+    assert.match(plan.propertyScope, /one bedroom/i);
+    assert.deepEqual(plan.services, []);
+    assert.equal(plan.packingPlan, 'No packing help requested');
+    assert.ok(plan.accessFactors.includes('Stairs'));
+    assert.ok(plan.accessFactors.includes('Apartment access'));
+    assert.ok(!plan.openItems.some(item => /packing/i.test(item)), 'do not re-ask a declined packing preference');
+    assert.equal(buildGoogleMapsDirectionsUrl(plan.stops), '');
+});
+
+test('explicit packing refusal is visible without treating it as self-packing or service consent', () => {
+    for (const phrase of ['No packing help.', "I don't need any packing assistance.", 'Packing help is not needed.', 'Please skip packing.']) {
+        const plan = buildEvanMovePlan([user(phrase)]);
+        assert.equal(plan.packingPlan, 'No packing help requested', phrase);
+        assert.ok(!plan.services.includes('Packing support'), phrase);
+    }
+    const corrected = buildEvanMovePlan([user('No packing help.'), user('Actually, we need full packing.')]);
+    assert.equal(corrected.packingPlan, 'Packing assistance requested');
+    assert.ok(corrected.services.includes('Full packing'));
+    assert.equal(buildEvanMovePlan([user('What if we needed no packing help?')]).packingPlan, '');
+    const conditional = buildEvanMovePlan([user('Storage first, if needed, then the Mesa apartment. There are stairs at Mesa.')]);
+    assert.ok(!conditional.services.includes('Storage stop'));
+    assert.ok(conditional.accessFactors.includes('Stairs'));
+});
+
 test('bare bedroom counts and studio answers are captured without requiring a property suffix', () => {
     for (const phrase of ['One-bedroom.', 'Two bedroom.', 'Three bedrooms.', 'A 2-bedroom.', 'One bedroom, probably Mesa.', 'Studio.']) {
         const model = buildEvanMovePlan([user(phrase)]);

@@ -560,10 +560,72 @@ try {
     pass('A fresh guest session does not inherit previous visitor contact information');
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    await page.clock.install();
-    await ready('evan');
     const endCall = async metadata => JSON.parse(await page.evaluate(meta => window.__evanHarness.callTool('end_mullins_session', {}, meta), metadata || {}));
     const assertStillLive = async () => assert.equal(await page.evaluate(() => window.__evanHarness.ready && window.__evanHarness.stopCount === 0), true);
+    // Keep the exact visual replay on the real browser clock. The following
+    // hang-up tests deliberately fast-forward time and are not visual tests.
+    await ready('evan');
+    await message('persona', 'Tell me a little about the move you are planning.', 'latest-greeting');
+    await message('user', "Hi Evan, I'm just starting to look. One bedroom, probably Mesa. I'm still figuring it out.", 'latest-opening');
+    await message('persona', 'Do you have a target move date or window in mind?', 'latest-date-question');
+    await message('user', 'mid-month but flexible.', 'latest-date');
+    await message('user', 'Actually, I might need storage in Gilbert first.', 'latest-storage');
+    await planner.waitFor({ state: 'visible' });
+    await planner.getByTestId('evan-possible-stops').waitFor();
+    assert.match(await planner.getByTestId('evan-possible-stops').innerText(), /Gilbert/);
+    assert.equal(await map.locator('.leaflet-marker-icon').count(), 0);
+    await capture('evan-latest-call-route');
+    pass('Latest real scenario visibly opens Route at a tentative storage location without inventing endpoints or a confirmed pin');
+    await message('user', "Storage first, if needed, then the Mesa apartment. There's stairs at Mesa.", 'latest-access');
+    await message('user', 'No packing help, phone only please, no email. My number is 480-555-0198. Mornings are best.', 'latest-contact');
+    await page.getByRole('button', { name: 'Move brief', exact: true }).click();
+    await planner.getByRole('heading', { name: 'Working move brief' }).waitFor();
+    assert.match(await planner.innerText(), /mid-month.*flexible/i);
+    assert.match(await planner.innerText(), /stairs/i);
+    assert.match(await planner.getByTestId('evan-contact-phone').innerText(), /0198/);
+    assert.match(await planner.innerText(), /mornings/i);
+    await capture('evan-latest-call-replay');
+    assert.equal((await endCall()).status, 'continue_conversation');
+    await assertStillLive();
+    pass('Latest call timing, access, phone-only preference and mornings update live; contact capture cannot hang up');
+    await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'unauthorized-farewell');
+    await page.waitForFunction(() => window.__evanHarness.talks.includes('Is there anything else you would like to add about your move?'));
+    assert.equal(await page.evaluate(() => window.__evanHarness.interruptCount), 1);
+    await assertStillLive();
+    pass('A farewell after a denied close is interrupted with one bounded recovery, not a hang-up or question loop');
+
+    // Exercise missing-final and cumulative payloads using real render time.
+    await message('user', 'Actually, the pickup is in Phoenix and the destination is Mesa.', 'missing-final-route', false);
+    await message('persona', 'Got it.', 'next-agent-boundary');
+    await page.getByRole('button', { name: 'Route', exact: true }).click();
+    await waitForRoute(['Phoenix', 'Mesa']);
+    await message('user', 'Change the destination', 'cumulative-route', false);
+    await message('user', 'Change the destination to Tempe.', 'cumulative-route');
+    await waitForRoute(['Phoenix', 'Tempe']);
+    await message('user', 'Change the destination to Tempe.', 'cumulative-route');
+    await waitForRoute(['Phoenix', 'Tempe']);
+    pass('Missing user final recovers on the next message; cumulative corrections and duplicate finals do not lose or duplicate live routes');
+
+    await page.clock.install();
+    await ready('evan');
+    await message('persona', 'Did I get that right?', 'silent-confirm');
+    await message('user', 'Yes.', 'silent-yes');
+    await message('persona', 'Is there anything else you would like to add?', 'silent-existing-question');
+    assert.equal((await endCall()).status, 'continue_conversation');
+    await page.clock.fastForward(13_000);
+    assert.deepEqual(await page.evaluate(() => window.__evanHarness.talks), []);
+    await assertStillLive();
+    pass('A refused close after a new question never repeats it while the visitor is thinking');
+    await message('user', 'There are stairs at the apartment.', 'silent-new-detail');
+    assert.equal((await endCall()).status, 'continue_conversation');
+    await page.clock.fastForward(6_000);
+    assert.equal((await endCall()).status, 'continue_conversation');
+    await page.clock.fastForward(7_000);
+    assert.deepEqual(await page.evaluate(() => window.__evanHarness.talks), ['Is there anything else you would like to add about your move?']);
+    assert.equal(await page.evaluate(() => window.__evanHarness.interruptCount), 0);
+    await assertStillLive();
+    pass('A genuinely silent refused close recovers once without interrupting or extending the deadline on retry');
+    await ready('evan');
     await message('persona', 'Your callback number is confirmed. Did I get that right?', 'close-confirm');
     await message('user', 'Yes.', 'close-yes');
     assert.equal((await endCall()).status, 'continue_conversation');
@@ -634,7 +696,7 @@ try {
     assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
     pass('Exact latest goodbye closes within the brief drain even when Anam reuses its message ID; old markers and partial farewell cannot close');
 
-    for (const ending of ["No, that's enough for now. Just have someone call in the morning. Thank you.", "That's everything. We're good to end."]) {
+    for (const ending of ["No, that's enough for now. Just have someone call in the morning. Thank you.", "That's everything. We're good to end.", "Nope, we're good there.", 'Closing now.']) {
         await ready('evan');
         await message('persona', 'Is there anything else you would like to add?', 'natural-close-question');
         await message('user', ending, 'natural-close-user');
@@ -643,7 +705,26 @@ try {
         await page.clock.fastForward(1_100);
         assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
     }
-    pass('Both observed natural closing phrases authorize a single farewell and automatic close without a second goodbye');
+    pass('All observed natural closing phrases authorize one farewell and automatic close without a second goodbye');
+
+    await ready('evan');
+    await message('user', 'Goodbye.', 'stale-unfinished-goodbye', false);
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_STARTED', 'new-details'));
+    await message('user', 'Wait, I have one more detail about access.', 'new-details-user', false);
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_ENDED', 'new-details'));
+    assert.equal((await endCall({ userActionCorrelationId: 'new-details' })).status, 'continue_conversation');
+    await page.clock.fastForward(13_000);
+    await assertStillLive();
+    pass('Completing an older unfinished goodbye never restores close consent after newer visitor speech');
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_STARTED', 'missing-final-close'));
+    await message('user', 'Closing now.', 'missing-final-close-user', false);
+    assert.equal((await endCall({ userActionCorrelationId: 'missing-final-close' })).status, 'continue_conversation');
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_ENDED', 'missing-final-close'));
+    assert.equal((await endCall({ userActionCorrelationId: 'missing-final-close' })).status, 'farewell_required');
+    await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'missing-final-farewell');
+    await page.clock.fastForward(1_100);
+    assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
+    pass('A missing transcript final can close at a fresh tool boundary only after visitor speech ends');
 
     await ready('amy');
     await message('persona', 'If you’d like to discuss a new move, could you share the city you’re moving from and the city you’re moving to?', 'amy-natural-question');
@@ -656,7 +737,7 @@ try {
     assert.equal(await map.count(), 0);
     pass('Actual shared AnamPlayer keeps natural-question and visitor-route auto-open isolated from Amy');
 
-    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 15);
+    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 20);
     assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode', '/api/anam/evan/access'].includes(request.path)));
     assert.deepEqual(report.blockedRequests, []);
     assert.deepEqual(report.consoleErrors, []);

@@ -47,6 +47,8 @@ import { hasEvanCloseIntent } from '@/lib/anam/evan-close-intent';
 import { runEvanToolWithDeadline, EvanToolExecutionError } from '@/lib/anam/evan-tool-execution';
 import { createEvanResponseRecovery } from '@/lib/anam/evan-response-recovery';
 import { createEvanPlannerAutoOpen } from '@/lib/anam/evan-planner-auto-open';
+import { createEvanTranscriptAccumulator, type EvanTranscriptCompleted } from '@/lib/anam/evan-transcript-accumulator';
+import { createEvanRefusedCloseRecovery } from '@/lib/anam/evan-refused-close-recovery';
 import { finishAbandonedEvanRouteLookup, preserveUnchangedEvanRoutePins, reconcileEvanConfirmedRoute } from '@/lib/anam/evan-route-reconciliation';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 import {
@@ -187,12 +189,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let requestedCloseReason: string | null = null;
         let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
         let evanResponseRecovery: ReturnType<typeof createEvanResponseRecovery> | null = null;
+        let evanRefusedCloseRecovery: ReturnType<typeof createEvanRefusedCloseRecovery> | null = null;
+        let evanRefusedCloseContext: { turnGeneration: number; speechGeneration: number; baselineId?: string; baselineLength: number } | null = null;
         let evanUserSpeaking = false;
         let evanSpeechCorrelationId: string | undefined;
         let evanCloseCandidate: { text: string; previousAgentText: string; correlationId?: string } | null = null;
         let evanPersonaMessage: { id: string; text: string; interrupted: boolean } | null = null;
         let evanCloseBaselineMessage: { id: string; length: number } | null = null;
         const evanCompletedUserIds = new Set<string>();
+        const evanTranscript = createEvanTranscriptAccumulator();
+        let evanSpeechGeneration = 0;
+        let evanUserTurnGeneration = 0;
+        const evanUserBoundaries = new Map<string, { speechGeneration: number; turnGeneration: number; correlationId?: string }>();
         const evanSessionAbort = new AbortController();
         let evanRouteGeneration = 0;
         let evanRouteAbort: AbortController | null = null;
@@ -223,6 +231,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         const videoElement = videoRef.current;
 
         const cancelEvanPendingClose = () => {
+            evanRefusedCloseRecovery?.cancel();
+            evanRefusedCloseContext = null;
             evanCloseCandidate = null;
             if (evanCloseCoordinator?.cancelPending()) {
                 if (requestedCloseReason === 'user_requested_end') requestedCloseReason = null;
@@ -314,6 +324,31 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             },
         }) : null;
         evanPlannerAutoOpenRef.current = evanPlannerAutoOpen;
+
+        const recordEvanCompletedTurn = (turn: EvanTranscriptCompleted) => {
+            const previousAgentText = [...transcriptRef.current].reverse().find(item => item.role === 'agent')?.content ?? '';
+            recordTurn(turn.role, turn.content);
+            if (turn.role === 'user') {
+                if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
+                    evanPlannerAutoOpen?.observePlanningDetails(buildEvanMovePlan(
+                        transcriptRef.current.slice(-120) as AmyWorkbenchTurn[], evanAddressStopsRef.current,
+                    ));
+                }
+                const boundary = evanUserBoundaries.get(turn.id);
+                const fresh = boundary?.speechGeneration === evanSpeechGeneration
+                    && boundary?.turnGeneration === evanUserTurnGeneration;
+                if (fresh && !evanCompletedUserIds.has(turn.id)) {
+                    evanCloseCandidate = { text: turn.content, previousAgentText, correlationId: boundary.correlationId };
+                    evanCompletedUserIds.add(turn.id);
+                    if (evanCompletedUserIds.size > 64) evanCompletedUserIds.delete(evanCompletedUserIds.values().next().value!);
+                }
+                if (fresh) evanResponseRecovery?.userTurnCompleted(turn.content, previousAgentText, turn.id);
+                completedUserTurns = transcriptRef.current.filter(item => item.role === 'user').length;
+            }
+            if (turn.completion !== 'explicit-final') console.info('[Evan Anam] Transcript boundary recovered', {
+                role: turn.role, boundary: turn.completion, contentLogged: false,
+            });
+        };
 
         const completeOnce = (closeReason: string): Promise<void> => {
             if (!sessionSpineActive || !launchId || !providerSessionId) {
@@ -571,6 +606,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 activeClient = anamClient;
                 if (isEvan) {
+                    evanRefusedCloseRecovery = createEvanRefusedCloseRecovery({
+                        canRecover: () => isMounted && !closeHandled && !requestedCloseReason && !evanUserSpeaking
+                            && !evanSessionAbort.signal.aborted && !publicAudioBlocked
+                            && evanRefusedCloseContext?.turnGeneration === evanUserTurnGeneration
+                            && evanRefusedCloseContext?.speechGeneration === evanSpeechGeneration,
+                        onInterrupt: () => anamClient.interruptPersona(),
+                        onRecover: async speech => {
+                            console.warn('[Evan Anam] Refused-close farewell recovery', { contentLogged: false });
+                            await anamClient.talk(speech);
+                        },
+                        onError: () => console.error('[Evan Anam] Refused-close recovery was not confirmed'),
+                    });
                     evanResponseRecovery = createEvanResponseRecovery({
                         canRecover: () => isMounted && !closeHandled && !requestedCloseReason
                             && !publicAudioBlocked && document.visibilityState === 'visible',
@@ -586,6 +633,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             // speculative model tool call or cancellable farewell grace.
                             evanPlannerAutoOpen?.dispose();
                             evanResponseRecovery?.close();
+                            evanRefusedCloseRecovery?.dispose();
                             evanSessionAbort.abort();
                             return anamClient.stopStreaming();
                         },
@@ -971,20 +1019,57 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
                     if (isEvan) {
-                        if (messageEvent.role === 'user' && messageEvent.content.trim()
-                            && !evanCompletedUserIds.has(messageEvent.id)) {
+                        const update = evanTranscript.push(messageEvent);
+                        if (update.replay) return;
+                        if (messageEvent.role === 'user' && messageEvent.content.trim()) {
                             // Transcript chunks are a backup when the VAD event is late/missing.
                             cancelEvanPendingClose();
+                            if (!evanUserBoundaries.has(messageEvent.id)) {
+                                evanUserBoundaries.set(messageEvent.id, { speechGeneration: evanSpeechGeneration,
+                                    turnGeneration: ++evanUserTurnGeneration, correlationId: evanSpeechCorrelationId });
+                                if (evanUserBoundaries.size > 128) evanUserBoundaries.delete(evanUserBoundaries.keys().next().value!);
+                            }
                         } else if (messageEvent.role === 'persona') {
                             if (evanPersonaMessage?.id !== messageEvent.id) {
                                 evanPersonaMessage = { id: messageEvent.id, text: '', interrupted: false };
                             }
                             evanPersonaMessage.text = (evanPersonaMessage.text + messageEvent.content).slice(-8_000);
                             evanPersonaMessage.interrupted ||= messageEvent.interrupted === true;
+                            if (evanRefusedCloseContext) {
+                                const rejectedFarewellText = evanRefusedCloseContext.baselineId === messageEvent.id
+                                    ? evanPersonaMessage.text.slice(evanRefusedCloseContext.baselineLength)
+                                    : evanPersonaMessage.text;
+                                if (evanRefusedCloseRecovery?.observePersona(rejectedFarewellText)) {
+                                    evanPersonaMessage.interrupted = true;
+                                }
+                            }
                         }
-                    }
-                    if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
-                        evanPlannerAutoOpen?.observeMessage(messageEvent);
+                        currentMessageRef.current = update.pending?.content ?? '';
+                        currentRoleRef.current = update.pending?.role ?? '';
+                        // Process a real message boundary even when the provider omits
+                        // its final marker. Other agents keep their existing stream path.
+                        update.completed.forEach(recordEvanCompletedTurn);
+                        if (messageEvent.role === 'persona' && messageEvent.content.trim()) {
+                            evanResponseRecovery?.agentResponseStarted();
+                        }
+                        if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
+                            evanPlannerAutoOpen?.observeMessage(messageEvent);
+                        }
+                        if (messageEvent.role === 'persona' && messageEvent.endOfSpeech
+                            && evanPersonaMessage?.id === messageEvent.id) {
+                            // Only an explicit, uninterrupted audio-completion marker
+                            // can drain a farewell. Message boundaries are not audio ends.
+                            const farewellText = evanCloseBaselineMessage?.id === messageEvent.id
+                                ? evanPersonaMessage.text.slice(evanCloseBaselineMessage.length)
+                                : evanPersonaMessage.text;
+                            const wasArmed = evanCloseCoordinator?.isArmed();
+                            const farewellAccepted = evanCloseCoordinator?.completeFarewell(farewellText, evanPersonaMessage.interrupted);
+                            if (wasArmed) console.info('[Evan Anam] Farewell completion observed', {
+                                accepted: farewellAccepted === true, interrupted: evanPersonaMessage.interrupted,
+                                hasPostArmText: Boolean(farewellText.trim()), contentLogged: false,
+                            });
+                        }
+                        return;
                     }
                     const deliverAmyUnsafeOutputRecovery = (reason: AmyUnsafeSpokenOutputReason) => {
                         if (amyUnsafeOutputRecoveryTimer !== null) {
@@ -1136,23 +1221,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             const completedTurn = currentMessageRef.current.trim();
                             recordTurn(messageEvent.role, currentMessageRef.current);
                             if (transcriptRole(messageEvent.role) === 'user') {
-                                if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
-                                    // A visitor can volunteer the route before Evan asks, or answer
-                                    // before the provider's final persona marker. Reuse the current
-                                    // user-grounded plan without another tool/model request.
-                                    evanPlannerAutoOpen?.observeRouteStops(buildEvanMovePlan(
-                                        transcriptRef.current.slice(-120) as AmyWorkbenchTurn[],
-                                        evanAddressStopsRef.current,
-                                    ).stops);
-                                }
-                                const previousEvanTurn = [...transcriptRef.current].reverse().find(turn => turn.role === 'agent')?.content ?? '';
-                                if (isEvan && !evanCompletedUserIds.has(messageEvent.id)) {
-                                    evanCloseCandidate = { text: completedTurn, previousAgentText: previousEvanTurn,
-                                        correlationId: evanSpeechCorrelationId };
-                                    evanCompletedUserIds.add(messageEvent.id);
-                                    if (evanCompletedUserIds.size > 64) evanCompletedUserIds.delete(evanCompletedUserIds.values().next().value!);
-                                }
-                                evanResponseRecovery?.userTurnCompleted(completedTurn, previousEvanTurn, messageEvent.id);
                                 completedUserTurns = transcriptRef.current.filter((turn) => turn.role === 'user').length;
                                 const completedUserTurn = currentMessageRef.current.trim();
                                 if (isAmyCara4) {
@@ -1256,20 +1324,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             }
                         }
                         if (transcriptRole(messageEvent.role) === 'agent') {
-                            if (isEvan && evanPersonaMessage?.id === messageEvent.id) {
-                                // Anam can continue the same message after a tool receipt.
-                                // Only post-arm text can complete this farewell, never the
-                                // pre-tool question or a repeated old end-of-speech marker.
-                                const farewellText = evanCloseBaselineMessage?.id === messageEvent.id
-                                    ? evanPersonaMessage.text.slice(evanCloseBaselineMessage.length)
-                                    : evanPersonaMessage.text;
-                                const wasArmed = evanCloseCoordinator?.isArmed();
-                                const farewellAccepted = evanCloseCoordinator?.completeFarewell(farewellText, evanPersonaMessage.interrupted);
-                                if (wasArmed) console.info('[Evan Anam] Farewell completion observed', {
-                                    accepted: farewellAccepted === true, interrupted: evanPersonaMessage.interrupted,
-                                    hasPostArmText: Boolean(farewellText.trim()), contentLogged: false,
-                                });
-                            }
                             daniCloseCoordinator?.completeFarewell();
                             if (!amyFarewellRecovery) amyCloseCoordinator?.completeFarewell();
                         }
@@ -1288,6 +1342,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     evanPlannerAutoOpen?.dispose();
                     evanSessionAbort.abort();
                     evanResponseRecovery?.dispose();
+                    evanRefusedCloseRecovery?.dispose();
                     amyArtifactOperation.cancel();
                     evanCloseCoordinator?.dispose();
                     daniCloseCoordinator?.dispose();
@@ -1644,18 +1699,44 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     return JSON.stringify({ status: 'session_closed', instruction: 'The session is already closed. Do not speak or retry.' });
                                 }
                                 const toolCorrelation = payload.userActionCorrelationId;
+                                if (!evanUserSpeaking && (!evanSpeechCorrelationId || !toolCorrelation
+                                    || toolCorrelation === 'unknown' || toolCorrelation === evanSpeechCorrelationId)) {
+                                    const pendingUser = evanTranscript.finalizeUserAtToolBoundary();
+                                    if (pendingUser) {
+                                        currentMessageRef.current = '';
+                                        currentRoleRef.current = '';
+                                        recordEvanCompletedTurn(pendingUser);
+                                    }
+                                }
                                 const staleTool = evanCloseCandidate?.correlationId && toolCorrelation && toolCorrelation !== 'unknown'
                                     && evanCloseCandidate.correlationId !== toolCorrelation;
                                 if (evanUserSpeaking || !evanCloseCandidate || staleTool
                                     || !hasEvanCloseIntent(evanCloseCandidate.text, evanCloseCandidate.previousAgentText)) {
+                                    if (!evanUserSpeaking && evanCloseCandidate && !staleTool && !requestedCloseReason) {
+                                        // Repeated refusals must not move the baseline past
+                                        // the start of a farewell that is already streaming.
+                                        evanRefusedCloseContext ??= { turnGeneration: evanUserTurnGeneration,
+                                            speechGeneration: evanSpeechGeneration, baselineId: evanPersonaMessage?.id,
+                                            baselineLength: evanPersonaMessage?.text.length ?? 0 };
+                                        const pendingReply = evanTranscript.getPending();
+                                        const alreadyResponded = transcriptRef.current.at(-1)?.role === 'agent'
+                                            || (pendingReply?.role === 'persona' && Boolean(pendingReply.content.trim()));
+                                        // An existing question may be awaiting the visitor.
+                                        // Never turn that legitimate pause into a repeated question.
+                                        evanRefusedCloseRecovery?.rejectClose({ allowSilenceRecovery: !alreadyResponded });
+                                    }
                                     console.info('[Evan Anam] Premature close request rejected', {
                                         visitorSpeaking: evanUserSpeaking, completedVisitorTurn: Boolean(evanCloseCandidate),
                                         staleTool: Boolean(staleTool), contentLogged: false,
                                     });
-                                    return JSON.stringify({ status: 'continue_conversation', retryAllowed: false,
-                                        instruction: 'The visitor has not finished the conversation. Do not say goodbye or call this tool again now. Listen to their next details and continue helping with the move. A contact confirmation, email preference, or your own anything-else question is not permission to end.' });
+                                    return JSON.stringify({ status: 'continue_conversation', accepted: false, retryAllowed: false,
+                                        instruction: evanUserSpeaking || !evanCloseCandidate || staleTool
+                                            ? 'This close request is not authorized. Do not say goodbye, retry, or speak over the visitor. Wait for the current visitor turn to finish.'
+                                            : 'This is a deliberate refusal, not a tool failure. Do not say goodbye, retry this tool, restart a readback, or repeat an answered question. The latest visitor answer is complete: acknowledge it briefly and ask one useful unanswered moving question, or ask whether they have anything else to add. Only wait silently if you have already asked a NEW question after that latest answer. A contact confirmation or callback preference is not permission to end. Do not promise that a callback has been scheduled.' });
                                 }
                                 requestedCloseReason = 'user_requested_end';
+                                evanRefusedCloseRecovery?.cancel();
+                                evanRefusedCloseContext = null;
                                 const armed = evanCloseCoordinator?.arm() === true;
                                 if (armed) {
                                     evanCloseBaselineMessage = evanPersonaMessage
@@ -1744,6 +1825,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 };
 
                 const handleEvanSpeechStarted = (correlationId: string) => {
+                    evanSpeechGeneration += 1;
                     evanUserSpeaking = true;
                     evanSpeechCorrelationId = correlationId && correlationId !== 'unknown' ? correlationId : undefined;
                     cancelEvanPendingClose();
@@ -1817,6 +1899,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             if (evanPlannerAutoOpenRef.current === evanPlannerAutoOpen) evanPlannerAutoOpenRef.current = null;
             evanSessionAbort.abort();
             evanResponseRecovery?.dispose();
+            evanRefusedCloseRecovery?.dispose();
             amyArtifactOperation.cancel();
             window.removeEventListener('pagehide', handlePageHide);
             window.removeEventListener('xagent:dani-request-end', handleDaniRequestedEnd);

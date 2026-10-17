@@ -25,11 +25,11 @@ function isAnythingElseQuestion(value: string): boolean {
     // "No" to a contact readback or email preference is not permission to end.
     if (isReportedOrHypothetical(question) || wantsToContinue(question)
         || /\b(?:e-?mail|phone|number|contact|correct|confirmation|consent|recap)\b/.test(question)) return false;
-    const directQuestion = /^(?:(?:and|so|now|great|thanks|thank you|okay|ok)[, ]+)*(?:is there|do you (?:have|need|want)|did you have|would you like)\b/.test(question);
+    const directQuestion = /^(?:(?:and|so|now|great|thanks|thank you|okay|ok)[, ]+)*(?:is there|are there|do you (?:have|need|want)|did you have|would you like|can i help (?:you )?with)\b/.test(question);
     const shortQuestion = question === 'anything else'
         || (/^anything else\b/.test(question) && /\?\s*$/.test(value));
     return (directQuestion || shortQuestion)
-        && /\b(?:anything else|any(?: more| other| further)? questions|any more help)\b/.test(question);
+        && /\b(?:anything (?:else|more)|any(?: more| other| further)? questions|any more help)\b/.test(question);
 }
 
 function isExplicitEndQuestion(value: string): boolean {
@@ -46,6 +46,17 @@ function isExplicitEndQuestion(value: string): boolean {
 export function hasEvanCloseIntent(userText: string, previousAgentText = ''): boolean {
     const text = normalizedSpeech(userText);
     if (!text || text.length > 2_000 || isReportedOrHypothetical(text) || wantsToContinue(text)) return false;
+
+    // These short, otherwise ambiguous responses close only in an actual final
+    // help-check context, never after a contact readback or service question.
+    if (/^(?:(?:no|nope|nah)[, ]+)?(?:we(?:'re| are)|i(?:'m| am)) good(?: there| for now| for today)?(?:[,;.! ]+(?:thanks|thank you|evan))*[.!]*$/.test(text)) {
+        return isAnythingElseQuestion(previousAgentText);
+    }
+    // Anam can transcribe a standalone spoken "bye" as "by". Do not introduce
+    // a general spelling alias: only an established closing exchange qualifies.
+    if (/^by(?:[, ]+evan)?[.!]*$/.test(text)) {
+        return isAnythingElseQuestion(previousAgentText) || isEvanTerminalFarewell(previousAgentText);
+    }
 
     if (/^(?:no|nope|nah)(?:[, ]+(?:thanks|thank you))?(?:[, ]+evan)?[.!]*$/.test(text)) {
         return isAnythingElseQuestion(previousAgentText);
@@ -68,6 +79,9 @@ export function hasEvanCloseIntent(userText: string, previousAgentText = ''): bo
         || /^(?:i (?:have|need) to go|i've got to go|i must go|i need to leave)(?:[, ]+(?:now|thanks|thank you))*[.!]*$/.test(request)) return true;
 
     if (text.includes('?')) return false;
+    // A complete present-tense declaration, not "closing the box" or a quoted
+    // example, explicitly ends this interaction without another confirmation.
+    if (/^(?:(?:i(?:'m| am)|we(?:'re| are)) )?closing(?: (?:the|this|our) (?:call|conversation|session|chat))? now[.!]*$/.test(request)) return true;
     const courtesy = '(?:[,;.! ]+(?:(?:thanks(?: again)?|thank you)(?: for your help)?|evan|take care))*[.!]*';
     // Keep natural wrap-ups aligned with Evan's prompt, but match the whole
     // statement so "everything about packing" or a new detail cannot close it.

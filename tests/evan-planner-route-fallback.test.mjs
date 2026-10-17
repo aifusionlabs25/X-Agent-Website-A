@@ -24,22 +24,37 @@ test('actual live-test customer answer is enough even if the question trigger is
     assert.equal(tracker.observeRouteStops(stops), true);
 });
 
-test('both endpoint roles are required; a blank endpoint or extra stops are not a route', () => {
-    let opens = 0;
-    const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
-    for (const stops of [[], endpoints.slice(0, 1), endpoints.slice(1),
+test('a first useful location opens without claiming a complete route', () => {
+    for (const stops of [endpoints.slice(0, 1), endpoints.slice(1),
+        [{ kind: 'Additional stop', city: 'Gilbert' }],
         [{ kind: 'Origin', city: 'Gilbert' }, { kind: 'Additional stop', city: 'Mesa' }],
         [{ kind: 'Origin', city: ' ' }, endpoints[1]],
+    ]) {
+        let opens = 0;
+        const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
+        const before = structuredClone(stops);
+        assert.equal(tracker.observeRouteStops(stops), true);
+        assert.equal(opens, 1);
+        assert.deepEqual(stops, before, 'display must not fill in missing endpoints');
+    }
+});
+
+test('empty and blank locations never auto-open', () => {
+    let opens = 0;
+    const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
+    for (const stops of [[], [{ kind: 'Origin', city: ' ' }], [{ kind: 'Destination', city: '' }],
     ]) assert.equal(tracker.observeRouteStops(stops), false);
     assert.equal(opens, 0);
 });
 
-test('separate user answers can complete the route, with no opening after just an origin', () => {
-    const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => {} });
+test('separate user answers open after the origin and do not reopen after the destination', () => {
+    let opens = 0;
+    const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
     const turns = [user('The pickup is in Gilbert.')];
-    assert.equal(tracker.observeRouteStops(route(turns)), false);
-    turns.push(agent('And the destination?'), user('The destination is Mesa.'));
     assert.equal(tracker.observeRouteStops(route(turns)), true);
+    turns.push(agent('And the destination?'), user('The destination is Mesa.'));
+    assert.equal(tracker.observeRouteStops(route(turns)), false);
+    assert.equal(opens, 1);
 });
 
 test('hypotheticals, unsupported locations, and agent-provided example routes do not open the fallback', () => {

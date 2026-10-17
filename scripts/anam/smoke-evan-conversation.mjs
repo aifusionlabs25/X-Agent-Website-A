@@ -15,11 +15,19 @@ import http from 'node:http';
 const EVAN_ID = '6097c73e-b6ef-48c5-94c7-9a95d4863b99';
 const MAX_SESSION_MS = 120_000;
 const args = process.argv.slice(2);
-if (args.some(arg => !['--run', '--check', '--help'].includes(arg)) || (args.includes('--run') && args.includes('--check'))) {
-    throw new Error('Use exactly --run, --check, or --help.');
+let scenario = 'intake';
+const modes = [];
+let scenarioSeen = false;
+for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--scenario' && !scenarioSeen && ['intake', 'phone-confirmation'].includes(args[index + 1])) {
+        scenario = args[++index]; scenarioSeen = true;
+    } else if (['--run', '--check', '--help'].includes(arg) && !modes.includes(arg)) modes.push(arg);
+    else throw new Error('Use --run or --check, optionally --scenario intake|phone-confirmation.');
 }
-if (!args.includes('--run') && !args.includes('--check') || args.includes('--help')) {
-    console.log('Usage: node scripts/anam/smoke-evan-conversation.mjs --check | --run');
+if (modes.includes('--run') && modes.includes('--check')) throw new Error('Choose --run or --check, not both.');
+if (!modes.includes('--run') && !modes.includes('--check') || modes.includes('--help')) {
+    console.log('Usage: node scripts/anam/smoke-evan-conversation.mjs --check | --run [--scenario intake|phone-confirmation]');
     console.log('--check: local bundle validation only; no token or session.');
     console.log('--run: one real candidate 6097 session, synthetic typed visitor, no microphone/email, 120-second limit.');
     process.exit(0);
@@ -36,6 +44,8 @@ await new Promise((resolve, reject) => {
         mode: 'development', devtool: false,
         entry: fileURLToPath(new URL('./smoke-evan-conversation.entry.mjs', import.meta.url)),
         output: { path: output, filename: 'bundle.js' },
+        resolve: { extensions: ['.ts', '.js', '.mjs'] },
+        module: { rules: [{ test: /\.ts$/, exclude: /node_modules/, use: fileURLToPath(new URL('./test-evan-planner-ui.loader.cjs', import.meta.url)) }] },
         optimization: { minimize: false }, performance: { hints: false },
     });
     compiler.run((error, stats) => compiler.close(() => {
@@ -45,17 +55,17 @@ await new Promise((resolve, reject) => {
     }));
 });
 if (args.includes('--check')) {
-    console.log('PASS: conversation smoke bundle compiled; no token or session created.');
+    console.log(`PASS: ${scenario} conversation smoke bundle compiled; no token or session created.`);
     process.exit(0);
 }
 
 const report = {
-    personaId: EVAN_ID, startedAt: new Date().toISOString(), mode: 'real-sdk-synthetic-typed-visitor',
-    limitations: ['No microphone or speech-recognition validation.', 'No website planner, email, or session-binding validation.', 'Heuristic flags require human transcript review; one passing call is not a reliability guarantee.'],
+    personaId: EVAN_ID, scenario, startedAt: new Date().toISOString(), mode: 'real-sdk-synthetic-typed-visitor',
+    limitations: ['No microphone or speech-recognition validation; video is muted, so audio pronunciation is not verified.', 'No website planner, email, session-binding, or VAD/coordinator integration validation.', 'Uses the shared close-intent guard with synthetic typed visitor turns.', 'Heuristic flags require human transcript review; one passing call is not a reliability guarantee.'],
     sentTurns: [], checkpoints: [], blockedOrigins: [], browserErrors: 0, result: 'incomplete',
 };
 const stamp = report.startedAt.replace(/[:.]/g, '-');
-const reportPath = path.join(output, `conversation-${stamp}.json`);
+const reportPath = path.join(output, `conversation-${scenario}-${stamp}.json`);
 let browser;
 let page;
 let server;
@@ -143,22 +153,42 @@ try {
             report.checkpoints.push({ name, completedMs: replies.at(-1).completedMs });
             return replies.at(-1).content;
         };
-        const send = async (text, name, farewell = false) => {
+        const send = async (text, name, observeQuiet = false) => {
             const before = await snapshot();
             const count = before.messages.filter(message => message.role === 'persona' && !message.interrupted).length;
-            report.sentTurns.push({ text, elapsedMs: before.elapsedMs });
-            await page.evaluate(({ text, farewell }) => window.__evanConversationSmoke.send(text, farewell), { text, farewell });
-            return waitForReply(count, name);
+            report.sentTurns.push({ name, text, elapsedMs: before.elapsedMs });
+            await page.evaluate(text => window.__evanConversationSmoke.send(text), text);
+            const reply = await waitForReply(count, name);
+            if (!observeQuiet) return reply;
+            // Observe a quiet window so a post-tool continuation (even under a
+            // reused message ID) is not hidden by the next synthetic answer.
+            await page.waitForFunction(() => {
+                const state = window.__evanConversationSmoke.snapshot();
+                return state.stopped || state.elapsedMs - state.lastPersonaEventMs >= 2_500
+                    && !state.partialMessages.some(turn => turn.role === 'persona');
+            }, null, { timeout: Math.min(12_000, remaining()) });
+            const observed = await snapshot();
+            if (observed.stopped) throw new Error('Session stopped before the synthetic visitor closed.');
+            report.checkpoints.push({ name: `${name}_quiet_observation`, completedMs: observed.elapsedMs });
+            return observed.messages.filter(message => message.role === 'persona' && !message.interrupted).slice(count).map(turn => turn.content).join(' ');
         };
         await waitForReply(0, 'completed_greeting');
-        const reply = await send("Hi Evan, I'm just looking. One bedroom, probably Mesa. I'm still figuring it out.", 'tentative_opening');
+        const reply = await send(scenario === 'phone-confirmation'
+            ? 'Hi Evan, I am planning a one-bedroom move from Phoenix to Mesa in the middle of next month. I am still figuring out the details.'
+            : "Hi Evan, I'm just looking. One bedroom, probably Mesa. I'm still figuring it out.", scenario === 'phone-confirmation' ? 'opening' : 'tentative_opening');
         if (/\b(?:your name|who am i (?:speaking|talking)|what (?:can|should) i call you|who (?:is|am i) speaking)\b/i.test(reply)) {
             await send('My name is Avery Example.', 'fictional_name');
         }
-        await send('I am moving from Phoenix, Arizona, to Mesa, Arizona. I do not have a moving date yet.', 'explicit_route_and_unknown_date');
-        await send('There may be a storage stop in Gilbert, but it is only a possibility.', 'tentative_stop');
-        await send('I will handle the packing myself.', 'customer_handles_packing');
-        await send("That's all for now. Goodbye.", 'farewell', true);
+        if (scenario === 'phone-confirmation') {
+            await send('No packing help, phone only please, no email. My number is 480-555-0198. Mornings are best.', 'phone_supplied', true);
+            await send("Yes, that's right. Please have someone call in the morning. Thank you.", 'phone_confirmed', true);
+            await send('Closing now.', 'farewell');
+        } else {
+            await send('I am moving from Phoenix, Arizona, to Mesa, Arizona. I do not have a moving date yet.', 'explicit_route_and_unknown_date');
+            await send('There may be a storage stop in Gilbert, but it is only a possibility.', 'tentative_stop');
+            await send('I will handle the packing myself.', 'customer_handles_packing');
+            await send("That's all for now. Goodbye.", 'farewell');
+        }
         await page.waitForFunction(() => window.__evanConversationSmoke.snapshot().stopped, null, { timeout: Math.min(14_000, remaining()) });
         report.session = await snapshot();
         report.result = 'completed';
@@ -192,6 +222,31 @@ for (const turn of personaTurns) {
         && !/\b(?:callback|call back|phone|contact|reach you)\b/.test(question))) {
         flags.push({ type: 'reasked_timing_after_explicit_unknown', messageId: turn.id });
     }
+}
+if (scenario === 'phone-confirmation') {
+    const supplied = report.sentTurns.find(turn => turn.name === 'phone_supplied');
+    const confirmed = report.sentTurns.find(turn => turn.name === 'phone_confirmed');
+    const closing = report.sentTurns.find(turn => turn.name === 'farewell');
+    const beforeClosing = closing?.elapsedMs ?? Infinity;
+    const responseTo = (start, end) => personaTurns.filter(turn => start && turn.startedMs >= start.elapsedMs && turn.startedMs < end).map(turn => turn.content).join(' ');
+    const readback = responseTo(supplied, confirmed?.elapsedMs ?? beforeClosing);
+    const confirmation = responseTo(confirmed, beforeClosing);
+    if (supplied) {
+        const questions = readback.match(/Did I get that right\s*\?/gi) || [];
+        if (questions.length !== 1) flags.push({ type: 'phone_confirmation_question_count', observed: questions.length, expected: 1 });
+        const digits = { zero: '0', oh: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9' };
+        const spokenDigits = (readback.toLowerCase().match(/\d+|\b(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)\b/g) || []).map(token => digits[token] ?? token).join('');
+        const numberCount = (spokenDigits.match(/4805550198/g) || []).length;
+        if (numberCount !== 1) flags.push({ type: 'synthetic_phone_readback_count', observed: numberCount, expected: 1 });
+        if (/just to confirm/i.test(readback) || (readback.match(/\?/g) || []).length > 1) flags.push({ type: 'possible_phone_readback_restart' });
+    }
+    if (confirmed && /did i get that right|just to confirm|(?:480[\s.-]*555[\s.-]*0198)/i.test(confirmation)) flags.push({ type: 'phone_reconfirmed_after_yes' });
+    if (confirmed && /\b(?:someone|the team|mullins(?: moving)?(?: team)?)\s+(?:will|is going to)\s+(?:call|contact|reach)|\bi(?:'ll| will)\s+(?:have|ask)\s+(?:someone|the team)\s+(?:to\s+)?call/i.test(confirmation)) flags.push({ type: 'possible_unsupported_callback_promise' });
+    const closeReceipts = (report.session?.receipts || []).filter(receipt => receipt.name === 'end_mullins_session');
+    if (closeReceipts.some(receipt => receipt.elapsedMs < beforeClosing)) flags.push({ type: 'premature_close_tool_attempt' });
+    if (personaTurns.some(turn => turn.startedMs < beforeClosing && /Thank you for speaking with Mullins Moving\. Take care\./i.test(turn.content))) flags.push({ type: 'premature_farewell' });
+    if (closing && closeReceipts.filter(receipt => receipt.status === 'farewell_required' && receipt.elapsedMs >= closing.elapsedMs).length !== 1) flags.push({ type: 'accepted_close_receipt_count' });
+    if (closing && report.session?.stopReason !== 'farewell_complete') flags.push({ type: 'farewell_close_not_confirmed' });
 }
 report.heuristicFlags = flags;
 report.reviewStatus = report.result === 'completed' && !flags.length ? 'No targeted heuristic flags; manual review still required.' : 'Review required; not a passing live-behavior claim.';

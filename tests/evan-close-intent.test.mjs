@@ -90,6 +90,52 @@ test('callback handoffs and final clauses retain all continuation and scope boun
     ]) assert.equal(hasEvanCloseIntent(phrase, 'Is there anything else?'), false, phrase);
 });
 
+test('observed good-there wrap-up requires a final help-check question', () => {
+    for (const phrase of ["Nope, we're good there.", 'No, we are good there.', "We're good there, thank you.", "I'm good for now."]) {
+        for (const prior of [
+            'Glad to hear it was clear. Is there anything else you would like to discuss about the move?',
+            'Do you need anything more?', 'Are there any further questions?',
+            'Can I help you with anything else?',
+        ]) assert.equal(hasEvanCloseIntent(phrase, prior), true, `${phrase} / ${prior}`);
+        for (const prior of ['', 'Got.', 'Did I get that right?', 'Is that your phone number?',
+            'Would you like an email recap?', 'Do you need packing assistance?',
+            'Is there anything else about your email that needs correcting?',
+            'Can I help with anything else about your phone number?',
+        ]) assert.equal(hasEvanCloseIntent(phrase, prior), false, `${phrase} / ${prior}`);
+    }
+    for (const phrase of ["We're good there?", "We're good with packing.",
+        "Nope, we're good there, but I have one more question.", "We're not good there.",
+        'He said we are good there.', '"We are good there."',
+    ]) assert.equal(hasEvanCloseIntent(phrase, 'Is there anything else?'), false, phrase);
+});
+
+test('closing-now declarations are explicit but scoped or continued statements are not', () => {
+    for (const phrase of ['Closing now.', "I'm closing now.", 'We are closing this call now.', 'Okay, closing the session now.']) {
+        assert.equal(hasEvanCloseIntent(phrase), true, phrase);
+    }
+    for (const phrase of ['Closing now?', 'Closing the box now.', 'The office is closing now.',
+        'Closing now, but one more question.', 'I am not closing now.',
+        'She said closing now.', 'For example, closing now.', '"Closing now."',
+        'Closing the planner now.', 'I am closing now and need to add another stop.',
+    ]) assert.equal(hasEvanCloseIntent(phrase), false, phrase);
+});
+
+test('standalone by is a farewell only in a strong closing exchange', () => {
+    for (const phrase of ['by', 'By.', 'By, Evan.']) {
+        for (const prior of ['Thank you for speaking with Mullins Moving. Take care.',
+            'Is there anything else I can help you with?',
+        ]) assert.equal(hasEvanCloseIntent(phrase, prior), true, `${phrase} / ${prior}`);
+        for (const prior of ['', 'Got.', 'Perfect.', 'Did I get that right?',
+            'What date are you moving by?', 'Which city are you moving to?',
+            'What should I write beside the delivery date?',
+            'I will say goodbye after your next question.',
+        ]) assert.equal(hasEvanCloseIntent(phrase, prior), false, `${phrase} / ${prior}`);
+    }
+    for (const phrase of ['By Friday.', 'By the storage unit.', 'By?', 'By, wait, one more thing.',
+        'He said by.', '"By."', 'What does by mean?',
+    ]) assert.equal(hasEvanCloseIntent(phrase, 'Thank you. Take care.'), false, phrase);
+});
+
 test('short negatives authorize closing only in a final anything-else context', () => {
     for (const phrase of ['No.', 'No thanks.', 'No, thank you.', 'Nope.', 'No thanks, Evan.']) {
         for (const prior of [

@@ -6,6 +6,39 @@ import { buildEvanPlannerContact } from '../lib/anam/evan-planner-contact.ts';
 const user = content => ({ role: 'user', content });
 const agent = content => ({ role: 'agent', content });
 
+test('natural phone-only intake captures a separate plural morning preference without email routing changes', () => {
+    const checkIn = { displayName: 'Avery Sample', email: 'avery@example.test' };
+    const turns = [
+        agent('Do you anticipate needing any packing help or labor-only assistance for the Mesa apartment?'),
+        user('No packing help, phone only please, no email. My number is 480-555-0198. Mornings are best.'),
+    ];
+    const model = buildEvanPlannerContact(turns, checkIn);
+    assert.equal(model.phone, '(480) 555-0198');
+    assert.equal(model.contactPreference, 'Phone call');
+    assert.equal(model.callbackWindow, 'Mornings');
+    assert.equal(model.email, checkIn.email, 'spoken preference must not change check-in routing');
+    assert.equal(model.emailSource, 'check-in');
+    turns.push(user("Yes, that's right. Please have someone call in the morning. Thank you."));
+    assert.equal(buildEvanPlannerContact(turns, checkIn).callbackWindow, 'in the morning');
+    turns.push(user('Actually, call me afternoons.'));
+    assert.equal(buildEvanPlannerContact(turns, checkIn).callbackWindow, 'afternoons');
+});
+
+test('plural preferred periods need visitor call context, not an unrelated moving schedule', () => {
+    for (const period of ['Mornings', 'Afternoons', 'Evenings']) {
+        assert.equal(buildEvanPlannerContact([user(`Phone only please. ${period} are best.`)]).callbackWindow, period);
+        assert.equal(buildEvanPlannerContact([
+            agent('What is the best time to call?'), user(`${period} are best.`),
+        ]).callbackWindow, period);
+        assert.equal(buildEvanPlannerContact([user(`${period} are best.`)]).callbackWindow, '');
+        assert.equal(buildEvanPlannerContact([agent(`Call in the ${period.toLowerCase()}.`)]).callbackWindow, '');
+    }
+    assert.equal(buildEvanPlannerContact([user('Phone only please. Moving mornings are best.')]).callbackWindow, '');
+    assert.equal(buildEvanPlannerContact([
+        user('Phone only. Mornings are best.'), user('Email only now.'),
+    ]).callbackWindow, '');
+});
+
 test('empty guest model does not invent contact details', () => {
     const model = buildEvanPlannerContact([]);
     assert.deepEqual(model, { displayName: '', phone: '', email: '', emailSource: null, proposedEmail: '', contactPreference: '', callbackWindow: '', hiddenFields: [] });

@@ -31,12 +31,22 @@ test('manual and tool opening consume automatic presentation; dismissal prevents
 });
 
 test('route fallback uses the current plan only after a completed user turn in an active Evan session', () => {
-    const fallback = player.slice(player.indexOf("if (messageEvent.endOfSpeech) {\n                        let amyFarewellRecovery"), player.indexOf('const previousEvanTurn ='));
-    assert.match(fallback, /recordTurn\(messageEvent\.role, currentMessageRef\.current\)/);
-    assert.match(fallback, /if \(transcriptRole\(messageEvent\.role\) === 'user'\)/);
+    const fallback = player.slice(player.indexOf('const recordEvanCompletedTurn ='), player.indexOf('const completeOnce ='));
+    assert.match(fallback, /recordTurn\(turn\.role, turn\.content\)/);
+    assert.match(fallback, /if \(turn\.role === 'user'\)/);
     assert.match(fallback, /if \(evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason\)/);
-    assert.match(fallback, /observeRouteStops\(buildEvanMovePlan\(/);
+    assert.match(fallback, /observePlanningDetails\(buildEvanMovePlan\(/);
     assert.match(fallback, /transcriptRef\.current\.slice\(-120\)/);
     assert.match(fallback, /evanAddressStopsRef\.current/);
     assert.doesNotMatch(fallback, /\.talk\(|addContext\(|fetch\(|setAmyWorkbench/);
+});
+
+test('Evan stream boundaries update the real player without changing the other agents stream path', () => {
+    const stream = player.slice(player.indexOf('const handleMessageStream ='), player.indexOf('const deliverAmyUnsafeOutputRecovery'));
+    assert.match(stream, /if \(isEvan\) \{/);
+    assert.match(stream, /evanTranscript.push\(messageEvent\)/);
+    assert.match(stream, /if \(update.replay\) return/);
+    assert.match(stream, /update.completed.forEach\(recordEvanCompletedTurn\)/);
+    assert.match(stream, /messageEvent.role === 'persona' && messageEvent.endOfSpeech/);
+    assert.match(stream, /return;\s*\}\s*$/);
 });

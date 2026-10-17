@@ -18,7 +18,7 @@ test('Evan response recovery is wired to actual speech/tool events with symmetri
         assert.ok(player.includes(`addListener(AnamEvent.${name}, handleEvan`));
         assert.ok(player.includes(`removeListener(AnamEvent.${name}, handleEvan`));
     }
-    assert.match(player, /evanResponseRecovery\?\.userTurnCompleted\(completedTurn, previousEvanTurn, messageEvent.id\)/);
+    assert.match(player, /if \(fresh\) evanResponseRecovery\?\.userTurnCompleted\(turn.content, previousAgentText, turn.id\)/);
     assert.match(player, /normalizedRole === 'agent' && messageEvent.content.trim\(\)/);
     assert.ok((player.match(/evanResponseRecovery\?\.dispose\(\)/g) ?? []).length >= 2);
 });

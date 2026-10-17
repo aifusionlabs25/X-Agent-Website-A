@@ -65,9 +65,11 @@ function contactCorrection(value: string, kind: 'phone' | 'email'): { value: str
 
 function callbackWindow(value: string, answeringWindow: boolean): string {
     const match = value.match(/\b(?:call(?:\s+me)?(?:\s+back)?|reach\s+me|callback(?:\s+window)?(?:\s+is)?|best\s+time(?:\s+to\s+(?:call|reach)\s+me)?\s+is|i(?:'m|\s+am)\s+available)\s+(.+)/i);
-    const candidate = clean(match?.[1] ?? (answeringWindow ? value : ''), 100).split(/[,;!?]|\.(?=\s|$)|\s+(?:and|but)\s+/i)[0];
+    const hasCallContext = answeringWindow || /\b(?:phone[ -]+only|callback|call|reach\s+me)\b/i.test(value);
+    const preferredPeriod = hasCallContext ? value.match(/(?:^|[.!?;]\s*)(mornings?|afternoons?|evenings?)\s+(?:are|is|work|works)\s+best\b/i)?.[1] : undefined;
+    const candidate = clean(preferredPeriod ?? match?.[1] ?? (answeringWindow ? value : ''), 100).split(/[,;!?]|\.(?=\s|$)|\s+(?:and|but)\s+/i)[0];
     if (!candidate || /\b(?:at\s+)?\d[\d\s().-]{8,}/.test(candidate)) return '';
-    if (!/\b(?:after|before|between|morning|afternoon|evening|weekdays?|weekends?|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|anytime|any\s+time|\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))\b/i.test(candidate)) return '';
+    if (!/\b(?:after|before|between|mornings?|afternoons?|evenings?|weekdays?|weekends?|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|anytime|any\s+time|\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))\b/i.test(candidate)) return '';
     return candidate;
 }
 

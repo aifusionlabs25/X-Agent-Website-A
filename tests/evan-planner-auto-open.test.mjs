@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEvanPlannerAutoOpen, isEvanRouteIntakeQuestion } from '../lib/anam/evan-planner-auto-open.ts';
+import { buildEvanMovePlan, buildGoogleMapsDirectionsUrl } from '../lib/anam/evan-move-planner.ts';
 
 test('recognizes natural route, origin-only, and destination-only intake questions', () => {
     for (const phrase of [
@@ -209,4 +210,78 @@ test('disposing while chunks are pending prevents a late final from opening the 
     tracker.dispose();
     assert.equal(tracker.observeMessage(message('p1', 'from and to?', true)), false);
     assert.equal(opens, 0);
+});
+
+test('one user-grounded location opens the planner before both endpoints are known', () => {
+    for (const kind of ['Origin', 'Destination', 'Additional stop']) {
+        let opens = 0;
+        const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
+        const plan = { stops: [{ kind, city: 'Mesa' }], possibleStops: [] };
+        const before = structuredClone(plan);
+        assert.equal(tracker.observePlanningDetails(plan), true, kind);
+        assert.equal(tracker.observePlanningDetails(plan), false, kind);
+        assert.equal(opens, 1);
+        assert.deepEqual(plan, before, 'display intent must not change endpoint roles');
+    }
+});
+
+test('latest natural intake opens from a tentative stop without inventing a route or pin', () => {
+    let opens = 0;
+    const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
+    const turns = [{ role: 'user', content: 'One bedroom, probably Mesa.' }];
+    const opening = buildEvanMovePlan(turns);
+    assert.equal(tracker.observePlanningDetails(opening), false, 'an unassigned city is not promoted into an endpoint');
+    turns.push({ role: 'user', content: "Mid-month but flexible. I might need a storage stop in Gilbert first, but I'm not sure yet." });
+    const tentative = buildEvanMovePlan(turns);
+    assert.deepEqual(tentative.stops, []);
+    assert.deepEqual(tentative.possibleStops.map(stop => stop.city), ['Gilbert']);
+    const before = structuredClone(tentative);
+    assert.equal(tracker.observePlanningDetails(tentative), true);
+    assert.deepEqual(tentative, before, 'opening must not promote a possible stop');
+    assert.equal(buildGoogleMapsDirectionsUrl(tentative.stops), '', 'no directions or mapped pin is invented');
+    turns.push(
+        { role: 'agent', content: 'Would you like the storage pickup in Gilbert before the move, and then the one-bedroom move from Mesa later in the month?' },
+        { role: 'user', content: "Hmm, that's right. Storage first, if needed, then the Mesa apartment. There's stairs at Mesa. Okay." },
+    );
+    assert.equal(tracker.observePlanningDetails(buildEvanMovePlan(turns)), false);
+    assert.equal(opens, 1);
+});
+
+test('general details, agent-only facts, and hypothetical locations do not open the route', () => {
+    const inputs = [
+        [],
+        [{ role: 'user', content: 'One bedroom. I will handle packing myself.' }],
+        [{ role: 'user', content: 'My move is mid-month, but flexible.' }],
+        [{ role: 'agent', content: 'You are moving from Phoenix to Mesa with storage in Gilbert.' }],
+        [{ role: 'user', content: 'What if we had a storage stop in Gilbert?' }],
+        [{ role: 'user', content: 'Do you move people to Mesa?' }],
+    ];
+    for (const turns of inputs) {
+        let opens = 0;
+        const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
+        assert.equal(tracker.observePlanningDetails(buildEvanMovePlan(turns)), false, JSON.stringify(turns));
+        assert.equal(opens, 0);
+    }
+    const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => assert.fail('invalid location must not open') });
+    assert.equal(tracker.observePlanningDetails({ stops: [{ kind: 'Origin', city: '  ' }] }), false);
+    assert.equal(tracker.observePlanningDetails({ stops: [{ kind: 'Unrecognized', city: 'Mesa' }] }), false);
+});
+
+test('manual opening, dismissal, and disposal suppress later useful-location auto-opening', () => {
+    const possible = buildEvanMovePlan([{ role: 'user', content: 'We might need a storage stop in Gilbert.' }]);
+    for (const action of ['markOpened', 'dismiss', 'dispose']) {
+        let opens = 0;
+        const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
+        tracker[action]();
+        assert.equal(tracker.observePlanningDetails(possible), false, action);
+        assert.equal(opens, 0);
+    }
+    let opens = 0;
+    const tracker = createEvanPlannerAutoOpen({ onOpenRoute: () => opens++ });
+    assert.equal(tracker.observePlanningDetails(possible), true);
+    tracker.dismiss();
+    assert.equal(tracker.observePlanningDetails(buildEvanMovePlan([
+        { role: 'user', content: 'Actually we are moving from Phoenix to Chandler.' },
+    ])), false);
+    assert.equal(opens, 1);
 });
