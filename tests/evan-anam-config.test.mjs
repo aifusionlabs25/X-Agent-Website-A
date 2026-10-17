@@ -1,25 +1,52 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
-import { EVAN_PERSONA_ID, EVAN_REQUIRED_PROMPT_MARKERS, EVAN_REQUIRED_TOOL_NAMES, inspectEvanPersonaReadiness, readEvanPersonaReadiness } from '../lib/anam/persona-readiness.ts';
+import {
+    EVAN_EXPECTED_AVATAR_ID,
+    EVAN_EXPECTED_LLM_ID,
+    EVAN_EXPECTED_NAME,
+    EVAN_EXPECTED_VOICE_ID,
+    EVAN_MINIMUM_PUBLISHED_AT,
+    EVAN_PERSONA_ID,
+    EVAN_REQUIRED_PROMPT_MARKERS,
+    EVAN_REQUIRED_TOOL_IDS,
+    EVAN_REQUIRED_TOOL_NAMES,
+    EVAN_REQUIRED_VOICE_DETECTION,
+    inspectEvanPersonaReadiness,
+    readEvanPersonaReadiness,
+} from '../lib/anam/persona-readiness.ts';
 import { isEvanLocalTestMode } from '../lib/anam/evan-local-test-mode.ts';
+
+const managedEvanPrompt = await readFile(
+    new URL('../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url),
+    'utf8',
+);
 
 const healthyPersona = () => ({
     id: EVAN_PERSONA_ID,
-    name: 'Evan Mullins Moving Concierge',
+    name: EVAN_EXPECTED_NAME,
+    publishedAt: EVAN_MINIMUM_PUBLISHED_AT,
     avatarModel: 'cara-4',
+    avatar: { id: EVAN_EXPECTED_AVATAR_ID },
+    voice: { id: EVAN_EXPECTED_VOICE_ID },
     zeroDataRetention: false,
     enableAudioPassthrough: false,
-    tools: EVAN_REQUIRED_TOOL_NAMES.map(name => ({ name })),
-    brain: { systemPrompt: EVAN_REQUIRED_PROMPT_MARKERS.join('\n') },
+    voiceDetectionOptions: { ...EVAN_REQUIRED_VOICE_DETECTION },
+    tools: EVAN_REQUIRED_TOOL_NAMES.map(name => ({ name, _toolId: EVAN_REQUIRED_TOOL_IDS[name] })),
+    brain: { systemPrompt: managedEvanPrompt, llm: { id: EVAN_EXPECTED_LLM_ID } },
 });
 
 test('Evan readiness requires exact identity, Cara 4, managed prompt, and safe tools', () => {
     assert.equal(inspectEvanPersonaReadiness(healthyPersona()).ready, true);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), id: '8a991c93-0c95-42c5-8c22-a67428946eb8' }).ready, false);
+    assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), id: '4b7e933a-ea04-4b84-b418-72c0762545e6' }).ready, false);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), name: 'James Knowles Law Firm' }).ready, false);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), avatarModel: 'cara-3' }).ready, false);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), tools: [{ name: 'Knowledge_Liv' }] }).ready, false);
+    assert.equal(inspectEvanPersonaReadiness({
+        ...healthyPersona(),
+        tools: EVAN_REQUIRED_TOOL_NAMES.map(name => ({ name, _toolId: name === 'show_move_planner' ? 'wrong-id' : EVAN_REQUIRED_TOOL_IDS[name] })),
+    }).ready, false);
 });
 
 test('live readiness fetch is bounded, no-store, and does not leak the API key', async () => {
@@ -61,6 +88,8 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /Ask one useful moving-detail question at a time/i);
     assert.match(prompt, /complete date including month and flexibility/i);
     assert.match(prompt, /Never silently guess or change a person's name/i);
+    assert.match(prompt, /retain all of them without reciting every fact/i);
+    assert.match(prompt, /keeping named cities specific when discussing the route/i);
     assert.match(prompt, /send_mullins_follow_up_email/);
     assert.match(prompt, /three messages are scheduled/i);
     assert.match(prompt, /Email follow-up is optional/i);
@@ -69,6 +98,9 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /Continuing without email is a normal guest option/i);
     assert.match(prompt, /Never ask for, spell, repeat, or confirm an email address during the conversation/i);
     assert.match(prompt, /No tool books a move/i);
+    assert.match(prompt, /I noted it for the team/i);
+    assert.match(prompt, /the team will get back to you/i);
+    assert.match(prompt, /Do not say Mullins "handles," "can move," or "accepts" the item/i);
     assert.match(prompt, /Never ask whether it is okay to end the call/i);
     assert.match(prompt, /Would you like me to end our call now\?" is forbidden/i);
     assert.match(prompt, /"take care,".*are already confirmation/i);

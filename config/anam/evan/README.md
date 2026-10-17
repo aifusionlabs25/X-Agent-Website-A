@@ -1,13 +1,14 @@
 # Evan Anam configuration
 
-This directory is the managed source for the live Evan Mullins Moving Anam persona.
+This directory is the managed source for the Evan Mullins Moving replacement candidate. The public website remains on the previous persona until the candidate passes a live browser conversation and is deliberately promoted.
 
 ## Identity safety
 
-- Evan: `4b7e933a-ea04-4b84-b418-72c0762545e6`
+- Replacement candidate: `6097c73e-b6ef-48c5-94c7-9a95d4863b99`
+- Previous public Evan (protected during candidate testing): `4b7e933a-ea04-4b84-b418-72c0762545e6`
 - Protected James persona (never use for Evan): `8a991c93-0c95-42c5-8c22-a67428946eb8`
 
-The live identity of both IDs is checked before any sync.
+The identity of all three IDs is checked before any sync.
 
 ## Contents
 
@@ -25,11 +26,23 @@ Internal strategy, Tavus/PAL runtime instructions, test-specific answers, draft 
 ```powershell
 npm test
 npm run anam:audit:evan
+npm run anam:smoke:evan-websocket
 node scripts/anam/update-evan-persona.mjs
-node scripts/anam/update-evan-persona.mjs --apply
+node scripts/anam/update-evan-persona.mjs --apply --confirm-6097-replacement
 ```
 
-The update command defaults to a read-only dry run. `--apply` updates only the existing Evan persona, uploads only missing allowlisted documents, waits for every document to become `READY`, updates the knowledge tool and persona, then performs immediate and delayed read-back verification. Git history is the rollback source; the updater does not create extra Anam personas.
+The update command defaults to a read-only dry run. Applying requires the explicit replacement confirmation flag. It updates only the pinned `6097…` persona and its pinned tools, uploads only missing allowlisted documents, waits for every document to become `READY`, then performs immediate and delayed read-back verification. A local ignored rollback receipt is saved before mutation; the updater does not create extra Anam personas or tools.
+
+## 2026-10-17 replacement-candidate result
+
+- Candidate name: `Evan Mullins Moving Concierge - Replacement Candidate`
+- Managed prompt SHA-256: `870f9f5e43caf1cf911a67d77b5687757388978e7e4882db4ff9399e84792834`
+- Knowledge bundle SHA-256: `9554e57575dc25b84b23212cd223b06b7ab8b0fc49c7d490fe093cb80b830035`
+- Knowledge folder: `c9ad40d1-05ba-4cd6-84b4-f9fa90b1a112`
+- Knowledge tool: `fc93e067-9254-4635-a4a6-645970d12548`
+- Eight of eight documents reported `READY`; delayed read-back passed.
+- Session token, engine start, and secure WebSocket smoke test passed.
+- The exact tool, avatar, voice, model, prompt, voice detection, transcript, and retention settings are fail-closed in the website readiness check.
 
 ## 2026-07-16 live result
 

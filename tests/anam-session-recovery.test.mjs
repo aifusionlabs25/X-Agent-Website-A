@@ -384,8 +384,8 @@ test('the recovery route is scheduler-compatible, bearer-authenticated, and keep
     assert.match(route, /maxDuration = 60/);
     assert.match(store, /'ZRANGEBYSCORE'/);
     assert.match(store, /dani:anam:agentmail:retry-due:v1/);
-    assert.match(store, /'ZADD', daniEmailRetryDueKey\(\)/);
-    assert.match(store, /'ZREM', daniEmailRetryDueKey\(\)/);
+    assert.match(store, /'ZADD', daniEmailRetryDueKey\(options\)/);
+    assert.match(store, /'ZREM', daniEmailRetryDueKey\(options\)/);
     assert.match(store, /recovery-drain-lock:v1/);
     assert.match(store, /'NX',[\s\S]*'EX',[\s\S]*55/);
     assert.match(
@@ -416,5 +416,5 @@ test('Amy email delivery failures remain on the durable finalization recovery la
     assert.match(finalizer, /scheduleAmyEmailRetry\(externalSessionId\)/);
     assert.match(finalizer, /emailResult\.status === 'email_failed'[\s\S]*emailResult\.status === 'email_already_attempted'/);
     assert.match(store, /export async function scheduleAmyAnamFinalizationDueEntry/);
-    assert.match(store, /'ZADD', finalizationDueKey\(\)/);
+    assert.match(store, /'ZADD', finalizationDueKey\(options\)/);
 });

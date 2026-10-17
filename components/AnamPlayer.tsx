@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     createClient,
     AnamClient,
@@ -9,6 +9,9 @@ import {
 import { BrainCircuit, Truck } from 'lucide-react';
 import AmyAnamWorkbenchV2 from '@/components/amy/AmyAnamWorkbenchV2';
 import EvanMovePlanner from '@/components/evan/EvanMovePlanner';
+import EvanSessionExit from '@/components/evan/EvanSessionExit';
+import { useEvanPlannerCheckIn } from '@/components/evan/EvanPlannerContactContext';
+import { buildEvanPlannerContact } from '@/lib/anam/evan-planner-contact';
 import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
@@ -40,6 +43,13 @@ import {
     routeToolStopsToMovePlanStops,
 } from '@/lib/anam/evan-address-route';
 import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-close';
+import { hasEvanCloseIntent } from '@/lib/anam/evan-close-intent';
+import { runEvanToolWithDeadline, EvanToolExecutionError } from '@/lib/anam/evan-tool-execution';
+import { createEvanResponseRecovery } from '@/lib/anam/evan-response-recovery';
+import { createEvanPlannerAutoOpen } from '@/lib/anam/evan-planner-auto-open';
+import { createEvanTranscriptAccumulator, type EvanTranscriptCompleted } from '@/lib/anam/evan-transcript-accumulator';
+import { createEvanRefusedCloseRecovery } from '@/lib/anam/evan-refused-close-recovery';
+import { finishAbandonedEvanRouteLookup, preserveUnchangedEvanRoutePins, reconcileEvanConfirmedRoute } from '@/lib/anam/evan-route-reconciliation';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 import {
     createAmyFarewellCloseCoordinator,
@@ -89,6 +99,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [workbenchView, setWorkbenchView] = useState<AmyWorkbenchView>('capabilities');
     const workbenchViewRef = useRef<AmyWorkbenchView>('capabilities');
     const [workbenchTurns, setWorkbenchTurns] = useState<AmyWorkbenchTurn[]>([]);
+    const [evanContactTurns, setEvanContactTurns] = useState<AmyWorkbenchTurn[]>([]);
     const [roadmapTopic, setRoadmapTopic] = useState('');
     const [catalogQuery, setCatalogQuery] = useState('');
     const [workbenchRequestedView, setWorkbenchRequestedView] = useState<AmyWorkbenchView | undefined>(undefined);
@@ -96,12 +107,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [workbenchAppliedChanges, setWorkbenchAppliedChanges] = useState<AmyWorkbenchFactChange[]>([]);
     const [workbenchVisualSlideIndex, setWorkbenchVisualSlideIndex] = useState(0);
     const [evanPlannerOpen, setEvanPlannerOpen] = useState(false);
+    const evanPlannerAutoOpenRef = useRef<ReturnType<typeof createEvanPlannerAutoOpen> | null>(null);
     const [evanPlannerView, setEvanPlannerView] = useState<EvanMovePlannerView>('brief');
-    const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[]>([]);
+    const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[] | null>(null);
     const workbenchEnabled = isAmyCara4Variant(sessionVariant)
         && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
     const evanPlannerEnabled = personaId === EVAN_PERSONA_ID
         && process.env.NEXT_PUBLIC_EVAN_MOVE_PLANNER_ENABLED !== 'false';
+    const evanPlannerCheckIn = useEvanPlannerCheckIn();
+    const evanPlannerContact = useMemo(() => evanPlannerEnabled
+        ? buildEvanPlannerContact(evanContactTurns, evanPlannerCheckIn) : undefined,
+    [evanPlannerEnabled, evanContactTurns, evanPlannerCheckIn]);
     const setAmyWorkbenchOpen = useCallback((nextOpen: boolean) => {
         if (nextOpen && !workbenchOpenRef.current) {
             workbenchOpenGenerationRef.current += 1;
@@ -125,7 +141,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const workbenchRevisionRef = useRef(0);
     const lastWorkbenchModelRef = useRef<AmyWorkbenchModel | null>(null);
     const cancelAmyArtifactRef = useRef<(() => void) | null>(null);
-    const evanAddressStopsRef = useRef<MovePlanStop[]>([]);
+    const evanAddressStopsRef = useRef<MovePlanStop[] | null>(null);
 
     useEffect(() => {
         if (!evanPlannerEnabled || !evanPlannerOpen) return;
@@ -172,6 +188,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeCloseToolHandler: (() => void) | null = null;
         let requestedCloseReason: string | null = null;
         let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
+        let evanResponseRecovery: ReturnType<typeof createEvanResponseRecovery> | null = null;
+        let evanRefusedCloseRecovery: ReturnType<typeof createEvanRefusedCloseRecovery> | null = null;
+        let evanRefusedCloseContext: { turnGeneration: number; speechGeneration: number; baselineId?: string; baselineLength: number } | null = null;
+        let evanUserSpeaking = false;
+        let evanSpeechCorrelationId: string | undefined;
+        let evanCloseCandidate: { text: string; previousAgentText: string; correlationId?: string } | null = null;
+        let evanPersonaMessage: { id: string; text: string; interrupted: boolean } | null = null;
+        let evanCloseBaselineMessage: { id: string; length: number } | null = null;
+        const evanCompletedUserIds = new Set<string>();
+        const evanTranscript = createEvanTranscriptAccumulator();
+        let evanSpeechGeneration = 0;
+        let evanUserTurnGeneration = 0;
+        const evanUserBoundaries = new Map<string, { speechGeneration: number; turnGeneration: number; correlationId?: string }>();
+        const evanSessionAbort = new AbortController();
+        let evanRouteGeneration = 0;
+        let evanRouteAbort: AbortController | null = null;
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let amyCloseCoordinator: ReturnType<typeof createAmyFarewellCloseCoordinator> | null = null;
         let suppressingAmyUnsafeOutput = false;
@@ -198,6 +230,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let lastAmyFallbackRecoveryTurn = -1;
         const videoElement = videoRef.current;
 
+        const cancelEvanPendingClose = () => {
+            evanRefusedCloseRecovery?.cancel();
+            evanRefusedCloseContext = null;
+            evanCloseCandidate = null;
+            if (evanCloseCoordinator?.cancelPending()) {
+                if (requestedCloseReason === 'user_requested_end') requestedCloseReason = null;
+                evanCloseBaselineMessage = null;
+                console.info('[Evan Anam] Pending farewell cancelled for visitor speech', { contentLogged: false });
+            }
+        };
+
         transcriptRef.current = [];
         currentMessageRef.current = '';
         currentRoleRef.current = '';
@@ -208,6 +251,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setAmyWorkbenchOpen(false);
         setAmyWorkbenchView('capabilities');
         setWorkbenchTurns([]);
+        setEvanContactTurns([]);
         setRoadmapTopic('');
         setCatalogQuery('');
         setWorkbenchRequestedView(undefined);
@@ -218,15 +262,37 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setWorkbenchVisualSlideIndex(0);
         setEvanPlannerOpen(false);
         setEvanPlannerView('brief');
-        evanAddressStopsRef.current = [];
-        setEvanAddressStops([]);
+        evanAddressStopsRef.current = null;
+        setEvanAddressStops(null);
 
         const recordTurn = (role: string, content: string) => {
             const normalized = content.trim();
             if (!normalized) return;
             const turn = { role: transcriptRole(role), content: normalized } as AmyWorkbenchTurn;
+            if (evanPlannerEnabled && turn.role === 'user' && evanAddressStopsRef.current !== null) {
+                const previousTurn = transcriptRef.current.at(-1);
+                const updatedRoute = reconcileEvanConfirmedRoute(evanAddressStopsRef.current, normalized,
+                    previousTurn?.role === 'agent' ? previousTurn.content : '');
+                if (updatedRoute !== evanAddressStopsRef.current) {
+                    // A newer spoken correction wins over an in-flight lookup.
+                    evanRouteGeneration += 1;
+                    evanRouteAbort?.abort();
+                    evanAddressStopsRef.current = finishAbandonedEvanRouteLookup(updatedRoute);
+                    if (isMounted) setEvanAddressStops(evanAddressStopsRef.current);
+                }
+            }
             transcriptRef.current = [...transcriptRef.current.slice(-399), turn];
-            if (workbenchEnabled || evanPlannerEnabled) {
+            if (evanPlannerEnabled) {
+                // Contact details update after a complete utterance, never from
+                // half a dictated phone number, email, or callback window.
+                // Keep this session's display corrections/hide requests even
+                // when the general transcript reaches its rolling limit.
+                setEvanContactTurns((current) => [...current, turn]);
+                // The live poll may already show this turn's partial text.
+                // Replace it from the authoritative history instead of appending
+                // a duplicate that could undo a chronological correction.
+                setWorkbenchTurns(transcriptRef.current.slice(-120) as AmyWorkbenchTurn[]);
+            } else if (workbenchEnabled) {
                 setWorkbenchTurns((current) => [...current.slice(-59), turn]);
             }
         };
@@ -245,6 +311,43 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 latestTurns.push(pendingTurn);
             }
             return latestTurns.slice(-120);
+        };
+
+        // Browser-only presentation: no model/tool round trip, speech, or address
+        // confirmation. Each session gets one opportunity; manual use consumes it too.
+        const evanPlannerAutoOpen = evanPlannerEnabled ? createEvanPlannerAutoOpen({
+            onOpenRoute: () => {
+                if (!isMounted || closeHandled || requestedCloseReason) return;
+                setEvanPlannerView('route');
+                setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                setEvanPlannerOpen(true);
+            },
+        }) : null;
+        evanPlannerAutoOpenRef.current = evanPlannerAutoOpen;
+
+        const recordEvanCompletedTurn = (turn: EvanTranscriptCompleted) => {
+            const previousAgentText = [...transcriptRef.current].reverse().find(item => item.role === 'agent')?.content ?? '';
+            recordTurn(turn.role, turn.content);
+            if (turn.role === 'user') {
+                if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
+                    evanPlannerAutoOpen?.observePlanningDetails(buildEvanMovePlan(
+                        transcriptRef.current.slice(-120) as AmyWorkbenchTurn[], evanAddressStopsRef.current,
+                    ));
+                }
+                const boundary = evanUserBoundaries.get(turn.id);
+                const fresh = boundary?.speechGeneration === evanSpeechGeneration
+                    && boundary?.turnGeneration === evanUserTurnGeneration;
+                if (fresh && !evanCompletedUserIds.has(turn.id)) {
+                    evanCloseCandidate = { text: turn.content, previousAgentText, correlationId: boundary.correlationId };
+                    evanCompletedUserIds.add(turn.id);
+                    if (evanCompletedUserIds.size > 64) evanCompletedUserIds.delete(evanCompletedUserIds.values().next().value!);
+                }
+                if (fresh) evanResponseRecovery?.userTurnCompleted(turn.content, previousAgentText, turn.id);
+                completedUserTurns = transcriptRef.current.filter(item => item.role === 'user').length;
+            }
+            if (turn.completion !== 'explicit-final') console.info('[Evan Anam] Transcript boundary recovered', {
+                role: turn.role, boundary: turn.completion, contentLogged: false,
+            });
         };
 
         const completeOnce = (closeReason: string): Promise<void> => {
@@ -503,9 +606,39 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 activeClient = anamClient;
                 if (isEvan) {
+                    evanRefusedCloseRecovery = createEvanRefusedCloseRecovery({
+                        canRecover: () => isMounted && !closeHandled && !requestedCloseReason && !evanUserSpeaking
+                            && !evanSessionAbort.signal.aborted && !publicAudioBlocked
+                            && evanRefusedCloseContext?.turnGeneration === evanUserTurnGeneration
+                            && evanRefusedCloseContext?.speechGeneration === evanSpeechGeneration,
+                        onInterrupt: () => anamClient.interruptPersona(),
+                        onRecover: async speech => {
+                            console.warn('[Evan Anam] Refused-close farewell recovery', { contentLogged: false });
+                            await anamClient.talk(speech);
+                        },
+                        onError: () => console.error('[Evan Anam] Refused-close recovery was not confirmed'),
+                    });
+                    evanResponseRecovery = createEvanResponseRecovery({
+                        canRecover: () => isMounted && !closeHandled && !requestedCloseReason
+                            && !publicAudioBlocked && document.visibilityState === 'visible',
+                        onRecover: () => {
+                            console.warn('[Evan Anam] Unexpected skipped answer recovery', { contentLogged: false });
+                            void anamClient.talk('Sorry about that pause. I am still here and listening.')
+                                .catch(() => console.error('[Evan Anam] Pause recovery was not confirmed'));
+                        },
+                    });
                     evanCloseCoordinator = createEvanFarewellCloseCoordinator({
-                        stopStreaming: () => anamClient.stopStreaming(),
+                        stopStreaming: () => {
+                            // Irreversible teardown belongs to committed closure, not a
+                            // speculative model tool call or cancellable farewell grace.
+                            evanPlannerAutoOpen?.dispose();
+                            evanResponseRecovery?.close();
+                            evanRefusedCloseRecovery?.dispose();
+                            evanSessionAbort.abort();
+                            return anamClient.stopStreaming();
+                        },
                         onStopError: () => console.error('[Evan Anam] Farewell close was not confirmed'),
+                        onStopReason: reason => console.info('[Evan Anam] Close trigger', { reason, contentLogged: false }),
                     });
                 }
                 if (isDani) {
@@ -657,79 +790,138 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 if (evanPlannerEnabled) {
                     cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler('show_move_planner', {
                         onStart: async (payload) => {
-                            const requested = payload.arguments?.view;
-                            const view: EvanMovePlannerView = requested === 'route'
-                                || requested === 'inventory'
-                                || requested === 'readiness'
-                                ? requested
-                                : 'brief';
-                            const requestedRouteStops = parseEvanRouteToolStops(payload.arguments?.stops);
-                            let routeStopsForReceipt = evanAddressStopsRef.current;
-
-                            if (isMounted) {
-                                setEvanPlannerView(view);
-                                setEvanPlannerOpen(true);
+                            const routeGeneration = ++evanRouteGeneration;
+                            evanRouteAbort?.abort();
+                            if (evanAddressStopsRef.current !== null) {
+                                evanAddressStopsRef.current = finishAbandonedEvanRouteLookup(evanAddressStopsRef.current);
+                                if (isMounted) setEvanAddressStops(evanAddressStopsRef.current);
                             }
+                            const routeAbort = new AbortController();
+                            evanRouteAbort = routeAbort;
+                            try {
+                                return await runEvanToolWithDeadline(async signal => {
+                                    signal.throwIfAborted();
+                                    const requested = payload.arguments?.view;
+                                    const view: EvanMovePlannerView = requested === 'route'
+                                        || requested === 'inventory'
+                                        || requested === 'readiness'
+                                        ? requested
+                                        : 'brief';
+                                    const requestedRouteStops = parseEvanRouteToolStops(payload.arguments?.stops);
+                                    const rawStops = payload.arguments?.stops;
+                                    if (rawStops !== undefined && (!Array.isArray(rawStops)
+                                        || rawStops.length !== requestedRouteStops.length)) {
+                                        throw new Error('Incomplete confirmed route');
+                                    }
+                                    let routeStopsForReceipt = evanAddressStopsRef.current;
 
-                            if (requestedRouteStops.length) {
-                                const pendingStops = routeToolStopsToMovePlanStops(requestedRouteStops);
-                                routeStopsForReceipt = pendingStops;
-                                evanAddressStopsRef.current = pendingStops;
-                                if (isMounted) setEvanAddressStops(pendingStops);
+                                    if (isMounted) {
+                                        evanPlannerAutoOpen?.markOpened();
+                                        setEvanPlannerView(view);
+                                        setEvanPlannerOpen(true);
+                                    }
 
-                                try {
-                                    const response = await fetch('/api/anam/evan/route-geocode', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        credentials: 'same-origin',
-                                        cache: 'no-store',
-                                        body: JSON.stringify({ stops: requestedRouteStops }),
+                                    if (requestedRouteStops.length) {
+                                        const pendingStops = preserveUnchangedEvanRoutePins(
+                                            routeToolStopsToMovePlanStops(requestedRouteStops), evanAddressStopsRef.current,
+                                        );
+                                        const unresolvedStops = () => pendingStops.map(stop => stop.precision === 'pending'
+                                            ? { ...stop, precision: 'unresolved' as const } : stop);
+                                        routeStopsForReceipt = pendingStops;
+                                        evanAddressStopsRef.current = pendingStops;
+                                        if (isMounted) setEvanAddressStops(pendingStops);
+
+                                        try {
+                                            const response = await fetch('/api/anam/evan/route-geocode', {
+                                                signal: AbortSignal.any([signal, routeAbort.signal]),
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                credentials: 'same-origin',
+                                                cache: 'no-store',
+                                                body: JSON.stringify({ stops: requestedRouteStops }),
+                                            });
+                                            const result = await response.json().catch(() => null) as { stops?: unknown } | null;
+                                            const resolvedStops = response.ok ? parseResolvedEvanRouteStops(result?.stops) : [];
+                                            routeStopsForReceipt = resolvedStops.length === requestedRouteStops.length
+                                                ? preserveUnchangedEvanRoutePins(resolvedStops, pendingStops)
+                                                : unresolvedStops();
+                                        } catch {
+                                            routeStopsForReceipt = unresolvedStops();
+                                        }
+                                        signal.throwIfAborted();
+                                        if (routeGeneration !== evanRouteGeneration || !isMounted || closeHandled) throw new Error('View superseded');
+                                        evanAddressStopsRef.current = routeStopsForReceipt;
+                                        if (isMounted) setEvanAddressStops(routeStopsForReceipt);
+                                    }
+
+                                    if (isMounted) {
+                                        // Read the authoritative refs when React applies the update. This
+                                        // prevents an earlier tool snapshot from replacing a newer turn.
+                                        setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                                        await new Promise<void>((resolve) => {
+                                            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                                        });
+                                    }
+
+                                    // Re-read after opening so speech chunks arriving during the tool call
+                                    // are included both in the visible planner and in the tool receipt.
+                                    signal.throwIfAborted();
+                                    if (routeGeneration !== evanRouteGeneration || !isMounted || closeHandled) throw new Error('View superseded');
+                                    const refreshedTurns = snapshotEvanPlannerTurns();
+                                    if (isMounted) setWorkbenchTurns(() => snapshotEvanPlannerTurns());
+                                    const receiptModel = buildEvanMovePlan(refreshedTurns, routeStopsForReceipt);
+                                    const streetPins = receiptModel.stops.filter((stop) => (
+                                        stop.precision === 'address' || stop.precision === 'address-range'
+                                    )).length;
+                                    const unresolvedAddresses = receiptModel.stops.filter((stop) => stop.precision === 'unresolved').length;
+                                    return JSON.stringify({
+                                        status: requestedRouteStops.length ? 'move_route_refreshed' : 'move_planner_opened',
+                                        view,
+                                        currentSessionUserTurns: refreshedTurns.filter((turn) => turn.role === 'user').length,
+                                        streetPins,
+                                        unresolvedAddresses,
+                                        visibleFacts: [
+                                            ...receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
+                                            ...receiptModel.possibleStops.map((stop) => `Possible ${stop.label || 'stop'} in ${stop.city}; not on the mapped route`),
+                                        ],
+                                        visibleStops: receiptModel.stops.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
+                                        instruction: unresolvedAddresses
+                                            ? 'The requested working Move Planner view is open, but one or more street addresses could not be verified. Say that briefly and ask the visitor to restate only the unresolved address. Do not claim the route is confirmed.'
+                                            : streetPins
+                                                ? 'The requested working Move Planner route is open with receipt-supported street-level pins. Confirm that briefly. Do not call it a confirmed driving route, quote, booking, or operational approval.'
+                                                : 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
                                     });
-                                    const result = await response.json().catch(() => null) as { stops?: unknown } | null;
-                                    const resolvedStops = response.ok ? parseResolvedEvanRouteStops(result?.stops) : [];
-                                    routeStopsForReceipt = resolvedStops.length === requestedRouteStops.length
-                                        ? resolvedStops
-                                        : pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
-                                } catch {
-                                    routeStopsForReceipt = pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                }, { signal: evanSessionAbort.signal });
+                            } catch (failure) {
+                                if (evanSessionAbort.signal.aborted || closeHandled || requestedCloseReason || !isMounted) {
+                                    return JSON.stringify({ status: 'session_closing', retryAllowed: false,
+                                        instruction: 'This operation was cancelled because the session is closing. Do not speak or retry. Follow only the existing farewell protocol.' });
                                 }
-                                evanAddressStopsRef.current = routeStopsForReceipt;
-                                if (isMounted) setEvanAddressStops(routeStopsForReceipt);
-                            }
-
-                            if (isMounted) {
-                                // Read the authoritative refs when React applies the update. This
-                                // prevents an earlier tool snapshot from replacing a newer turn.
-                                setWorkbenchTurns(() => snapshotEvanPlannerTurns());
-                                await new Promise<void>((resolve) => {
-                                    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                                if (routeGeneration !== evanRouteGeneration) {
+                                    return JSON.stringify({ status: 'update_superseded', retryAllowed: false,
+                                        instruction: 'Newer visitor details or a planner request superseded this update. Do not speak about this old result or retry. Continue from the latest visitor correction; confirm any changed street address before requesting a new street pin.' });
+                                }
+                                if (isMounted && !closeHandled && !evanSessionAbort.signal.aborted && routeGeneration === evanRouteGeneration) {
+                                    const unresolved = evanAddressStopsRef.current?.map(stop => stop.precision === 'pending'
+                                        ? { ...stop, precision: 'unresolved' as const } : stop);
+                                    if (unresolved) {
+                                        evanAddressStopsRef.current = unresolved;
+                                        setEvanAddressStops(unresolved);
+                                    }
+                                }
+                                console.warn('[Evan Anam] Planner update not confirmed', {
+                                    reason: failure instanceof EvanToolExecutionError ? failure.code : 'failed', contentLogged: false,
                                 });
+                                return JSON.stringify({
+                                    status: 'move_planner_update_unconfirmed', retryAllowed: false,
+                                    instruction: 'The latest planner update could not be confirmed. Briefly explain that and continue the moving conversation from details already shared. Do not claim pins or route changes were applied, ask the caller to repeat the whole move, or retry automatically.',
+                                });
+                            } finally {
+                                if (evanRouteAbort === routeAbort) evanRouteAbort = null;
                             }
-
-                            // Re-read after opening so speech chunks arriving during the tool call
-                            // are included both in the visible planner and in the tool receipt.
-                            const refreshedTurns = snapshotEvanPlannerTurns();
-                            if (isMounted) setWorkbenchTurns(() => snapshotEvanPlannerTurns());
-                            const receiptModel = buildEvanMovePlan(refreshedTurns, routeStopsForReceipt);
-                            const streetPins = routeStopsForReceipt.filter((stop) => (
-                                stop.precision === 'address' || stop.precision === 'address-range'
-                            )).length;
-                            const unresolvedAddresses = routeStopsForReceipt.filter((stop) => stop.precision === 'unresolved').length;
-                            return JSON.stringify({
-                                status: requestedRouteStops.length ? 'move_route_refreshed' : 'move_planner_opened',
-                                view,
-                                currentSessionUserTurns: refreshedTurns.filter((turn) => turn.role === 'user').length,
-                                streetPins,
-                                unresolvedAddresses,
-                                visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
-                                visibleStops: routeStopsForReceipt.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
-                                instruction: unresolvedAddresses
-                                    ? 'The requested working Move Planner view is open, but one or more street addresses could not be verified. Say that briefly and ask the visitor to restate only the unresolved address. Do not claim the route is confirmed.'
-                                    : streetPins
-                                        ? 'The requested working Move Planner route is open with receipt-supported street-level pins. Confirm that briefly. Do not call it a confirmed driving route, quote, booking, or operational approval.'
-                                        : 'The requested working Move Planner view is open. Confirm that briefly. Do not claim a quote, booking, confirmed route, or operational approval.',
-                            });
                         },
+                        onComplete: async () => {},
+                        onFail: async () => {},
                     }));
                 }
                 const memoryPolicyContext = tokenPayload.memoryPolicyContextAvailable === true
@@ -776,6 +968,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         setError(`VoiceMeeter bridge could not start: ${permissionError}`);
                     } else if (isAmyCara4) {
                         setError('Microphone access is blocked. Allow microphone access for this site in your browser, then restart the Amy session.');
+                    } else if (isEvan) {
+                        setError('Microphone access is blocked. Allow microphone access for this site in your browser, then restart the Evan session.');
                     } else {
                         return;
                     }
@@ -824,6 +1018,59 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 // Capture live conversation chunks
                 const handleMessageStream = (messageEvent: MessageStreamEvent) => {
+                    if (isEvan) {
+                        const update = evanTranscript.push(messageEvent);
+                        if (update.replay) return;
+                        if (messageEvent.role === 'user' && messageEvent.content.trim()) {
+                            // Transcript chunks are a backup when the VAD event is late/missing.
+                            cancelEvanPendingClose();
+                            if (!evanUserBoundaries.has(messageEvent.id)) {
+                                evanUserBoundaries.set(messageEvent.id, { speechGeneration: evanSpeechGeneration,
+                                    turnGeneration: ++evanUserTurnGeneration, correlationId: evanSpeechCorrelationId });
+                                if (evanUserBoundaries.size > 128) evanUserBoundaries.delete(evanUserBoundaries.keys().next().value!);
+                            }
+                        } else if (messageEvent.role === 'persona') {
+                            if (evanPersonaMessage?.id !== messageEvent.id) {
+                                evanPersonaMessage = { id: messageEvent.id, text: '', interrupted: false };
+                            }
+                            evanPersonaMessage.text = (evanPersonaMessage.text + messageEvent.content).slice(-8_000);
+                            evanPersonaMessage.interrupted ||= messageEvent.interrupted === true;
+                            if (evanRefusedCloseContext) {
+                                const rejectedFarewellText = evanRefusedCloseContext.baselineId === messageEvent.id
+                                    ? evanPersonaMessage.text.slice(evanRefusedCloseContext.baselineLength)
+                                    : evanPersonaMessage.text;
+                                if (evanRefusedCloseRecovery?.observePersona(rejectedFarewellText)) {
+                                    evanPersonaMessage.interrupted = true;
+                                }
+                            }
+                        }
+                        currentMessageRef.current = update.pending?.content ?? '';
+                        currentRoleRef.current = update.pending?.role ?? '';
+                        // Process a real message boundary even when the provider omits
+                        // its final marker. Other agents keep their existing stream path.
+                        update.completed.forEach(recordEvanCompletedTurn);
+                        if (messageEvent.role === 'persona' && messageEvent.content.trim()) {
+                            evanResponseRecovery?.agentResponseStarted();
+                        }
+                        if (evanPlannerEnabled && isMounted && !closeHandled && !requestedCloseReason) {
+                            evanPlannerAutoOpen?.observeMessage(messageEvent);
+                        }
+                        if (messageEvent.role === 'persona' && messageEvent.endOfSpeech
+                            && evanPersonaMessage?.id === messageEvent.id) {
+                            // Only an explicit, uninterrupted audio-completion marker
+                            // can drain a farewell. Message boundaries are not audio ends.
+                            const farewellText = evanCloseBaselineMessage?.id === messageEvent.id
+                                ? evanPersonaMessage.text.slice(evanCloseBaselineMessage.length)
+                                : evanPersonaMessage.text;
+                            const wasArmed = evanCloseCoordinator?.isArmed();
+                            const farewellAccepted = evanCloseCoordinator?.completeFarewell(farewellText, evanPersonaMessage.interrupted);
+                            if (wasArmed) console.info('[Evan Anam] Farewell completion observed', {
+                                accepted: farewellAccepted === true, interrupted: evanPersonaMessage.interrupted,
+                                hasPostArmText: Boolean(farewellText.trim()), contentLogged: false,
+                            });
+                        }
+                        return;
+                    }
                     const deliverAmyUnsafeOutputRecovery = (reason: AmyUnsafeSpokenOutputReason) => {
                         if (amyUnsafeOutputRecoveryTimer !== null) {
                             window.clearTimeout(amyUnsafeOutputRecoveryTimer);
@@ -879,6 +1126,9 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             .catch(() => console.error('[Amy Anam] Unsafe-output recovery was not confirmed'));
                     };
                     const normalizedRole = transcriptRole(messageEvent.role);
+                    if (normalizedRole === 'agent' && messageEvent.content.trim()) {
+                        evanResponseRecovery?.agentResponseStarted();
+                    }
                     if (isAmyCara4 && normalizedRole === 'agent') {
                         if (suppressingAmyUnsafeOutput) {
                             if (messageEvent.endOfSpeech) {
@@ -1037,7 +1287,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 } else if (!hasAmyCapabilityOverviewIntent(completedUserTurn)) {
                                     lastAmyCapabilityIntentTurn = '';
                                 }
-                                if (hasExplicitAmyCloseIntent(completedUserTurn)) {
+                                if (isAmyCara4 && hasExplicitAmyCloseIntent(completedUserTurn)) {
                                     pendingAmyHardCloseIntent = true;
                                     requestedCloseReason = 'user_requested_end';
                                     try {
@@ -1046,14 +1296,14 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         console.error('[Amy Anam] Hard-close context was not confirmed');
                                     }
                                 }
-                                if (hasAmySoftCloseIntent(completedUserTurn)) {
+                                if (isAmyCara4 && hasAmySoftCloseIntent(completedUserTurn)) {
                                     try {
                                         anamClient.addContext('The visitor expressed a soft close. Call end_amy_session silently exactly once. Follow its authoritative receipt: give one compact closing motion that ends with the exact farewell, ask no question, and never call the tool a second time.');
                                     } catch {
                                         console.error('[Amy Anam] Closing motion context was not confirmed');
                                     }
                                 }
-                                if (hasAmySpokenEmailAttempt(completedUserTurn)) {
+                                if (isAmyCara4 && hasAmySpokenEmailAttempt(completedUserTurn)) {
                                     try {
                                         anamClient.addContext('Private contact rule: the visitor spoke an email-like phrase. Do not parse, repeat, spell, confirm, or store it. The verified website check-in address remains authoritative.');
                                     } catch {
@@ -1074,7 +1324,6 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             }
                         }
                         if (transcriptRole(messageEvent.role) === 'agent') {
-                            evanCloseCoordinator?.completeFarewell();
                             daniCloseCoordinator?.completeFarewell();
                             if (!amyFarewellRecovery) amyCloseCoordinator?.completeFarewell();
                         }
@@ -1090,6 +1339,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleConnectionClosed = async (reason: ConnectionClosedCode) => {
                     if (closeHandled) return;
                     closeHandled = true;
+                    evanPlannerAutoOpen?.dispose();
+                    evanSessionAbort.abort();
+                    evanResponseRecovery?.dispose();
+                    evanRefusedCloseRecovery?.dispose();
                     amyArtifactOperation.cancel();
                     evanCloseCoordinator?.dispose();
                     daniCloseCoordinator?.dispose();
@@ -1441,13 +1694,61 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     removeCloseToolHandler = anamClient.registerToolCallHandler(
                         'end_mullins_session',
                         {
-                            onStart: async () => {
+                            onStart: async payload => {
+                                if (!isMounted || closeHandled || evanSessionAbort.signal.aborted) {
+                                    return JSON.stringify({ status: 'session_closed', instruction: 'The session is already closed. Do not speak or retry.' });
+                                }
+                                const toolCorrelation = payload.userActionCorrelationId;
+                                if (!evanUserSpeaking && (!evanSpeechCorrelationId || !toolCorrelation
+                                    || toolCorrelation === 'unknown' || toolCorrelation === evanSpeechCorrelationId)) {
+                                    const pendingUser = evanTranscript.finalizeUserAtToolBoundary();
+                                    if (pendingUser) {
+                                        currentMessageRef.current = '';
+                                        currentRoleRef.current = '';
+                                        recordEvanCompletedTurn(pendingUser);
+                                    }
+                                }
+                                const staleTool = evanCloseCandidate?.correlationId && toolCorrelation && toolCorrelation !== 'unknown'
+                                    && evanCloseCandidate.correlationId !== toolCorrelation;
+                                if (evanUserSpeaking || !evanCloseCandidate || staleTool
+                                    || !hasEvanCloseIntent(evanCloseCandidate.text, evanCloseCandidate.previousAgentText)) {
+                                    if (!evanUserSpeaking && evanCloseCandidate && !staleTool && !requestedCloseReason) {
+                                        // Repeated refusals must not move the baseline past
+                                        // the start of a farewell that is already streaming.
+                                        evanRefusedCloseContext ??= { turnGeneration: evanUserTurnGeneration,
+                                            speechGeneration: evanSpeechGeneration, baselineId: evanPersonaMessage?.id,
+                                            baselineLength: evanPersonaMessage?.text.length ?? 0 };
+                                        const pendingReply = evanTranscript.getPending();
+                                        const alreadyResponded = transcriptRef.current.at(-1)?.role === 'agent'
+                                            || (pendingReply?.role === 'persona' && Boolean(pendingReply.content.trim()));
+                                        // An existing question may be awaiting the visitor.
+                                        // Never turn that legitimate pause into a repeated question.
+                                        evanRefusedCloseRecovery?.rejectClose({ allowSilenceRecovery: !alreadyResponded });
+                                    }
+                                    console.info('[Evan Anam] Premature close request rejected', {
+                                        visitorSpeaking: evanUserSpeaking, completedVisitorTurn: Boolean(evanCloseCandidate),
+                                        staleTool: Boolean(staleTool), contentLogged: false,
+                                    });
+                                    return JSON.stringify({ status: 'continue_conversation', accepted: false, retryAllowed: false,
+                                        instruction: evanUserSpeaking || !evanCloseCandidate || staleTool
+                                            ? 'This close request is not authorized. Do not say goodbye, retry, or speak over the visitor. Wait for the current visitor turn to finish.'
+                                            : 'This is a deliberate refusal, not a tool failure. Do not say goodbye, retry this tool, restart a readback, or repeat an answered question. The latest visitor answer is complete: acknowledge it briefly and ask one useful unanswered moving question, or ask whether they have anything else to add. Only wait silently if you have already asked a NEW question after that latest answer. A contact confirmation or callback preference is not permission to end. Do not promise that a callback has been scheduled.' });
+                                }
                                 requestedCloseReason = 'user_requested_end';
+                                evanRefusedCloseRecovery?.cancel();
+                                evanRefusedCloseContext = null;
                                 const armed = evanCloseCoordinator?.arm() === true;
+                                if (armed) {
+                                    evanCloseBaselineMessage = evanPersonaMessage
+                                        ? { id: evanPersonaMessage.id, length: evanPersonaMessage.text.length } : null;
+                                    if (evanPersonaMessage) evanPersonaMessage.interrupted = false;
+                                }
                                 console.info('[Evan Anam] Farewell close armed', { armed });
                                 return JSON.stringify({
                                     status: armed ? 'farewell_required' : 'farewell_already_armed',
-                                    instruction: 'Say exactly one brief warm farewell now: "Thank you for speaking with Mullins Moving. Take care." Do not ask a question, add a recap, or mention ending the call. The browser will close after the farewell finishes.',
+                                    instruction: armed
+                                        ? 'Say exactly one brief warm farewell now: "Thank you for speaking with Mullins Moving. Take care." Do not ask a question, add a recap, or mention ending the call. The browser will close after the farewell finishes.'
+                                        : 'The farewell is already pending. Do not repeat it, speak again, or call the tool again. If the visitor resumes speaking, listen and continue helping instead.',
                                 });
                             },
                         },
@@ -1456,36 +1757,62 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                         'send_mullins_follow_up_email',
                         {
                             onStart: async payload => {
+                                if (evanSessionAbort.signal.aborted || closeHandled || requestedCloseReason || !isMounted) {
+                                    return JSON.stringify({ status: 'session_closing', retryAllowed: false,
+                                        instruction: 'Do not speak, schedule follow-up, or retry. Follow only the existing farewell protocol.' });
+                                }
                                 if (tokenPayload.agentMailAvailable !== true) {
                                     return JSON.stringify({
                                         status: 'email_unavailable',
-                                        instruction: 'Say that email is temporarily unavailable. Do not claim anything was sent.',
+                                        instruction: 'No verified website recap is available for this session. Say that briefly and continue the moving conversation. Do not ask for an email address or claim anything was sent.',
                                     });
                                 }
                                 if (completedUserTurns < 1) {
-                                    throw new Error('Continue the moving conversation before offering an email follow-up.');
+                                    return JSON.stringify({ status: 'conversation_not_started', instruction: 'Continue the moving conversation before discussing follow-up. Do not retry this tool now.' });
                                 }
                                 if (payload.arguments.userConfirmed !== true) {
-                                    throw new Error('Ask the visitor for explicit permission before scheduling the Mullins follow-up.');
+                                    return JSON.stringify({ status: 'permission_not_confirmed', instruction: 'Do not schedule or claim follow-up without the verified website opt-in. Continue the moving conversation without asking for an email address.' });
                                 }
                                 if (!sessionSpineActive || !launchId || !providerSessionId || !bindingPromise) {
-                                    throw new Error('The secure session is not ready. Continue the conversation and try once more.');
+                                    return JSON.stringify({ status: 'session_not_ready', retryAllowed: false, instruction: 'The follow-up could not be confirmed. Continue the conversation without claiming an email was scheduled and do not retry automatically.' });
                                 }
-                                await bindingPromise;
-                                const result = await sendAmyAnamFollowUpEmail({
-                                    launchId, sessionId: providerSessionId, userConfirmed: true,
-                                });
-                                console.info('[Evan Anam AgentMail] Three-message post-session intent recorded', {
-                                    status: result.status, duplicate: result.duplicate, contactContentLogged: false,
-                                });
-                                return JSON.stringify({
-                                    status: result.status, queued: true, sent: false, duplicate: result.duplicate,
-                                    receiptId: result.receiptId,
-                                    instruction: result.duplicate
-                                        ? 'Confirm briefly that the conversation recap is already scheduled for after the session. Do not say it was sent, and do not mention a quote or estimate being emailed.'
-                                        : 'Confirm briefly that the conversation recap will be emailed after this session ends. If a quote, estimate, or walkthrough was discussed, say Mullins staff must separately review that request. Never say a quote, estimate, price, booking, or appointment will be emailed, included, prepared, sent, or confirmed. Continue naturally.',
-                                });
+                                const emailLaunchId = launchId;
+                                const emailSessionId = providerSessionId;
+                                try {
+                                    const result = await runEvanToolWithDeadline(async signal => {
+                                        await bindingPromise;
+                                        signal.throwIfAborted();
+                                        return sendAmyAnamFollowUpEmail({
+                                            launchId: emailLaunchId, sessionId: emailSessionId, userConfirmed: true,
+                                            fetchImpl: (input, init) => fetch(input, { ...init, signal }),
+                                        });
+                                    }, { signal: evanSessionAbort.signal });
+                                    console.info('[Evan Anam AgentMail] Three-message post-session intent recorded', {
+                                        status: result.status, duplicate: result.duplicate, contactContentLogged: false,
+                                    });
+                                    return JSON.stringify({
+                                        status: result.status, queued: true, sent: false, duplicate: result.duplicate,
+                                        receiptId: result.receiptId,
+                                        instruction: result.duplicate
+                                            ? 'Confirm briefly that the conversation recap is already scheduled for after the session. Do not say it was sent, and do not mention a quote or estimate being emailed.'
+                                            : 'Confirm briefly that the conversation recap will be emailed after this session ends. If a quote, estimate, or walkthrough was discussed, say Mullins staff must separately review that request. Never say a quote, estimate, price, booking, or appointment will be emailed, included, prepared, sent, or confirmed. Continue naturally.',
+                                    });
+                                } catch (failure) {
+                                    if (evanSessionAbort.signal.aborted || closeHandled || requestedCloseReason || !isMounted) {
+                                        return JSON.stringify({ status: 'session_closing', retryAllowed: false,
+                                            instruction: 'This operation was cancelled because the session is closing. Do not speak or retry. Follow only the existing farewell protocol.' });
+                                    }
+                                    console.warn('[Evan Anam] Follow-up confirmation unavailable', {
+                                        reason: failure instanceof EvanToolExecutionError ? failure.code : 'failed', contentLogged: false,
+                                    });
+                                    return JSON.stringify({
+                                        status: 'email_confirmation_unavailable', sent: false, retryAllowed: false,
+                                        instruction: 'Say you could not confirm the follow-up status, then continue the moving conversation. Do not claim that email was sent, scheduled, cancelled, or failed to send. Do not ask for an address or retry automatically.',
+                                    });
+                                }
                             },
+                            onComplete: async () => {},
+                            onFail: async () => {},
                         },
                     );
                 }
@@ -1497,12 +1824,41 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     });
                 };
 
+                const handleEvanSpeechStarted = (correlationId: string) => {
+                    evanSpeechGeneration += 1;
+                    evanUserSpeaking = true;
+                    evanSpeechCorrelationId = correlationId && correlationId !== 'unknown' ? correlationId : undefined;
+                    cancelEvanPendingClose();
+                    evanResponseRecovery?.userSpeechStarted(correlationId);
+                };
+                const handleEvanSpeechEnded = (correlationId: string) => {
+                    if (!evanSpeechCorrelationId || !correlationId || correlationId === 'unknown' || correlationId === evanSpeechCorrelationId) {
+                        evanUserSpeaking = false;
+                    }
+                    evanResponseRecovery?.userSpeechEnded(correlationId);
+                };
+                const handleEvanToolStarted = (event: { toolCallId: string; toolName: string; userActionCorrelationId?: string }) => {
+                    evanResponseRecovery?.toolStarted(event);
+                    if (isEvan) console.info('[Evan Anam] Tool started', { tool: event.toolName, contentLogged: false });
+                };
+                const handleEvanToolFinished = (event: { toolCallId: string; toolName: string; userActionCorrelationId?: string }) => {
+                    evanResponseRecovery?.toolFinished(event);
+                    if (isEvan) console.info('[Evan Anam] Tool settled', { tool: event.toolName, contentLogged: false });
+                };
+
                 anamClient.addListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
                 anamClient.addListener(AnamEvent.INPUT_AUDIO_STREAM_STARTED, handleInputAudioStreamStarted);
                 anamClient.addListener(AnamEvent.SESSION_READY, handleSessionReady);
                 anamClient.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                 anamClient.addListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
                 anamClient.addListener(AnamEvent.SERVER_WARNING, handleServerWarning);
+                if (isEvan) {
+                    anamClient.addListener(AnamEvent.USER_SPEECH_STARTED, handleEvanSpeechStarted);
+                    anamClient.addListener(AnamEvent.USER_SPEECH_ENDED, handleEvanSpeechEnded);
+                    anamClient.addListener(AnamEvent.TOOL_CALL_STARTED, handleEvanToolStarted);
+                    anamClient.addListener(AnamEvent.TOOL_CALL_COMPLETED, handleEvanToolFinished);
+                    anamClient.addListener(AnamEvent.TOOL_CALL_FAILED, handleEvanToolFinished);
+                }
                 removeClientListeners = () => {
                     anamClient.removeListener(AnamEvent.CONNECTION_ESTABLISHED, handleConnectionEstablished);
                     anamClient.removeListener(AnamEvent.MIC_PERMISSION_DENIED, handleMicPermissionDenied);
@@ -1511,6 +1867,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     anamClient.removeListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, handleMessageStream);
                     anamClient.removeListener(AnamEvent.CONNECTION_CLOSED, handleConnectionClosed);
                     anamClient.removeListener(AnamEvent.SERVER_WARNING, handleServerWarning);
+                    if (isEvan) {
+                        anamClient.removeListener(AnamEvent.USER_SPEECH_STARTED, handleEvanSpeechStarted);
+                        anamClient.removeListener(AnamEvent.USER_SPEECH_ENDED, handleEvanSpeechEnded);
+                        anamClient.removeListener(AnamEvent.TOOL_CALL_STARTED, handleEvanToolStarted);
+                        anamClient.removeListener(AnamEvent.TOOL_CALL_COMPLETED, handleEvanToolFinished);
+                        anamClient.removeListener(AnamEvent.TOOL_CALL_FAILED, handleEvanToolFinished);
+                    }
                     cancelWorkbenchHandlers.forEach((cancel) => cancel());
                 };
 
@@ -1532,6 +1895,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
         return () => {
             isMounted = false;
+            evanPlannerAutoOpen?.dispose();
+            if (evanPlannerAutoOpenRef.current === evanPlannerAutoOpen) evanPlannerAutoOpenRef.current = null;
+            evanSessionAbort.abort();
+            evanResponseRecovery?.dispose();
+            evanRefusedCloseRecovery?.dispose();
             amyArtifactOperation.cancel();
             window.removeEventListener('pagehide', handlePageHide);
             window.removeEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
@@ -1599,14 +1967,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <div className={`flex h-full w-full items-center justify-center transition-[padding] duration-500 ease-out ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(62vw,980px)]' : ''}`}>
+            <div className={`flex h-full w-full items-center justify-center transition-[padding] duration-500 ease-out ${evanPlannerEnabled && evanPlannerOpen ? 'flex-col gap-4' : ''} ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(62vw,980px)]' : ''}`}>
                 <video
                     ref={videoRef}
                     id="persona-video"
                     autoPlay
                     playsInline
-                    className={`${evanPlannerEnabled ? 'aspect-video h-auto max-h-full w-full max-w-[1080px] rounded-2xl object-contain shadow-[0_28px_90px_rgba(0,0,0,.45)]' : personaId === DANI_PERSONA_ID ? 'h-full w-full scale-[.84] origin-center transform-gpu object-contain object-center shadow-[0_24px_80px_rgba(0,0,0,.24)] sm:scale-[.8] lg:scale-[.76] motion-reduce:transform-none' : 'h-full w-full object-contain'} transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
+                    className={`${evanPlannerEnabled ? `aspect-video h-auto min-h-0 ${evanPlannerOpen ? 'max-h-[calc(100%-4rem)]' : 'max-h-full'} w-full max-w-[1080px] rounded-2xl object-contain shadow-[0_28px_90px_rgba(0,0,0,.45)]` : personaId === DANI_PERSONA_ID ? 'h-full w-full scale-[.84] origin-center transform-gpu object-contain object-center shadow-[0_24px_80px_rgba(0,0,0,.24)] sm:scale-[.8] lg:scale-[.76] motion-reduce:transform-none' : 'h-full w-full object-contain'} transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
                 />
+                {evanPlannerEnabled && evanPlannerOpen && (
+                    <EvanSessionExit placement="picture-in-picture" onExit={onClose} disabled={isFinalizing} />
+                )}
             </div>
 
             {workbenchEnabled && !workbenchOpen && !error && !isConnecting && (
@@ -1647,7 +2018,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             {evanPlannerEnabled && !evanPlannerOpen && !error && !isConnecting && (
                 <button
                     type="button"
-                    onClick={() => setEvanPlannerOpen(true)}
+                    onClick={() => {
+                        evanPlannerAutoOpenRef.current?.markOpened();
+                        setEvanPlannerOpen(true);
+                    }}
                     className="absolute right-5 top-20 z-30 inline-flex items-center gap-2 rounded-xl border border-[#ffc857]/35 bg-[#5d24d6]/88 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.12em] text-white shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 hover:border-[#ffc857]/70 hover:bg-[#6f34e8]"
                     data-testid="open-evan-move-planner"
                 >
@@ -1664,8 +2038,14 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     isOpen={evanPlannerOpen}
                     turns={workbenchTurns}
                     addressStops={evanAddressStops}
+                    contact={evanPlannerContact}
                     requestedView={evanPlannerView}
-                    onClose={() => setEvanPlannerOpen(false)}
+                    onExitSession={onClose}
+                    isFinalizing={isFinalizing}
+                    onClose={() => {
+                        evanPlannerAutoOpenRef.current?.dismiss();
+                        setEvanPlannerOpen(false);
+                    }}
                 />
             )}
 

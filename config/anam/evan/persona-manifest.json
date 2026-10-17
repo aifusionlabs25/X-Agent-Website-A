@@ -1,10 +1,15 @@
 {
   "schemaVersion": 1,
-  "personaId": "4b7e933a-ea04-4b84-b418-72c0762545e6",
+  "personaId": "6097c73e-b6ef-48c5-94c7-9a95d4863b99",
+  "replacesPersonaId": "4b7e933a-ea04-4b84-b418-72c0762545e6",
   "doNotUsePersonaId": "8a991c93-0c95-42c5-8c22-a67428946eb8",
   "doNotUseReason": "This ID is the live James Knowles Law Firm persona as verified on 2026-07-16.",
-  "expectedName": "Evan Mullins Moving Concierge",
+  "expectedName": "Evan Mullins Moving Concierge - Replacement Candidate",
   "expectedAvatarModel": "cara-4",
+  "expectedAvatarId": "a2146a9f-c46b-4d6a-b2c7-c66c6a559665",
+  "expectedVoiceId": "615ad2e8-c34a-4993-8aa3-36fd4dc3a876",
+  "expectedLlmId": "a7cf662c-2ace-4de1-a21e-ef0fbf144bb7",
+  "minimumPublishedAt": "2026-09-11T01:09:12.390Z",
   "initialMessage": "Hi, I'm Evan with Mullins Moving. Tell me a little about the move you're planning, and I'll help you work through the details.",
   "voiceDetectionOptions": {
     "endOfSpeechSensitivity": 0.05,
@@ -14,9 +19,17 @@
     "speechEnhancementLevel": 0.7
   },
   "promptFile": "EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md",
+  "expectedPromptSha256": "94eb7d7d086edea4e5167280c60c9adefe6243dade1a8d90d0768a84e0a66ef7",
   "zeroDataRetention": false,
   "enableAudioPassthrough": false,
   "knowledgeToolName": "Knowledge_Evan_Mullins_Moving",
-  "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_mullins_session", "send_mullins_follow_up_email", "show_move_planner"]
+  "requiredToolNames": ["Knowledge_Evan_Mullins_Moving", "skip_turn", "end_mullins_session", "send_mullins_follow_up_email", "show_move_planner"],
+  "toolIds": {
+    "Knowledge_Evan_Mullins_Moving": "fc93e067-9254-4635-a4a6-645970d12548",
+    "skip_turn": "69a89bda-9e11-443f-84c0-1cbea75e4fcb",
+    "end_mullins_session": "ac5c9f09-fc18-4702-8818-8d8b812164a9",
+    "send_mullins_follow_up_email": "bc0b4e00-3a04-4139-a699-b90c5c7b6415",
+    "show_move_planner": "db2dce25-ffd0-4913-89c5-e5901b42f127"
+  }
 }
 

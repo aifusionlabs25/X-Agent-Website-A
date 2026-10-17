@@ -132,7 +132,16 @@ export async function POST(req: Request) {
                 console.error('[Evan Anam Configuration] Out of sync', {
                     personaIdMatches: personaReadiness.personaIdMatches,
                     identityMatches: personaReadiness.identityMatches,
+                    publishedRevisionMatches: personaReadiness.publishedRevisionMatches,
                     cara4AvatarConfigured: personaReadiness.cara4AvatarConfigured,
+                    avatarIdMatches: personaReadiness.avatarIdMatches,
+                    voiceIdMatches: personaReadiness.voiceIdMatches,
+                    llmIdMatches: personaReadiness.llmIdMatches,
+                    promptHashMatches: personaReadiness.promptHashMatches,
+                    voiceDetectionConfigured: personaReadiness.voiceDetectionConfigured,
+                    sessionDataRetentionConfigured: personaReadiness.sessionDataRetentionConfigured,
+                    anamTranscriptionPipelineConfigured: personaReadiness.anamTranscriptionPipelineConfigured,
+                    toolAttachmentMatches: personaReadiness.toolAttachmentMatches,
                     missingToolNames: personaReadiness.missingToolNames,
                     missingPromptMarkers: personaReadiness.missingPromptMarkers,
                 });

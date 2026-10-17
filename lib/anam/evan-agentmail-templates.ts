@@ -9,6 +9,7 @@ export type EvanMovingIntake = {
     access: string[];
     inventory: string[];
     services: string[];
+    packingPlan: string[];
     customerCare: string[];
     quoteRequests: string[];
     coverageQuestions: string[];
@@ -51,12 +52,17 @@ export function redactEvanTranscript(turns: AmyTranscriptTurn[]): AmyTranscriptT
 }
 
 export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingIntake {
-    const userTurns = turns
-        .filter(turn => turn.role === 'user')
-        .map(turn => ({ role: 'user' as const, content: clean(turn.content, 2_000) }))
+    const normalizedTurns = turns
+        .map(turn => ({ role: turn.role, content: clean(turn.content, 2_000) }))
         .filter(turn => Boolean(turn.content));
+    const userTurns = normalizedTurns
+        .filter(turn => turn.role === 'user')
+        .map(turn => ({ role: 'user' as const, content: turn.content }));
     const text = userTurns.map(turn => turn.content).join(' ');
-    const plan = buildEvanMovePlan(userTurns);
+    // Preserve adjacent readback/confirmation context. The shared planner still
+    // requires visitor-grounded facts; agent speech alone cannot create a route.
+    const plan = buildEvanMovePlan(normalizedTurns);
+    const storageRequested = plan.services.includes('Storage stop');
 
     const routeStops = [...plan.stops];
     const cityPattern = '(Phoenix|Mesa|Chandler|Surprise|Scottsdale|Tempe|Gilbert|Glendale|Queen Creek|Peoria|Goodyear|Avondale|Buckeye)';
@@ -68,7 +74,7 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
     const moveType: string[] = [];
     if (/\b(elderly|senior|walker|wheelchair|retirement|assisted living)\b/i.test(text)) append(moveType, 'Senior move');
     if (/\b(house|home|apartment|condo|residential)\b/i.test(text)) append(moveType, 'Residential move');
-    if (routeStops.length > 2 || /\bstorage unit\b/i.test(text)) append(moveType, 'Multi-stop move');
+    if (routeStops.length > 2 || storageRequested && /\bstorage unit\b/i.test(text)) append(moveType, 'Multi-stop move');
     if (/\b(commercial|office)\b/i.test(text)) append(moveType, 'Commercial move');
     if (/\b(long[- ]distance|out of state)\b/i.test(text)) append(moveType, 'Long-distance move');
 
@@ -83,14 +89,10 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
     else if (plan.timing) append(timing, capitalize(plan.timing));
 
     const kitchenPacking = /\b(?:full packing\b[^.!?]{0,35}\bkitchen\b|full kitchen packing)\b/i.test(text);
-    const services = unique([
-        kitchenPacking ? 'Full kitchen packing' : '',
-        !kitchenPacking && /\bfull packing\b/i.test(text) ? 'Full packing' : '',
-        !kitchenPacking && !/\bfull packing\b/i.test(text) && /\bpacking\b/i.test(text) ? 'Packing support' : '',
-        /\bunpacking\b/i.test(text) ? 'Unpacking' : '',
-        /\blabor[- ]only\b/i.test(text) ? 'Labor-only support' : '',
-        /\bdisassembl(?:e|y|ing)\b/i.test(text) ? 'Furniture disassembly' : '',
-    ]);
+    const services = unique(plan.services
+        .filter(service => ['Full packing', 'Packing support', 'Unpacking', 'Labor-only support', 'Furniture disassembly'].includes(service))
+        .map(service => service === 'Full packing' && kitchenPacking ? 'Full kitchen packing' : service));
+    const packingPlan = plan.packingPlan ? [plan.packingPlan] : [];
     const inventoryRules: Array<[RegExp, string]> = [
         [/\bsectional(?: sofa)?\b/i, 'Sectional'],
         [/\btreadmill\b/i, 'Treadmill'],
@@ -137,10 +139,11 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
         /\b(?:do not|don't) have (?:a )?(?:full|complete) inventory\b/i.test(text)
             ? 'Complete inventory / approximate volume needs confirmation'
             : '',
+        ...plan.possibleStops.map(stop => `Possible ${stop.label || 'additional'} stop in ${stop.city} (not confirmed)`),
     ]);
     const propertyScope = unique([
         plan.propertyScope ? capitalize(plan.propertyScope) : '',
-        /\bstorage unit\b/i.test(text) ? 'Storage unit stop' : '',
+        storageRequested && /\bstorage unit\b/i.test(text) ? 'Storage unit stop' : '',
     ]);
 
     const intake: EvanMovingIntake = {
@@ -151,6 +154,7 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
         access,
         inventory,
         services,
+        packingPlan,
         customerCare,
         quoteRequests,
         coverageQuestions,
@@ -169,7 +173,7 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
     }
     if (!intake.access.length) missing.push('origin and destination access requirements');
     const storageAccessCaptured = /\bstorage unit\b[^.!?]{0,100}\b(stairs?|elevator|parking|driveway|gate|loading|ground floor|access)\b/i.test(text);
-    if (/\bstorage unit\b/i.test(text) && !storageAccessCaptured) missing.push('storage-unit access details');
+    if (storageRequested && /\bstorage unit\b/i.test(text) && !storageAccessCaptured) missing.push('storage-unit access details');
     const addressUnavailable = intake.unknowns.some(item => /street addresses/i.test(item));
     if (addressUnavailable || !/\b\d{1,6}\s+[A-Za-z0-9]/.test(text)) missing.push('exact street addresses');
     if (/\b(?:phone|contact number|reach me|call me)\b/i.test(text) && !findAuthorizedCallbackPhone(turns)) {
@@ -266,7 +270,10 @@ function recapBullets(intake: EvanMovingIntake): string[] {
     if (intake.moveType.length) items.push(`Move: ${listText(intake.moveType)}`);
     if (intake.originDestination.length) items.push(`Locations and route: ${listText(intake.originDestination)}`);
     if (intake.timing.length) items.push(`Requested timing: ${listText(intake.timing)}`);
-    if (intake.services.length || intake.inventory.length) items.push(`Services and special items: ${listText(unique([...intake.services, ...intake.inventory], 8))}`);
+    if (intake.services.length || intake.inventory.length || intake.packingPlan.length) items.push([
+        intake.services.length || intake.inventory.length ? `Services and special items: ${listText(unique([...intake.services, ...intake.inventory], 8))}` : '',
+        intake.packingPlan.length ? `Packing plan: ${listText(intake.packingPlan)}` : '',
+    ].filter(Boolean).join('. '));
     if (intake.access.length) items.push(`Access: ${listText(intake.access)}`);
     if (intake.customerCare.length) items.push(`Customer-care priorities: ${listText(intake.customerCare)}`);
     if (intake.quoteRequests.length || intake.coverageQuestions.length) items.push(`Questions for the Mullins team: ${listText(unique([...intake.quoteRequests, ...intake.coverageQuestions], 6))}`);
@@ -357,12 +364,14 @@ export function buildEvanEmailBundle(input: {
 
     const salesSections = ([
         ['Services requested', intake.services],
+        ['Packing plan', intake.packingPlan],
         ['Specialty / high-care items', intake.inventory],
         ['Access considerations', intake.access],
         ['Customer-care priorities', intake.customerCare],
         ['Quote request', intake.quoteRequests],
         ['Valuation / coverage questions', intake.coverageQuestions],
         ['Walkthrough preference', intake.walkthrough],
+        ['Details still to confirm', intake.unknowns],
     ] as Array<[string, string[]]>).filter(([, items]) => items.length > 0);
     const repActions = unique([
         callbackPhone
