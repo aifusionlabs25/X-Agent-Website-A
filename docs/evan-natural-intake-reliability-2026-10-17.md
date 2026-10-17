@@ -34,3 +34,13 @@ Local release results: 282 Evan checks passed; all 40 browser checkpoints passed
 Only the existing isolated candidate environment (`amy-ceo-rehearsal`, recovery namespace `evan-6097-candidate`) may be published. Keep the public website and Amy/Dani personas unchanged. Production baseline: `dpl_3AmVsSi9cbASHK7ZTiufPy24gmho`.
 
 Apply the candidate prompt only while it is idle, using the guarded updater with backup and read-back verification. Pair it with the new website readiness hash. Older candidate links will reject new sessions once the provider prompt changes; use the newly verified candidate link.
+
+## Published candidate verification
+
+- Runtime source checkpoint: `0280171` (following implementation checkpoint `0da4454`), pushed to the existing candidate branch.
+- Deployment: `dpl_5cV7FxH9J8ogiiQo7bieEjYwb4uK`, READY. URL: https://x-agent-website-bh5ef5rli-robs-projects-e72bad73.vercel.app/demo/evan (Vercel protection requires the temporary share link supplied in the chat). Next.js 16.4.1; cloud build approximately 28 seconds from build start to ready.
+- Managed prompt SHA-256: `57e5551ec033f1553713b559f87aaa9172de665c5edd0d32678ca65cb331fcb2`. Candidate-only prompt update completed with zero active sessions, backup, hash read-back, and non-prompt configuration preservation verified.
+- Deployed guest and synthetic-email entry checks passed: signed access cookie, correct candidate token, and email-consent isolation. No website engine session was bound and no email was sent by these checks.
+- Final standalone real-SDK session `688abe8e-240f-48aa-b103-c3e1a25f2ac5` completed six checkpoints in approximately 44 seconds. Manual review found no repeated unknown-date request, within-turn duplicate question, fabricated caller route answer, or freeze. Evan responded to self-packing and delivered the prescribed farewell; the harness stopped one second after completed farewell. It still asked a broad inventory-sizing question after a one-bedroom description; this was not treated as proof of perfectly natural conversation.
+- Live smoke output is private local test evidence under ignored `work/evan-6097-promotion/conversation-smoke/`. Synthetic typed messages are not proof of microphone/ASR performance, interrupted speech behavior, or actual email delivery.
+- The public domain was rechecked after the final publish and still resolved to `dpl_3AmVsSi9cbASHK7ZTiufPy24gmho`. Amy/Dani personas, main, and production were not changed.
