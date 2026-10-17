@@ -86,6 +86,13 @@ export async function POST(req: Request) {
         const isDani = resolution.personaId === DANI_PERSONA_ID;
         const isEvan = resolution.personaId === EVAN_PERSONA_ID;
         const evanLocalTestMode = isEvan && isEvanLocalTestMode();
+        // Disabling optional features must never disable Amy's invitation gate.
+        if (isAmyCara4 && (!spineConfig.gatesOpen || !memoryConfig.gatesOpen)) {
+            return noStoreJson(
+                { error: 'Amy session access is temporarily unavailable' },
+                { status: 503 },
+            );
+        }
         if (isDani && !daniSessionSecrets.configured) {
             console.error('[Dani Anam Session] Isolated session secrets are unavailable');
             return noStoreJson(
@@ -97,13 +104,6 @@ export async function POST(req: Request) {
             console.error('[Amy Anam Spine] Enabled but unavailable');
             return noStoreJson(
                 { error: 'Amy session tracking is temporarily unavailable' },
-                { status: 503 },
-            );
-        }
-        if (isAmyCara4 && memoryConfig.enabled && !memoryConfig.gatesOpen) {
-            console.error('[Amy Anam Memory] Enabled but unavailable');
-            return noStoreJson(
-                { error: 'Amy returning memory is temporarily unavailable' },
                 { status: 503 },
             );
         }
@@ -274,7 +274,7 @@ export async function POST(req: Request) {
             let browserSession = isDani
                 ? readDaniAnamBrowserSession(req, daniSessionSecrets.sessionSecret)
                 : readAmyAnamBrowserSession(req, spineConfig.signingSecret);
-            if (!browserSession && isAmyCara4 && memoryConfig.gatesOpen) {
+            if (!browserSession && isAmyCara4) {
                 return noStoreJson(
                     { error: 'Amy memory check-in is required' },
                     { status: 401 },
@@ -298,7 +298,7 @@ export async function POST(req: Request) {
                 browserCookieToken = created.token;
             }
 
-            if (isAmyCara4 && memoryConfig.gatesOpen) {
+            if (isAmyCara4) {
                 const identity = await readAmyAnamBrowserIdentity(browserSession.id);
                 if (!identity) {
                     return noStoreJson(

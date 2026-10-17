@@ -12,16 +12,54 @@ const TAYLOR_PERSONA_ID = '4183f1fe-9922-4ef5-ad47-9b1949dfdaa4';
 const CANARY_PERSONA_ID = '11111111-2222-4333-8444-555555555555';
 const allowedPersonaIds = [AMY_PUBLIC_PERSONA_ID, TAYLOR_PERSONA_ID];
 
-test('the public Amy persona remains the default', () => {
+test('all default Amy requests resolve to the protected configuration', () => {
+    for (const requestedVariant of [undefined, null, '', '   ']) {
+        assert.deepEqual(resolveAnamSessionPersona({
+            requestedPersonaId: AMY_PUBLIC_PERSONA_ID,
+            requestedVariant,
+            allowedPersonaIds,
+            amyCara4PersonaId: CANARY_PERSONA_ID,
+        }), {
+            ok: true,
+            personaId: CANARY_PERSONA_ID,
+            variant: AMY_CARA4_VARIANT,
+        });
+    }
+});
+
+test('other agents retain their existing default configuration', () => {
     assert.deepEqual(resolveAnamSessionPersona({
-        requestedPersonaId: AMY_PUBLIC_PERSONA_ID,
+        requestedPersonaId: TAYLOR_PERSONA_ID,
         requestedVariant: undefined,
         allowedPersonaIds,
         amyCara4PersonaId: CANARY_PERSONA_ID,
-    }), {
-        ok: true,
-        personaId: AMY_PUBLIC_PERSONA_ID,
-    });
+    }), { ok: true, personaId: TAYLOR_PERSONA_ID });
+});
+
+test('missing Amy configuration never falls back to the legacy public persona', () => {
+    for (const amyCara4PersonaId of [undefined, '', AMY_PUBLIC_PERSONA_ID]) {
+        const result = resolveAnamSessionPersona({
+            requestedPersonaId: AMY_PUBLIC_PERSONA_ID,
+            requestedVariant: undefined,
+            allowedPersonaIds,
+            amyCara4PersonaId,
+        });
+        assert.equal(result.ok, false);
+        assert.equal(result.status, 503);
+    }
+});
+
+test('malformed variants cannot select a default session', () => {
+    for (const requestedVariant of [false, 0, {}, [], ['amy-cara4']]) {
+        const result = resolveAnamSessionPersona({
+            requestedPersonaId: AMY_PUBLIC_PERSONA_ID,
+            requestedVariant,
+            allowedPersonaIds,
+            amyCara4PersonaId: CANARY_PERSONA_ID,
+        });
+        assert.equal(result.ok, false);
+        assert.equal(result.status, 400);
+    }
 });
 
 test('the Amy-only canary resolves to its server-side persona ID', () => {

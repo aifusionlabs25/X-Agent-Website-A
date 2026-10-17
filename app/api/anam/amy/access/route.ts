@@ -64,14 +64,8 @@ function safeIdentityStatus(input: {
 export async function GET(request: Request) {
     try {
         const config = readAmyAnamMemoryConfig();
-        if (!config.enabled) {
-            return noStoreJson(safeIdentityStatus({
-                required: false,
-                authenticated: true,
-            }));
-        }
         if (!config.gatesOpen) {
-            return noStoreJson({ error: 'Amy returning memory is temporarily unavailable' }, { status: 503 });
+            return noStoreJson({ error: 'Amy session access is temporarily unavailable' }, { status: 503 });
         }
         const spine = readAmyAnamSpineConfig();
         const browserSession = readAmyAnamBrowserSession(request, spine.signingSecret);
