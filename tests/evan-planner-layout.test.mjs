@@ -29,6 +29,7 @@ function render(source, props, expanded = false) {
         'lucide-react': new Proxy({}, { get: (_target, name) => name }),
         '@/lib/anam/evan-move-planner': plannerModel,
         '@/components/evan/EvanRouteMap': { __esModule: true, default: mapStub },
+        '@/components/evan/EvanSessionExit': { __esModule: true, default: 'EvanSessionExit' },
     };
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
         target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,

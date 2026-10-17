@@ -211,6 +211,15 @@ try {
         assert.equal(geometry.scrollTop, 0);
         assert.ok(geometry.canvas.height >= 220, JSON.stringify({ viewport, geometry }));
         assert.ok(geometry.controls.bottom <= geometry.footer.top + 1, JSON.stringify({ viewport, geometry }));
+        const exitGeometry = await page.evaluate(() => {
+            const exit = document.querySelector('[data-testid="evan-pip-exit"]');
+            const button = exit.getBoundingClientRect();
+            const video = document.getElementById('persona-video').getBoundingClientRect();
+            const panel = document.querySelector('[data-testid="evan-move-planner"]').getBoundingClientRect();
+            return { visible: getComputedStyle(exit).display !== 'none', below: button.top >= video.bottom,
+                onScreen: button.bottom <= innerHeight, leftOfPlanner: button.right <= panel.left };
+        });
+        assert.deepEqual(exitGeometry, { visible: true, below: true, onScreen: true, leftOfPlanner: true });
         await capture(`evan-layout-${viewport.width}x${viewport.height}`);
     }
     pass('Map and directions controls fit above the footer without scrolling at desktop, laptop, and short-window sizes');
@@ -417,6 +426,30 @@ try {
     assert.match(await map.innerText(), /1 street-level pin/i);
     pass('A view-only request supersedes a pending lookup with an explicit unresolved receipt and preserves the verified origin pin');
 
+    await ready('evan');
+    await message('user', 'I am moving from Mesa to Gilbert.', 'desktop-exit-route');
+    await planner.waitFor({ state: 'visible' });
+    await page.getByTestId('evan-pip-exit').click();
+    await page.getByTestId('session-exited').waitFor();
+    assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
+    pass('Desktop Exit under Evan ends the session through normal unmount cleanup without dismissing the planner first');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await ready('evan');
+    await message('user', 'I am moving from Mesa to Gilbert.', 'mobile-exit-route');
+    await planner.waitFor({ state: 'visible' });
+    const mobileExit = page.getByTestId('evan-planner-mobile-exit');
+    await mobileExit.waitFor({ state: 'visible' });
+    assert.equal(await page.getByTestId('evan-pip-exit').isVisible(), false);
+    const mobileBounds = await mobileExit.boundingBox();
+    assert.ok(mobileBounds && mobileBounds.y >= 0 && mobileBounds.y + mobileBounds.height <= 844);
+    await capture('evan-mobile-exit');
+    await mobileExit.click();
+    await page.getByTestId('session-exited').waitFor();
+    assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
+    pass('Mobile planner keeps a visible working Exit button without requiring planner dismissal');
+    await page.setViewportSize({ width: 1440, height: 900 });
+
     await page.clock.install();
     await ready('evan');
     const endCall = async metadata => JSON.parse(await page.evaluate(meta => window.__evanHarness.callTool('end_mullins_session', {}, meta), metadata || {}));
@@ -446,7 +479,7 @@ try {
     await message('user', 'That is all, goodbye.', 'close-bye-2');
     assert.equal((await endCall()).status, 'farewell_required');
     await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'close-farewell-2');
-    await page.clock.fastForward(1_000);
+    await page.clock.fastForward(300);
     await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_STARTED', 'continued-2'));
     await message('user', 'Actually, one more question about packing.', 'continued-user-2');
     await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_ENDED', 'continued-2'));
@@ -470,11 +503,26 @@ try {
     assert.equal((await endCall({ userActionCorrelationId: 'final-goodbye' })).status, 'farewell_required');
     assert.equal((await endCall({ userActionCorrelationId: 'final-goodbye' })).status, 'farewell_already_armed');
     await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'close-final-farewell');
-    await page.clock.fastForward(2_600);
+    await page.clock.fastForward(1_100);
     assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
     await page.clock.fastForward(13_000);
     assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
     pass('A fresh explicit goodbye closes once after the actual farewell; stale and duplicate end tools cannot accelerate it');
+
+    await ready('evan');
+    await message('persona', 'Let me know if there is anything else you would like to add.', 'same-id-farewell');
+    await message('user', "That's everything. Thanks, Evan. Goodbye.", 'latest-live-goodbye');
+    assert.equal((await endCall()).status, 'farewell_required');
+    await message('persona', '', 'same-id-farewell');
+    await page.clock.fastForward(1_100);
+    await assertStillLive();
+    await message('persona', 'Thank you for speaking with Mullins Moving. ', 'same-id-farewell', false);
+    await page.clock.fastForward(1_100);
+    await assertStillLive();
+    await message('persona', 'Take care.', 'same-id-farewell');
+    await page.clock.fastForward(1_100);
+    assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
+    pass('Exact latest goodbye closes within the brief drain even when Anam reuses its message ID; old markers and partial farewell cannot close');
 
     await ready('amy');
     await message('persona', 'If you’d like to discuss a new move, could you share the city you’re moving from and the city you’re moving to?', 'amy-natural-question');
@@ -487,7 +535,7 @@ try {
     assert.equal(await map.count(), 0);
     pass('Actual shared AnamPlayer keeps natural-question and visitor-route auto-open isolated from Amy');
 
-    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 7);
+    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 10);
     assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode'].includes(request.path)));
     assert.deepEqual(report.blockedRequests, []);
     assert.deepEqual(report.consoleErrors, []);

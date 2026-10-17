@@ -36,6 +36,29 @@ test('ordinary confirmations and gratitude do not authorize closing', () => {
     }
 });
 
+test('prompt-approved natural wrap-ups and bounded courtesy endings authorize closing', () => {
+    for (const phrase of [
+        "I'm set for now.", 'I am set for today, thank you.', "We're set for now.",
+        "That's everything.", 'That is everything for today, Evan.',
+        "That's all, thanks for your help.", "That's all. Thanks again for your help, Evan.",
+        "No that's it thank you Evan.", "No, that's it. Thank you, Evan.",
+        "That's everything. Thanks, Evan. Goodbye.",
+    ]) assert.equal(hasEvanCloseIntent(phrase), true, phrase);
+});
+
+test('natural wrap-up additions retain scope, question, quote, and continuation safeguards', () => {
+    for (const phrase of [
+        "I'm set for now with packing.", "That's everything about the inventory.",
+        "That's all, thanks for your help with the map. Now change the destination.",
+        "That's everything, but I still need the phone number.",
+        "I'm set for now, except I have one more question.",
+        "I'm not set for now.", "That isn't everything.",
+        "That's everything?", "I'm set for now?", 'Thanks for your help.',
+        '"I\'m set for now."', 'He said that is everything.',
+        'For example, that is everything.', 'If I say I am set for now, will you close?',
+    ]) assert.equal(hasEvanCloseIntent(phrase, 'Is there anything else?'), false, phrase);
+});
+
 test('short negatives authorize closing only in a final anything-else context', () => {
     for (const phrase of ['No.', 'No thanks.', 'No, thank you.', 'Nope.', 'No thanks, Evan.']) {
         for (const prior of [

@@ -53,6 +53,7 @@ function componentHarness(source, { state = {}, importFailure = false } = {}) {
         'next/image': { __esModule: true, default: 'img' },
         '@/lib/anam/evan-move-planner': plannerModel,
         '@/components/evan/EvanRouteMap': { __esModule: true, default: RouteMapStub },
+        '@/components/evan/EvanSessionExit': { __esModule: true, default: 'EvanSessionExit' },
         leaflet,
     };
     const code = ts.transpileModule(source, { compilerOptions: {

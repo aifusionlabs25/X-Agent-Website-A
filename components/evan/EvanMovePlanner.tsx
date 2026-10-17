@@ -27,6 +27,7 @@ import {
     MovePlanStop,
 } from '@/lib/anam/evan-move-planner';
 import EvanRouteMap from '@/components/evan/EvanRouteMap';
+import EvanSessionExit from '@/components/evan/EvanSessionExit';
 
 interface EvanMovePlannerProps {
     isOpen: boolean;
@@ -34,6 +35,8 @@ interface EvanMovePlannerProps {
     addressStops?: MovePlanStop[] | null;
     requestedView?: EvanMovePlannerView;
     onClose: () => void;
+    onExitSession?: () => void;
+    isFinalizing?: boolean;
 }
 
 const TABS: Array<{ id: EvanMovePlannerView; label: string; icon: typeof Truck }> = [
@@ -72,7 +75,7 @@ function DetailChip({ children }: { children: string }) {
     );
 }
 
-export default function EvanMovePlanner({ isOpen, turns, addressStops = null, requestedView, onClose }: EvanMovePlannerProps) {
+export default function EvanMovePlanner({ isOpen, turns, addressStops = null, requestedView, onClose, onExitSession, isFinalizing = false }: EvanMovePlannerProps) {
     const [view, setView] = useState<EvanMovePlannerView>(requestedView ?? 'brief');
     const model = useMemo(() => buildEvanMovePlan(turns, addressStops), [turns, addressStops]);
 
@@ -311,6 +314,11 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                         </div>
 
                         <footer className="flex-none border-t border-[#321064]/15 bg-[#eee7f8] px-4 py-2 sm:px-5" data-testid="evan-planner-footer">
+                            {onExitSession && (
+                                <div className="mb-2 lg:hidden">
+                                    <EvanSessionExit placement="planner" onExit={onExitSession} disabled={isFinalizing} />
+                                </div>
+                            )}
                             <div className="flex items-start gap-2 text-[10px] leading-4 text-[#746180]">
                                 <Clock3 size={14} className="mt-0.5 flex-none text-[#7540cf]" />
                                 <span>{EVAN_MOVE_PLANNER_BOUNDARY}</span>

@@ -68,8 +68,12 @@ export function hasEvanCloseIntent(userText: string, previousAgentText = ''): bo
         || /^(?:i (?:have|need) to go|i've got to go|i must go|i need to leave)(?:[, ]+(?:now|thanks|thank you))*[.!]*$/.test(request)) return true;
 
     if (text.includes('?')) return false;
-    const courtesy = '(?:[,;.! ]+(?:thanks(?: again)?|thank you(?: for your help)?|evan|take care))*[.!]*';
-    if (new RegExp(`^(?:(?:no|nope)[, ]+)?(?:that(?:'s| is) (?:all|it)|(?:i(?:'m| am)|we(?:'re| are)) (?:all set|done|finished)|all set|nothing else|no (?:more|other|further) questions)(?: for (?:now|today))?${courtesy}$`).test(request)) return true;
+    const courtesy = '(?:[,;.! ]+(?:(?:thanks(?: again)?|thank you)(?: for your help)?|evan|take care))*[.!]*';
+    // Keep natural wrap-ups aligned with Evan's prompt, but match the whole
+    // statement so "everything about packing" or a new detail cannot close it.
+    const wrapUp = `(?:that(?:'s| is) (?:all|it|everything)|(?:i(?:'m| am)|we(?:'re| are)) (?:all set|done|finished)|all set|nothing else|no (?:more|other|further) questions)(?: for (?:now|today))?`;
+    const setForNow = `(?:i(?:'m| am)|we(?:'re| are)) set for (?:now|today)`;
+    if (new RegExp(`^(?:(?:no|nope)[, ]+)?(?:${wrapUp}|${setForNow})${courtesy}$`).test(request)) return true;
 
     // A genuine final goodbye is explicit authorization even after a short
     // handoff acknowledgement, but questions/reporting/continuation veto above.

@@ -22,7 +22,9 @@ export function createEvanFarewellCloseCoordinator(input: {
     const schedule = input.schedule ?? setTimeout;
     const cancel = input.cancel ?? clearTimeout;
     const fallbackMs = input.fallbackMs ?? 12_000;
-    const audioDrainMs = input.audioDrainMs ?? 2_500;
+    // The provider has marked the genuine farewell complete. Keep a brief
+    // playback margin without leaving a long invitation to restart the call.
+    const audioDrainMs = input.audioDrainMs ?? 1_000;
     let phase: ClosePhase = 'idle';
     let generation = 0;
     let fallbackTimer: TimerHandle | null = null;

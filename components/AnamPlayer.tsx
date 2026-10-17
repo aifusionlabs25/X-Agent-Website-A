@@ -9,6 +9,7 @@ import {
 import { BrainCircuit, Truck } from 'lucide-react';
 import AmyAnamWorkbenchV2 from '@/components/amy/AmyAnamWorkbenchV2';
 import EvanMovePlanner from '@/components/evan/EvanMovePlanner';
+import EvanSessionExit from '@/components/evan/EvanSessionExit';
 import {
     AnamAudioBridge,
     selectVoiceMeeterB1DeviceId,
@@ -183,7 +184,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let evanSpeechCorrelationId: string | undefined;
         let evanCloseCandidate: { text: string; previousAgentText: string; correlationId?: string } | null = null;
         let evanPersonaMessage: { id: string; text: string; interrupted: boolean } | null = null;
-        let evanCloseBaselineMessageId: string | null = null;
+        let evanCloseBaselineMessage: { id: string; length: number } | null = null;
         const evanCompletedUserIds = new Set<string>();
         const evanSessionAbort = new AbortController();
         let evanRouteGeneration = 0;
@@ -218,7 +219,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             evanCloseCandidate = null;
             if (evanCloseCoordinator?.cancelPending()) {
                 if (requestedCloseReason === 'user_requested_end') requestedCloseReason = null;
-                evanCloseBaselineMessageId = null;
+                evanCloseBaselineMessage = null;
                 console.info('[Evan Anam] Pending farewell cancelled for visitor speech', { contentLogged: false });
             }
         };
@@ -1238,9 +1239,14 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                             }
                         }
                         if (transcriptRole(messageEvent.role) === 'agent') {
-                            if (isEvan && evanPersonaMessage?.id === messageEvent.id
-                                && messageEvent.id !== evanCloseBaselineMessageId) {
-                                evanCloseCoordinator?.completeFarewell(evanPersonaMessage.text, evanPersonaMessage.interrupted);
+                            if (isEvan && evanPersonaMessage?.id === messageEvent.id) {
+                                // Anam can continue the same message after a tool receipt.
+                                // Only post-arm text can complete this farewell, never the
+                                // pre-tool question or a repeated old end-of-speech marker.
+                                const farewellText = evanCloseBaselineMessage?.id === messageEvent.id
+                                    ? evanPersonaMessage.text.slice(evanCloseBaselineMessage.length)
+                                    : evanPersonaMessage.text;
+                                evanCloseCoordinator?.completeFarewell(farewellText, evanPersonaMessage.interrupted);
                             }
                             daniCloseCoordinator?.completeFarewell();
                             if (!amyFarewellRecovery) amyCloseCoordinator?.completeFarewell();
@@ -1626,7 +1632,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 }
                                 requestedCloseReason = 'user_requested_end';
                                 const armed = evanCloseCoordinator?.arm() === true;
-                                if (armed) evanCloseBaselineMessageId = evanPersonaMessage?.id ?? null;
+                                if (armed) {
+                                    evanCloseBaselineMessage = evanPersonaMessage
+                                        ? { id: evanPersonaMessage.id, length: evanPersonaMessage.text.length } : null;
+                                    if (evanPersonaMessage) evanPersonaMessage.interrupted = false;
+                                }
                                 console.info('[Evan Anam] Farewell close armed', { armed });
                                 return JSON.stringify({
                                     status: armed ? 'farewell_required' : 'farewell_already_armed',
@@ -1849,14 +1859,17 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 </div>
             )}
 
-            <div className={`flex h-full w-full items-center justify-center transition-[padding] duration-500 ease-out ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(62vw,980px)]' : ''}`}>
+            <div className={`flex h-full w-full items-center justify-center transition-[padding] duration-500 ease-out ${evanPlannerEnabled && evanPlannerOpen ? 'flex-col gap-4' : ''} ${(workbenchEnabled && workbenchOpen) || (evanPlannerEnabled && evanPlannerOpen) ? 'lg:pr-[min(62vw,980px)]' : ''}`}>
                 <video
                     ref={videoRef}
                     id="persona-video"
                     autoPlay
                     playsInline
-                    className={`${evanPlannerEnabled ? 'aspect-video h-auto max-h-full w-full max-w-[1080px] rounded-2xl object-contain shadow-[0_28px_90px_rgba(0,0,0,.45)]' : personaId === DANI_PERSONA_ID ? 'h-full w-full scale-[.84] origin-center transform-gpu object-contain object-center shadow-[0_24px_80px_rgba(0,0,0,.24)] sm:scale-[.8] lg:scale-[.76] motion-reduce:transform-none' : 'h-full w-full object-contain'} transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
+                    className={`${evanPlannerEnabled ? `aspect-video h-auto min-h-0 ${evanPlannerOpen ? 'max-h-[calc(100%-4rem)]' : 'max-h-full'} w-full max-w-[1080px] rounded-2xl object-contain shadow-[0_28px_90px_rgba(0,0,0,.45)]` : personaId === DANI_PERSONA_ID ? 'h-full w-full scale-[.84] origin-center transform-gpu object-contain object-center shadow-[0_24px_80px_rgba(0,0,0,.24)] sm:scale-[.8] lg:scale-[.76] motion-reduce:transform-none' : 'h-full w-full object-contain'} transition-opacity duration-700 ${isConnecting ? 'opacity-0' : 'opacity-100'}`}
                 />
+                {evanPlannerEnabled && evanPlannerOpen && (
+                    <EvanSessionExit placement="picture-in-picture" onExit={onClose} disabled={isFinalizing} />
+                )}
             </div>
 
             {workbenchEnabled && !workbenchOpen && !error && !isConnecting && (
@@ -1918,6 +1931,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     turns={workbenchTurns}
                     addressStops={evanAddressStops}
                     requestedView={evanPlannerView}
+                    onExitSession={onClose}
+                    isFinalizing={isFinalizing}
                     onClose={() => {
                         evanPlannerAutoOpenRef.current?.dismiss();
                         setEvanPlannerOpen(false);

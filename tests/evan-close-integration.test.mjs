@@ -23,9 +23,10 @@ test('new speech and user transcript chunks cancel a pending farewell without pe
     assert.match(player, /if \(requestedCloseReason === 'user_requested_end'\) requestedCloseReason = null/);
 });
 
-test('only a new, uninterrupted actual Evan farewell can complete closure; other agents retain their own path', () => {
-    assert.match(player, /messageEvent.id !== evanCloseBaselineMessageId/);
-    assert.match(player, /completeFarewell\(evanPersonaMessage.text, evanPersonaMessage.interrupted\)/);
+test('only post-arm uninterrupted Evan farewell text can complete closure, including same-message continuation', () => {
+    assert.match(player, /evanCloseBaselineMessage\?\.id === messageEvent.id/);
+    assert.match(player, /evanPersonaMessage.text.slice\(evanCloseBaselineMessage.length\)/);
+    assert.match(player, /completeFarewell\(farewellText, evanPersonaMessage.interrupted\)/);
     assert.doesNotMatch(player, /evanCloseCoordinator\?\.completeFarewell\(\)/);
     assert.match(player, /daniCloseCoordinator\?\.completeFarewell\(\)/);
     assert.match(player, /if \(!amyFarewellRecovery\) amyCloseCoordinator\?\.completeFarewell\(\)/);

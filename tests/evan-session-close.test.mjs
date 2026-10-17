@@ -118,7 +118,7 @@ test('new user speech can cancel either close timer and permit a later fresh far
         });
         assert.equal(coordinator.arm(), true);
         if (phase === 'audio-drain') assert.equal(coordinator.completeFarewell(FAREWELL), true);
-        const oldQueuedCallback = timers.callbackFor(phase === 'audio-drain' ? 2_500 : 12_000);
+        const oldQueuedCallback = timers.callbackFor(phase === 'audio-drain' ? 1_000 : 12_000);
         assert.equal(coordinator.cancelPending(), true, phase);
         assert.equal(coordinator.cancelPending(), false, phase);
         assert.equal(coordinator.isArmed(), false);
@@ -132,7 +132,7 @@ test('new user speech can cancel either close timer and permit a later fresh far
         assert.equal(coordinator.completeFarewell(FAREWELL), true);
         oldQueuedCallback();
         assert.equal(stops, 0);
-        timers.runDelay(2_500);
+        timers.runDelay(1_000);
         assert.equal(stops, 1);
         assert.equal(timers.count(), 0);
     }
@@ -150,7 +150,7 @@ test('a queued fallback cannot cut short the verified farewell audio-drain windo
     oldFallback();
     assert.equal(stops, 0);
     assert.equal(timers.count(), 1);
-    timers.runDelay(2_500);
+    timers.runDelay(1_000);
     oldFallback();
     assert.equal(stops, 1);
 });
@@ -164,7 +164,7 @@ test('disposing during either pending phase invalidates already queued close cal
         });
         coordinator.arm();
         if (drain) coordinator.completeFarewell(FAREWELL);
-        const queued = timers.callbackFor(drain ? 2_500 : 12_000);
+        const queued = timers.callbackFor(drain ? 1_000 : 12_000);
         coordinator.dispose();
         queued();
         assert.equal(stops, 0);
