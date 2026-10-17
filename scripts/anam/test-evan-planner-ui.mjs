@@ -200,6 +200,22 @@ try {
     await message('persona', 'Thanks, I have noted those locations.', 'acknowledge');
     await capture('evan-live-city-route');
 
+    for (const viewport of [{ width: 1872, height: 830 }, { width: 1366, height: 768 }, { width: 1100, height: 620 }]) {
+        await page.setViewportSize(viewport);
+        await page.waitForTimeout(350);
+        const geometry = await page.evaluate(() => {
+            const bounds = id => { const r = document.querySelector(`[data-testid="${id}"]`).getBoundingClientRect(); return { top: r.top, bottom: r.bottom, height: r.height }; };
+            return { canvas: bounds('evan-route-map-canvas'), controls: bounds('evan-route-map-controls'), footer: bounds('evan-planner-footer'),
+                scrollTop: document.querySelector('[data-testid="evan-planner-content"]').scrollTop };
+        });
+        assert.equal(geometry.scrollTop, 0);
+        assert.ok(geometry.canvas.height >= 220, JSON.stringify({ viewport, geometry }));
+        assert.ok(geometry.controls.bottom <= geometry.footer.top + 1, JSON.stringify({ viewport, geometry }));
+        await capture(`evan-layout-${viewport.width}x${viewport.height}`);
+    }
+    pass('Map and directions controls fit above the footer without scrolling at desktop, laptop, and short-window sizes');
+    await page.setViewportSize({ width: 1440, height: 900 });
+
     await page.getByRole('button', { name: 'Close Move Planner' }).click();
     await planner.waitFor({ state: 'detached' });
     await message('persona', 'What is your pickup address?', 'later-question');
@@ -401,6 +417,65 @@ try {
     assert.match(await map.innerText(), /1 street-level pin/i);
     pass('A view-only request supersedes a pending lookup with an explicit unresolved receipt and preserves the verified origin pin');
 
+    await page.clock.install();
+    await ready('evan');
+    const endCall = async metadata => JSON.parse(await page.evaluate(meta => window.__evanHarness.callTool('end_mullins_session', {}, meta), metadata || {}));
+    const assertStillLive = async () => assert.equal(await page.evaluate(() => window.__evanHarness.ready && window.__evanHarness.stopCount === 0), true);
+    await message('persona', 'Your callback number is confirmed. Did I get that right?', 'close-confirm');
+    await message('user', 'Yes.', 'close-yes');
+    assert.equal((await endCall()).status, 'continue_conversation');
+    await message('persona', 'Is there anything else—special items, access concerns, or packing help you would like to mention?', 'close-question');
+    await page.clock.fastForward(13_000);
+    await assertStillLive();
+    pass('Exact premature-close scenario refuses the end tool after contact confirmation and stays connected');
+
+    await message('user', 'Goodbye.', 'close-bye-1');
+    assert.equal((await endCall()).status, 'farewell_required');
+    await message('persona', 'Is there anything else you would like to add?', 'close-not-farewell');
+    await page.clock.fastForward(3_000);
+    await assertStillLive();
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_STARTED', 'continued-1'));
+    await message('user', 'Wait, I need to add a treadmill.', 'continued-user-1');
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_ENDED', 'continued-1'));
+    await page.clock.fastForward(13_000);
+    await assertStillLive();
+    assert.equal((await endCall()).status, 'continue_conversation');
+    assert.equal(JSON.parse(await page.evaluate(() => window.__evanHarness.callTool('show_move_planner', { view: 'inventory' }))).status, 'move_planner_opened');
+    pass('An ordinary question never counts as farewell; resumed visitor speech cancels fallback and leaves planner tools usable');
+
+    await message('user', 'That is all, goodbye.', 'close-bye-2');
+    assert.equal((await endCall()).status, 'farewell_required');
+    await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'close-farewell-2');
+    await page.clock.fastForward(1_000);
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_STARTED', 'continued-2'));
+    await message('user', 'Actually, one more question about packing.', 'continued-user-2');
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_ENDED', 'continued-2'));
+    await page.clock.fastForward(13_000);
+    await assertStillLive();
+    pass('Visitor speech during the goodbye audio-drain grace cancels the hang-up');
+
+    await message('user', 'Goodbye.', 'close-bye-3');
+    assert.equal((await endCall()).status, 'farewell_required');
+    await message('user', 'Wait, please', 'continued-partial', false);
+    await page.clock.fastForward(13_000);
+    await assertStillLive();
+    await message('user', ', I have another question.', 'continued-partial');
+    assert.equal((await endCall()).status, 'continue_conversation');
+    pass('User transcript chunks cancel pending closure even without a VAD speech-start event');
+
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_STARTED', 'final-goodbye'));
+    await message('user', 'Thank you, goodbye.', 'close-final-user');
+    await page.evaluate(() => window.__evanHarness.emit('USER_SPEECH_ENDED', 'final-goodbye'));
+    assert.equal((await endCall({ userActionCorrelationId: 'older-turn' })).status, 'continue_conversation');
+    assert.equal((await endCall({ userActionCorrelationId: 'final-goodbye' })).status, 'farewell_required');
+    assert.equal((await endCall({ userActionCorrelationId: 'final-goodbye' })).status, 'farewell_already_armed');
+    await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'close-final-farewell');
+    await page.clock.fastForward(2_600);
+    assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
+    await page.clock.fastForward(13_000);
+    assert.equal(await page.evaluate(() => window.__evanHarness.stopCount), 1);
+    pass('A fresh explicit goodbye closes once after the actual farewell; stale and duplicate end tools cannot accelerate it');
+
     await ready('amy');
     await message('persona', 'If you’d like to discuss a new move, could you share the city you’re moving from and the city you’re moving to?', 'amy-natural-question');
     await message('user', 'I am moving from Gilbert', 'amy-user', false);
@@ -412,7 +487,7 @@ try {
     assert.equal(await map.count(), 0);
     pass('Actual shared AnamPlayer keeps natural-question and visitor-route auto-open isolated from Amy');
 
-    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 6);
+    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 7);
     assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode'].includes(request.path)));
     assert.deepEqual(report.blockedRequests, []);
     assert.deepEqual(report.consoleErrors, []);

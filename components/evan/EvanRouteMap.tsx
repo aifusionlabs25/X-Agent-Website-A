@@ -165,32 +165,32 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
         <div
             className={isExpanded
                 ? 'fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden bg-white shadow-[0_24px_100px_rgba(16,4,26,0.62)]'
-                : 'mt-6 overflow-hidden border border-[#321064]/15 bg-white shadow-[0_18px_48px_rgba(42,16,80,0.12)]'}
+                : 'mt-3 overflow-hidden border border-[#321064]/15 bg-white shadow-[0_18px_48px_rgba(42,16,80,0.12)]'}
             data-testid="evan-route-map"
             data-evan-map-expanded={isExpanded}
             role={isExpanded ? 'dialog' : undefined}
             aria-modal={isExpanded || undefined}
             aria-label={isExpanded ? 'Full-screen working map of move locations' : undefined}
         >
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#321064]/10 bg-[#2a1050] px-4 py-3 text-white sm:px-5">
-                <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#ffc857] text-[#2a1050]">
-                        <MapPinned size={18} />
+            <div className="grid flex-none grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-[#321064]/10 bg-[#2a1050] px-3 py-2 text-white" data-testid="evan-route-map-header">
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#ffc857] text-[#2a1050]">
+                        <MapPinned size={16} />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#ffdc8a]">Live route map</p>
-                        <p className="text-sm font-semibold">{waitingForLocations ? 'Waiting for pickup and destination' : `${mappedStops.length} mapped ${mappedStops.length === 1 ? 'location' : 'locations'}`}</p>
+                        <p className="text-xs font-semibold leading-4">{waitingForLocations ? 'Waiting for pickup and destination' : `${mappedStops.length} mapped ${mappedStops.length === 1 ? 'location' : 'locations'}`}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className="hidden items-center gap-2 rounded-full border border-white/15 bg-white/7 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/70 sm:inline-flex">
+                    <span className="hidden items-center gap-2 rounded-full border border-white/15 bg-white/7 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.09em] text-white/70 xl:inline-flex">
                         <LocateFixed size={13} className={mapReady ? 'text-[#ffc857]' : 'animate-pulse text-white/35'} />
                         {waitingForLocations ? 'Phoenix-area overview' : streetLevelCount ? `${streetLevelCount} street-level ${streetLevelCount === 1 ? 'pin' : 'pins'}` : mappedStops.length ? 'City-level working route' : 'Locations need confirmation'}
                     </span>
                     <button
                         type="button"
                         onClick={() => setIsExpanded((expanded) => !expanded)}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 text-xs font-bold text-white transition hover:border-white/35 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffc857]"
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/20 bg-white/10 px-2 text-xs font-bold text-white transition hover:border-white/35 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffc857]"
                         aria-label={isExpanded ? 'Exit full-screen map' : 'Open full-screen map'}
                         aria-pressed={isExpanded}
                         title={isExpanded ? 'Exit full screen (Esc)' : 'Open map full screen'}
@@ -206,8 +206,9 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                 <div
                     ref={mapContainerRef}
                     className={isExpanded
-                        ? 'evan-route-map h-full min-h-[420px] w-full bg-[#eee7f8]'
-                        : 'evan-route-map h-[310px] w-full bg-[#eee7f8] sm:h-[360px]'}
+                        ? 'evan-route-map h-full min-h-0 w-full bg-[#eee7f8]'
+                        : 'evan-route-map h-[clamp(220px,calc(100dvh-400px),460px)] w-full bg-[#eee7f8]'}
+                    data-testid="evan-route-map-canvas"
                     aria-label={waitingForLocations ? 'Phoenix-area overview; no move locations added yet' : 'Working map of move locations'}
                 />
                 {!mapReady && (
@@ -221,7 +222,7 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                 </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-[#321064]/10 bg-[#faf7fd] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-2 border-t border-[#321064]/10 bg-[#faf7fd] px-3 py-2" data-testid="evan-route-map-controls">
                 {waitingForLocations ? <p className="text-xs leading-5 text-[#71617c]">Share your pickup and destination with Evan. This is an unmarked area preview, not your current location.</p> : <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#71617c]">
                     <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#5d24d6]" /> Origin</span>
                     <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#9568df]" /> Additional stop</span>
@@ -232,7 +233,7 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
                         href={googleMapsUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-[#5d24d6] px-4 py-2 text-xs font-bold text-white shadow-[0_8px_22px_rgba(93,36,214,0.24)] transition hover:-translate-y-0.5 hover:bg-[#4d1cbc]"
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-[#5d24d6] px-3 py-2 text-xs font-bold text-white shadow-[0_8px_22px_rgba(93,36,214,0.24)] transition hover:-translate-y-0.5 hover:bg-[#4d1cbc]"
                     >
                         Open in Google Maps <ExternalLink size={14} />
                     </a>

@@ -104,11 +104,11 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                     data-testid="evan-move-planner"
                 >
                     <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:repeating-linear-gradient(0deg,#5d24d6_0,#5d24d6_1px,transparent_1px,transparent_6px)]" />
-                    <div className="relative flex h-full flex-col">
-                        <header className="flex-none border-b border-[#321064]/15 bg-[#2a1050] px-5 py-4 text-[#fffdf7] sm:px-7 sm:py-5">
+                    <div className="relative flex h-full min-h-0 flex-col">
+                        <header className="flex-none border-b border-[#321064]/15 bg-[#2a1050] px-4 py-3 text-[#fffdf7] sm:px-5" data-testid="evan-planner-header">
                             <div className="flex items-center justify-between gap-4">
                                 <div className="flex min-w-0 items-center gap-3">
-                                    <div className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white p-1.5">
+                                    <div className="flex h-9 w-9 flex-none items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white p-1.5">
                                         <Image
                                             src="/agents/thumbnails/Evan Mullins Moving logo.png"
                                             alt="Mullins Moving"
@@ -119,7 +119,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#ffdc8a]">Mullins Moving</p>
-                                        <h2 className="truncate font-serif text-2xl leading-tight sm:text-3xl">Live Move Planner</h2>
+                                        <h2 className="truncate font-serif text-xl leading-tight sm:text-2xl">Live Move Planner</h2>
                                     </div>
                                 </div>
                                 <button
@@ -131,8 +131,8 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                                     <X size={19} />
                                 </button>
                             </div>
-                            <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-xs">
-                                <span className="inline-flex items-center gap-2 font-semibold uppercase tracking-[0.14em] text-white/70">
+                            <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/10 pt-2 text-[10px] leading-4">
+                                <span className="inline-flex items-center gap-2 font-semibold uppercase tracking-[0.09em] text-white/70">
                                     <span className={`h-2 w-2 rounded-full ${model.status === 'building' ? 'animate-pulse bg-[#ffc857]' : 'bg-white/35'}`} />
                                     {model.status === 'building' ? 'Building from this conversation' : 'Listening for move details'}
                                 </span>
@@ -140,13 +140,13 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                             </div>
                         </header>
 
-                        <nav className="flex flex-none overflow-x-auto border-b border-[#321064]/15 bg-[#eee7f8] px-3 sm:px-5" aria-label="Move Planner views">
+                        <nav className="flex flex-none overflow-x-auto border-b border-[#321064]/15 bg-[#eee7f8] px-2 sm:px-3" aria-label="Move Planner views">
                             {TABS.map(({ id, label, icon: Icon }) => (
                                 <button
                                     key={id}
                                     type="button"
                                     onClick={() => setView(id)}
-                                    className={`relative inline-flex min-w-max items-center gap-2 px-3 py-4 text-xs font-bold uppercase tracking-[0.11em] transition sm:px-4 ${view === id ? 'text-[#321064]' : 'text-[#776886] hover:text-[#6230bb]'}`}
+                                    className={`relative inline-flex min-h-11 min-w-max items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.09em] transition ${view === id ? 'text-[#321064]' : 'text-[#776886] hover:text-[#6230bb]'}`}
                                 >
                                     <Icon size={15} />
                                     {label}
@@ -155,7 +155,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                             ))}
                         </nav>
 
-                        <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-7 sm:py-7">
+                        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5" data-testid="evan-planner-content">
                             {model.status === 'listening' && view !== 'route' ? <EmptyState view={view} /> : (
                                 <AnimatePresence mode="wait">
                                     <motion.div
@@ -207,14 +207,13 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                                         )}
 
                                         {view === 'route' && (
-                                            <section>
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7540cf]">Pickup to placement</p>
-                                                <h3 className="mt-1 font-serif text-3xl">Move route</h3>
-                                                <p className="mt-2 text-sm leading-6 text-[#746180]">{model.stops.length ? 'Confirmed street addresses become live pins. Approximate city pins remain clearly labeled until an address can be matched.' : 'Tell Evan your pickup and destination. Locations will appear here as your move takes shape.'}</p>
+                                            <section data-testid="evan-planner-route-view">
+                                                <h3 className="font-serif text-xl leading-7">Move route</h3>
+                                                <p className="mt-1 text-xs leading-4 text-[#746180]">{model.stops.length ? 'Live planning pins. City locations stay approximate until street addresses are confirmed.' : 'Tell Evan your pickup and destination. Your locations will appear here.'}</p>
 
                                                 <EvanRouteMap stops={model.stops} />
 
-                                                {model.stops.length > 0 ? <div className="relative mt-7 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
+                                                {model.stops.length > 0 ? <div className="relative mt-5 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
                                                     {model.stops.map((stop, index) => (
                                                         <div key={`${stop.kind}-${stop.displayAddress ?? stop.address ?? stop.city}-${index}`} className="relative pb-8 last:pb-0">
                                                             <div className={`absolute -left-[45px] top-0 flex h-7 w-7 items-center justify-center rounded-full border-4 border-[#faf7fd] text-xs font-bold text-white ${stop.kind === 'Origin' ? 'bg-[#5d24d6]' : stop.kind === 'Destination' ? 'bg-[#f6b93b]' : 'bg-[#9b6ee5]'}`}>
@@ -311,8 +310,8 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, re
                             )}
                         </div>
 
-                        <footer className="flex-none border-t border-[#321064]/15 bg-[#eee7f8] px-5 py-3 sm:px-7">
-                            <div className="flex items-start gap-2 text-[11px] leading-5 text-[#746180]">
+                        <footer className="flex-none border-t border-[#321064]/15 bg-[#eee7f8] px-4 py-2 sm:px-5" data-testid="evan-planner-footer">
+                            <div className="flex items-start gap-2 text-[10px] leading-4 text-[#746180]">
                                 <Clock3 size={14} className="mt-0.5 flex-none text-[#7540cf]" />
                                 <span>{EVAN_MOVE_PLANNER_BOUNDARY}</span>
                             </div>

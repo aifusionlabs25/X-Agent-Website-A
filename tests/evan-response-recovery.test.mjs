@@ -148,16 +148,42 @@ test('explicit wait, backchannels, closing, and duplicate final turns never rear
     assert.equal(f.timers.size, 0);
 });
 
-test('close, dispose, and end_mullins_session irreversibly cancel all recovery', () => {
-    for (const action of ['close', 'dispose', 'end']) {
+test('only committed close and dispose irreversibly cancel all recovery', () => {
+    for (const action of ['close', 'dispose']) {
         const f = fixture();
         skippedAnswer(f);
-        if (action === 'end') f.coordinator.toolStarted({ toolCallId: 'close-1', toolName: 'end_mullins_session' });
-        else f.coordinator[action]();
+        f.coordinator[action]();
         skippedAnswer(f, 'turn-2');
         assert.equal(f.timers.size, 0, action);
         assert.deepEqual(f.spoken, []);
     }
+});
+
+test('a rejected or cancelled end tool does not permanently disable later answer recovery', () => {
+    const f = fixture();
+    skippedAnswer(f);
+    const endTool = { toolCallId: 'close-1', toolName: 'end_mullins_session' };
+    f.coordinator.toolStarted(endTool);
+    assert.equal(f.timers.size, 0);
+    f.coordinator.toolFinished(endTool);
+    assert.equal(f.timers.size, 0);
+    skippedAnswer(f, 'turn-2');
+    assert.equal(f.timers.size, 1);
+    f.fire();
+    assert.deepEqual(f.spoken, [EVAN_RESPONSE_RECOVERY_MESSAGE]);
+});
+
+test('an active end-tool request suppresses old recovery but not a later completed answer', () => {
+    const f = fixture();
+    const endTool = { toolCallId: 'close-1', toolName: 'end_mullins_session' };
+    f.coordinator.toolStarted(endTool);
+    skippedAnswer(f, 'during-tool');
+    assert.equal(f.timers.size, 0);
+    f.coordinator.toolFinished(endTool);
+    assert.equal(f.timers.size, 0);
+    skippedAnswer(f, 'continued-turn');
+    f.fire();
+    assert.deepEqual(f.spoken, [EVAN_RESPONSE_RECOVERY_MESSAGE]);
 });
 
 test('hidden, disconnected, or callback-failed recovery never retries', async () => {

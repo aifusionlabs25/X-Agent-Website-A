@@ -14,6 +14,7 @@ export class AnamClient {
     contexts = [];
     ready = false;
     nextToolId = 1;
+    stopCount = 0;
     addListener(event, listener) {
         if (!this.listeners.has(event)) this.listeners.set(event, new Set());
         this.listeners.get(event).add(listener);
@@ -31,16 +32,16 @@ export class AnamClient {
         this.emit(AnamEvent.SESSION_READY, 'isolated-ui-fixture-session');
         this.ready = true;
     }
-    async stopStreaming() { this.ready = false; }
+    async stopStreaming() { this.stopCount++; this.ready = false; }
     async talk(text) { this.talks.push(text); }
     addContext(text) { this.contexts.push(text); }
     muteInputAudio() {}
     interruptPersona() {}
     message(message) { this.emit(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED, message); }
-    async callTool(name, args) {
+    async callTool(name, args, metadata = {}) {
         const handler = this.handlers.get(name);
         if (!handler) throw new Error(`Missing mocked tool handler: ${name}`);
-        const payload = { id: `fixture-${name}-${this.nextToolId++}`, name, arguments: args };
+        const payload = { id: `fixture-${name}-${this.nextToolId++}`, name, arguments: args, ...metadata };
         const lifecycle = { toolCallId: payload.id, toolName: name };
         this.emit(AnamEvent.TOOL_CALL_STARTED, lifecycle);
         const result = await handler.onStart(payload);

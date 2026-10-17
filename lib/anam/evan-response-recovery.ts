@@ -111,7 +111,6 @@ export function createEvanResponseRecovery(input: {
         },
         toolStarted: (event: ToolEvent) => {
             if (closed) return;
-            if (event.toolName === 'end_mullins_session') { close(); return; }
             if (event.toolName === 'skip_turn') {
                 if (!event.toolCallId || seenSkipCalls.has(event.toolCallId)) return;
                 seenSkipCalls.add(event.toolCallId);
@@ -121,6 +120,9 @@ export function createEvanResponseRecovery(input: {
                 arm();
                 return;
             }
+            // A raw end-tool event is not authorization to close. The player may
+            // reject it, or the visitor may resume speaking during the farewell.
+            // Only the player commits irreversible close() at the actual stop.
             activeTools.add(event.toolCallId);
             // Useful work has begun. Do not race it or resume the old silence watchdog afterward.
             invalidateTurn();
