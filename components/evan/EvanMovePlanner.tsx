@@ -31,7 +31,7 @@ import EvanRouteMap from '@/components/evan/EvanRouteMap';
 interface EvanMovePlannerProps {
     isOpen: boolean;
     turns: EvanMovePlannerTurn[];
-    addressStops?: MovePlanStop[];
+    addressStops?: MovePlanStop[] | null;
     requestedView?: EvanMovePlannerView;
     onClose: () => void;
 }
@@ -72,7 +72,7 @@ function DetailChip({ children }: { children: string }) {
     );
 }
 
-export default function EvanMovePlanner({ isOpen, turns, addressStops = [], requestedView, onClose }: EvanMovePlannerProps) {
+export default function EvanMovePlanner({ isOpen, turns, addressStops = null, requestedView, onClose }: EvanMovePlannerProps) {
     const [view, setView] = useState<EvanMovePlannerView>(requestedView ?? 'brief');
     const model = useMemo(() => buildEvanMovePlan(turns, addressStops), [turns, addressStops]);
 

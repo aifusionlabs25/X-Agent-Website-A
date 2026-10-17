@@ -36,11 +36,22 @@ export default function EvanRouteMap({ stops }: EvanRouteMapProps) {
     const [mapLoadFailed, setMapLoadFailed] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const waitingForLocations = stops.length === 0;
-    const mappedStops = useMemo(() => stops.flatMap((stop, index) => {
+    // Transcript updates produce fresh stop objects, even when the route is unchanged.
+    // Keep Leaflet (and the visitor's zoom) stable unless a rendered route detail changes.
+    const stopsKey = JSON.stringify(stops.map((stop) => ({
+        city: stop.city,
+        kind: stop.kind,
+        address: stop.address,
+        displayAddress: stop.displayAddress,
+        precision: stop.precision,
+        coordinates: getMovePlanStopCoordinates(stop),
+    })));
+    const stableStops = useMemo(() => JSON.parse(stopsKey) as MovePlanStop[], [stopsKey]);
+    const mappedStops = useMemo(() => stableStops.flatMap((stop, index) => {
         const coordinates = getMovePlanStopCoordinates(stop);
         return coordinates ? [{ stop, index, coordinates }] : [];
-    }), [stops]);
-    const googleMapsUrl = useMemo(() => buildGoogleMapsDirectionsUrl(stops), [stops]);
+    }), [stableStops]);
+    const googleMapsUrl = useMemo(() => buildGoogleMapsDirectionsUrl(stableStops), [stableStops]);
     const streetLevelCount = mappedStops.filter(({ stop }) => stop.precision === 'address' || stop.precision === 'address-range').length;
 
     useEffect(() => {

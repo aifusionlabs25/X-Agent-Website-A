@@ -13,6 +13,7 @@ export class AnamClient {
     talks = [];
     contexts = [];
     ready = false;
+    nextToolId = 1;
     addListener(event, listener) {
         if (!this.listeners.has(event)) this.listeners.set(event, new Set());
         this.listeners.get(event).add(listener);
@@ -39,7 +40,7 @@ export class AnamClient {
     async callTool(name, args) {
         const handler = this.handlers.get(name);
         if (!handler) throw new Error(`Missing mocked tool handler: ${name}`);
-        const payload = { id: `fixture-${name}`, name, arguments: args };
+        const payload = { id: `fixture-${name}-${this.nextToolId++}`, name, arguments: args };
         const lifecycle = { toolCallId: payload.id, toolName: name };
         this.emit(AnamEvent.TOOL_CALL_STARTED, lifecycle);
         const result = await handler.onStart(payload);

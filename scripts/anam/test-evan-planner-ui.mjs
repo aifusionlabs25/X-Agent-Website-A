@@ -18,6 +18,9 @@ const require = createRequire(path.join(root, 'package.json'));
 const output = path.join(root, 'work/evan-6097-promotion/planner-ui');
 const fixture = suffix => path.join(here, `test-evan-planner-ui.${suffix}`);
 const report = { checks: [], consoleErrors: [], blockedRequests: [], apiRequests: [] };
+// Synthetic, localhost-only geocoding. The queue can hold an earlier result so
+// response ordering is exercised without disclosing addresses to a real service.
+const geocodeResponses = [];
 const pass = name => { report.checks.push({ name, passed: true }); console.log(`PASS ${name}`); };
 await fs.mkdir(output, { recursive: true });
 
@@ -64,6 +67,23 @@ const server = http.createServer(async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         if (url.pathname === '/api/anam-token') {
             res.end(JSON.stringify({ sessionToken: 'fixture-only', sessionSpineEnabled: false, agentMailAvailable: false }));
+        } else if (url.pathname === '/api/anam/evan/route-geocode') {
+            let body = '';
+            for await (const chunk of req) body += chunk;
+            const { stops = [] } = JSON.parse(body);
+            const fixtureResponse = geocodeResponses.shift() || {};
+            if (fixtureResponse.delay) await new Promise(resolve => setTimeout(resolve, fixtureResponse.delay));
+            res.end(JSON.stringify({ stops: stops.map((stop, index) => ({
+                ...stop,
+                displayAddress: stop.address,
+                precision: 'address',
+                // Deliberately synthetic coordinates, never a claim that these
+                // fake test addresses resolve to real homes.
+                coordinates: {
+                    latitude: 33.3 + index * 0.1 + (Number.parseInt(stop.address, 10) || 0) * 0.00001,
+                    longitude: -111.8 + index * 0.1 - (Number.parseInt(stop.address, 10) || 0) * 0.00001,
+                },
+            })) }));
         } else {
             res.statusCode = 503;
             res.end(JSON.stringify({ error: 'No live APIs exist in the isolated UI fixture' }));
@@ -107,6 +127,25 @@ try {
     const open = page.getByTestId('open-evan-move-planner');
     const planner = page.getByTestId('evan-move-planner');
     const map = page.getByTestId('evan-route-map');
+    const waitForRoute = async expected => {
+        await page.waitForFunction(locations => {
+            const icons = [...document.querySelectorAll('[data-testid="evan-route-map"] .leaflet-marker-icon')];
+            return icons.length === locations.length && icons.every((icon, index) =>
+                icon.getAttribute('title')?.includes(locations[index]));
+        }, expected);
+        const href = await map.getByRole('link', { name: 'Open in Google Maps' }).getAttribute('href');
+        const params = new URL(href).searchParams;
+        const route = [params.get('origin') || params.get('query'), ...(params.get('waypoints')?.split('|') || []), params.get('destination')].filter(Boolean);
+        assert.equal(route.length, expected.length);
+        expected.forEach((location, index) => assert.ok(route[index].includes(location), `${location} must be in link position ${index + 1}: ${route[index]}`));
+    };
+    const callRoute = async stops => JSON.parse(await page.evaluate(
+        args => window.__evanHarness.callTool('show_move_planner', { view: 'route', stops: args }), stops,
+    ));
+    const fakeStops = (destination = '200 Sample Road, Queen Creek', city = 'Queen Creek') => [
+        { kind: 'origin', address: '100 Test Lane, Gilbert', city: 'Gilbert', order: 1, confirmed: true },
+        { kind: 'destination', address: destination, city, order: 2, confirmed: true },
+    ];
     const capture = async name => {
         // Framer spring and Leaflet tile fades are not completed by DOM visibility.
         await page.waitForFunction(() => {
@@ -186,6 +225,131 @@ try {
     assert.equal(await planner.count(), 1);
     pass('Full-screen map works; Escape restores map without closing planner');
 
+    await message('user', 'Actually, the destination is Scottsdale instead.', 'change-destination');
+    await waitForRoute(['Gilbert', 'Scottsdale']);
+    pass('Spoken destination correction replaces the old pin and Google Maps destination during the call');
+    await message('user', 'Add a storage stop in Mesa.', 'add-storage');
+    await waitForRoute(['Gilbert', 'Mesa', 'Scottsdale']);
+    await message('user', 'Add a donation stop in Chandler.', 'add-donation');
+    await waitForRoute(['Gilbert', 'Mesa', 'Chandler', 'Scottsdale']);
+    await message('user', 'Put Chandler before Mesa.', 'reorder-stops');
+    await waitForRoute(['Gilbert', 'Chandler', 'Mesa', 'Scottsdale']);
+    await message('user', 'Remove the Mesa storage stop.', 'remove-storage');
+    await waitForRoute(['Gilbert', 'Chandler', 'Scottsdale']);
+    pass('Live additional stops can be added, reordered, and removed in pins and directions');
+    const leafletId = await map.locator('.leaflet-container').evaluate(element => element._leaflet_id);
+    await message('persona', 'I have noted the updated stop order.', 'unrelated-response');
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await map.locator('.leaflet-container').evaluate(element => element._leaflet_id), leafletId);
+    pass('Unrelated conversation updates preserve the existing Leaflet map instead of resetting zoom and tiles');
+
+    await message('user', 'We are moving in two weeks from a four-bedroom house. We need full packing and a piano moved.', 'move-details');
+    await page.getByRole('button', { name: 'Move brief', exact: true }).click();
+    await planner.getByText('two weeks', { exact: true }).waitFor();
+    await planner.getByText('four-bedroom house', { exact: true }).waitFor();
+    await message('user', 'Change the timing to next month and the property to a two-bedroom apartment. We do not need full packing, and remove the piano.', 'change-details');
+    await planner.getByText('next month', { exact: true }).waitFor();
+    await planner.getByText('two-bedroom apartment', { exact: true }).waitFor();
+    assert.equal(await planner.getByText('two weeks', { exact: true }).count(), 0);
+    assert.equal(await planner.getByText('four-bedroom house', { exact: true }).count(), 0);
+    await page.getByRole('button', { name: 'Move list', exact: true }).click();
+    await planner.getByRole('heading', { name: 'Special handling', exact: true }).waitFor();
+    assert.equal(await planner.getByText('Piano', { exact: true }).count(), 0);
+    assert.equal(await planner.getByText('Full packing', { exact: true }).count(), 0);
+    await message('user', 'Actually, add the piano back and we do need full packing.', 'restore-details');
+    await planner.getByText('Piano', { exact: true }).waitFor();
+    await planner.getByText('Full packing', { exact: true }).waitFor();
+    pass('Timing and property corrections replace earlier facts; cancelled inventory/services disappear and can be re-added');
+    await page.getByRole('button', { name: 'Move brief', exact: true }).click();
+    await message('user', 'Change the timing to this ', 'chunked-correction', false);
+    // Intentionally cross the player's 400 ms pending-transcript refresh interval.
+    // This exercises pending + completed state, not an arbitrary rendering delay.
+    await page.waitForTimeout(450);
+    await message('user', 'week.', 'chunked-correction');
+    await planner.getByText('this week', { exact: true }).waitFor();
+    await page.waitForTimeout(450);
+    assert.equal(await planner.getByText('this week', { exact: true }).count(), 1);
+    assert.equal(await planner.getByText('next month', { exact: true }).count(), 0);
+    pass('Chunked visitor corrections remain current after pending and completed transcript refreshes');
+
+    await page.getByRole('button', { name: 'Route', exact: true }).click();
+    await page.getByRole('button', { name: 'Open full-screen map' }).click();
+    await message('user', 'Change the destination to Tempe.', 'fullscreen-correction');
+    await waitForRoute(['Gilbert', 'Chandler', 'Tempe']);
+    assert.equal(await page.getByRole('dialog', { name: 'Full-screen working map of move locations' }).count(), 1);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Open full-screen map' }).waitFor();
+    await page.getByRole('button', { name: 'Close Move Planner' }).click();
+    await planner.waitFor({ state: 'detached' });
+    await message('user', 'Change the destination to Phoenix.', 'closed-correction');
+    assert.equal(await planner.count(), 0);
+    await open.click();
+    await waitForRoute(['Gilbert', 'Chandler', 'Phoenix']);
+    pass('Corrections update the fullscreen map and survive a closed planner without reopening it');
+    await capture('evan-corrected-city-route');
+
+    await ready('evan');
+    await message('user', 'The pickup address is 100 Test Lane, Gilbert. The destination address is 200 Sample Road, Queen Creek.', 'confirmed-addresses');
+    const addressReceipt = await callRoute(fakeStops());
+    assert.equal(addressReceipt.streetPins, 2);
+    await waitForRoute(['100 Test Lane', '200 Sample Road']);
+    await message('user', 'Actually, the destination is Scottsdale instead.', 'confirmed-city-correction');
+    await waitForRoute(['100 Test Lane', 'Scottsdale']);
+    assert.equal(await map.locator('.leaflet-marker-icon[title*="200 Sample Road"]').count(), 0);
+    pass('A city correction supersedes a previously geocoded destination while retaining the unchanged origin');
+
+    await message('user', 'The destination address is 300 Sample Road, Scottsdale.', 'new-street-address');
+    await callRoute(fakeStops('300 Sample Road, Scottsdale', 'Scottsdale'));
+    await waitForRoute(['100 Test Lane', '300 Sample Road']);
+    await message('user', 'Change the destination address to 400 Replacement Road, Scottsdale.', 'replace-street-address');
+    await page.waitForFunction(() => !document.querySelector('[data-testid="evan-route-map"] .leaflet-marker-icon[title*="300 Sample Road"]'));
+    const pendingCorrectionLink = await map.getByRole('link', { name: 'Open in Google Maps' }).getAttribute('href');
+    assert.ok(!pendingCorrectionLink.includes('300'), 'The old confirmed address must not remain in directions while its replacement is being confirmed');
+    await callRoute(fakeStops('400 Replacement Road, Scottsdale', 'Scottsdale'));
+    await waitForRoute(['100 Test Lane', '400 Replacement Road']);
+    assert.equal(await map.locator('.leaflet-marker-icon[title*="300 Sample Road"]').count(), 0);
+    pass('Sequential confirmed street-address updates replace the pin and directions within the same city');
+
+    geocodeResponses.push({ delay: 600 }, {});
+    const geocodeCount = report.apiRequests.filter(request => request.path.endsWith('/route-geocode')).length;
+    await page.evaluate(stops => { window.__oldRoute = window.__evanHarness.callTool('show_move_planner', { view: 'route', stops }); }, fakeStops('500 Older Road, Scottsdale', 'Scottsdale'));
+    await page.waitForFunction(() => document.querySelector('[data-testid="evan-route-map"] a[href*="500"]'));
+    assert.equal(report.apiRequests.filter(request => request.path.endsWith('/route-geocode')).length, geocodeCount + 1);
+    await callRoute(fakeStops('600 Latest Road, Scottsdale', 'Scottsdale'));
+    await page.evaluate(() => window.__oldRoute);
+    await waitForRoute(['100 Test Lane', '600 Latest Road']);
+    pass('A delayed older geocode response cannot replace a newer street-address tool update');
+
+    geocodeResponses.push({ delay: 600 });
+    await page.evaluate(stops => { window.__staleRoute = window.__evanHarness.callTool('show_move_planner', { view: 'route', stops }); }, fakeStops('700 Pending Road, Scottsdale', 'Scottsdale'));
+    await page.waitForFunction(() => document.querySelector('[data-testid="evan-route-map"] a[href*="700"]'));
+    await message('user', 'Actually, change the destination to Chandler.', 'correction-during-geocode');
+    await page.evaluate(() => window.__staleRoute);
+    await waitForRoute(['100 Test Lane', 'Chandler']);
+    assert.equal(await map.locator('.leaflet-marker-icon[title*="700 Pending Road"]').count(), 0);
+    assert.match(await map.innerText(), /1 street-level pin/i);
+    pass('A spoken correction arriving during geocoding stays authoritative after the delayed response');
+    await capture('evan-corrected-address-route');
+
+    geocodeResponses.push({ delay: 600 });
+    await page.evaluate(stops => { window.__abandonedRoute = window.__evanHarness.callTool('show_move_planner', { view: 'route', stops }); }, fakeStops('800 Abandoned Road, Scottsdale', 'Scottsdale'));
+    await page.waitForFunction(() => document.querySelector('[data-testid="evan-route-map"] a[href*="800"]'));
+    const inventoryReceipt = JSON.parse(await page.evaluate(() => window.__evanHarness.callTool('show_move_planner', { view: 'inventory' })));
+    assert.equal(inventoryReceipt.status, 'move_planner_opened');
+    assert.equal(inventoryReceipt.view, 'inventory');
+    assert.equal(inventoryReceipt.streetPins, 1);
+    assert.equal(inventoryReceipt.unresolvedAddresses, 1);
+    assert.ok(inventoryReceipt.visibleStops.some(stop => stop.includes('800 Abandoned Road') && stop.includes('(unresolved)')));
+    assert.ok(inventoryReceipt.visibleStops.every(stop => !stop.includes('(pending)')));
+    const abandonedReceipt = JSON.parse(await page.evaluate(() => window.__abandonedRoute));
+    assert.equal(abandonedReceipt.status, 'update_superseded');
+    await planner.getByRole('heading', { name: 'Move list', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Route', exact: true }).click();
+    await waitForRoute(['100 Test Lane', '800 Abandoned Road']);
+    await planner.getByText('Address needs confirmation', { exact: true }).waitFor();
+    assert.match(await map.innerText(), /1 street-level pin/i);
+    pass('A view-only request supersedes a pending lookup with an explicit unresolved receipt and preserves the verified origin pin');
+
     await ready('amy');
     await message('persona', 'Where are you moving from, and where are you moving to?', 'amy-question');
     await message('user', 'I am moving from Gilbert to Queen Creek.', 'amy-user');
@@ -194,11 +358,11 @@ try {
     assert.equal(await map.count(), 0);
     pass('Actual shared AnamPlayer keeps Evan auto-open and map isolated from Amy');
 
-    assert.equal(report.apiRequests.length, 2);
-    assert.ok(report.apiRequests.every(request => request.path === '/api/anam-token'));
+    assert.equal(report.apiRequests.filter(request => request.path === '/api/anam-token').length, 3);
+    assert.ok(report.apiRequests.every(request => ['/api/anam-token', '/api/anam/evan/route-geocode'].includes(request.path)));
     assert.deepEqual(report.blockedRequests, []);
     assert.deepEqual(report.consoleErrors, []);
-    pass('Only two fake token requests; no provider, email, geocoder, or unexpected network requests');
+    pass('Only local fake tokens/geocodes; no live provider, email, external geocoder, or unexpected network requests');
     report.passed = true;
 } catch (error) {
     report.passed = false;

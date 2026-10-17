@@ -43,6 +43,7 @@ import { createEvanFarewellCloseCoordinator } from '@/lib/anam/evan-session-clos
 import { runEvanToolWithDeadline, EvanToolExecutionError } from '@/lib/anam/evan-tool-execution';
 import { createEvanResponseRecovery } from '@/lib/anam/evan-response-recovery';
 import { createEvanPlannerAutoOpen } from '@/lib/anam/evan-planner-auto-open';
+import { finishAbandonedEvanRouteLookup, preserveUnchangedEvanRoutePins, reconcileEvanConfirmedRoute } from '@/lib/anam/evan-route-reconciliation';
 import { createDaniFarewellCloseCoordinator } from '@/lib/anam/dani-session-close';
 import {
     createAmyFarewellCloseCoordinator,
@@ -101,7 +102,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [evanPlannerOpen, setEvanPlannerOpen] = useState(false);
     const evanPlannerAutoOpenRef = useRef<ReturnType<typeof createEvanPlannerAutoOpen> | null>(null);
     const [evanPlannerView, setEvanPlannerView] = useState<EvanMovePlannerView>('brief');
-    const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[]>([]);
+    const [evanAddressStops, setEvanAddressStops] = useState<MovePlanStop[] | null>(null);
     const workbenchEnabled = isAmyCara4Variant(sessionVariant)
         && process.env.NEXT_PUBLIC_AMY_ANAM_WORKBENCH_ENABLED !== 'false';
     const evanPlannerEnabled = personaId === EVAN_PERSONA_ID
@@ -129,7 +130,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const workbenchRevisionRef = useRef(0);
     const lastWorkbenchModelRef = useRef<AmyWorkbenchModel | null>(null);
     const cancelAmyArtifactRef = useRef<(() => void) | null>(null);
-    const evanAddressStopsRef = useRef<MovePlanStop[]>([]);
+    const evanAddressStopsRef = useRef<MovePlanStop[] | null>(null);
 
     useEffect(() => {
         if (!evanPlannerEnabled || !evanPlannerOpen) return;
@@ -179,6 +180,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let evanResponseRecovery: ReturnType<typeof createEvanResponseRecovery> | null = null;
         const evanSessionAbort = new AbortController();
         let evanRouteGeneration = 0;
+        let evanRouteAbort: AbortController | null = null;
         let daniCloseCoordinator: ReturnType<typeof createDaniFarewellCloseCoordinator> | null = null;
         let amyCloseCoordinator: ReturnType<typeof createAmyFarewellCloseCoordinator> | null = null;
         let suppressingAmyUnsafeOutput = false;
@@ -225,15 +227,32 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setWorkbenchVisualSlideIndex(0);
         setEvanPlannerOpen(false);
         setEvanPlannerView('brief');
-        evanAddressStopsRef.current = [];
-        setEvanAddressStops([]);
+        evanAddressStopsRef.current = null;
+        setEvanAddressStops(null);
 
         const recordTurn = (role: string, content: string) => {
             const normalized = content.trim();
             if (!normalized) return;
             const turn = { role: transcriptRole(role), content: normalized } as AmyWorkbenchTurn;
+            if (evanPlannerEnabled && turn.role === 'user' && evanAddressStopsRef.current !== null) {
+                const previousTurn = transcriptRef.current.at(-1);
+                const updatedRoute = reconcileEvanConfirmedRoute(evanAddressStopsRef.current, normalized,
+                    previousTurn?.role === 'agent' ? previousTurn.content : '');
+                if (updatedRoute !== evanAddressStopsRef.current) {
+                    // A newer spoken correction wins over an in-flight lookup.
+                    evanRouteGeneration += 1;
+                    evanRouteAbort?.abort();
+                    evanAddressStopsRef.current = finishAbandonedEvanRouteLookup(updatedRoute);
+                    if (isMounted) setEvanAddressStops(evanAddressStopsRef.current);
+                }
+            }
             transcriptRef.current = [...transcriptRef.current.slice(-399), turn];
-            if (workbenchEnabled || evanPlannerEnabled) {
+            if (evanPlannerEnabled) {
+                // The live poll may already show this turn's partial text.
+                // Replace it from the authoritative history instead of appending
+                // a duplicate that could undo a chronological correction.
+                setWorkbenchTurns(transcriptRef.current.slice(-120) as AmyWorkbenchTurn[]);
+            } else if (workbenchEnabled) {
                 setWorkbenchTurns((current) => [...current.slice(-59), turn]);
             }
         };
@@ -686,6 +705,13 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     cancelWorkbenchHandlers.push(anamClient.registerToolCallHandler('show_move_planner', {
                         onStart: async (payload) => {
                             const routeGeneration = ++evanRouteGeneration;
+                            evanRouteAbort?.abort();
+                            if (evanAddressStopsRef.current !== null) {
+                                evanAddressStopsRef.current = finishAbandonedEvanRouteLookup(evanAddressStopsRef.current);
+                                if (isMounted) setEvanAddressStops(evanAddressStopsRef.current);
+                            }
+                            const routeAbort = new AbortController();
+                            evanRouteAbort = routeAbort;
                             try {
                                 return await runEvanToolWithDeadline(async signal => {
                                     signal.throwIfAborted();
@@ -696,6 +722,11 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         ? requested
                                         : 'brief';
                                     const requestedRouteStops = parseEvanRouteToolStops(payload.arguments?.stops);
+                                    const rawStops = payload.arguments?.stops;
+                                    if (rawStops !== undefined && (!Array.isArray(rawStops)
+                                        || rawStops.length !== requestedRouteStops.length)) {
+                                        throw new Error('Incomplete confirmed route');
+                                    }
                                     let routeStopsForReceipt = evanAddressStopsRef.current;
 
                                     if (isMounted) {
@@ -705,14 +736,18 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     }
 
                                     if (requestedRouteStops.length) {
-                                        const pendingStops = routeToolStopsToMovePlanStops(requestedRouteStops);
+                                        const pendingStops = preserveUnchangedEvanRoutePins(
+                                            routeToolStopsToMovePlanStops(requestedRouteStops), evanAddressStopsRef.current,
+                                        );
+                                        const unresolvedStops = () => pendingStops.map(stop => stop.precision === 'pending'
+                                            ? { ...stop, precision: 'unresolved' as const } : stop);
                                         routeStopsForReceipt = pendingStops;
                                         evanAddressStopsRef.current = pendingStops;
                                         if (isMounted) setEvanAddressStops(pendingStops);
 
                                         try {
                                             const response = await fetch('/api/anam/evan/route-geocode', {
-                                                signal,
+                                                signal: AbortSignal.any([signal, routeAbort.signal]),
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 credentials: 'same-origin',
@@ -722,10 +757,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                             const result = await response.json().catch(() => null) as { stops?: unknown } | null;
                                             const resolvedStops = response.ok ? parseResolvedEvanRouteStops(result?.stops) : [];
                                             routeStopsForReceipt = resolvedStops.length === requestedRouteStops.length
-                                                ? resolvedStops
-                                                : pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                                ? preserveUnchangedEvanRoutePins(resolvedStops, pendingStops)
+                                                : unresolvedStops();
                                         } catch {
-                                            routeStopsForReceipt = pendingStops.map((stop) => ({ ...stop, precision: 'unresolved' as const }));
+                                            routeStopsForReceipt = unresolvedStops();
                                         }
                                         signal.throwIfAborted();
                                         if (routeGeneration !== evanRouteGeneration || !isMounted || closeHandled) throw new Error('View superseded');
@@ -749,10 +784,10 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     const refreshedTurns = snapshotEvanPlannerTurns();
                                     if (isMounted) setWorkbenchTurns(() => snapshotEvanPlannerTurns());
                                     const receiptModel = buildEvanMovePlan(refreshedTurns, routeStopsForReceipt);
-                                    const streetPins = routeStopsForReceipt.filter((stop) => (
+                                    const streetPins = receiptModel.stops.filter((stop) => (
                                         stop.precision === 'address' || stop.precision === 'address-range'
                                     )).length;
-                                    const unresolvedAddresses = routeStopsForReceipt.filter((stop) => stop.precision === 'unresolved').length;
+                                    const unresolvedAddresses = receiptModel.stops.filter((stop) => stop.precision === 'unresolved').length;
                                     return JSON.stringify({
                                         status: requestedRouteStops.length ? 'move_route_refreshed' : 'move_planner_opened',
                                         view,
@@ -760,7 +795,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                         streetPins,
                                         unresolvedAddresses,
                                         visibleFacts: receiptModel.highlights.map((fact) => `${fact.label}: ${fact.value}`),
-                                        visibleStops: routeStopsForReceipt.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
+                                        visibleStops: receiptModel.stops.map((stop, index) => `${index + 1}. ${stop.kind}: ${stop.displayAddress || stop.city} (${stop.precision || 'city'})`),
                                         instruction: unresolvedAddresses
                                             ? 'The requested working Move Planner view is open, but one or more street addresses could not be verified. Say that briefly and ask the visitor to restate only the unresolved address. Do not claim the route is confirmed.'
                                             : streetPins
@@ -775,13 +810,15 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 }
                                 if (routeGeneration !== evanRouteGeneration) {
                                     return JSON.stringify({ status: 'update_superseded', retryAllowed: false,
-                                        instruction: 'A newer planner request superseded this update. Do not speak about this old result or retry; use only the newer request receipt.' });
+                                        instruction: 'Newer visitor details or a planner request superseded this update. Do not speak about this old result or retry. Continue from the latest visitor correction; confirm any changed street address before requesting a new street pin.' });
                                 }
                                 if (isMounted && !closeHandled && !evanSessionAbort.signal.aborted && routeGeneration === evanRouteGeneration) {
-                                    const unresolved = evanAddressStopsRef.current.map(stop => stop.precision === 'pending'
+                                    const unresolved = evanAddressStopsRef.current?.map(stop => stop.precision === 'pending'
                                         ? { ...stop, precision: 'unresolved' as const } : stop);
-                                    evanAddressStopsRef.current = unresolved;
-                                    setEvanAddressStops(unresolved);
+                                    if (unresolved) {
+                                        evanAddressStopsRef.current = unresolved;
+                                        setEvanAddressStops(unresolved);
+                                    }
                                 }
                                 console.warn('[Evan Anam] Planner update not confirmed', {
                                     reason: failure instanceof EvanToolExecutionError ? failure.code : 'failed', contentLogged: false,
@@ -790,6 +827,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                     status: 'move_planner_update_unconfirmed', retryAllowed: false,
                                     instruction: 'The latest planner update could not be confirmed. Briefly explain that and continue the moving conversation from details already shared. Do not claim pins or route changes were applied, ask the caller to repeat the whole move, or retry automatically.',
                                 });
+                            } finally {
+                                if (evanRouteAbort === routeAbort) evanRouteAbort = null;
                             }
                         },
                         onComplete: async () => {},
