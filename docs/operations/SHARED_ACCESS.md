@@ -25,7 +25,7 @@ Permissions are independent:
   automations. The existing agent's consent and delivery checks still apply.
 
 Amy's old access-code form becomes a preferences step after shared approval.
-`AMY_ACCESS_CODE` is no longer required or read by this flow.
+`AMY_ANAM_MEMORY_ACCESS_CODE` is no longer required or read by this flow.
 Her memory and follow-up choices are optional. Her identity comes from the
 verified account, not an editable email field. Dani and Evan keep their existing
 agent-specific recap/preferences UI, behind the common gate; their contact

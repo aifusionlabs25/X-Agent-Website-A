@@ -90,7 +90,7 @@ test('production accepts Dani session isolation with memory explicitly fail-clos
 });
 
 test('production requires shared email delivery without retaining the old Amy pilot code', () => {
-    assert.equal(runContract({ AMY_ACCESS_CODE: '' }).status, 0);
+    assert.equal(runContract({ AMY_ANAM_MEMORY_ACCESS_CODE: '' }).status, 0);
     const missing = runContract({ RESEND_API_KEY: '' });
     assert.equal(missing.status, 1);
     assert.match(missing.output, /RESEND_API_KEY must be configured/);
