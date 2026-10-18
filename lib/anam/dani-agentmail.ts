@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomInt, randomUUID } from 'node:crypto';
+import { isStoredBrowserAccessAllowed } from '../access/policy.ts';
 import { readAmyAgentMailProviderConfig, sendAmyEmailWithAgentMail } from '../email/amy-email-provider.ts';
 import {
     AMY_ANAM_CONTACT_TTL_SECONDS,
@@ -24,7 +25,7 @@ const DELIVERY_DURABLE_RETRY_DELAY_MS = 5 * 60 * 1_000;
 const DEFAULT_INBOX = 'hermes-hal@agentmail.to';
 const DEFAULT_INTERNAL_EMAIL = 'aifusionlabs@gmail.com';
 
-type Options = { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; now?: number };
+type Options = { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; now?: number; accessAllowed?: typeof isStoredBrowserAccessAllowed };
 type PipelineItem = { result?: unknown; error?: string };
 
 type Intent = {
@@ -451,6 +452,9 @@ export async function queueDaniAnamConversationFollowUp(input: {
     email: string;
     contactSecret: string;
 }, options: Options = {}) {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('dani', input.browserSessionId, 'actions')) {
+        throw new Error('Dani email approval is required');
+    }
     if (!readDaniAnamAgentMailConfig(options.env ?? process.env).effectiveGateOpen) {
         throw new Error('Dani AgentMail is unavailable');
     }
@@ -570,12 +574,16 @@ export async function scheduleDaniAnamEmailRetryAfterDispatchFailure(input: {
 
 export async function sendDaniAnamConversationFollowUp(input: {
     externalSessionId: string;
+    browserSessionId: string;
     displayName: string;
     email: string;
     sessionStartedAt: string;
     sessionEndedAt: string;
     turns: AmyTranscriptTurn[] | unknown;
 }, options: Options = {}): Promise<DaniAnamPostSessionDispatchResult> {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('dani', input.browserSessionId, 'actions')) {
+        return { status: 'email_unavailable', sent: false };
+    }
     const config = readDaniAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) throw new Error('Dani AgentMail is unavailable');
     const turns = normalizeAmyTranscript(input.turns);
@@ -679,6 +687,9 @@ export async function sendDaniAnamConversationFollowUp(input: {
         await Promise.allSettled(lanes
             .filter(lane => !deliveryStatus[lane])
             .map(async lane => {
+                if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('dani', input.browserSessionId, 'actions')) {
+                    throw new Error('Dani email approval is required');
+                }
                 const result = await sendAmyEmailWithAgentMail(laneMessages[lane], {
                     ...options,
                     env: config.providerEnv,
@@ -749,6 +760,9 @@ export async function dispatchDaniAnamPostSessionFollowUp(input: {
     receipt: AmyAnamSessionReceipt;
     turns: AmyTranscriptTurn[] | unknown;
 }, options: Options = {}): Promise<DaniAnamPostSessionDispatchResult> {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('dani', input.session.browserSessionId, 'actions')) {
+        return { status: 'email_unavailable', sent: false };
+    }
     if (!readDaniAnamAgentMailConfig(options.env ?? process.env).effectiveGateOpen) {
         return { status: 'email_unavailable', sent: false };
     }
@@ -785,6 +799,7 @@ export async function dispatchDaniAnamPostSessionFollowUp(input: {
     }
     const result = await sendDaniAnamConversationFollowUp({
         externalSessionId: input.session.externalSessionId,
+        browserSessionId: input.session.browserSessionId,
         displayName: intent.displayName,
         email: contact.email,
         sessionStartedAt: input.session.boundAt,

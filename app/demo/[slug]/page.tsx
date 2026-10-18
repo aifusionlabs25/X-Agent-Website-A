@@ -14,6 +14,7 @@ import daniStyles from '@/components/dani/DaniEditorial.module.css';
 import EvanContactGate from '@/components/evan/EvanContactGate';
 import Link from 'next/link';
 import { LogOut } from 'lucide-react';
+import AgentAccessGate from '@/components/access/AgentAccessGate';
 
 interface Props {
     params: Promise<{ slug: string }>;
@@ -185,8 +186,9 @@ export default function DemoPage({ params, searchParams }: Props) {
         </main>
     );
 
-    if (isAmyCara4Canary) return <AmyMemoryAccessGate>{experience}</AmyMemoryAccessGate>;
-    if (agent.slug === 'dani') return <DaniContactGate>{experience}</DaniContactGate>;
-    if (agent.slug === 'evan') return <EvanContactGate>{experience}</EvanContactGate>;
-    return experience;
+    const agentExperience = isAmyCara4Canary ? <AmyMemoryAccessGate>{experience}</AmyMemoryAccessGate>
+        : isDani ? <DaniContactGate>{experience}</DaniContactGate>
+            : isEvan ? <EvanContactGate>{experience}</EvanContactGate>
+                : experience;
+    return <AgentAccessGate agent={agent.slug}>{agentExperience}</AgentAccessGate>;
 }

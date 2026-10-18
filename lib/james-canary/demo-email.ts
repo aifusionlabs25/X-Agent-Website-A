@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { isStoredBrowserAccessAllowed } from '../access/policy.ts';
 import { brief, readiness, sha } from './state.ts';
 import type { Session } from './state.ts';
 import { instructionLeakageSuspected, candidateInstructionLeakageSuspected } from './speech-quality.ts';
@@ -238,9 +239,13 @@ export async function sendDemoSummaries(session: Session, consent: { snapshotHas
     save: (previous: Session, next: Session) => Promise<void>;
     stamp: (previous: Session, next: Session, event: unknown) => Session;
     send?: typeof sendDemoMessage; env?: Environment; now?: number;
+    accessAllowed?: typeof isStoredBrowserAccessAllowed;
     reserveAllowance?: (callerAddress: string) => Promise<void>;
 }) {
     if (session.demoEmail?.deliveries) return session;
+    if (!await (deps.accessAllowed ?? isStoredBrowserAccessAllowed)('james', session.browserId, 'actions')) {
+        throw new Error('James email approval is required');
+    }
     const prepared = prepareDemoMessages(session, deps.now ?? Date.now(), deps.env);
     if (consent.approved !== true || consent.snapshotHash !== prepared.snapshotHash || consent.callerAddress !== prepared.callerAddress
         || (prepared.admin && consent.messageHash !== prepared.messageHash)) {
@@ -269,6 +274,9 @@ export async function sendDemoSummaries(session: Session, consent: { snapshotHas
         const next = structuredClone(current);
         const delivery = next.demoEmail!.deliveries![lane]!;
         try {
+            if (!await (deps.accessAllowed ?? isStoredBrowserAccessAllowed)('james', session.browserId, 'actions')) {
+                throw new Error('James email approval is required');
+            }
             const result = await (deps.send || sendDemoMessage)(prepared[lane]!, { env: deps.env, idempotencyKey: 'james-demo-' + session.demoEmail!.grantId + '-' + lane });
             if (!result.messageId) throw new Error('Missing provider receipt');
             delivery.status = 'SENT'; delivery.messageId = result.messageId;

@@ -5,8 +5,8 @@ import { renderAmyVisitorRecap } from '../lib/anam/amy-visitor-email.ts';
 import {
     buildAmyConversationFollowUp,
     readAmyAnamAgentMailConfig,
-    dispatchAmyAnamPostSessionFollowUp,
-    queueAmyAnamConversationFollowUp,
+    dispatchAmyAnamPostSessionFollowUp as dispatchAmyWithPolicy,
+    queueAmyAnamConversationFollowUp as queueAmyWithPolicy,
 } from '../lib/anam/agentmail.ts';
 import {
     createAmyAnamContactToken,
@@ -20,6 +20,9 @@ import { buildAmyWorkbenchModel } from '../lib/anam/workbench-v2.ts';
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
 const BROWSER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const SECRET = 's'.repeat(48);
+// Existing mail behavior cases run with an explicitly approved account.
+const queueAmyAnamConversationFollowUp = (input, options) => queueAmyWithPolicy(input, { accessAllowed: async () => true, ...options });
+const dispatchAmyAnamPostSessionFollowUp = (input, options) => dispatchAmyWithPolicy(input, { accessAllowed: async () => true, ...options });
 const ENV = {
     AMY_ANAM_SESSION_SPINE_ENABLED: 'true',
     AMY_ANAM_SESSION_SPINE_KILL_SWITCH: 'false',
@@ -261,6 +264,14 @@ test('email permission queues without sending, then finalization sends the compl
         transcript: { source: 'anam_api', messageCount: 2, contentSha256: 'a'.repeat(64), rawTranscriptPersisted: false },
         actions: { hermes: false, memory: false, email: false, sheets: false },
     };
+    const revoked = await dispatchAmyWithPolicy({ session, receipt, turns: [] }, {
+        env: ENV, fetchImpl, accessAllowed: async (agent, browserId, capability) => {
+            assert.deepEqual([agent, browserId, capability], ['amy', BROWSER_ID, 'actions']);
+            return false;
+        },
+    });
+    assert.deepEqual(revoked, { status: 'email_unavailable', sent: false });
+    assert.equal(agentMailRequests.length, 0);
     const dispatched = await dispatchAmyAnamPostSessionFollowUp({
         session, receipt,
         turns: [
@@ -634,4 +645,12 @@ test('Amy intake email includes the same Visual Brief and confirmed callback', (
     assert.match(bundle.intake.html, /Final Visual Brief/i);
     assert.match(bundle.intake.html, /\(480\) 555-0107/);
     assert.equal(bundle.intake.attachments?.[0]?.filename, 'amy-visual-brief.html');
+});
+test('Amy rejects unapproved queue requests before storage or delivery', async () => {
+    let requests = 0;
+    await assert.rejects(queueAmyWithPolicy({
+        externalSessionId: SESSION_ID, browserSessionId: BROWSER_ID,
+        displayName: 'Pat', email: 'pat@example.com', contactSecret: SECRET,
+    }, { env: ENV, accessAllowed: async () => false, fetchImpl: async () => { requests++; throw new Error('Unexpected request'); } }), /approval is required/);
+    assert.equal(requests, 0);
 });

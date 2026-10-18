@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentEntryAccess, requireAgentEntryBrowserAccess } from '@/lib/access/policy';
 import {
     DANI_ANAM_CONTACT_COOKIE,
     daniAnamContactCookieOptions,
@@ -36,6 +37,8 @@ function noStoreJson(body: unknown, init?: ResponseInit) {
 export async function POST(request: Request) {
     let verificationStage = 'request_start';
     try {
+        const accessDenied = await requireAgentEntryAccess(request, 'dani');
+        if (accessDenied) return accessDenied;
         if (!isTrustedBrowserOrigin(request)) {
             return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
         }
@@ -48,6 +51,8 @@ export async function POST(request: Request) {
         if (!browser) {
             return noStoreJson({ error: 'Dani session ownership is required' }, { status: 401 });
         }
+        const browserDenied = await requireAgentEntryBrowserAccess(request, 'dani', browser.id);
+        if (browserDenied) return browserDenied;
         const body = await readBoundedJsonObject(request, 2 * 1024);
         const allowedFields = new Set(['challengeId', 'verificationCode']);
         if (Object.keys(body).some(key => !allowedFields.has(key))) {
@@ -69,6 +74,8 @@ export async function POST(request: Request) {
             );
         }
         if (isDaniAnamFollowUpOtpChallengeId(challengeId)) {
+            const actionsDenied = await requireAgentAccess(request, 'dani', 'actions');
+            if (actionsDenied) return actionsDenied;
             verificationStage = 'consume_follow_up_challenge';
             const result = await consumeDaniAnamFollowUpOtpChallenge({
                 challengeId,

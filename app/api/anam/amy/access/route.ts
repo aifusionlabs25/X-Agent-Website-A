@@ -1,4 +1,5 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { bindAgentAccessBrowser, requireAgentAccess, requireAgentEntryAccess, requireAgentEntryBrowserAccess } from '@/lib/access/policy';
+import { readAccessIdentity } from '@/lib/access/auth';
 import { NextResponse } from 'next/server';
 import {
     AMY_ANAM_BROWSER_COOKIE,
@@ -32,12 +33,6 @@ function noStoreJson(body: unknown, init?: ResponseInit) {
     return response;
 }
 
-function accessCodeMatches(candidate: string, expected: string): boolean {
-    const candidateDigest = createHash('sha256').update(candidate).digest();
-    const expectedDigest = createHash('sha256').update(expected).digest();
-    return timingSafeEqual(candidateDigest, expectedDigest);
-}
-
 function safeIdentityStatus(input: {
     required: boolean;
     authenticated: boolean;
@@ -63,6 +58,8 @@ function safeIdentityStatus(input: {
 
 export async function GET(request: Request) {
     try {
+        const accessDenied = await requireAgentEntryAccess(request, 'amy');
+        if (accessDenied) return accessDenied;
         const config = readAmyAnamMemoryConfig();
         if (!config.gatesOpen) {
             return noStoreJson({ error: 'Amy session access is temporarily unavailable' }, { status: 503 });
@@ -72,6 +69,8 @@ export async function GET(request: Request) {
         if (!browserSession) {
             return noStoreJson(safeIdentityStatus({ required: true, authenticated: false }));
         }
+        const browserDenied = await requireAgentEntryBrowserAccess(request, 'amy', browserSession.id);
+        if (browserDenied) return noStoreJson(safeIdentityStatus({ required: true, authenticated: false }));
         const identity = await readAmyAnamBrowserIdentity(browserSession.id);
         if (!identity) {
             return noStoreJson(safeIdentityStatus({ required: true, authenticated: false }));
@@ -91,6 +90,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const accessDenied = await requireAgentEntryAccess(request, 'amy');
+        if (accessDenied) return accessDenied;
         const config = readAmyAnamMemoryConfig();
         if (!config.gatesOpen) {
             return noStoreJson({ error: 'Amy returning memory is temporarily unavailable' }, { status: 503 });
@@ -112,21 +113,25 @@ export async function POST(request: Request) {
 
         const body = await readBoundedJsonObject(request, 4 * 1024);
         const displayName = typeof body.displayName === 'string' ? body.displayName : '';
-        const email = typeof body.email === 'string' ? body.email : '';
-        const accessCode = typeof body.accessCode === 'string' ? body.accessCode : '';
+        const account = await readAccessIdentity(request);
+        if (!account) return noStoreJson({ error: 'Sign in to continue' }, { status: 401 });
+        const email = account.email;
         const memoryConsent = body.memoryConsent === true;
-        if (!displayName.trim() || !email.trim() || !accessCode) {
+        const followUpConsent = body.followUpConsent === true;
+        if (!displayName.trim()) {
             return noStoreJson(
-                { error: 'Enter a valid name, email, and access code' },
+                { error: 'Enter a valid name' },
                 { status: 400 },
             );
         }
-        if (!accessCodeMatches(accessCode, config.accessCode)) {
-            return noStoreJson({ error: 'Invalid access code' }, { status: 401 });
+        if (followUpConsent) {
+            const actionsDenied = await requireAgentAccess(request, 'amy', 'actions');
+            if (actionsDenied) return actionsDenied;
         }
 
         const spine = readAmyAnamSpineConfig();
         const created = createAmyAnamBrowserSessionWithSecret(spine.signingSecret);
+        await bindAgentAccessBrowser(request, 'amy', created.session.id);
         const identity = await storeAmyAnamBrowserIdentity({
             browserSessionId: created.session.id,
             displayName,
@@ -155,8 +160,8 @@ export async function POST(request: Request) {
         );
         response.cookies.set(
             AMY_ANAM_CONTACT_COOKIE,
-            contactToken,
-            amyAnamContactCookieOptions(),
+            followUpConsent ? contactToken : '',
+            amyAnamContactCookieOptions(followUpConsent ? undefined : 0),
         );
         return response;
     } catch (error) {

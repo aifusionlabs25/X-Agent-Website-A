@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { isStoredBrowserAccessAllowed } from '../access/policy.ts';
 import { brief, readiness, sha } from './state.ts';
 import type { Session } from './state.ts';
 import { readAmyAgentMailProviderConfig, sendAmyEmailWithAgentMail } from '../email/amy-email-provider.ts';
@@ -29,14 +30,16 @@ export function prepareOwnerMessage(s:Session){
 }
 /** Reservation is durably saved BEFORE the single transport attempt. A crash,
  * timeout, unknown receipt, or reload cannot cause another send. */
-export async function sendPreparedOwnerTest(s:Session,deps:{save:(previous:Session,next:Session)=>Promise<void>;stamp:(previous:Session,next:Session,event:unknown)=>Session;send?:typeof sendAmyEmailWithAgentMail}){
+export async function sendPreparedOwnerTest(s:Session,deps:{save:(previous:Session,next:Session)=>Promise<void>;stamp:(previous:Session,next:Session,event:unknown)=>Session;send?:typeof sendAmyEmailWithAgentMail;accessAllowed?:typeof isStoredBrowserAccessAllowed}){
     if(!s.ownerTest||s.email)return s;
+    if(!await (deps.accessAllowed??isStoredBrowserAccessAllowed)('james',s.browserId,'actions'))throw new Error('James email approval is required');
     if(s.ownerTest.expiresAt<=Date.now())throw new Error('Owner test authorization expired; no send attempted');
     const message=prepareOwnerMessage(s);emailConfiguration();
     const reserved=deps.stamp(s,{...structuredClone(s),email:{status:'RESERVED',snapshotHash:s.stateHash,subject:message.subject,bodyHash:sha(message.text),reservedAt:new Date().toISOString()}},{action:'owner-email-reservation',grantId:s.ownerTest.grantId,recipient:OWNER_RECIPIENT});
     await deps.save(s,reserved);
     const next=structuredClone(reserved);
     try{
+        if(!await (deps.accessAllowed??isStoredBrowserAccessAllowed)('james',s.browserId,'actions'))throw new Error('James email approval is required');
         const result=await (deps.send||sendAmyEmailWithAgentMail)(message,{idempotencyKey:'james-owner-'+s.ownerTest.grantId});
         if(!result.sent||!result.messageId)throw new Error('Missing provider receipt');
         next.email!.status='SENT';next.email!.messageId=result.messageId;

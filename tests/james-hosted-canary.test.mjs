@@ -1,3 +1,4 @@
+import { authorizedRequest, installJamesSharedAccess } from './helpers/james-shared-access.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -166,8 +167,9 @@ test('hosted lifecycle uses existing store, binds persona, persists/reloads and 
         if(String(url).endsWith('/sessions/'+providerId))return Response.json({id:providerId,personaId:PERSONA_ID,clientLabel:label,startTime:new Date().toISOString(),endTime:released?new Date().toISOString():null});
         throw new Error('Unexpected network target '+url);
     };
+    installJamesSharedAccess();
     try {
-        const request=(body,cookie='')=>new Request('https://demo.invalid/api/james-canary',{method:'POST',headers:{origin:'https://demo.invalid','Content-Type':'application/json',cookie},body:JSON.stringify(body)});
+        const request=(body,cookie='')=>authorizedRequest('https://xagent.aifusionlabs.app/api/james-canary',{method:'POST',headers:{origin:'https://xagent.aifusionlabs.app','Content-Type':'application/json',cookie},body:JSON.stringify(body)});
         const launched=await post(request({action:'start'})),cookie=launched.headers.get('set-cookie').split(';')[0],start=await launched.json();
         assert.equal(launched.status,200);assert.equal(start.config.voiceName,'Owner voice');
         const action=async(action,extra={})=>{const r=await post(request({action,id:start.id,...extra},cookie));const b=await r.json();assert.equal(r.status,200,JSON.stringify(b));return b;};
@@ -179,12 +181,12 @@ test('hosted lifecycle uses existing store, binds persona, persists/reloads and 
         await action('begin-close');
         const unverified=await post(request({action:'close',id:start.id},cookie));
         assert.equal(unverified.status,400);assert.match((await unverified.json()).error,/not yet verified/);
-        const waiting=await (await get(new Request('https://demo.invalid/api/james-canary?id='+start.id,{headers:{cookie}}))).json();
+        const waiting=await (await get(authorizedRequest('https://xagent.aifusionlabs.app/api/james-canary?id='+start.id,{headers:{cookie}}))).json();
         assert.equal(waiting.state,'CLOSING');assert.equal(waiting.providerRelease,undefined);
         assert.equal(waiting.email_status,'INACTIVE_NOT_SENT');
         released=true;const closed=await action('close');assert.equal(closed.state,'CLOSED');assert.equal(closed.handoff,'PREPARED');
-        const read=await get(new Request('https://demo.invalid/api/james-canary?id='+start.id,{headers:{cookie}}));assert.deepEqual(await read.json(),closed);
-        const unauthorized=await get(new Request('https://demo.invalid/api/james-canary?id='+start.id));assert.equal(unauthorized.status,400);
+        const read=await get(authorizedRequest('https://xagent.aifusionlabs.app/api/james-canary?id='+start.id,{headers:{cookie}}));assert.deepEqual(await read.json(),closed);
+        const unauthorized=await get(authorizedRequest('https://xagent.aifusionlabs.app/api/james-canary?id='+start.id));assert.equal(unauthorized.status,400);
         assert.ok(calls.every(url=>url.startsWith('https://redis.invalid')||url.startsWith('https://api.anam.ai/v1/')));
         assert.ok(![...db.values()].some(v=>v.includes('Dana')));
     } finally {globalThis.fetch=previousFetch;for(const key of Object.keys(process.env))if(!(key in previousEnv))delete process.env[key];Object.assign(process.env,previousEnv);}

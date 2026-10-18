@@ -23,6 +23,9 @@ const moduleUrl = text => `data:text/javascript;base64,${Buffer.from(text).toStr
 const source = await readFile(new URL('../app/api/anam/session/complete/route.ts', import.meta.url), 'utf8');
 let compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const mocks = {
+    // This suite tests artifact integrity after access approval. The shared
+    // policy and denial paths run against their real implementation separately.
+    '@/lib/access/policy': moduleUrl('export const requireAgentAccess = async () => null; export const requireAgentBrowserAccess = async () => null;'),
     'next/server': moduleUrl('export const after = () => {}; export const NextResponse = {json: (body, init) => Response.json(body, init)};'),
     '@/lib/anam/session-finalizer': moduleUrl('export async function finalizeAmyAnamSession() {throw new Error("Unexpected real finalization")}'),
     '@/lib/anam/dani-session': moduleUrl('export const readDaniAnamSessionSecrets=()=>({configured:false}); export const readDaniAnamBrowserSession=()=>null;'),
@@ -139,7 +142,7 @@ test('finalized display metadata reaches the real email dispatcher with unchange
         requests.push({ url, body: JSON.parse(init.body), key: new Headers(init.headers).get('Idempotency-Key') });
         return Response.json(String(url).includes('resend') ? { id: 'test-visitor' } : { message_id: 'test-internal', thread_id: 'test-thread' });
     };
-    const options = { env: mailEnv, fetchImpl };
+    const options = { env: mailEnv, fetchImpl, accessAllowed: async () => true };
     await queueAmyAnamConversationFollowUp({ externalSessionId: sessionId, browserSessionId: browser.id, displayName: 'Demo Visitor', email: 'typed@example.com', contactSecret: env.AMY_ANAM_SESSION_SECRET }, options);
     assert.equal(requests.length, 0);
     const session = { ...launch, externalSessionId: sessionId, displayedArtifact: { view: 'visual', revision: 2 }, boundAt: '2026-09-02T21:07:33Z', closeReceivedAt: '2026-09-02T21:11:07Z' };

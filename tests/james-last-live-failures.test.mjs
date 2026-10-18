@@ -1,7 +1,9 @@
+import { authorizedRequest, installJamesSharedAccess } from './helpers/james-shared-access.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {emptyIntake,ingest,applyTurn,receipt,readiness,conversationGuidance,brief,spokenPhone,PERSONA_ID,sha} from '../lib/james-canary/state.ts';
-import {verifyOwnerGrant,sendPreparedOwnerTest,OWNER_RECIPIENT,OWNER_POLICY} from '../lib/james-canary/owner-email.ts';
+import {verifyOwnerGrant,sendPreparedOwnerTest as sendPreparedOwnerTestWithPolicy,OWNER_RECIPIENT,OWNER_POLICY} from '../lib/james-canary/owner-email.ts';
+const sendPreparedOwnerTest=(session,deps)=>sendPreparedOwnerTestWithPolicy(session,{accessAllowed:async()=>true,...deps});
 import {post,get} from '../lib/james-canary/server.ts';
 const base=()=>({id:'17e1b181-d4fa-42eb-8209-cad30ef97880',browserId:'browser',clientLabel:'test',createdAt:new Date().toISOString(),revision:0,stateHash:'initial',personaId:PERSONA_ID,config:{},state:'ACTIVE',turns:[],intake:emptyIntake(),receipts:[]});
 const add=(s,text,role='user')=>applyTurn(s,{id:String(s.turns.length),role,content:text});
@@ -108,9 +110,10 @@ test('owner HTTP lifecycle consumes grant once and sends only after verified clo
         if(u.startsWith('https://api.agentmail.to/')){assert.ok(released);assert.deepEqual(data.to,[OWNER_RECIPIENT]);sends++;return Response.json({message_id:'verified-receipt'});}
         throw Error('Unexpected target '+u);
     };
+    installJamesSharedAccess();
     try{
         const token='t'.repeat(43);Object.assign(OWNER_POLICY,{...originalPolicy,expiresAt:Date.now()+60000,tokenHash:sha(token)});
-        const request=(body,cookie='',grant=token)=>new Request('https://demo.invalid/api/james-canary',{method:'POST',headers:{origin:'https://demo.invalid','Content-Type':'application/json',cookie,'x-james-owner-test':grant},body:JSON.stringify(body)});
+        const request=(body,cookie='',grant=token)=>authorizedRequest('https://xagent.aifusionlabs.app/api/james-canary',{method:'POST',headers:{origin:'https://xagent.aifusionlabs.app','Content-Type':'application/json',cookie,'x-james-owner-test':grant},body:JSON.stringify(body)});
         assert.equal((await post(request({action:'owner-test-preflight'}))).status,200);assert.equal(launches,0);
         const r=await post(request({action:'start'})),cookie=r.headers.get('set-cookie').split(';')[0],started=await r.json();assert.equal(r.status,200);
         assert.equal((await post(request({action:'start'},cookie))).status,400);assert.equal(launches,1);
@@ -121,6 +124,6 @@ test('owner HTTP lifecycle consumes grant once and sends only after verified clo
         assert.equal(sends,0);await action('begin-close');assert.equal(sends,0);released=true;
         const closed=await action('close');assert.equal(closed.state,'CLOSED');assert.equal(closed.handoff,'PREPARED');assert.equal(closed.email_status,'SENT');assert.equal(closed.email_receipt,'verified-receipt');assert.equal(sends,1);
         assert.deepEqual(await action('close'),closed);assert.equal(sends,1);
-        assert.deepEqual(await (await get(new Request('https://demo.invalid/api/james-canary?id='+started.id,{headers:{cookie}}))).json(),closed);assert.equal(sends,1);
+        assert.deepEqual(await (await get(authorizedRequest('https://xagent.aifusionlabs.app/api/james-canary?id='+started.id,{headers:{cookie}}))).json(),closed);assert.equal(sends,1);
     }finally{Object.assign(OWNER_POLICY,originalPolicy);globalThis.fetch=fetch;for(const k of Object.keys(process.env))if(!(k in env))delete process.env[k];Object.assign(process.env,env);}
 });

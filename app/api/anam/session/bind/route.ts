@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import { verifyAnamSessionForLaunch, AnamSessionApiError } from '@/lib/anam/session-api';
 import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from '@/lib/anam/persona-readiness';
 import {
@@ -82,6 +83,8 @@ export async function POST(request: Request) {
             launch.resolvedPersonaId,
             launch.agentSlug,
         );
+        const accessDenied = await requireAgentAccess(request, launchAgentSlug);
+        if (accessDenied) return accessDenied;
         const daniSessionSecrets = readDaniAnamSessionSecrets();
         if (launchAgentSlug === 'dani' && !daniSessionSecrets.configured) {
             return noStoreJson({ error: 'Dani session access is temporarily unavailable' }, { status: 503 });
@@ -92,6 +95,8 @@ export async function POST(request: Request) {
         if (!browserSession) {
             return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
         }
+        const browserDenied = await requireAgentBrowserAccess(request, launchAgentSlug, browserSession.id);
+        if (browserDenied) return browserDenied;
         if (launch.browserSessionId !== browserSession.id) {
             return noStoreJson({ error: 'Session ownership did not match' }, { status: 403 });
         }
@@ -116,6 +121,7 @@ export async function POST(request: Request) {
         });
 
         if (status === 'bound' || status === 'duplicate') {
+            const followUpAllowed = !await requireAgentAccess(request, launchAgentSlug, 'actions');
             const memoryConfig = readAmyAnamMemoryConfig();
             const daniMemoryConfig = readDaniAnamMemoryConfig();
             let memoryIdentityLinked = false;
@@ -136,7 +142,7 @@ export async function POST(request: Request) {
                 memoryIdentityLinked = memoryLinkStatus === 'linked'
                     || memoryLinkStatus === 'duplicate';
             }
-            if (launchAgentSlug === 'amy') {
+            if (followUpAllowed && launchAgentSlug === 'amy') {
                 const contact = readAmyAnamContactFromRequest({
                     request,
                     browserSessionId: browserSession.id,
@@ -171,7 +177,7 @@ export async function POST(request: Request) {
                 memoryIdentityLinked = memoryLinkStatus === 'linked'
                     || memoryLinkStatus === 'duplicate';
             }
-            if (launch.resolvedPersonaId === DANI_PERSONA_ID && launchAgentSlug === 'dani') {
+            if (followUpAllowed && launch.resolvedPersonaId === DANI_PERSONA_ID && launchAgentSlug === 'dani') {
                 const cookieContact = readDaniAnamContactFromRequest({
                     request,
                     browserSessionId: browserSession.id,
@@ -200,7 +206,7 @@ export async function POST(request: Request) {
                     contactContentLogged: false,
                 });
             }
-            if (launch.resolvedPersonaId === EVAN_PERSONA_ID) {
+            if (followUpAllowed && launch.resolvedPersonaId === EVAN_PERSONA_ID) {
                 const contact = readAmyAnamContactFromRequest({
                     request,
                     browserSessionId: browserSession.id,

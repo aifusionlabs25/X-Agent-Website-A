@@ -1,3 +1,4 @@
+import { authorizedRequest, installJamesSharedAccess } from './helpers/james-shared-access.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -100,10 +101,11 @@ test('public launch is server-bound to the bounded persona and cannot read legac
         throw new Error(`Unexpected network target ${target}`);
     };
 
+    installJamesSharedAccess();
     try {
-        const request = new Request('https://demo.invalid/api/james-notepad', {
+        const request = authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad', {
             method: 'POST',
-            headers: { origin: 'https://demo.invalid', 'Content-Type': 'application/json' },
+            headers: { origin: 'https://xagent.aifusionlabs.app', 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'start', personaId: CANONICAL_ID }),
         });
         const response = await post(request);
@@ -116,9 +118,9 @@ test('public launch is server-bound to the bounded persona and cannot read legac
         const cookie = response.headers.get('set-cookie').split(';')[0];
         assert.match(cookie, /^xagent_james_notepad_v2=/);
         for (const action of ['demo-email-preflight', 'preview-demo-email', 'send-demo-email']) {
-            const blocked = await post(new Request('https://demo.invalid/api/james-notepad', {
+            const blocked = await post(authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad', {
                 method: 'POST',
-                headers: { origin: 'https://demo.invalid', 'Content-Type': 'application/json', cookie },
+                headers: { origin: 'https://xagent.aifusionlabs.app', 'Content-Type': 'application/json', cookie },
                 body: JSON.stringify({ action, id: launched.id }),
             }));
             assert.equal(blocked.status, 400);
@@ -130,11 +132,11 @@ test('public launch is server-bound to the bounded persona and cannot read legac
             'https://api.anam.ai/v1/auth/session-token',
         ]);
 
-        const url = `https://demo.invalid/api/james-notepad?id=${launched.id}`;
-        const candidateRead = await get(new Request(url, { headers: { cookie } }));
+        const url = `https://xagent.aifusionlabs.app/api/james-notepad?id=${launched.id}`;
+        const candidateRead = await get(authorizedRequest(url, { headers: { cookie } }));
         assert.equal(candidateRead.status, 200);
         assert.equal((await candidateRead.json()).personaId, CANDIDATE_ID);
-        const legacyRead = await legacyGet(new Request(url, { headers: { cookie } }));
+        const legacyRead = await legacyGet(authorizedRequest(url, { headers: { cookie } }));
         assert.equal(legacyRead.status, 400);
     } finally {
         globalThis.fetch = previousFetch;
@@ -161,9 +163,10 @@ test('candidate-only development diagnostic logs the failed Anam step without se
                 request:{systemPrompt:'must not appear'}}},{status:400});
         throw new Error(`Unexpected network target ${target}`);
     };
+    installJamesSharedAccess();
     try {
-        const response=await post(new Request('https://demo.invalid/api/james-notepad',{
-            method:'POST',headers:{origin:'https://demo.invalid','Content-Type':'application/json'},
+        const response=await post(authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad',{
+            method:'POST',headers:{origin:'https://xagent.aifusionlabs.app','Content-Type':'application/json'},
             body:JSON.stringify({action:'start'}),
         }));
         assert.equal(response.status,400);

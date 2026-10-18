@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
+import { requireOwnerAccess } from '@/lib/access/policy';
 import { LLMService } from '@/lib/openai-service';
 
 export async function POST(req: Request) {
     try {
+        const accessDenied = await requireOwnerAccess(req);
+        if (accessDenied) return accessDenied;
         const { transcript, model, provider } = await req.json();
 
         if (!transcript) {

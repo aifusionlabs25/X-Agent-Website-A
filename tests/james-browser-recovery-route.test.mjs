@@ -1,3 +1,4 @@
+import { authorizedRequest, installJamesSharedAccess } from './helpers/james-shared-access.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
@@ -16,11 +17,11 @@ const prefix = 'xagent:james:notepad:v2:';
 const cookieName = 'xagent_james_notepad_v2';
 const signingSecret = 'fake-browser-recovery-signing-secret'.repeat(3);
 const secretFor = surfacePrefix => createHmac('sha256', signingSecret).update(surfacePrefix).digest('hex');
-const request = (body, cookie, origin = 'https://demo.invalid') => new Request('https://demo.invalid/api/james-notepad', {
+const request = (body, cookie, origin = 'https://xagent.aifusionlabs.app') => authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad', {
     method: 'POST', headers: { origin, 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) },
     body: JSON.stringify(body),
 });
-const getRequest = cookie => new Request('https://demo.invalid/api/james-notepad?id=' + id,
+const getRequest = cookie => authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad?id=' + id,
     { headers: cookie ? { cookie } : {} });
 
 async function withRecoveryFixture(run) {
@@ -96,13 +97,14 @@ async function withRecoveryFixture(run) {
         }
         throw new Error('Unexpected mocked provider target ' + target);
     };
+    const access = installJamesSharedAccess({ browserIds: [owner.session.id] });
     const stored = () => unseal(db.get(prefix + id), id, key, RUNTIME_CANDIDATE_ID, prefix);
     const replace = next => { session = next; db.set(prefix + id, seal(session, key, prefix)); };
     const action = async (action, extra = {}, useCookie = cookie) => {
         const response = await publicPost(request({ action, id, ...extra }, useCookie));
         return { response, body: await response.json() };
     };
-    try { await run({ session, stored, replace, action, cookie, owner, db, behavior, providerCalls, redisWrites, redisReads, key }); }
+    try { await run({ session, stored, replace, action, cookie, owner, db, behavior, providerCalls, redisWrites, redisReads, key, access }); }
     finally {
         globalThis.fetch = previousFetch;
         for (const name of Object.keys(process.env)) if (!(name in previousEnv)) delete process.env[name];
@@ -114,9 +116,9 @@ test('public browser recovery rejects unauthorized, cross-origin, and different-
     await withRecoveryFixture(async h => {
         const foreign = createAmyAnamBrowserSessionWithSecret(h.key);
         for (const [cookie, origin, status, error] of [
-            ['', 'https://demo.invalid', 400, /authorization expired/],
+            ['', 'https://xagent.aifusionlabs.app', 400, /authorization expired/],
             [h.cookie, 'https://foreign.invalid', 403, /origin is not allowed/],
-            [cookieName + '=' + foreign.token, 'https://demo.invalid', 400, /different browser/],
+            [cookieName + '=' + foreign.token, 'https://xagent.aifusionlabs.app', 403, /fresh session/],
         ]) {
             const response = await publicPost(request({ action: 'release-browser-session', id }, cookie, origin));
             assert.equal(response.status, status); assert.match((await response.json()).error, error);
@@ -187,6 +189,7 @@ test('candidate and default servers do not expose browser recovery', async () =>
         for (const surface of surfaces) {
             const key = secretFor(surface.prefix), owner = createAmyAnamBrowserSessionWithSecret(key);
             const record = { ...h.session, browserId: owner.session.id, personaId: surface.personaId };
+            h.access.bind(owner.session.id);
             h.db.set(surface.prefix + id, seal(record, key, surface.prefix));
             const response = await surface.post(request({ action: 'release-browser-session', id, sdkNeverStarted: true }, surface.cookie + '=' + owner.token));
             assert.equal(response.status, 400); assert.match((await response.json()).error, /unavailable on this surface/);
@@ -345,7 +348,7 @@ test('public GET never classifies a foreign browser, storage outage, or disabled
     await withRecoveryFixture(async h => {
         const original = h.db.get(prefix + id), foreign = createAmyAnamBrowserSessionWithSecret(h.key);
         const response = await publicGet(getRequest(cookieName + '=' + foreign.token)), body = await response.json();
-        assert.equal(response.status, 400); assert.match(body.error, /different browser/);
+        assert.equal(response.status, 403); assert.match(body.error, /fresh session/);
         assert.equal(body.recoveryUnavailable, undefined); assert.equal(h.db.get(prefix + id), original);
         h.behavior.redisFailure = true;
         const outage = await publicGet(getRequest(h.cookie)), outageBody = await outage.json();
@@ -366,6 +369,7 @@ test('candidate and default GET surfaces do not expose the public unavailable-re
             { get: createJamesServer().get, prefix: 'xagent:james:canary:v1:', cookie: 'xagent_james_canary' },
         ]) {
             const owner = createAmyAnamBrowserSessionWithSecret(secretFor(surface.prefix));
+            h.access.bind(owner.session.id);
             const missing = await surface.get(getRequest(surface.cookie + '=' + owner.token)), missingBody = await missing.json();
             assert.equal(missing.status, 400); assert.match(missingBody.error, /Session is unavailable or expired/);
             assert.equal(missingBody.recoveryUnavailable, undefined);
@@ -404,7 +408,7 @@ test('public notes-only GET retains the exact old note record instead of followi
     await withRecoveryFixture(async h => {
         h.replace({ ...h.session, providerId: undefined, state: 'LAUNCHING' });
         h.db.set(prefix + 'restart:' + id, successorId); storeSuccessor(h);
-        const response = await publicGet(new Request('https://demo.invalid/api/james-notepad?id=' + id + '&notesOnly=1',
+        const response = await publicGet(authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad?id=' + id + '&notesOnly=1',
             { headers: { cookie: h.cookie } })), body = await response.json();
         assert.equal(response.status, 200, JSON.stringify(body)); assert.equal(body.id, id);
         assert.equal(body.previousSessionId, undefined); assert.equal(body.acceptedVisitorTurns, 1);
@@ -477,6 +481,7 @@ test('candidate and default GET do not follow restart claims or perform their ex
             { get: createJamesServer().get, prefix: 'xagent:james:canary:v1:', cookie: 'xagent_james_canary', personaId: PERSONA_ID },
         ]) {
             const key = secretFor(surface.prefix), owner = createAmyAnamBrowserSessionWithSecret(key);
+            h.access.bind(owner.session.id);
             const record = { ...h.session, browserId: owner.session.id, personaId: surface.personaId, providerId: undefined, state: 'LAUNCHING' };
             h.db.set(surface.prefix + id, seal(record, key, surface.prefix));
             h.db.set(surface.prefix + 'restart:' + id, successorId); h.redisReads.length = 0;

@@ -56,7 +56,7 @@ test('v1 shared core stays agent-neutral', () => {
   assert.match(read('components/meeting-concierge/v1/MeetingConcierge.tsx'), /checkInEnabled/);
 });
 
-test('Amy adapter uses only Amy identity, consent, persona, and routes', () => {
+test('Amy adapter uses its approved account, persona, and routes without opting into email', () => {
   const combined = amyFiles.map(read).join('\n');
   assert.doesNotMatch(combined, /Dani|DANI_|\/dani(?:\/|['"?])|readDani|dani_/i);
 
@@ -64,15 +64,20 @@ test('Amy adapter uses only Amy identity, consent, persona, and routes', () => {
   assert.match(client, /meetingApiPath:\s*['"]\/api\/anam\/amy\/meetings['"]/);
   assert.match(client, /returnHref:\s*['"]\/agents\/amy['"]/);
   assert.match(client, /fetch\(['"]\/api\/anam\/amy\/access['"]/);
-  assert.match(client, /body:\s*JSON\.stringify\(fields\)/);
+  assert.match(client, /checkInEnabled:\s*false/);
+  assert.match(client, /prepareOrganizer/);
+  assert.match(client, /memoryConsent:\s*false,\s*followUpConsent:\s*false/);
+  assert.doesNotMatch(client, /accessCode/);
   assert.match(client, /Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1/);
   assert.doesNotMatch(client, /standard session follow-up/);
 
   const route = read(amyFiles[1]);
   assert.match(route, /ANAM_AMY_CARA4_PERSONA_ID/);
   assert.match(route, /resolveAnamSessionPersona/);
-  assert.match(route, /contact\?\.purpose\s*!==\s*['"]amy_follow_up['"]/);
-  assert.match(route, /readAmyAnamBrowserIdentity\(browser\.id\)/);
+  assert.match(route, /readAccessIdentity\(request\)/);
+  assert.match(route, /isolationId:\s*browser\.id/);
+  assert.match(read('lib/meeting-concierge/v1/server.ts'), /requireAgentBrowserAccess\(request, adapter\.agentKey, organizer\.isolationId, 'meeting'\)/);
+  assert.doesNotMatch(route, /amy_follow_up/, 'meeting access must not imply email consent');
   assert.match(route, /removeToolNames:\s*\[['"]end_amy_session['"]\]/);
   assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);
   assert.match(route, /Call end_call once with confirmed true/i);
@@ -117,21 +122,25 @@ test('Dani adapter uses only Dani identity, consent, persona, and routes', () =>
   assert.doesNotMatch(route, /sendEmail|resend/i, 'Meeting Concierge must not alter email delivery');
 });
 
-test('Evan adapter uses only Evan identity, consent, persona, and routes', () => {
+test('Evan adapter uses its approved account, persona, and routes without opting into email', () => {
   const combined = evanFiles.map(read).join('\n');
   assert.doesNotMatch(combined, /\bDani\b|DANI_|\/amy(?:\/|['"?])|\/dani(?:\/|['"?])|amy_follow_up|dani_follow_up/i);
 
   const client = read(evanFiles[0]);
   assert.match(client, /meetingApiPath:\s*['"]\/api\/anam\/evan\/meetings['"]/);
   assert.match(client, /returnHref:\s*['"]\/agents\/evan['"]/);
-  assert.match(client, /kind:\s*['"]contact['"]/);
+  assert.match(client, /checkInEnabled:\s*false/);
+  assert.match(client, /prepareOrganizer/);
   assert.match(client, /fetch\(['"]\/api\/anam\/evan\/access['"]/);
-  assert.match(client, /followUpConsent:\s*true/);
+  assert.match(client, /body:\s*JSON\.stringify\(\{\s*guest:\s*true\s*\}\)/);
+  assert.doesNotMatch(client, /followUpConsent/);
   assert.match(client, /Meeting transcripts, recap emails, and returning memory are not included in Meeting Concierge v1/);
 
   const route = read(evanFiles[1]);
   assert.match(route, /expectedPersonaId:\s*EVAN_PERSONA_ID/);
-  assert.match(route, /contact\?\.purpose\s*!==\s*['"]evan_follow_up['"]/);
+  assert.match(route, /readAccessIdentity\(request\)/);
+  assert.match(route, /isolationId:\s*browser\.id/);
+  assert.doesNotMatch(route, /evan_follow_up/, 'meeting access must not imply email consent');
   assert.match(route, /removeToolNames:\s*\[[\s\S]*['"]end_mullins_session['"][\s\S]*['"]send_mullins_follow_up_email['"][\s\S]*['"]show_move_planner['"]/);
   assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);
   assert.match(route, /Call end_call once with confirmed true/i);
@@ -150,7 +159,8 @@ test('three-agent adapters remain isolated while sharing one versioned core', ()
   assert.match(read('components/amy/AmyMeetingScheduler.tsx'), /<MeetingConcierge/);
   assert.match(read('components/dani/DaniMeetingScheduler.tsx'), /<MeetingConcierge/);
   assert.match(read('components/evan/EvanMeetingScheduler.tsx'), /<MeetingConcierge/);
-  assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]credentials['"]/);
+  assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /prepareOrganizer\?:\s*\(\) => Promise<MeetingConciergeOrganizer>/);
+  assert.doesNotMatch(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]credentials['"]|accessCode/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]email-code['"]/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /kind:\s*['"]contact['"]/);
   assert.match(read('lib/meeting-concierge/v1/contracts.ts'), /MEETING_CONCIERGE_PARTICIPATION_MODES\s*=\s*\[['"]observer['"], ['"]participant['"], ['"]facilitator['"]\]/);

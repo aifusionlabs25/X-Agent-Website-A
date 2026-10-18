@@ -1,3 +1,4 @@
+import { authorizedRequest, installJamesSharedAccess } from './helpers/james-shared-access.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
@@ -224,7 +225,8 @@ test('same-browser return reconciles an ended public James session once without 
                 endTime:'2026-10-03T20:01:00Z',messages:[{role:'user',message:'I was in an accident.'}]});
         throw new Error('Unexpected offline target '+target);
     };
-    const request=()=>new Request(`https://example.invalid/api/james-notepad?id=${session.id}`,
+    installJamesSharedAccess({ browserIds: [owner.session.id] });
+    const request=()=>authorizedRequest(`https://xagent.aifusionlabs.app/api/james-notepad?id=${session.id}`,
         {headers:{cookie:'xagent_james_notepad_v2='+owner.token}});
     try{
         assert.equal((await publicGet(request())).status,200);

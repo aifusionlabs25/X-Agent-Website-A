@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import { DANI_PERSONA_ID } from '@/lib/anam/persona-ids';
 import { verifyDaniAnamLiveIdentity } from '@/lib/anam/dani-live-identity';
 import {
@@ -33,6 +34,8 @@ function noStoreJson(body: unknown, init?: ResponseInit) {
 
 export async function POST(request: Request) {
     try {
+        const accessDenied = await requireAgentAccess(request, 'dani');
+        if (accessDenied) return accessDenied;
         const spine = readAmyAnamSpineConfig();
         const memory = readDaniAnamMemoryConfig();
         const daniSession = readDaniAnamSessionSecrets();
@@ -49,6 +52,8 @@ export async function POST(request: Request) {
         if (!browserSession) {
             return noStoreJson({ error: 'Dani session ownership is required' }, { status: 401 });
         }
+        const browserDenied = await requireAgentBrowserAccess(request, 'dani', browserSession.id);
+        if (browserDenied) return browserDenied;
 
         const body = await readBoundedJsonObject(request, 2 * 1024);
         const allowedFields = new Set([

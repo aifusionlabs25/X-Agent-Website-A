@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -21,7 +22,9 @@ const SECRET = 'offline-token-access-signing-secret-over-32-characters';
 // signatures, identity storage, launch reservation and rate-limit code. A VM
 // gives every case isolated environment variables and a fetch implementation
 // that never delegates to the network. Only unrelated integrations and the
-// external persona-readiness preflight are replaced.
+// external persona-readiness preflight are replaced. Verified-account lookup
+// is the authentication boundary; the grant policy, persisted browser binding,
+// Amy cookies and memory checks execute unchanged.
 function harness(options = {}) {
     const env = {
         NODE_ENV: 'production', ANAM_API_KEY: 'offline-anam-key',
@@ -35,6 +38,18 @@ function harness(options = {}) {
         ...options.env,
     };
     const db = new Map(), providerCalls = [], readinessCalls = [], unexpected = [];
+    const shared = { identity: null, unavailable: false };
+    function signIn(email = 'visitor@example.test', id = 'offline-verified-user') {
+        shared.identity = { id, email, name: 'Offline Visitor' };
+    }
+    function approve(agent = 'amy', capabilities = ['conversation'], overrides = {}) {
+        const email = shared.identity?.email || 'visitor@example.test';
+        const hash = createHash('sha256').update(`${email}\0${agent}`).digest('hex');
+        db.set(`xagent:access:policy:v1:record:${hash}`, JSON.stringify({
+            email, agent, capabilities, status: 'approved', expiresAt: new Date(Date.now() + 3600000).toISOString(),
+            updatedAt: new Date().toISOString(), updatedBy: 'owner@example.test', ...overrides,
+        }));
+    }
     const fetch = async (url, init = {}) => {
         const target = String(url), body = init.body ? JSON.parse(init.body) : null;
         if (target === PROVIDER_URL) {
@@ -62,6 +77,22 @@ function harness(options = {}) {
         throw new Error('No real network permitted: ' + target);
     };
     const mocks = new Map([
+        ['lib/access/auth.ts', { readAccessIdentity: async () => {
+            if (shared.unavailable) throw new Error('Offline authentication unavailable');
+            return shared.identity;
+        } }],
+        ['lib/access/redis.ts', { accessRedisCommand: async command => {
+            if (shared.unavailable) throw new Error('Offline authorization unavailable');
+            const [operation, key, value] = command;
+            if (operation === 'GET') return db.get(key) ?? null;
+            if (operation === 'SMEMBERS') return [];
+            if (operation === 'SET') {
+                if (command.includes('NX') && db.has(key)) return null;
+                db.set(key, value); return 'OK';
+            }
+            unexpected.push('Shared Redis command: ' + operation);
+            throw new Error('Unexpected offline shared Redis command');
+        } }],
         ['lib/anam/outbound-email-config.ts', { readAmyAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
         ['lib/anam/dani-agentmail.ts', { readDaniAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
         ['lib/anam/evan-agentmail.ts', { readEvanAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
@@ -88,8 +119,8 @@ function harness(options = {}) {
         const filename = resolve(root, path);
         if (mocks.has(filename)) return mocks.get(filename);
         if (cache.has(filename)) return cache.get(filename).exports;
-        const module = { exports: {} };
-        cache.set(filename, module);
+        const loadedModule = { exports: {} };
+        cache.set(filename, loadedModule);
         const source = readFileSync(filename, 'utf8');
         const compiled = ts.transpileModule(source, {
             compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -104,8 +135,8 @@ function harness(options = {}) {
             return load(dependency.endsWith('.ts') ? dependency : dependency + '.ts');
         };
         const execute = vm.runInContext(`(function(require, module, exports) {\n${compiled}\n})`, context, { filename });
-        execute(localRequire, module, module.exports);
-        return module.exports;
+        execute(localRequire, loadedModule, loadedModule.exports);
+        return loadedModule.exports;
     }
     const tokenRoute = load('app/api/anam-token/route.ts');
     const accessRoute = load('app/api/anam/amy/access/route.ts');
@@ -124,14 +155,15 @@ function harness(options = {}) {
         return { response, status: response.status, data: await response.json() };
     }
     return {
-        env, db, providerCalls, readinessCalls, spine, agents,
+        env, db, shared, signIn, approve, providerCalls, readinessCalls, spine, agents,
         post: async (body, cookie = '', origin = ORIGIN) => result(await tokenRoute.POST(request('/api/anam-token', body, cookie, origin))),
         status: async (cookie = '') => result(await accessRoute.GET(request('/api/anam/amy/access', undefined, cookie))),
-        checkIn: async (memoryConsent = false, accessCode = env.AMY_ANAM_MEMORY_ACCESS_CODE) => {
+        checkIn: async (memoryConsent = false, authorize = true) => {
+            if (authorize) { signIn(); approve(); }
             const checked = await result(await accessRoute.POST(request('/api/anam/amy/access', {
-                displayName: 'Offline Visitor', email: 'visitor@example.test', accessCode, memoryConsent,
+                displayName: 'Offline Visitor', email: 'untrusted-body@example.test', memoryConsent,
             })));
-            const cookie = checked.response.cookies.get(spine.AMY_ANAM_BROWSER_COOKIE);
+            const cookie = checked.response.cookies?.get(spine.AMY_ANAM_BROWSER_COOKIE);
             return { ...checked, cookie: cookie ? `${cookie.name}=${encodeURIComponent(cookie.value)}` : '' };
         },
         signedCookie: (secret = SECRET, now = Date.now()) => {
@@ -164,7 +196,6 @@ for (const [label, env] of [
     ['Redis configuration missing', { AMY_ANAM_REDIS_REST_TOKEN: '' }],
     ['memory disabled', { AMY_ANAM_MEMORY_ENABLED: 'false' }],
     ['memory kill switch', { AMY_ANAM_MEMORY_KILL_SWITCH: 'true' }],
-    ['invitation code missing', { AMY_ANAM_MEMORY_ACCESS_CODE: '' }],
     ['identity salt missing', { AMY_ANAM_MEMORY_IDENTITY_SALT: '' }],
     ['canonical persona missing', { ANAM_AMY_CARA4_PERSONA_ID: '' }],
     ['canonical persona is legacy ID', { ANAM_AMY_CARA4_PERSONA_ID: AMY_ID }],
@@ -181,17 +212,21 @@ for (const [label, env] of [
     });
 }
 
-test('Amy access GET stays required anonymously and fails closed with disabled or unavailable gates', async () => {
+test('Amy access GET requires approved shared identity before check-in and fails closed with unavailable gates', async () => {
     const open = harness();
     const anonymous = await open.status();
-    assert.equal(anonymous.status, 200);
-    assert.equal(anonymous.data.required, true);
-    assert.equal(anonymous.data.authenticated, false);
+    assert.equal(anonymous.status, 401);
+    open.signIn(); open.approve();
+    const approved = await open.status();
+    assert.equal(approved.status, 200);
+    assert.equal(approved.data.required, true);
+    assert.equal(approved.data.authenticated, false);
     for (const env of [
         { AMY_ANAM_MEMORY_ENABLED: 'false' }, { AMY_ANAM_SESSION_SPINE_ENABLED: 'false' },
         { AMY_ANAM_MEMORY_KILL_SWITCH: 'true' }, { AMY_ANAM_SESSION_SECRET: '' },
     ]) {
         const h = harness({ env });
+        h.signIn(); h.approve();
         const unavailable = await h.status();
         assert.equal(unavailable.status, 503);
         assert.notEqual(unavailable.data.required, false);
@@ -202,6 +237,7 @@ test('Amy access GET stays required anonymously and fails closed with disabled o
 test('Amy rejects forged, expired and unrecognized signed sessions without minting', async () => {
     for (const kind of ['wrong-secret', 'tampered', 'expired', 'no-identity', 'different-browser']) {
         const h = harness();
+        h.signIn(); h.approve();
         let cookie;
         if (kind === 'different-browser') {
             assert.equal((await h.checkIn()).status, 200);
@@ -211,14 +247,14 @@ test('Amy rejects forged, expired and unrecognized signed sessions without minti
         else if (kind === 'tampered') cookie = h.signedCookie().cookie + '.extra';
         else cookie = h.signedCookie().cookie;
         const result = await h.post({ personaId: AMY_ID }, cookie);
-        assert.equal(result.status, 401, kind);
+        assert.equal(result.status, ['no-identity', 'different-browser'].includes(kind) ? 403 : 401, kind);
         assert.equal(h.providerCalls.length, 0, kind);
     }
 });
 
-test('wrong invitation code cannot create a usable Amy session', async () => {
+test('anonymous check-in cannot create a usable Amy session', async () => {
     const h = harness();
-    const checked = await h.checkIn(false, 'wrong-invitation-code');
+    const checked = await h.checkIn(false, false);
     assert.equal(checked.status, 401);
     assert.equal(checked.cookie, '');
     assert.equal((await h.post({ personaId: AMY_ID }, checked.cookie)).status, 401);
@@ -266,8 +302,19 @@ test('Amy readiness failures and untrusted origins cannot mint after an approved
     }
 });
 
-test('unrelated public agents retain default token access even while Amy gates are disabled', async () => {
+test('all ten listed agents require shared identity before token minting', async () => {
+    const h = harness();
+    assert.equal(h.agents.length, 10);
+    for (const agent of h.agents) {
+        assert.equal((await h.post({ personaId: agent.personaId })).status, 401, agent.slug);
+    }
+    assert.equal(h.providerCalls.length, 0);
+    assert.deepEqual(h.readinessCalls, []);
+});
+
+test('approved unrelated agents can launch while Amy-specific gates are disabled', async () => {
     const h = harness({ env: { AMY_ANAM_MEMORY_ENABLED: 'false', AMY_ANAM_SESSION_SPINE_ENABLED: 'false' } });
+    h.signIn(); h.approve('michael');
     const personaId = h.agents.find(agent => agent.slug === 'michael').personaId;
     const result = await h.post({ personaId });
     assert.equal(result.status, 200);
@@ -275,6 +322,40 @@ test('unrelated public agents retain default token access even while Amy gates a
     assert.equal(h.providerCalls.length, 1);
     assert.equal(h.providerCalls[0].body.personaConfig.personaId, personaId);
     assert.deepEqual(h.readinessCalls, []);
+});
+
+test('sign-in alone, another agent grant, wrong capability, and revoked or expired grants cannot mint', async () => {
+    for (const kind of ['no-grant', 'wrong-agent', 'wrong-capability', 'revoked', 'expired']) {
+        const h = harness();
+        h.signIn();
+        if (kind === 'wrong-agent') h.approve('taylor');
+        if (kind === 'wrong-capability') h.approve('michael', ['meeting']);
+        if (kind === 'revoked') h.approve('michael', ['conversation'], { status: 'revoked' });
+        if (kind === 'expired') h.approve('michael', ['conversation'], { expiresAt: new Date(Date.now() - 1000).toISOString() });
+        const personaId = h.agents.find(agent => agent.slug === 'michael').personaId;
+        assert.equal((await h.post({ personaId })).status, 403, kind);
+        assert.equal(h.providerCalls.length, 0, kind);
+    }
+});
+
+test('shared auth outages deny every listed token endpoint even with old Amy cookies', async () => {
+    const h = harness();
+    const checked = await h.checkIn();
+    h.shared.unavailable = true;
+    for (const agent of h.agents) {
+        assert.equal((await h.post({ personaId: agent.personaId }, checked.cookie)).status, 503, agent.slug);
+    }
+    assert.equal(h.providerCalls.length, 0);
+});
+
+test('Amy browser cookies cannot cross verified accounts and a revoked grant stops existing check-ins', async () => {
+    const h = harness();
+    const checked = await h.checkIn();
+    h.signIn('another@example.test', 'another-verified-user'); h.approve();
+    assert.equal((await h.post({ personaId: AMY_ID }, checked.cookie)).status, 403);
+    h.signIn(); h.approve('amy', ['conversation'], { status: 'revoked' });
+    assert.equal((await h.post({ personaId: AMY_ID }, checked.cookie)).status, 403);
+    assert.equal(h.providerCalls.length, 0);
 });
 
 test('unknown personas, direct canonical IDs and unsupported or malformed variants are rejected', async () => {

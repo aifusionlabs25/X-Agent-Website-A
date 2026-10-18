@@ -1,13 +1,15 @@
+import { authorizedRequest, installJamesSharedAccess } from './helpers/james-shared-access.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {emptyIntake,applyTurn,ingest,brief,receipt,sha,view,CURRENT_JAMES_PERSONA_ID,readiness} from '../lib/james-canary/state.ts';
-import {prepareDemoMessages,sendDemoSummaries,sendDemoMessage,verifyDemoGrant,bindDemoGrant,readDemoAccessMode,readVisitorEmailPolicy,createVisitorDemoAuthorization,reserveVisitorEmailAllowance,readDemoEmailConfig,preflightDemoTransport,INTERNAL_DEMO_RECIPIENT} from '../lib/james-canary/demo-email.ts';
+import {prepareDemoMessages,sendDemoSummaries as sendDemoSummariesWithPolicy,sendDemoMessage,verifyDemoGrant,bindDemoGrant,readDemoAccessMode,readVisitorEmailPolicy,createVisitorDemoAuthorization,reserveVisitorEmailAllowance,readDemoEmailConfig,preflightDemoTransport,INTERNAL_DEMO_RECIPIENT} from '../lib/james-canary/demo-email.ts';
 import {finalizeBrief,confirmBrief,applyBriefCorrection,structuredBriefView} from '../lib/james-canary/structured-brief.ts';
 import {instructionLeakageSuspected} from '../lib/james-canary/speech-quality.ts';
 import {post,get} from '../lib/james-canary/demo-server.ts';
 import {post as legacyPost,verifyFinalEvidence} from '../lib/james-canary/server.ts';
 const token='d'.repeat(43);
+const sendDemoSummaries=(session,consent,deps)=>sendDemoSummariesWithPolicy(session,consent,{accessAllowed:async()=>true,...deps});
 const environment=()=>({JAMES_DEMO_EMAIL_ENABLED:'true',JAMES_AGENTMAIL_API_KEY:'fake-key-long-enough-for-tests',JAMES_AGENTMAIL_ADDRESS:'james-demo@agentmail.to',JAMES_DEMO_REPLY_TO:'aifusionlabs@gmail.com',JAMES_DEMO_EMAIL_ACCESS_SHA256:sha(token),JAMES_DEMO_EMAIL_EXPIRES_AT:new Date(Date.now()+60000).toISOString()});
 const base=()=>({id:'17e1b181-d4fa-42eb-8209-cad30ef97880',browserId:'browser',clientLabel:'test',createdAt:new Date().toISOString(),revision:0,stateHash:'initial',personaId:CURRENT_JAMES_PERSONA_ID,config:{},state:'ACTIVE',turns:[],intake:emptyIntake(),receipts:[]});
 const add=(s,text,role='user')=>applyTurn(s,{id:String(s.turns.length),role,content:text});
@@ -267,8 +269,9 @@ test('HTTP demo lifecycle: isolated original persona, no automatic sends, previe
         if(u.includes('api.agentmail.to')){if(!o.method)return Response.json({email:'james-demo@agentmail.to',display_name:'AI Fusion Labs Demo'});assert.ok(released);assert.deepEqual(body.to,[sends%2?'maya@example.test':INTERNAL_DEMO_RECIPIENT]);sends++;return Response.json({message_id:'provider-'+sends});}
         throw Error('Unexpected target '+u);
     };
+    installJamesSharedAccess();
     try{
-        const request=(body,cookie='',code='')=>new Request('https://demo.invalid/api/james-notepad',{method:'POST',headers:{origin:'https://demo.invalid','Content-Type':'application/json',cookie,...(code?{'x-james-demo-access':code}:{})},body:JSON.stringify(body)});
+        const request=(body,cookie='',code='')=>authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad',{method:'POST',headers:{origin:'https://xagent.aifusionlabs.app','Content-Type':'application/json',cookie,...(code?{'x-james-demo-access':code}:{})},body:JSON.stringify(body)});
         assert.equal((await post(request({action:'demo-email-preflight'},'',token))).status,200);assert.equal(launches,0);
         assert.equal((await legacyPost(request({action:'demo-email-preflight'},'',token))).status,400);
         const started=await post(request({action:'start'},'',token));assert.equal(started.status,200);const cookie=started.headers.get('set-cookie').split(';')[0],s=await started.json();assert.equal(s.personaId,CURRENT_JAMES_PERSONA_ID);assert.ok(cookie.startsWith('xagent_james_notepad_demo='));
@@ -313,8 +316,8 @@ test('HTTP demo lifecycle: isolated original persona, no automatic sends, previe
         const sent=await action('send-demo-email',{snapshotHash:p.snapshotHash,callerAddress:p.callerAddress,approved:true});assert.equal(sends,2);assert.ok(sent.demo_email_status.every(d=>d.status==='SENT'));assert.equal(sent.email_receipt,null);
         assert.equal((await post(request({action:'correct-brief',id:s.id,slot:'name',value:'Maya Patel',snapshotHash:sent.intakeBrief.hash},cookie))).status,400);
         await action('send-demo-email',{snapshotHash:p.snapshotHash,callerAddress:p.callerAddress,approved:true});assert.equal(sends,2);
-        const reload=await get(new Request('https://demo.invalid/api/james-notepad?id='+s.id,{headers:{cookie}}));assert.deepEqual(await reload.json(),sent);assert.equal(sends,2);
-        assert.equal((await get(new Request('https://demo.invalid/api/james-notepad?id='+s.id))).status,400);
+        const reload=await get(authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad?id='+s.id,{headers:{cookie}}));assert.deepEqual(await reload.json(),sent);assert.equal(sends,2);
+        assert.equal((await get(authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad?id='+s.id))).status,400);
         // Upgrade leaves the old code/claim intact while each future call gets
         // a distinct send capability. Preflight never starts a provider call.
         process.env.JAMES_DEMO_EMAIL_ACCESS_MODE='reusable';process.env.JAMES_DEMO_EMAIL_EXPIRES_AT='expired';
@@ -353,4 +356,13 @@ test('HTTP demo lifecycle: isolated original persona, no automatic sends, previe
         process.env.JAMES_DEMO_EMAIL_ENABLED='false';const notesOnly=await post(request({action:'start',accessMode:'visitor',demoEmail:{accessMode:'visitor'}},cookie));assert.equal(notesOnly.status,200);assert.equal((await notesOnly.json()).demo_email_authorized,false);assert.equal(launches,5);assert.equal(sends,4);
         assert.ok([...db.keys()].every(k=>k.startsWith('xagent:james:notepad-demo:v1:')));assert.ok(![...db.values()].some(v=>v.includes('Maya')));
     }finally{globalThis.fetch=oldFetch;for(const k of Object.keys(process.env))if(!(k in previous))delete process.env[k];Object.assign(process.env,previous);}
+});
+test('shared James actions approval blocks delivery before reservations or external sends',async()=>{
+    const s=complete(),store=memoryStore(s);
+    await assert.rejects(sendDemoSummariesWithPolicy(s,{approved:true,snapshotHash:'initial',callerAddress:'maya@example.test'},
+        {...store.deps,accessAllowed:async(agent,browserId,capability)=>{
+            assert.deepEqual([agent,browserId,capability],['james',s.browserId,'actions']);return false;
+        }}),/approval is required/);
+    assert.equal(store.calls.length,0);
+    assert.equal(store.stored.demoEmail.deliveries,undefined);
 });

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isStoredBrowserAccessAllowed } from '../access/policy.ts';
 import {
     readAmyAgentMailProviderConfig,
     sendAmyEmailWithAgentMail,
@@ -20,6 +21,7 @@ import { buildAmyWorkbenchModel } from './workbench-v2.ts';
 const EMAIL_RECEIPT_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 type AgentMailStoreOptions = {
+    accessAllowed?: typeof isStoredBrowserAccessAllowed;
     env?: NodeJS.ProcessEnv;
     fetchImpl?: typeof fetch;
 };
@@ -326,6 +328,9 @@ export async function queueAmyAnamConversationFollowUp(input: {
     contactSecret: string;
     callbackPhone?: string;
 }, options: AgentMailStoreOptions = {}): Promise<AmyAnamFollowUpQueueResult> {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('amy', input.browserSessionId, 'actions')) {
+        throw new Error('Amy email approval is required');
+    }
     const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) throw new Error('Amy AgentMail is unavailable');
     const requestedAt = new Date().toISOString();
@@ -405,6 +410,7 @@ export async function queueAmyAnamConversationFollowUp(input: {
 
 export async function sendAmyAnamConversationFollowUp(input: {
     externalSessionId: string;
+    browserSessionId: string;
     displayName: string;
     email: string;
     callbackPhone?: string;
@@ -413,6 +419,9 @@ export async function sendAmyAnamConversationFollowUp(input: {
     turns: AmyTranscriptTurn[] | unknown;
     displayedArtifactView?: 'notes' | 'brief' | 'roadmap' | 'visual' | 'catalog';
 }, options: AgentMailStoreOptions = {}): Promise<AmyAnamFollowUpResult> {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('amy', input.browserSessionId, 'actions')) {
+        throw new Error('Amy email approval is required');
+    }
     const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) throw new Error('Amy AgentMail is unavailable');
     const turns = normalizeAmyTranscript(input.turns);
@@ -501,6 +510,9 @@ export async function sendAmyAnamConversationFollowUp(input: {
             displayedArtifactView: input.displayedArtifactView,
         });
         const visitorProvider = config.visitorProvider === 'resend' ? 'resend' : 'agentmail';
+        if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('amy', input.browserSessionId, 'actions')) {
+            throw new Error('Amy email approval is required');
+        }
         const [visitorResult, adminResult, intakeResult] = await Promise.allSettled([
             (visitorProvider === 'resend' ? sendAmyEmailWithResend : sendAmyEmailWithAgentMail)(
                 { to: input.email, ...bundle.visitor },
@@ -578,6 +590,9 @@ export async function dispatchAmyAnamPostSessionFollowUp(input: {
     receipt: AmyAnamSessionReceipt;
     turns: AmyTranscriptTurn[] | unknown;
 }, options: AgentMailStoreOptions = {}): Promise<AmyAnamPostSessionDispatchResult> {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('amy', input.session.browserSessionId, 'actions')) {
+        return { status: 'email_unavailable', sent: false };
+    }
     const config = readAmyAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) return { status: 'email_unavailable', sent: false };
     const intent = parseIntent(await redisCommand([
@@ -599,6 +614,7 @@ export async function dispatchAmyAnamPostSessionFollowUp(input: {
     if (!contact) throw new Error('Amy AgentMail post-session contact token expired or was invalid');
     const result = await sendAmyAnamConversationFollowUp({
         externalSessionId: input.session.externalSessionId,
+        browserSessionId: input.session.browserSessionId,
         displayName: intent.displayName,
         email: contact.email,
         callbackPhone: contact.callbackPhone,

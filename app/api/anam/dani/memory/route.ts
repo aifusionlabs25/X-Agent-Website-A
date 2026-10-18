@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import {
     readDaniAnamBrowserSession,
     readDaniAnamSessionSecrets,
@@ -23,11 +24,14 @@ async function verifiedIdentity(request: Request) {
     if (!memory.gatesOpen || !daniSession.configured) return null;
     const browser = readDaniAnamBrowserSession(request, daniSession.sessionSecret);
     if (!browser) return null;
+    if (await requireAgentBrowserAccess(request, 'dani', browser.id)) return null;
     return readDaniAnamBrowserIdentity(browser.id);
 }
 
 export async function GET(request: Request) {
     try {
+        const accessDenied = await requireAgentAccess(request, 'dani');
+        if (accessDenied) return accessDenied;
         const identity = await verifiedIdentity(request);
         if (!identity) {
             return noStoreJson({ error: 'Verified Dani memory access is required' }, { status: 401 });

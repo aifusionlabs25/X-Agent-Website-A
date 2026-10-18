@@ -1,8 +1,10 @@
 import { finalizeAmyAnamSession } from '@/lib/anam/session-finalizer';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import {
     isValidAnamSessionId,
     readAmyAnamBrowserSession,
     readAmyAnamSpineConfig,
+    resolveAnamSessionAgentSlug,
 } from '@/lib/anam/session-spine';
 import {
     consumeAmyAnamDistributedRateLimit,
@@ -70,6 +72,8 @@ async function readOwnedSession(request: Request) {
     }
 
     const sessionId = new URL(request.url).searchParams.get('sessionId')?.trim() ?? '';
+    const browserDenied = await requireAgentBrowserAccess(request, 'amy', browserSession.id, 'actions');
+    if (browserDenied) return { error: browserDenied };
     if (!isValidAnamSessionId(sessionId)) {
         return {
             error: htmlResponse(
@@ -96,6 +100,7 @@ async function readOwnedSession(request: Request) {
     if (
         session.browserSessionId !== browserSession.id
         || finalization.browserSessionId !== browserSession.id
+        || resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug) !== 'amy'
     ) {
         return {
             error: htmlResponse(
@@ -111,6 +116,8 @@ async function readOwnedSession(request: Request) {
 
 export async function GET(request: Request) {
     try {
+        const accessDenied = await requireAgentAccess(request, 'amy', 'actions');
+        if (accessDenied) return accessDenied;
         const owned = await readOwnedSession(request);
         if ('error' in owned) return owned.error;
         if (
@@ -141,6 +148,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const accessDenied = await requireAgentAccess(request, 'amy', 'actions');
+        if (accessDenied) return accessDenied;
         if (request.headers.get('origin') !== new URL(request.url).origin) {
             return htmlResponse(
                 'Recovery unavailable',
