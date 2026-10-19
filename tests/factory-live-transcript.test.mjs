@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {liveTranscript} from '../lib/factory/live-transcript.ts';
+import {liveTranscript,submitTypedTurn} from '../lib/factory/live-transcript.ts';
 const require=createRequire(import.meta.url);
 const sdkRoot=new URL('../node_modules/@anam-ai/js-sdk/dist/main/',import.meta.url);
 const {MessageHistoryClient}=require(fileURLToPath(new URL('modules/MessageHistoryClient.js',sdkRoot)));
@@ -48,4 +48,24 @@ test('page uses adapter, live drafts and single SDK close; no persona configurat
     const s=readFileSync(new URL('../components/factory/FactoryPilot.tsx',import.meta.url),'utf8');
     assert.ok(!s.includes('completed.has'));assert.match(s,/transcript.history\(messages\)/);assert.match(s,/transcript.stream\(e\)/);
     assert.match(s,/live, not yet finalized/);assert.match(s,/if\(stopping.current\|\|!client.current\)return/);
+});
+test('non-echoing typed SDK path preserves exact visitor text before one dispatch',async()=>{
+    const {appendTurn}=await import('../lib/factory/handoff.ts');
+    const s={status:'ACTIVE',turns:[],approved:false,evidence_reviewed:false,provider_transcript_verified:false};
+    const t={id:'typed-visitor::synthetic',role:'user',content:'I run a small design studio. Could an agent help us route incoming project documents to the right person for review?'};
+    const order=[];
+    await submitTypedTurn(t,async x=>{appendTurn(s,x);order.push('persist');},x=>{assert.deepEqual(s.turns,[t]);assert.equal(x.content,t.content);order.push('dispatch');});
+    assert.deepEqual(order,['persist','dispatch']);assert.deepEqual(JSON.parse(JSON.stringify(s)).turns,[t]);
+    assert.equal(s.provider_transcript_verified,false);
+});
+test('typed capture failure blocks dispatch; unknown dispatch outcome is not retried',async()=>{
+    const t={id:'typed-visitor::1',role:'user',content:'Do not email anyone.'};let calls=0,persisted;
+    await assert.rejects(submitTypedTurn(t,async()=>{throw new Error('storage rejected');},()=>calls++));assert.equal(calls,0);
+    await assert.rejects(submitTypedTurn(t,async x=>{persisted=x;},()=>{calls++;throw new Error('unknown send');}));
+    assert.equal(calls,1);assert.deepEqual(persisted,t);
+});
+test('typed visitor exit is captured before dispatch and still cannot manufacture CLOSED',async()=>{
+    const {appendTurn}=await import('../lib/factory/handoff.ts');const s={status:'ACTIVE',turns:[],approved:false,evidence_reviewed:false,provider_transcript_verified:false};
+    await submitTypedTurn({id:'typed-visitor::bye',role:'user',content:'Thanks, Olivia. Goodbye.'},async t=>appendTurn(s,t),()=>{assert.equal(s.status,'CLOSING_PENDING');});
+    assert.equal(s.status,'CLOSING_PENDING');
 });

@@ -3,6 +3,16 @@ import type { Turn } from './handoff';
 type Stream = Turn & { endOfSpeech:boolean; interrupted?:boolean };
 type Trace = { event:'stream'|'history'; id:string; role:string; length:number; end?:boolean };
 
+/** sendUserMessage writes the data channel, not MessageHistoryClient. Capture the
+ * exact typed submission before dispatch. This is browser evidence, not a claim
+ * of provider acceptance; the existing provider transcript gate still applies.
+ * A rejected/unknown send is never automatically retried.
+ */
+export async function submitTypedTurn(turn:Turn, persist:(t:Turn)=>Promise<unknown>, send:(t:Turn)=>void) {
+    await persist(turn);
+    send(turn);
+}
+
 /** SDK 4.20: user events are whole messages; persona events are incremental.
  * History is emitted after a speech-end event. Never use a second speech-end
  * whitelist to discard user entries from that history. Drafts are display only.

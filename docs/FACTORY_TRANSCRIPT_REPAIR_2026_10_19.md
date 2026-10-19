@@ -36,3 +36,28 @@ in the test import before the passing run. No model was called by these checks.
 Live results and immutable identity/preservation captures are retained separately
 under Factory `verification/delivery-live-qa-v0.1/20261019-olivia-transcript-retest/`.
 Only the protected `codex/factory-aiowa-pilot` Preview may be deployed for this test.
+
+## Single live retest finding
+
+Retest provider session `05db51ef-94cc-4ba3-9e86-4f4c292010c3` captured actual
+stream/history metadata: persona reply chunks, a terminal marker, and assembled
+history of length 2211 arrived and persisted normally. The history contained only
+persona messages, not the typed visitor turn. This demonstrates that the old
+all-role end whitelist was a reproducible latent bug, not sufficient to explain
+the missing typed text in this environment. The historical run's unrecorded
+events are not invented retrospectively.
+
+The actual typed path calls SDK `sendUserMessage`, which only sends a data-channel
+message and does not update `MessageHistoryClient`. The UI cleared its input and
+depended on an echo that the observed backend does not provide. Typed submission
+now persists its exact browser evidence before one dispatch, with a local
+`typed-visitor::` reference (not a claimed provider message ID). Storage failure
+blocks sending. Unknown dispatch outcomes are never automatically retried.
+Provider transcript matching remains mandatory before owner approval; saving
+browser input is not treated as proof the provider received it.
+
+Three additional provider-free tests prove persist-before-send, no-echo capture,
+unknown-send/non-retry behavior and exit intent. Total focused checks: 19 pass;
+TypeScript passes. This final typed-path correction was made after the one live
+retest exposed it. No second live session was started. End-to-end approval/export
+is NOT certified by this task; the retained live run stopped at the evidence gap.
