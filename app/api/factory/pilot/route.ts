@@ -81,8 +81,18 @@ export async function POST(req:NextRequest) {
             }
             case 'turn': appendTurn(state,b.turn as Turn); break;
             case 'handoff': {
-                propose(state,b.proposals as Proposal[],manifest.configured_fields);
-                toolResult={status:'PENDING_OWNER_REVIEW',submission_status:'UNSUBMITTED',external_actions:[],note:'Local proposals retained. No sending, routing, booking, follow-up or external action occurred.'}; break;
+                try {
+                    propose(state,b.proposals as Proposal[],manifest.configured_fields);
+                    toolResult={status:'PENDING_OWNER_REVIEW',submission_status:'UNSUBMITTED',external_actions:[],note:'Local proposals retained. No sending, routing, booking, follow-up or external action occurred.'};
+                } catch(error) {
+                    state.quarantined_proposals??=[];
+                    if(state.quarantined_proposals.length>=24)throw new Error('Proposal review bound reached');
+                    const reason=error instanceof Error?error.message:'Proposal validation failed';
+                    state.quarantined_proposals.push({request_id:b.request_id,proposals:b.proposals??null,reason});
+                    state.evidence_reviewed=false;state.approved=false;
+                    toolResult={status:'UNMAPPED_OWNER_REVIEW',reason,accepted:false,submission_status:'UNSUBMITTED',external_actions:[],note:'Proposed mapping was not adopted. Original visitor evidence and the rejected proposal are retained for owner review.'};
+                }
+                break;
             }
             case 'closing': if(!['ACTIVE','CLOSING_PENDING'].includes(state.status)) throw new Error('Session cannot begin closing'); state.status='CLOSING_PENDING'; break;
             case 'tool_receipt': {

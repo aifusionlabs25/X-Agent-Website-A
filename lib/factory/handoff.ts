@@ -12,6 +12,7 @@ export type Handoff = {
     provider_release_verified:boolean; provider_transcript_verified:boolean;
     provider_evidence?:unknown;
     tool_events?:Array<{tool_call_id:string;tool_name:string;phase:string;result:unknown;exposure:string}>;
+    quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     evidence_reviewed:boolean; approved:boolean; submission_status:'UNSUBMITTED'; external_actions:never[];
 };
 export const digest = (value:unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
