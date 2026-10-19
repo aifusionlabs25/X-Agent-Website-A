@@ -8,8 +8,10 @@ export const runtime='nodejs';
 export const dynamic='force-dynamic';
 const cookie='factory_preview_owner_v1';
 function gate() {
-    if(process.env.VERCEL_ENV!=='preview' || process.env.VERCEL_GIT_COMMIT_REF!==manifest.branch
-        || process.env.FACTORY_DELIVERY_ENABLED!=='true' || (process.env.FACTORY_DELIVERY_SECRET||'').length<32) throw new Error('This exact private Preview is not enabled');
+    if(process.env.VERCEL_ENV!=='preview') throw new Error('PREVIEW_ENVIRONMENT_REQUIRED');
+    if(process.env.VERCEL_GIT_COMMIT_REF!==manifest.branch) throw new Error('PREVIEW_BRANCH_MISMATCH');
+    if(process.env.FACTORY_DELIVERY_ENABLED?.trim()!=='true') throw new Error('PREVIEW_ENABLE_FLAG_MISSING');
+    if((process.env.FACTORY_DELIVERY_SECRET||'').length<32) throw new Error('PREVIEW_BRANCH_SECRET_MISSING');
 }
 function mac(id:string) { return createHmac('sha256',process.env.FACTORY_DELIVERY_SECRET||'').update('factory-owner:'+id).digest('hex'); }
 function browser(req:NextRequest) { const [id='',signature='']= (req.cookies.get(cookie)?.value||'').split('.'); const expected=mac(id); return /^[a-f0-9]{32}$/.test(id) && signature.length===expected.length && timingSafeEqual(Buffer.from(signature),Buffer.from(expected)) ? id:null; }
@@ -38,7 +40,12 @@ async function verifySession(state:Handoff, sessionId:string) {
 export async function GET(req:NextRequest) {
     try { gate(); const id=browser(req)||randomBytes(16).toString('hex'); const saved=await store.load(id);
         return response({manifest,state:saved.state,source_commit:process.env.VERCEL_GIT_COMMIT_SHA,access:'VERCEL_AUTHENTICATED_PREVIEW',retention:'Encrypted local handoff expires after 7 days; Anam QA retention is separate',release_status:'OWNER_QA_NOT_RELEASED'},id);
-    } catch { return NextResponse.json({error:'Private Preview configuration or storage unavailable'},{status:503}); }
+    } catch(error) {
+        const message=error instanceof Error?error.message:'';
+        const code=/^PREVIEW_[A-Z_]+$/.test(message)?message:message.startsWith('Existing project Redis')?'STORE_CONFIGURATION_UNAVAILABLE':message.startsWith('Factory store HTTP')?'STORE_HTTP_REJECTED':'STORE_READ_FAILED';
+        console.error('[Factory Preview]',code);
+        return NextResponse.json({error:'Private Preview configuration or storage unavailable',code},{status:503});
+    }
 }
 export async function POST(req:NextRequest) {
     let reserved=false;
@@ -78,6 +85,13 @@ export async function POST(req:NextRequest) {
                 toolResult={status:'PENDING_OWNER_REVIEW',submission_status:'UNSUBMITTED',external_actions:[],note:'Local proposals retained. No sending, routing, booking, follow-up or external action occurred.'}; break;
             }
             case 'closing': if(!['ACTIVE','CLOSING_PENDING'].includes(state.status)) throw new Error('Session cannot begin closing'); state.status='CLOSING_PENDING'; break;
+            case 'tool_receipt': {
+                if(b.provider_session_id!==state.provider_session_id || !/^[\w-]{1,200}$/.test(b.tool_call_id||'')
+                    || !['factory_handoff','factory_end_session'].includes(b.tool_name) || !['SDK_COMPLETED','SDK_FAILED'].includes(b.phase)) throw new Error('Tool receipt session/name binding mismatch');
+                state.tool_events??=[];if(state.tool_events.length>=100)throw new Error('Tool evidence bound reached');
+                state.tool_events.push({tool_call_id:b.tool_call_id,tool_name:b.tool_name,phase:b.phase,result:b.result,
+                    exposure:'SDK_EVENT_NOT_PROOF_OF_MODEL_CONSUMPTION'}); break;
+            }
             case 'reconcile': {
                 if(!state.provider_session_id) throw new Error('No bound provider session');
                 const meta=await verifySession(state,state.provider_session_id);
