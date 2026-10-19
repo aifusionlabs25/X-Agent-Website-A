@@ -1,0 +1,74 @@
+{
+  "contract": "factory.hosted-preview.v0.1",
+  "project_id": "project-f1861ceb17889b1e74c0d8e7",
+  "plan_sha256": "1689f2f986a84bb66a416fcd23215139d764733beeae1da80733147e903a992f",
+  "package_sha256": "a6f9de88eba99e7490343d773ea299e69914873640218a17b87dd33d67d747ee",
+  "revision_sha256": "32f41ed27218c4a725c18b2ccb3a4d5ebf083afbb8df781ac818d27a2a0d9e4b",
+  "name": "AIowa Service Guide",
+  "persona_id": "b0a9f53d-13f6-4566-9263-47e8cddd5db2",
+  "avatar_id": "c2626c68-43d7-4c25-a683-df29e0e489a7",
+  "voice_id": "9173c0ac-4fc0-11f1-84b0-52bacf74fa75",
+  "voice_name": "Cindy Baker - Receptionist",
+  "llm_id": "a7cf662c-2ace-4de1-a21e-ef0fbf144bb7",
+  "prompt_sha256": "179639bbadf4bc6903f0cb842bae0ce3f6ada572995363f41aae25ead903c74b",
+  "initial_message": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?",
+  "tool_ids": [
+    "1f814746-9701-4f02-bcdf-2a61800ced85",
+    "37c416cf-ec7f-4670-a483-e10b2e76f7cd",
+    "4870dc38-320e-49ab-ae20-07fb6b822016"
+  ],
+  "configured_fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "branch": "codex/factory-aiowa-pilot",
+  "route": "/demo/factory/aiowa-service-guide",
+  "submission_status": "UNSUBMITTED",
+  "external_actions": []
+}
