@@ -14,6 +14,25 @@ export async function command(args:(string|number)[], env:NodeJS.ProcessEnv=proc
     const out=JSON.parse(t); if(out.error) throw new Error('Factory store rejected operation'); return out.result;
 }
 export async function load(id:string) { const raw=await command(['GET',prefix(id)]); return {raw:raw as string|null,state:raw?unseal(raw,process.env.FACTORY_DELIVERY_SECRET||'') as Handoff:null}; }
+export function requireClosedSession(state:Handoff|null) {
+    if(!state || state.status!=='CLOSED' || !state.provider_release_verified || !state.provider_transcript_verified)
+        throw new Error('Verify provider closure and complete transcript before starting a fresh conversation');
+}
+export async function history(id:string) {
+    const values=await command(['LRANGE',prefix(id)+':history',0,19]);
+    if(!Array.isArray(values)) throw new Error('Saved session history unavailable');
+    return values.map((raw:string)=>unseal(raw,process.env.FACTORY_DELIVERY_SECRET||'') as Handoff);
+}
+export async function archiveClosed(id:string,previous:string,state:Handoff) {
+    requireClosedSession(state);
+    // One atomic transition: preserve the exact encrypted record before clearing
+    // the current pointer. Late writes and concurrent resets cannot overwrite it.
+    const empty=seal(null,process.env.FACTORY_DELIVERY_SECRET||'');
+    const script="if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end; if redis.call('LLEN',KEYS[2])>=20 then return -1 end; redis.call('LPUSH',KEYS[2],ARGV[1]); redis.call('EXPIRE',KEYS[2],ARGV[3]); redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[3]); return 1";
+    const result=await command(['EVAL',script,2,prefix(id),prefix(id)+':history',previous,empty,ttl]);
+    if(result===-1) throw new Error('Saved-session limit reached; export history before requesting more test capacity');
+    if(result!==1) throw new Error('Session changed; reload before starting another conversation');
+}
 export async function commit(id:string, previous:string|null,state:Handoff) {
     const raw=seal(state,process.env.FACTORY_DELIVERY_SECRET||'');
     const script="local old=redis.call('GET',KEYS[1]); if (ARGV[1]=='__NEW__' and not old) or old==ARGV[1] then redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[3]); return 1 end; return 0";

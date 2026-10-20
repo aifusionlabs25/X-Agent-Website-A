@@ -39,7 +39,7 @@ async function verifySession(state:Handoff, sessionId:string) {
 }
 export async function GET(req:NextRequest) {
     try { gate(); const id=browser(req)||randomBytes(16).toString('hex'); const saved=await store.load(id);
-        return response({manifest,state:saved.state,source_commit:process.env.VERCEL_GIT_COMMIT_SHA,access:'VERCEL_AUTHENTICATED_PREVIEW',retention:'Encrypted local handoff expires after 7 days; Anam QA retention is separate',release_status:'OWNER_QA_NOT_RELEASED'},id);
+        return response({manifest,state:saved.state,history:await store.history(id),source_commit:process.env.VERCEL_GIT_COMMIT_SHA,access:'VERCEL_AUTHENTICATED_PREVIEW',retention:'Encrypted local handoff expires after 7 days; Anam QA retention is separate',release_status:'OWNER_QA_NOT_RELEASED'},id);
     } catch(error) {
         const message=error instanceof Error?error.message:'';
         const code=/^PREVIEW_[A-Z_]+$/.test(message)?message:message.startsWith('Existing project Redis')?'STORE_CONFIGURATION_UNAVAILABLE':message.startsWith('Factory store HTTP')?'STORE_HTTP_REJECTED':'STORE_READ_FAILED';
@@ -56,6 +56,13 @@ export async function POST(req:NextRequest) {
         const b=JSON.parse(raw); if(typeof b.request_id!=='string'||!/^[\w-]{8,100}$/.test(b.request_id)) throw new Error('Stable request ID required');
         if(b.action==='preflight') return response({storage:await store.preflight(id),persona:await checkPersona(),manifest});
         const saved=await store.load(id); let state=saved.state;
+        if(b.action==='new_conversation') {
+            store.requireClosedSession(state);
+            if(!state || b.version!==state.version || b.session_id!==state.id || !saved.raw)
+                throw new Error('Exact closed session required; reload before continuing');
+            await store.archiveClosed(id,saved.raw,state);
+            return response({state:null,archived_session_id:state.id});
+        }
         if(b.action==='start') {
             if(state) throw new Error('This browser already has a reserved session; do not duplicate an unknown launch');
             await checkPersona(); await store.preflight(id);
@@ -63,7 +70,7 @@ export async function POST(req:NextRequest) {
                 launch_label:'factory:'+id+':'+randomUUID(),status:'RESERVED',provider_session_id:null,
                 turns:[],proposals:[],decisions:[],receipts:[],processed:[b.request_id],provider_release_verified:false,
                 provider_transcript_verified:false,evidence_reviewed:false,approved:false,submission_status:'UNSUBMITTED',external_actions:[]};
-            await store.commit(id,null,state); reserved=true;
+            await store.commit(id,saved.raw,state); reserved=true;
             const token=await provider('/auth/session-token',{personaConfig:{personaId:manifest.persona_id},clientLabel:state.launch_label});
             if(typeof token.sessionToken!=='string') throw new Error('Provider token not received; do not retry launch');
             const after=await store.load(id); state.status='TOKEN_READY'; state.version++;

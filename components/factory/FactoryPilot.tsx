@@ -11,13 +11,14 @@ export default function FactoryPilot() {
     const [mappingField,setMappingField]=useState(''),[mappingTurn,setMappingTurn]=useState(''),[span,setSpan]=useState('');
     const [status,setStatus]=useState('Loading the approved Preview…');
     const [drafts,setDrafts]=useState<Turn[]>([]),[transport,setTransport]=useState<unknown[]>([]);
+    const [history,setHistory]=useState<Handoff[]>([]);
     const current=useRef<Handoff|null>(null), client=useRef<AnamClient|null>(null), queue=useRef<Promise<unknown>>(Promise.resolve());
     const stopping=useRef(false),endArmed=useRef(false),timer=useRef<ReturnType<typeof setTimeout>|null>(null);
     const submitting=useRef(false);
     const accept=(s:Handoff|null)=>{current.current=s;setState(s);};
     async function refresh() {
         const r=await fetch('/api/factory/pilot',{cache:'no-store'}), v=await r.json();
-        if(!r.ok) throw new Error(v.error||'Preview unavailable'); setManifest(v.manifest);accept(v.state);
+        if(!r.ok) throw new Error(v.error||'Preview unavailable'); setManifest(v.manifest);accept(v.state);setHistory(v.history||[]);
         setStatus(v.state?.status||'Ready when you are. No session has started.');
     }
     useEffect(()=>{void refresh().catch(e=>setError(e.message));return()=>{if(timer.current)clearTimeout(timer.current);if(client.current&&!stopping.current){stopping.current=true;void client.current.stopStreaming();}};},[]); // only hydrate, never auto-launch
@@ -76,6 +77,22 @@ export default function FactoryPilot() {
         finally{setBusy(false);}
     }
     async function action(name:string, data:Record<string,unknown>={}) {setBusy(true);setError('');try{await post(name,data);}catch(e){setError(e instanceof Error?e.message:'Blocked');}finally{setBusy(false);}}
+    async function freshConversation() {
+        if(busy||!current.current)return;
+        setBusy(true);setError('');
+        try {
+            await post('new_conversation',{session_id:current.current.id});
+            // A full reload discards the old SDK listeners and pending event
+            // closures; none can be rebound to the next conversation.
+            window.location.reload(); // Never mint a token or auto-start here.
+        } catch(e){setError(e instanceof Error?e.message:'Fresh conversation blocked');}
+        finally{setBusy(false);}
+    }
+    function downloadSaved(saved:Handoff) {
+        const blob=new Blob([JSON.stringify({handoff:saved,kind:'SAVED_SESSION_EVIDENCE',submission_status:'UNSUBMITTED'},null,2)],{type:'application/json'});
+        const url=URL.createObjectURL(blob),a=document.createElement('a');
+        a.href=url;a.download='factory-'+saved.id+'-saved-evidence.json';a.click();URL.revokeObjectURL(url);
+    }
     const active=state?.status==='ACTIVE'&&!stopping.current;
     async function sendText() {
         const c=client.current;
@@ -101,6 +118,7 @@ export default function FactoryPilot() {
                 <div className={styles.stage}><video id="factory-olivia-video" autoPlay playsInline poster="/factory-aiowa-approved.png" aria-label="Olivia live avatar"/></div>
                 <div className={styles.controls}><p role="status">{status}</p>
                     {!state&&<button onClick={()=>void launch()} disabled={busy||!manifest}>Start private conversation</button>}
+                    {state?.status==='CLOSED'&&<><button disabled={busy||!state.provider_release_verified||!state.provider_transcript_verified} onClick={()=>void freshConversation()}>Start new conversation</button><small>This saves the closed session below and opens an empty page. Review and export any handoff first; saved records are read-only. You will click Start private conversation separately.</small></>}
                     {state&&!client.current&&state.status!=='CLOSED'&&<p>This saved session cannot be silently restarted. Check its closure before starting another.</p>}
                     {active&&<><button onClick={()=>{const c=client.current;if(c){if(muted)c.unmuteInputAudio();else c.muteInputAudio();setMuted(!muted);}}}>{muted?'Enable microphone':'Mute microphone'}</button><button className={styles.secondary} onClick={()=>void stop().catch(e=>setError(e.message))}>Finish conversation</button></>}
                     <form onSubmit={e=>{e.preventDefault();void sendText();}}><label htmlFor="visitor-input">Or type your message</label><div className={styles.inline}><input id="visitor-input" value={text} onChange={e=>setText(e.target.value)} disabled={!active} placeholder="Your question or workflow…"/><button disabled={!active||!text.trim()}>Send</button></div></form>
@@ -109,6 +127,7 @@ export default function FactoryPilot() {
                 {drafts.length>0&&<div className={styles.transcript} aria-label="Live transcript — awaiting finalization">{drafts.map(t=><p key={t.id}><strong>Olivia · live, not yet finalized</strong><br/>{t.content}</p>)}</div>}
                 <details className={styles.transcript}><summary>Original conversation evidence ({state?.turns.length||0} turns)</summary>{state?.turns.map(t=><p key={t.id}><strong>{t.role==='user'?'Visitor':'Olivia'}</strong><br/>{t.content}</p>)}</details>
                 <details><summary>Transcript transport diagnostics</summary><p>SDK event metadata only; not proof of spoken delivery.</p><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(transport,null,2)}</pre></details>
+                <details><summary>Previous test sessions ({history.length})</summary><p>Read-only evidence, retained for a limited time—not permanent storage. Download records you want to keep.</p>{history.map(s=><div key={s.id}><p>{s.id} · {s.status} · {s.turns.length} turns · {s.approved?'Handoff approved':'Handoff not approved'}</p><button onClick={()=>downloadSaved(s)}>Download saved session</button></div>)}</details>
             </section>
             <aside className={styles.review} aria-label="Owner handoff review"><div className={styles.label}>OWNER OPERATIONS</div><h2>A handoff, not an action.</h2><p>UNSUBMITTED · No email, booking, CRM update or external business action.</p>
                 <dl className={styles.meta}><div><dt>Package</dt><dd>{manifest?.package_sha256.slice(0,12)}</dd></div><div><dt>Session</dt><dd>{state?.status||'Not started'}</dd></div><div><dt>Provider release</dt><dd>{state?.provider_release_verified?'Verified':'Not verified'}</dd></div></dl>
