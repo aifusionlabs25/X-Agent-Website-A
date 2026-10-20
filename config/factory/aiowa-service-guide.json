@@ -10,7 +10,13 @@
   "voice_id": "9173c0ac-4fc0-11f1-84b0-52bacf74fa75",
   "voice_name": "Cindy Baker - Receptionist",
   "llm_id": "a7cf662c-2ace-4de1-a21e-ef0fbf144bb7",
-  "prompt_sha256": "179639bbadf4bc6903f0cb842bae0ce3f6ada572995363f41aae25ead903c74b",
+  "prompt_sha256": "f720f0bb1151ec445e7e0b3306e01db17040ec6909c276ce6df6be66ae036f43",
+  "voice_adaptation": {
+    "contract": "factory.voice-citation.v0.1",
+    "source_prompt_sha256": "179639bbadf4bc6903f0cb842bae0ce3f6ada572995363f41aae25ead903c74b",
+    "owner_authorized": true,
+    "scope": "Citation-only voice adaptation; original package and plan remain provenance, not approval of this derived prompt"
+  },
   "initial_message": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?",
   "tool_ids": [
     "1f814746-9701-4f02-bcdf-2a61800ced85",
