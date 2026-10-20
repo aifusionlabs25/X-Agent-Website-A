@@ -10,7 +10,12 @@
   "voice_id": "9173c0ac-4fc0-11f1-84b0-52bacf74fa75",
   "voice_name": "Cindy Baker - Receptionist",
   "llm_id": "a7cf662c-2ace-4de1-a21e-ef0fbf144bb7",
-  "prompt_sha256": "b047d1c456c98cb514c5e12d4e67fcd4ae8d825c1291ff653d82fc44aa6cd86e",
+  "prompt_sha256": "118a57d4ad3568f3f56540f69cdd6b5020402cd6d725be6e1a628a0d7c42e2e5",
+  "grounding_followup": {
+    "source_prompt_sha256": "b047d1c456c98cb514c5e12d4e67fcd4ae8d825c1291ff653d82fc44aa6cd86e",
+    "owner_authorized": true,
+    "scope": "Require Knowledge retrieval before company claims, retain approval conditions, prohibit unsupported guarantees, short introductory answer target with technical-depth exception."
+  },
   "depth_followup": {
     "source_prompt_sha256": "6b6816250f9101001ef0a7fc15a02f46a0fd522fdf30d40100f09dfe421601f5",
     "owner_authorized": true,
