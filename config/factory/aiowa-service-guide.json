@@ -10,7 +10,12 @@
   "voice_id": "9173c0ac-4fc0-11f1-84b0-52bacf74fa75",
   "voice_name": "Cindy Baker - Receptionist",
   "llm_id": "a7cf662c-2ace-4de1-a21e-ef0fbf144bb7",
-  "prompt_sha256": "f720f0bb1151ec445e7e0b3306e01db17040ec6909c276ce6df6be66ae036f43",
+  "prompt_sha256": "6b6816250f9101001ef0a7fc15a02f46a0fd522fdf30d40100f09dfe421601f5",
+  "conversation_adaptation": {
+    "source_prompt_sha256": "f720f0bb1151ec445e7e0b3306e01db17040ec6909c276ce6df6be66ae036f43",
+    "owner_authorized": true,
+    "scope": "Troy-reviewed sections 4 and 5 only: adaptive depth, context memory, exit respect and handoff truth. Historical package remains unchanged."
+  },
   "voice_adaptation": {
     "contract": "factory.voice-citation.v0.1",
     "source_prompt_sha256": "179639bbadf4bc6903f0cb842bae0ce3f6ada572995363f41aae25ead903c74b",
