@@ -60,7 +60,9 @@ export default function AccessSignIn({ agentSlug, returnTo, preview = false, ver
         try {
             const address = email.trim();
             const response = await signIn('email', { email: address, redirect: false, callbackUrl: destination });
-            if (!response?.ok || response.error) throw new Error('A sign-in link could not be sent. Please try again.');
+            if (!response?.ok || response.error) throw new Error(preview
+                ? 'No sign-in link was sent. This preview accepts only the AIFL owner inbox or configured test addresses.'
+                : 'A sign-in link could not be sent. Please try again.');
             setSentTo(address);
             setEmail('');
         } catch (caught) {
