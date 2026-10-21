@@ -293,8 +293,8 @@ test('Amy entry preserves the regular session and adds explicit concierge routin
   const landing = read('components/agents/AmyInsightLanding.tsx');
   const agents = read('lib/agents.ts');
   assert.match(route, /agent\.slug === ['"]amy['"][\s\S]*rawMeetingProvider[\s\S]*<AmyMeetingConcierge/);
-  assert.match(route, /if \(meetingProvider\) return <AmyMeetingConcierge initialProvider=\{meetingProvider\}/);
-  assert.match(route, /return <AmyInsightLanding \/>/);
+  assert.match(route, /if \(meetingProvider\) return <AgentAccessGate agent="amy" capability="meeting" showAuthorizedCheckpoint><AmyMeetingConcierge initialProvider=\{meetingProvider\}/);
+  assert.match(route, /return <AgentAccessGate agent="amy" showAuthorizedCheckpoint><AmyInsightLanding \/>/);
   assert.match(landing, /href=['"]\/agents\/amy\?meeting=google['"]/);
   assert.match(landing, /Invite Amy to a meeting/);
   assert.match(agents, /slug:\s*['"]amy['"][\s\S]*liveUrl:\s*['"]\/demo\/amy\?variant=cara4['"]/);
@@ -332,8 +332,8 @@ test('Evan entry preserves the regular session and adds a Mullins-branded meetin
   const component = read('components/evan/EvanMeetingScheduler.tsx');
   const css = read('components/evan/EvanMeetingScheduler.module.css');
   assert.match(route, /agent\.slug === ['"]evan['"][\s\S]*rawMeetingProvider[\s\S]*<EvanMeetingScheduler/);
-  assert.match(route, /if \(meetingProvider\) return <EvanMeetingScheduler initialProvider=\{meetingProvider\}/);
-  assert.match(route, /return <EvanLandingPage agent=\{agent\} \/>/);
+  assert.match(route, /if \(meetingProvider\) return <AgentAccessGate agent="evan" capability="meeting" showAuthorizedCheckpoint><EvanMeetingScheduler initialProvider=\{meetingProvider\}/);
+  assert.match(route, /return <AgentAccessGate agent="evan" showAuthorizedCheckpoint><EvanLandingPage agent=\{agent\} \/>/);
   assert.match(landing, /href=['"]\/agents\/evan\?meeting=google['"]/);
   assert.match(landing, /Invite Evan to a meeting/);
   assert.match(component, /Evan Mullins Moving\.png/);

@@ -125,11 +125,11 @@ function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', em
         <AccessFrame agent={agent} embedded={embedded} backHref="/#agents">
             <h1 className={styles.title}>{current.owner ? `Owner access to ${name} is active.` : `Access to ${name} is approved.`}</h1>
             <p className={styles.description}>{current.owner
-                ? 'Your owner account can continue without requesting approval. Choose how you would like to meet Dani next.'
-                : 'You are approved to continue. Choose how you would like to meet Dani next.'}</p>
+                ? `Your owner account can continue without requesting approval. Explore ${name} next.`
+                : `You are approved to continue. Explore ${name} next.`}</p>
             {current.email && <p className={styles.identity}>Signed in as <strong>{current.email}</strong></p>}
             <div className={styles.actions}>
-                <button type="button" className={styles.primary} onClick={() => setContinued(true)}>Continue to Dani<ArrowRight size={17} /></button>
+                <button type="button" className={styles.primary} onClick={() => setContinued(true)}>Continue to {name}<ArrowRight size={17} /></button>
                 <button type="button" className={styles.secondary} onClick={() => void logout()} disabled={busy}>Sign out</button>
                 {current.owner && <Link className={styles.secondary} href="/access/admin">Manage access</Link>}
             </div>

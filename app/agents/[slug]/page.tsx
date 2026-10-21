@@ -75,8 +75,8 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
             || rawMeetingProvider === 'teams'
             ? rawMeetingProvider
             : null;
-        if (meetingProvider) return <AmyMeetingConcierge initialProvider={meetingProvider} />;
-        return <AmyInsightLanding />;
+        if (meetingProvider) return <AgentAccessGate agent="amy" capability="meeting" showAuthorizedCheckpoint><AmyMeetingConcierge initialProvider={meetingProvider} /></AgentAccessGate>;
+        return <AgentAccessGate agent="amy" showAuthorizedCheckpoint><AmyInsightLanding /></AgentAccessGate>;
     }
 
     if (agent.slug === 'dani') {
@@ -97,7 +97,7 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
                 meetingProvider={meetingProvider}
             />
         );
-        return meetingProvider ? landing : <AgentAccessGate agent="dani" showAuthorizedCheckpoint>{landing}</AgentAccessGate>;
+        return <AgentAccessGate agent="dani" capability={meetingProvider ? 'meeting' : 'conversation'} showAuthorizedCheckpoint>{landing}</AgentAccessGate>;
     }
 
     if (agent.slug === 'evan') {
@@ -109,11 +109,11 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
             || rawMeetingProvider === 'teams'
             ? rawMeetingProvider
             : null;
-        if (meetingProvider) return <EvanMeetingScheduler initialProvider={meetingProvider} />;
-        return <EvanLandingPage agent={agent} />;
+        if (meetingProvider) return <AgentAccessGate agent="evan" capability="meeting" showAuthorizedCheckpoint><EvanMeetingScheduler initialProvider={meetingProvider} /></AgentAccessGate>;
+        return <AgentAccessGate agent="evan" showAuthorizedCheckpoint><EvanLandingPage agent={agent} /></AgentAccessGate>;
     }
 
-    return (
+    return <AgentAccessGate agent={agent.slug} showAuthorizedCheckpoint>
         <main className="min-h-screen bg-zinc-950 pt-20">
             {/* Cinematic backdrop */}
             <div className="relative w-full h-[50vh] overflow-hidden">
@@ -200,5 +200,5 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
                 </div>
             </div>
         </main>
-    );
+    </AgentAccessGate>;
 }
