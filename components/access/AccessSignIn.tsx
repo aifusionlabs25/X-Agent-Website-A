@@ -11,9 +11,10 @@ import styles from './AgentAccessGate.module.css';
 
 type AccountStatus = { authenticated: boolean; email: string | null; owner: boolean };
 
-export default function AccessSignIn({ agentSlug, returnTo, verifyRequest = false, signInError = false }: {
+export default function AccessSignIn({ agentSlug, returnTo, preview = false, verifyRequest = false, signInError = false }: {
     agentSlug?: string;
     returnTo: string;
+    preview?: boolean;
     verifyRequest?: boolean;
     signInError?: boolean;
 }) {
@@ -94,6 +95,7 @@ export default function AccessSignIn({ agentSlug, returnTo, verifyRequest = fals
                 : awaitingLink ? 'Open the sign-in link in your inbox to continue. You can also check your spam folder.'
                     : 'We’ll send you a link to sign in. After that, you can request permission to use an agent.'}</p>
             {account?.authenticated && account.email && <p className={styles.identity}>Signed in as<strong>{account.email}</strong></p>}
+            {preview && !account?.authenticated && <p className={styles.notice} role="note">This preview sends sign-in links only to the AIFL owner inbox or configured test addresses. Other email addresses will work only after the live release.</p>}
             {sentTo && <p className={styles.notice} role="status"><Mail size={17} />Sign-in link sent to {sentTo}.</p>}
             {error && <p className={styles.error} role="alert">{error}</p>}
             {statusError ? <div className={styles.actions}><button className={styles.primary} onClick={() => { setError(null); setChecking(true); setStatusError(false); void checkAccount(); }}><RotateCcw size={16} />Try again</button></div>

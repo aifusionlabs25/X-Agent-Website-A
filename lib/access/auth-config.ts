@@ -33,7 +33,9 @@ export function readAccessAuthConfig(env: Environment = process.env) {
     let validOrigin = true;
     try {
         if (env.VERCEL_ENV === 'preview') {
-            const preview = new URL(`https://${env.VERCEL_URL ?? ''}`);
+            // The branch URL remains stable across preview deployments. Magic
+            // links and passkeys must use the same host visitors opened.
+            const preview = new URL(`https://${env.VERCEL_BRANCH_URL || env.VERCEL_URL || ''}`);
             validOrigin = /^[a-z0-9-]+\.vercel\.app$/i.test(preview.hostname) && preview.href === `${preview.origin}/`;
             origin = preview.origin;
         } else if (env.NODE_ENV !== 'production' && !env.VERCEL_ENV) {

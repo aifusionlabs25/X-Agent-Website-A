@@ -103,6 +103,12 @@ test('production, preview, forwarded-host and mutation origins are bounded', () 
     assert.equal(preview.configured, true);
     assert.equal(isTrustedAccessRequest(new Request('https://x-agent-offline.vercel.app/api/access'), preview), true);
     assert.equal(isTrustedAccessRequest(request(), preview), false);
+    const branchPreview = readAccessAuthConfig({ ...ENV, KV_REST_API_URL: ENV.AMY_ANAM_REDIS_REST_URL,
+        KV_REST_API_TOKEN: ENV.AMY_ANAM_REDIS_REST_TOKEN, VERCEL_ENV: 'preview',
+        VERCEL_URL: 'x-agent-commit.vercel.app', VERCEL_BRANCH_URL: 'x-agent-git-access.vercel.app' });
+    assert.equal(branchPreview.origin, 'https://x-agent-git-access.vercel.app');
+    assert.equal(isTrustedAccessRequest(new Request('https://x-agent-git-access.vercel.app/api/access'), branchPreview), true);
+    assert.equal(isTrustedAccessRequest(new Request('https://x-agent-commit.vercel.app/api/access'), branchPreview), false);
 });
 
 test('magic links have Redis TTL and exactly one simultaneous redemption succeeds', async () => offline(async ({ expirations, commands }) => {

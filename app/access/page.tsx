@@ -16,7 +16,7 @@ export default async function AccessPage({ searchParams }: {
     const agent = ALL_AGENTS.find(item => item.slug === first(query.agent));
     const fallback = agent ? `/agents/${agent.slug}` : '/#agents';
     const returnTo = safeAccessReturnTo(first(query.returnTo) ?? first(query.callbackUrl), fallback);
-    return <AccessSignIn agentSlug={agent?.slug} returnTo={returnTo}
+    return <AccessSignIn agentSlug={agent?.slug} returnTo={returnTo} preview={process.env.VERCEL_ENV === 'preview'}
         verifyRequest={first(query.checkEmail) === '1' || first(query.verifyRequest) === '1' || first(query.verifyRequest) === 'true'}
         signInError={Boolean(first(query.error))} />;
 }
