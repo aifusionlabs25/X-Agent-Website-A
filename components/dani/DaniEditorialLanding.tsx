@@ -82,11 +82,11 @@ export default function DaniEditorialLanding({
                             <div className={styles.choiceRule} aria-hidden="true" />
                             <p className={`${styles.mono} ${styles.choiceEyebrow}`}>Choose your experience</p>
                             <h1 className={`${styles.display} ${styles.choiceHeading}`}>How would you like to meet?</h1>
-                            <p className={styles.choiceIntro}>Most visitors can start talking with Dani immediately. Bringing her into another meeting platform is completely optional.</p>
+                            <p className={styles.choiceIntro}>Choose a private conversation on this site, or invite Dani to a meeting. Each activity checks its own access before starting.</p>
 
                             <Link href="/demo/dani" className={styles.talkNowCard}>
                                 <span>
-                                    <strong>Talk with Dani right now</strong>
+                                    <strong>Talk with Dani on this site</strong>
                                     <small>Start the regular private X Agent session on this site.</small>
                                 </span>
                                 <span className={styles.talkNowAction}>Start conversation <ArrowRight size={16} /></span>

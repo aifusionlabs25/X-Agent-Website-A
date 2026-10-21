@@ -74,7 +74,7 @@ test('Dani agent route renders direct and post-session editorial states', async 
     assert.match(route, /meetingProvider=\{meetingProvider\}/);
     assert.match(landing, /Good work\. You moved the idea forward\./);
     assert.match(landing, /How would you like to meet\?/);
-    assert.match(landing, /Talk with Dani right now/);
+    assert.match(landing, /Talk with Dani on this site/);
     assert.match(landing, /Google Meet/);
     assert.match(landing, /Microsoft Teams/);
     assert.match(landing, /\/demo\/dani/);
