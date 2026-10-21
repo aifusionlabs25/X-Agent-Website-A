@@ -88,7 +88,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
     const submitEmail = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!followUpConsent && !memoryConsent) {
-            setError('Choose email recap, returning memory, or continue as a guest.');
+            setError('Choose email recap, returning memory, or continue without a contact email.');
             return;
         }
         await requestAccess('email');
@@ -184,8 +184,8 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                         </h2>
                         <p className={`${styles.entryIntro} mt-3 max-w-[40rem] text-sm leading-6 text-[#626861] sm:mt-5 sm:text-[15px] sm:leading-7`}>
                             {emailFollowUpAvailable || memoryAvailable
-                                ? 'Share a verified email for your recap, optional returning memory, or both. You can also continue as a guest.'
-                                : 'Dani is ready to talk without collecting your name or email. Continue as a guest to begin.'}
+                                ? 'Your agent access is already approved. A verified email for a recap or returning memory is optional; you can begin without sharing contact details.'
+                                : 'Your agent access is already approved. Begin without sharing your name or email.'}
                         </p>
 
                         {(emailFollowUpAvailable || memoryAvailable || challengeId) && <form
@@ -347,7 +347,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                             aria-label="Continue without email"
                             className={`${styles.entryAction} group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] border border-[#a9a292] bg-transparent px-5 text-sm font-extrabold text-[#151b19] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#126e64] hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none`}
                         >
-                            {submitting === 'guest' ? 'Opening Dani...' : 'Continue as a guest'}
+                            {submitting === 'guest' ? 'Opening Dani...' : 'Continue without contact email'}
                             {submitting !== 'guest' && <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />}
                         </button>}
                         <p id="dani-session-privacy" className={`${styles.entryPrivacy} mt-4 flex max-w-[42rem] gap-2.5 text-[11px] leading-5 text-[#626861]`}>
