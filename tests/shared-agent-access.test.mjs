@@ -168,6 +168,19 @@ test('anonymous visitors are denied every activity for all ten registered agents
     assert.equal(h.commands.length, 0, 'anonymous access cannot create policy records');
 });
 
+test('paused Taylor cannot be launched, requested, or approved even by the owner', async t => {
+    const h = harness(t);
+    await h.save('taylor');
+    assert.equal((await h.deny('taylor', 'conversation', 'visitor')).status, 403);
+    assert.equal((await h.deny('taylor', 'conversation', 'owner')).status, 403);
+    assert.equal((await h.status('taylor', 'conversation', 'owner')).data.authorized, false);
+    assert.equal((await h.ask({ agent: 'taylor', capability: 'conversation' })).status, 403);
+    assert.equal((await h.admin({ agent: 'taylor', operation: 'approve', email: EMAIL,
+        capabilities: ['conversation'], expiresAt: new Date(Date.now() + 86400000).toISOString() })).status, 403);
+    const dashboard = await h.dashboard();
+    assert.equal(dashboard.data.agents.find(agent => agent.slug === 'taylor').paused, true);
+});
+
 test('an approval is limited to its exact account, agent and capability', async t => {
     const h = harness(t);
     await h.save('amy');
@@ -199,7 +212,9 @@ test('unknown agents and activities fail closed even for owner', async t => {
 
 test('owner has all activities but global and per-agent pauses override owner access', async t => {
     const h = harness(t);
-    for (const agent of h.agents) for (const activity of ['conversation', 'meeting', 'actions']) assert.equal(await h.deny(agent, activity, 'owner'), null);
+    for (const agent of h.agents.filter(agent => agent !== 'taylor')) {
+        for (const activity of ['conversation', 'meeting', 'actions']) assert.equal(await h.deny(agent, activity, 'owner'), null);
+    }
     await h.grants.setAccessAgentDisabled('amy', true);
     assert.equal((await h.deny('amy', 'conversation', 'owner')).status, 403);
     assert.equal(await h.deny('james', 'conversation', 'owner'), null);

@@ -2,6 +2,7 @@ import { readAccessIdentity } from './auth.ts';
 import { isAccessAgent, isAccessCapability, normalizeAccessEmail, readAccessRecord, recordAllows, listDisabledAccessAgents, storeAccessBrowser, readAccessBrowser, type AccessCapability } from './grants.ts';
 import { isTrustedBrowserOrigin } from '../anam/session-spine.ts';
 import { isAccessOwner } from './owners.ts';
+import { isAgentPaused } from '../agents.ts';
 export { isAccessOwner } from './owners.ts';
 
 export function accessJson(body: unknown, status = 200): Response {
@@ -9,6 +10,7 @@ export function accessJson(body: unknown, status = 200): Response {
 }
 
 export function agentAccessDisabled(agent: string): boolean {
+    if (isAgentPaused(agent)) return true;
     const disabled = (process.env.XAGENT_ACCESS_DISABLED_AGENTS ?? '').split(',').map(value => value.trim());
     return disabled.includes('*') || disabled.includes(agent);
 }

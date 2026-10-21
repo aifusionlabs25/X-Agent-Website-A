@@ -1,4 +1,4 @@
-import { ALL_AGENTS } from '@/lib/agents';
+import { ALL_AGENTS, isAgentPaused } from '@/lib/agents';
 import { randomUUID } from 'node:crypto';
 import { accessNotificationStatus, deliverAccessNotifications } from '@/lib/access/notifications';
 import { readAccessIdentity } from '@/lib/access/auth';
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     try {
         const [records, disabledAgents] = await Promise.all([listAccessRecords(), listDisabledAccessAgents()]);
         const withNotifications = await Promise.all(records.map(async record => ({ ...record, notificationStatus: await accessNotificationStatus(record) })));
-        return accessJson({ records: withNotifications, disabledAgents, preview: process.env.VERCEL_ENV === 'preview', agents: ALL_AGENTS.map(({ slug, name, role }) => ({ slug, name, role })) });
+        return accessJson({ records: withNotifications, disabledAgents, preview: process.env.VERCEL_ENV === 'preview', agents: ALL_AGENTS.map(({ slug, name, role, paused }) => ({ slug, name, role, paused: paused === true })) });
     } catch {
         return accessJson({ error: 'Access records are temporarily unavailable' }, 503);
     }
@@ -28,6 +28,9 @@ export async function POST(request: Request) {
         if (!await consumeAccessRate(`admin:${identity.id}`, 120, 3600)) return accessJson({ error: 'Too many updates. Please wait.' }, 429);
         const body = await readBoundedJsonObject(request, 4096);
         if (!isAccessAgent(body.agent)) return accessJson({ error: 'Select a valid agent' }, 400);
+        if (isAgentPaused(body.agent) && ['preview-request', 'set-agent-state', 'approve'].includes(String(body.operation))) {
+            return accessJson({ error: 'This agent is paused while its demo is reviewed' }, 403);
+        }
         if (body.operation === 'preview-request') {
             if (process.env.VERCEL_ENV !== 'preview') return accessJson({ error: 'Preview only' }, 403);
             const sample = await requestAccess('preview-visitor@example.invalid', body.agent, 'conversation');

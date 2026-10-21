@@ -29,6 +29,11 @@ export default function DemoPage({ params, searchParams }: Props) {
 
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) return notFound();
+    if (agent.paused) return <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-zinc-950 px-6 text-center text-white">
+        <h1 className="text-3xl font-semibold">{agent.name} is unavailable</h1>
+        <p className="max-w-md text-zinc-400">This agent is paused while we review its demo.</p>
+        <Link href="/#agents" className="rounded-md border border-white/20 px-5 py-3 text-sm hover:bg-white/10">Browse other X Agents</Link>
+    </main>;
     const isEvan = agent.slug === 'evan';
     const isDani = agent.slug === 'dani';
 
