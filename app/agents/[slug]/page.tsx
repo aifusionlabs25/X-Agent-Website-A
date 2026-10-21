@@ -9,6 +9,7 @@ import EvanMeetingScheduler from '@/components/evan/EvanMeetingScheduler';
 import AmyInsightLanding from '@/components/agents/AmyInsightLanding';
 import { AmyMeetingConcierge } from '@/components/amy/AmyMeetingScheduler';
 import DaniEditorialLanding from '@/components/dani/DaniEditorialLanding';
+import AgentAccessGate from '@/components/access/AgentAccessGate';
 
 interface Props {
     params: Promise<{ slug: string }>;
@@ -90,12 +91,13 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
             || rawMeetingProvider === 'teams'
             ? rawMeetingProvider
             : null;
-        return (
+        const landing = (
             <DaniEditorialLanding
                 sessionComplete={rawSessionState === 'complete'}
                 meetingProvider={meetingProvider}
             />
         );
+        return meetingProvider ? landing : <AgentAccessGate agent="dani" showAuthorizedCheckpoint>{landing}</AgentAccessGate>;
     }
 
     if (agent.slug === 'evan') {

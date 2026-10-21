@@ -23,6 +23,7 @@ type AgentAccessGateProps = {
     agent: string;
     capability?: AgentAccessCapability;
     embedded?: boolean;
+    showAuthorizedCheckpoint?: boolean;
     children: ReactNode;
 };
 
@@ -30,13 +31,14 @@ export default function AgentAccessGate(props: AgentAccessGateProps) {
     return <AgentAccessBoundary key={`${props.agent}:${props.capability ?? 'conversation'}`} {...props} />;
 }
 
-function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', embedded = false, children }: AgentAccessGateProps) {
+function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', embedded = false, showAuthorizedCheckpoint = false, children }: AgentAccessGateProps) {
     const agent = ALL_AGENTS.find(item => item.slug === agentSlug);
     const name = agent?.name ? agent.name.charAt(0).toUpperCase() + agent.name.slice(1).toLowerCase() : 'this agent';
     const scope = `${agentSlug}:${capability}`;
     const [status, setStatus] = useState<AccessStatus | null>(null);
     const [checking, setChecking] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [continued, setContinued] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [returnTo, setReturnTo] = useState(`/agents/${agentSlug}`);
@@ -119,6 +121,20 @@ function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', em
     }
 
     const current = status?.scope === scope ? status : null;
+    if (!checking && !error && current?.authorized === true && current.authenticated === true && showAuthorizedCheckpoint && !continued) return (
+        <AccessFrame agent={agent} embedded={embedded} backHref="/#agents">
+            <h1 className={styles.title}>{current.owner ? `Owner access to ${name} is active.` : `Access to ${name} is approved.`}</h1>
+            <p className={styles.description}>{current.owner
+                ? 'Your owner account can continue without requesting approval. Choose how you would like to meet Dani next.'
+                : 'You are approved to continue. Choose how you would like to meet Dani next.'}</p>
+            {current.email && <p className={styles.identity}>Signed in as <strong>{current.email}</strong></p>}
+            <div className={styles.actions}>
+                <button type="button" className={styles.primary} onClick={() => setContinued(true)}>Continue to Dani<ArrowRight size={17} /></button>
+                <button type="button" className={styles.secondary} onClick={() => void logout()} disabled={busy}>Sign out</button>
+                {current.owner && <Link className={styles.secondary} href="/access/admin">Manage access</Link>}
+            </div>
+        </AccessFrame>
+    );
     if (!checking && !error && current?.authorized === true && current.authenticated === true) return <>
         {children}
         {current.owner && <div className={styles.ownerToolbar}>
@@ -129,7 +145,7 @@ function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', em
     </>;
     const signInHref = `/access?${new URLSearchParams({ agent: agentSlug, capability, returnTo })}`;
     return (
-        <AccessFrame agent={agent} embedded={embedded}>
+        <AccessFrame agent={agent} embedded={embedded} backHref={showAuthorizedCheckpoint ? '/#agents' : undefined}>
             {checking || (!current && !error) ? <div className={styles.loading} role="status"><LoaderCircle size={21} className={styles.spinner} /><p>Checking access to {name}…</p></div> : <>
                 <h1 className={styles.title}>{current?.authenticated ? current.requested ? 'Your request is pending.' : `Meet ${name}, with approval.` : `Sign in to meet ${name}.`}</h1>
                 <p className={styles.description}>{current?.authenticated

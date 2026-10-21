@@ -5,9 +5,10 @@ import { ArrowLeft, LockKeyhole } from 'lucide-react';
 import type { AgentData } from '@/lib/agents';
 import styles from './AgentAccessGate.module.css';
 
-export default function AccessFrame({ agent, embedded = false, children }: {
+export default function AccessFrame({ agent, embedded = false, backHref, children }: {
     agent?: AgentData;
     embedded?: boolean;
+    backHref?: string;
     children: ReactNode;
 }) {
     const name = agent?.name ? agent.name.charAt(0).toUpperCase() + agent.name.slice(1).toLowerCase() : 'X Agents';
@@ -28,7 +29,7 @@ export default function AccessFrame({ agent, embedded = false, children }: {
                     </div>
                 </aside>}
                 <div className={styles.content}>
-                    <Link href={agent ? `/agents/${agent.slug}` : '/#agents'} className={styles.backLink}><ArrowLeft size={15} />{agent ? `Back to ${name}` : 'Explore the agents'}</Link>
+                    <Link href={backHref ?? (agent ? `/agents/${agent.slug}` : '/#agents')} className={styles.backLink}><ArrowLeft size={15} />{backHref === '/#agents' || !agent ? 'Explore the agents' : `Back to ${name}`}</Link>
                     <div className={styles.label}><LockKeyhole size={14} /><span>{embedded ? `${name} · meeting access` : 'Private access'}</span></div>
                     {children}
                 </div>
