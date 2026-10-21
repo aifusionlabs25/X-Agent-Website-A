@@ -31,7 +31,7 @@ const productionFixture = {
     AMY_ANAM_MEMORY_KILL_SWITCH: 'false',
     AMY_ANAM_MEMORY_PROMOTION_ENABLED: 'true',
     AMY_ANAM_MEMORY_PROMOTION_KILL_SWITCH: 'false',
-    AMY_ANAM_MEMORY_ACCESS_CODE: 'amy-access-code',
+    RESEND_API_KEY: 'offline-access-resend-key',
     AMY_ANAM_MEMORY_OPERATOR_SECRET: `amy-operator-${'o'.repeat(32)}`,
     AMY_ANAM_REDIS_REST_URL: amyRedisUrl,
     AMY_ANAM_REDIS_REST_TOKEN: amyRedisToken,
@@ -87,6 +87,23 @@ test('production accepts Dani session isolation with memory explicitly fail-clos
     const result = runContract();
     assert.equal(result.status, 0, result.output);
     assert.match(result.output, /Production configuration verified/);
+});
+
+test('production requires shared email delivery without retaining the old Amy pilot code', () => {
+    assert.equal(runContract({ AMY_ANAM_MEMORY_ACCESS_CODE: '' }).status, 0);
+    const missing = runContract({ RESEND_API_KEY: '' });
+    assert.equal(missing.status, 1);
+    assert.match(missing.output, /RESEND_API_KEY must be configured/);
+});
+
+test('production rejects weak explicit auth secrets and conflicting callback origins', () => {
+    const weak = runContract({ XAGENT_AUTH_SECRET: 'short' });
+    assert.equal(weak.status, 1);
+    assert.match(weak.output, /XAGENT_AUTH_SECRET must be configured/);
+    const stale = runContract({ NEXTAUTH_URL: 'https://old-preview.invalid' });
+    assert.equal(stale.status, 1);
+    assert.match(stale.output, /NEXTAUTH_URL must match/);
+    assert.equal(runContract({ NEXTAUTH_URL: 'https://xagent.aifusionlabs.app/' }).status, 0);
 });
 
 test('production requires Dani email recovery gates and a strong, distinct cron secret', () => {

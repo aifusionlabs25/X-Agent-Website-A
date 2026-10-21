@@ -50,7 +50,8 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
     const [submitting, setSubmitting] = useState(false);
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
-    const [accessCode, setAccessCode] = useState('');
+    const [followUpConsent, setFollowUpConsent] = useState(false);
+    const [followUpAllowed, setFollowUpAllowed] = useState(false);
     const [memoryConsent, setMemoryConsent] = useState(false);
     const [profileControlsOpen, setProfileControlsOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -61,6 +62,14 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         setChecking(true);
         setError(null);
         try {
+            const accountResponse = await fetch('/api/access', { cache: 'no-store' });
+            const account = await readJson(accountResponse);
+            if (!accountResponse.ok || account.authenticated !== true) throw new Error('Sign in before preparing your conversation');
+            setEmail(typeof account.email === 'string' ? account.email : '');
+            setDisplayName(current => current || (typeof account.displayName === 'string' ? account.displayName : ''));
+            const actionsResponse = await fetch('/api/access?agent=amy&capability=actions', { cache: 'no-store' });
+            const actions = await readJson(actionsResponse);
+            setFollowUpAllowed(actionsResponse.ok && actions.authorized === true);
             const response = await fetch('/api/anam/amy/access', {
                 cache: 'no-store',
                 credentials: 'same-origin',
@@ -76,23 +85,20 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         }
     }, []);
 
-    const requireFreshCheckIn = useCallback(async () => {
-        setChecking(true);
-        setError(null);
-        try {
-            const response = await fetch('/api/anam/amy/access', {
-                method: 'DELETE',
-                cache: 'no-store',
-                credentials: 'same-origin',
-            });
+    const requireFreshCheckIn = useCallback(() => {
+        return fetch('/api/anam/amy/access', {
+            method: 'DELETE',
+            cache: 'no-store',
+            credentials: 'same-origin',
+        }).then(async response => {
             const payload = await readJson(response);
             if (!response.ok) throw new Error(String(payload.error ?? 'A fresh check-in could not be started'));
             await checkAccess();
-        } catch (caught) {
+        }).catch(caught => {
             setError(caught instanceof Error ? caught.message : 'A fresh check-in could not be started');
             setStatus(emptyStatus);
             setChecking(false);
-        }
+        });
     }, [checkAccess]);
 
     useEffect(() => {
@@ -109,14 +115,13 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ displayName, email, accessCode, memoryConsent }),
+                body: JSON.stringify({ displayName, memoryConsent, followUpConsent }),
             });
             const payload = await readJson(response);
             if (!response.ok) throw new Error(String(payload.error ?? 'Access was not granted'));
             const nextStatus = normalizeStatus(payload);
             setStatus(nextStatus);
             setCheckInResult(nextStatus);
-            setAccessCode('');
             setNotice(nextStatus.approvedMemoryCount > 0
                 ? `Amy found ${nextStatus.approvedMemoryCount} saved conversation highlight(s) for you.`
                 : 'You’re all set. Amy is ready to meet you.');
@@ -135,7 +140,6 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
         }).catch(() => undefined);
         setStatus(emptyStatus);
         setCheckInResult(null);
-        setAccessCode('');
     };
 
     const continueToAmy = () => {
@@ -217,7 +221,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                         {memoryFound
                             ? `Amy found ${checkInResult.approvedMemoryCount} reviewed ${checkInResult.approvedMemoryCount === 1 ? 'note' : 'notes'} from an earlier conversation.`
                             : memoryMissing
-                                ? 'If you have met Amy before, check the email spelling. Otherwise, continue and start fresh.'
+                                ? 'There are no reviewed notes for your signed-in account. Continue to start fresh.'
                                 : 'Amy will start fresh for this visit.'}
                     </p>
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -227,7 +231,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                 onClick={() => void editCheckIn()}
                                 className="rounded-xl border border-white/15 px-5 py-3 font-medium text-zinc-200 transition hover:border-white/30 hover:bg-white/5"
                             >
-                                Check email
+                                Review preferences
                             </button>
                         )}
                         <button
@@ -308,7 +312,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                         className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-zinc-300 transition hover:border-white/25 hover:text-white"
                                     >
                                         <LogOut className="h-3 w-3" />
-                                        Switch user
+                                        Edit preferences
                                     </button>
                                 </div>
                             </aside>
@@ -359,7 +363,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                         </p>
                         <h1 className="mt-3 text-4xl font-semibold tracking-tight">Meet Amy.</h1>
                         <p className="mt-3 text-sm leading-6 text-zinc-400">
-                            Sign in to begin. We use this address privately for your post-session recap, Visual Brief, and follow-up support.
+                            Your access is approved. Choose how Amy should remember this visit and whether you want a follow-up.
                         </p>
                     </div>
                     <div className="hidden">
@@ -394,23 +398,12 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                 type="email"
                                 autoComplete="email"
                                 value={email}
-                                onChange={event => setEmail(event.target.value)}
+                                readOnly
                                 className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
                                 placeholder="you@example.com"
                             />
                         </label>
-                        <label className="block text-sm text-zinc-300">
-                            Access code
-                            <input
-                                required
-                                type="password"
-                                autoComplete="current-password"
-                                value={accessCode}
-                                onChange={event => setAccessCode(event.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-500/20"
-                                placeholder="Provided with your invitation"
-                            />
-                        </label>
+                        <p className="text-xs leading-5 text-zinc-500">This is your verified sign-in address. Your memory stays with this account.</p>
                         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
                             <input
                                 type="checkbox"
@@ -419,12 +412,16 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                                 className="mt-1 h-4 w-4 accent-indigo-500"
                             />
                             <span>
-                                <strong className="font-medium text-white">Remember this email</strong>
+                                <strong className="font-medium text-white">Use returning memory</strong>
                                 <span className="mt-1 block text-xs leading-5 text-zinc-500">
                                     Amy can find reviewed notes on your next visit. Turn this off to start fresh.
                                 </span>
                             </span>
                         </label>
+                        {followUpAllowed && <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                            <input type="checkbox" checked={followUpConsent} onChange={event => setFollowUpConsent(event.target.checked)} className="mt-1 h-4 w-4 accent-indigo-500" />
+                            <span><strong className="font-medium text-white">Email me the follow-up</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Receive your session recap and Visual Brief at the verified address above.</span></span>
+                        </label>}
 
                         {error && (
                             <div className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
@@ -439,7 +436,7 @@ export default function AmyMemoryAccessGate({ children }: AmyMemoryAccessGatePro
                             {submitting ? 'Getting things ready…' : 'Continue to Amy'}
                         </button>
                         <p className="text-xs leading-5 text-zinc-500">
-                            By continuing, you agree to receive Amy&apos;s session follow-up at the email above. Amy will not ask you to repeat or confirm the address during the conversation.
+                            Memory and email follow-up are optional. You can leave both off and still speak with Amy.
                         </p>
                         <button
                             type="button"

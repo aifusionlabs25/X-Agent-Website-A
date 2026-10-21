@@ -3,11 +3,14 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { buildEvanEmailBundle, buildEvanMovingIntake } from '../lib/anam/evan-agentmail-templates.ts';
 import {
-    queueEvanAnamConversationFollowUp,
+    queueEvanAnamConversationFollowUp as queueEvanWithPolicy,
     readEvanAnamAgentMailConfig,
-    sendEvanAnamConversationFollowUp,
+    sendEvanAnamConversationFollowUp as sendEvanWithPolicy,
 } from '../lib/anam/evan-agentmail.ts';
 import { sendAmyEmailWithAgentMail } from '../lib/email/amy-email-provider.ts';
+// Existing mail behavior cases run with an explicitly approved account.
+const queueEvanAnamConversationFollowUp = (input, options) => queueEvanWithPolicy(input, { accessAllowed: async () => true, ...options });
+const sendEvanAnamConversationFollowUp = (input, options) => sendEvanWithPolicy({ browserSessionId: 'evan-authorized-test-browser', ...input }, { accessAllowed: async () => true, ...options });
 
 const env = {
     AMY_ANAM_SESSION_SPINE_ENABLED: 'true',
@@ -310,4 +313,18 @@ test('Evan browser integration makes email optional while preserving secure gues
     assert.match(emailTool, /does not create, attach, deliver, or promise a quote/);
     assert.match(endTool, /"awaitResult": true/);
     assert.match(endTool, /farewell_required/);
+});
+test('Evan rejects unapproved intents and direct delivery before any external request', async () => {
+    let requests = 0;
+    const input = { externalSessionId: '11111111-2222-4333-8444-555555555555',
+        browserSessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', displayName: 'Pat',
+        email: 'pat@example.com', contactSecret: env.AMY_ANAM_SESSION_SECRET };
+    const denied = { env, accessAllowed: async (agent, browserId, capability) => {
+        assert.deepEqual([agent, browserId, capability], ['evan', input.browserSessionId, 'actions']);
+        return false;
+    }, fetchImpl: async () => { requests++; throw new Error('Unexpected request'); } };
+    await assert.rejects(queueEvanWithPolicy(input, denied), /approval is required/);
+    const result = await sendEvanWithPolicy({ ...input, turns: latestTestTurns }, denied);
+    assert.deepEqual(result, { status: 'email_unavailable', sent: false });
+    assert.equal(requests, 0);
 });

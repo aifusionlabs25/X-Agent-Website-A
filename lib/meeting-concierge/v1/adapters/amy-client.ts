@@ -13,32 +13,29 @@ export const amyMeetingConciergeAdapter: MeetingConciergeClientAdapter = {
         meetingApiPath: '/api/anam/amy/meetings',
         groupWakeName: 'Amy',
     },
+    checkInEnabled: false,
     copy: {
         eyebrow: 'Meeting Concierge · Amy',
         confirmedTitle: 'Amy is on the agenda.',
         personaBoundary: "Amy's current Insight SDR persona remains in control. The objective is not used to rewrite her system prompt or expand her role.",
-        contactBoundary: "The meeting module uses Amy's existing private check-in. It does not read another agent's contacts, memory, consent, sessions, or email workflows.",
-        authenticatedLabel: "Secure Amy check-in active",
-        checkInTitle: "Complete Amy's secure check-in",
-        checkInDescription: "Use the same private check-in required for Amy's regular X Agent session.",
-        consent: "This private check-in secures the invitation. Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1. Amy will not ask you to repeat the address during the meeting.",
+        contactBoundary: "Your approved account secures this invitation. Email follow-up and returning memory remain separate choices.",
+        authenticatedLabel: "Approved Amy organizer",
+        checkInTitle: "Prepare your invitation",
+        checkInDescription: "Your signed-in account is used to secure the meeting invitation.",
+        consent: "Meeting transcripts, recaps, and returning memory are not included in Meeting Concierge v1. Amy will not ask you to repeat the address during the meeting.",
     },
-    checkIn: {
-        kind: 'credentials',
-        defaultMemoryConsent: false,
-        async submit(fields): Promise<MeetingConciergeOrganizer> {
-            const response = await fetch('/api/anam/amy/access', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify(fields),
-            });
-            const payload = await readJson(response);
-            if (!response.ok || payload.authenticated !== true) throw new Error(String(payload.error ?? 'Amy check-in could not be completed'));
-            return {
-                authenticated: true,
-                displayName: typeof payload.displayName === 'string' ? payload.displayName : fields.displayName,
-            };
-        },
+    async prepareOrganizer(): Promise<MeetingConciergeOrganizer> {
+        const accountResponse = await fetch('/api/access', { credentials: 'same-origin', cache: 'no-store' });
+        const account = await readJson(accountResponse);
+        if (!accountResponse.ok || account.authenticated !== true) throw new Error('Sign in to prepare your meeting invitation');
+        const name = typeof account.displayName === 'string' ? account.displayName.trim() : '';
+        const displayName = name.length >= 2 ? name : 'Meeting organizer';
+        const response = await fetch('/api/anam/amy/access', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', cache: 'no-store',
+            body: JSON.stringify({ displayName, memoryConsent: false, followUpConsent: false }),
+        });
+        const payload = await readJson(response);
+        if (!response.ok || payload.authenticated !== true) throw new Error(String(payload.error ?? 'Amy meeting access could not be prepared'));
+        return { authenticated: true, displayName: typeof payload.displayName === 'string' ? payload.displayName : displayName };
     },
 };

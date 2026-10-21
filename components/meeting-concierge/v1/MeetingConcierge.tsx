@@ -42,6 +42,7 @@ import type {
     MeetingConciergeProvider,
 } from '@/lib/meeting-concierge/v1/contracts';
 import { MEETING_CONCIERGE_DURATION_MINUTES, MEETING_CONCIERGE_VERSION } from '@/lib/meeting-concierge/v1/contracts';
+import AgentAccessGate from '@/components/access/AgentAccessGate';
 
 export type MeetingConciergeStyleContract = Record<
     | 'scheduler' | 'backLink' | 'topline' | 'headingRow' | 'eyebrow' | 'title' | 'steps'
@@ -92,10 +93,8 @@ function CheckInFields({
     const checkIn = adapter.checkIn;
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
-    const [accessCode, setAccessCode] = useState('');
     const [verificationCode, setVerificationCode] = useState('');
     const [challengeId, setChallengeId] = useState<string | null>(null);
-    const [memoryConsent, setMemoryConsent] = useState(checkIn?.kind === 'credentials' ? checkIn.defaultMemoryConsent : false);
     const [submitting, setSubmitting] = useState(false);
 
     async function submit(event: FormEvent<HTMLFormElement>) {
@@ -111,9 +110,8 @@ function CheckInFields({
             }
             const organizer = checkIn.kind === 'email-code'
                 ? await checkIn.verifyCode({ challengeId: challengeId ?? '', verificationCode })
-                : await checkIn.submit({ displayName, email, accessCode, memoryConsent });
+                : await checkIn.submit({ displayName, email });
             setEmail('');
-            setAccessCode('');
             setVerificationCode('');
             setChallengeId(null);
             onAuthenticated(organizer.displayName);
@@ -136,15 +134,8 @@ function CheckInFields({
                     <label><span><UserRound size={14} /> Name</span><input required value={displayName} onChange={event => setDisplayName(event.target.value)} autoComplete="name" /></label>
                     <label><span><Mail size={14} /> Email</span><input required type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" /></label>
                 </div>
-                {checkIn.kind === 'credentials' ? <>
-                    <label><span><LockKeyhole size={14} /> Access code</span><input required type="password" value={accessCode} onChange={event => setAccessCode(event.target.value)} autoComplete="current-password" /></label>
-                    <label className={styles.memoryChoice}>
-                        <input type="checkbox" checked={memoryConsent} onChange={event => setMemoryConsent(event.target.checked)} />
-                        <span><strong>Remember this email</strong><small>{adapter.agent.name} may find reviewed notes on a future visit. Leave this off to start fresh.</small></span>
-                    </label>
-                </> : null}
             </>}
-            <button type="submit" className={styles.verifyButton} disabled={submitting || (checkIn.kind === 'email-code' && challengeId ? verificationCode.length !== 6 : displayName.trim().length < 2 || !email.includes('@') || (checkIn.kind === 'credentials' && !accessCode))}>
+            <button type="submit" className={styles.verifyButton} disabled={submitting || (checkIn.kind === 'email-code' && challengeId ? verificationCode.length !== 6 : displayName.trim().length < 2 || !email.includes('@'))}>
                 {submitting ? <LoaderCircle className={styles.spinner} size={16} /> : null} {checkIn.kind === 'email-code' ? challengeId ? 'Verify code' : 'Send verification code' : 'Complete check-in'}
             </button>
             <p className={styles.consentCopy}>{adapter.copy.consent}</p>
@@ -165,7 +156,13 @@ function statusCopy(agentName: string, invite: MeetingConciergeInvite, joinState
     return 'The meeting invitation has finished.';
 }
 
-export default function MeetingConcierge({ adapter, initialProvider, styles }: MeetingConciergeProps) {
+export default function MeetingConcierge(props: MeetingConciergeProps) {
+    return <AgentAccessGate agent={props.adapter.agent.key} capability="meeting" embedded>
+        <MeetingConciergeFlow {...props} />
+    </AgentAccessGate>;
+}
+
+function MeetingConciergeFlow({ adapter, initialProvider, styles }: MeetingConciergeProps) {
     const { meetingApiPath } = adapter.agent;
     const checkInEnabled = adapter.checkInEnabled !== false && Boolean(adapter.checkIn);
     const persistInvite = adapter.persistInvite !== false;
@@ -181,7 +178,7 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
     const [participationMode, setParticipationMode] = useState<MeetingConciergeParticipationMode>(adapter.participation?.defaultMode ?? 'participant');
     const [maxDurationMinutes, setMaxDurationMinutes] = useState<MeetingConciergeDurationMinutes>(30);
     const [purpose, setPurpose] = useState('');
-    const [displayName, setDisplayName] = useState('');
+    const [displayName, setDisplayName] = useState(checkInEnabled ? '' : 'Organizer');
     const [authenticated, setAuthenticated] = useState(!checkInEnabled);
     const [preparing, setPreparing] = useState(!checkInEnabled && Boolean(prepareOrganizer));
     const [busy, setBusy] = useState(false);
@@ -230,13 +227,8 @@ export default function MeetingConcierge({ adapter, initialProvider, styles }: M
                     .finally(() => {
                         if (!disposed) setPreparing(false);
                     });
-            } else {
-                setAuthenticated(true);
-                setDisplayName('Organizer');
-                setPreparing(false);
             }
         } else {
-            setPreparing(false);
             void readMeetingConciergeOrganizer(meetingApiPath)
                 .then(organizer => {
                     if (disposed) return;

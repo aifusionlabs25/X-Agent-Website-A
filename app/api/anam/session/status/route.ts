@@ -1,4 +1,5 @@
 import { after, NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import {
     ensureAmyAnamHermesShadowQueued,
     finalizeAmyAnamSession,
@@ -64,6 +65,11 @@ export async function GET(request: Request) {
         const sessionAgentSlug = session
             ? resolveAnamSessionAgentSlug(session.resolvedPersonaId, session.agentSlug)
             : null;
+        if (!sessionAgentSlug) {
+            return noStoreJson({ error: 'Session agent access could not be confirmed' }, { status: 403 });
+        }
+        const accessDenied = await requireAgentAccess(request, sessionAgentSlug);
+        if (accessDenied) return accessDenied;
         const daniSessionSecrets = readDaniAnamSessionSecrets();
         if (sessionAgentSlug === 'dani' && !daniSessionSecrets.configured) {
             return noStoreJson({ error: 'Dani session access is temporarily unavailable' }, { status: 503 });
@@ -81,6 +87,8 @@ export async function GET(request: Request) {
         if (!browserSession) {
             return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
         }
+        const browserDenied = await requireAgentBrowserAccess(request, sessionAgentSlug, browserSession.id);
+        if (browserDenied) return browserDenied;
         if (
             (session && session.browserSessionId !== browserSession.id)
             || (finalization && finalization.browserSessionId !== browserSession.id)

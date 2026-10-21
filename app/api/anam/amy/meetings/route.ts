@@ -1,4 +1,5 @@
 import { AMY_CARA4_VARIANT, AMY_PUBLIC_PERSONA_ID, resolveAnamSessionPersona } from '@/lib/anam/session-config';
+import { readAccessIdentity } from '@/lib/access/auth';
 import {
     isTrustedBrowserOrigin,
     readAmyAnamBrowserSession,
@@ -7,8 +8,6 @@ import {
     requestFingerprint,
 } from '@/lib/anam/session-spine';
 import { consumeAmyAnamDistributedRateLimit } from '@/lib/anam/session-spine-store';
-import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
-import { readAmyAnamBrowserIdentity } from '@/lib/anam/user-memory';
 import { createMeetingConciergeHandlers } from '@/lib/meeting-concierge/v1/server';
 import { resolveMeetingPersonaSnapshot } from '@/lib/meeting-concierge/v1/persona-snapshot';
 
@@ -51,18 +50,11 @@ const amyMeetingConcierge = createMeetingConciergeHandlers({
         if (!spine.gatesOpen) return null;
         const browser = readAmyAnamBrowserSession(request, spine.signingSecret);
         if (!browser) return null;
-        const [contact, identity] = await Promise.all([
-            Promise.resolve(readAmyAnamContactFromRequest({
-                request,
-                browserSessionId: browser.id,
-                secret: spine.signingSecret,
-            })),
-            readAmyAnamBrowserIdentity(browser.id),
-        ]);
-        if (!identity || contact?.purpose !== 'amy_follow_up') return null;
+        const identity = await readAccessIdentity(request);
+        if (!identity) return null;
         return {
             authenticated: true,
-            displayName: identity.displayName,
+            displayName: identity.name || 'Organizer',
             isolationId: browser.id,
         };
     },

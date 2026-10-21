@@ -1,3 +1,4 @@
+import { authorizedRequest, installJamesSharedAccess } from './helpers/james-shared-access.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -110,12 +111,13 @@ async function withPublicRoute(options, run) {
         }
         throw new Error('Unexpected network target; no real request permitted: ' + target);
     };
+    installJamesSharedAccess();
     try {
         const tasks=[];
         const { createPublicJamesServer } = await import(new URL('../lib/james-canary/public-server.ts?offline-email=' + (++importSequence), import.meta.url));
         const {get,post}=options.manual?createJamesServer({personaId:RUNTIME_CANDIDATE_ID,cookie:'xagent_james_notepad_v2',prefix,allowDemoEmail:true,allowEmail:true,runtimeClose:true,allowBrowserRecovery:true})
             :createPublicJamesServer(task=>tasks.push(task));
-        const request = (body, auth = cookie, origin = 'https://demo.invalid') => new Request('https://demo.invalid/api/james-notepad', {
+        const request = (body, auth = cookie, origin = 'https://xagent.aifusionlabs.app') => authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad', {
             method: 'POST', headers: { origin, 'Content-Type': 'application/json', ...(auth ? { cookie: auth } : {}) },
             body: JSON.stringify(body),
         });
@@ -174,7 +176,7 @@ async function withPublicRoute(options, run) {
             ended:()=>{released=true;endedAt=new Date().toISOString();},
             launches: () => launches, inboxReads: () => inboxReads,
             getView: async (auth = cookie) => {
-                const response = await get(new Request('https://demo.invalid/api/james-notepad?id=' + currentId, { headers: auth ? { cookie: auth } : {} }));
+                const response = await get(authorizedRequest('https://xagent.aifusionlabs.app/api/james-notepad?id=' + currentId, { headers: auth ? { cookie: auth } : {} }));
                 return { status: response.status, data: await response.json() };
             }, requests });
     } finally {

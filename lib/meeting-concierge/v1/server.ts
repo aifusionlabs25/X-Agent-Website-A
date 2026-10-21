@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { accessDecision, requireAgentAccess, requireAgentBrowserAccess } from '../../access/policy.ts';
 import type {
     MeetingConciergeInvite,
     MeetingConciergeOrganizer,
@@ -177,10 +178,14 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
     const requireOrganizer = async (request: Request) => {
         const organizer = await adapter.readOrganizer(request);
         if (!organizer) throw new MeetingConciergeRequestError(`Complete ${adapter.agentName}'s secure check-in before creating the invitation`, 401);
+        const browserDenied = await requireAgentBrowserAccess(request, adapter.agentKey, organizer.isolationId, 'meeting');
+        if (browserDenied) throw browserDenied;
         return organizer;
     };
 
     const POST = async (request: Request) => {
+        const accessDenied = await requireAgentAccess(request, adapter.agentKey, 'meeting');
+        if (accessDenied) return accessDenied;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 18_000);
         try {
@@ -218,6 +223,12 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
             const purpose = parsePurpose(body.purpose);
             const participationMode = parseParticipationMode(body.participationMode, body.groupCall, adapter.participation);
             const maxDurationMinutes = parseDurationMinutes(body.maxDurationMinutes);
+            const access = await accessDecision(request, adapter.agentKey, 'meeting');
+            if (!access.authorized) return json({ error: 'Meeting access is no longer approved' }, { status: 403 });
+            if (!access.owner && access.record?.expiresAt
+                && (joinAt ? Date.parse(joinAt) : Date.now()) + maxDurationMinutes * 60_000 > Date.parse(access.record.expiresAt)) {
+                return json({ error: 'Choose a meeting time and duration within your approved access period' }, { status: 403 });
+            }
             const apiKey = readApiKey();
             const persona = await adapter.resolvePersona({
                 apiKey,
@@ -256,6 +267,7 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
                 meetingProvider: meeting.provider,
             }, { status: 201 });
         } catch (error) {
+            if (error instanceof Response) return error;
             if (error instanceof MeetingConciergeRequestError) return json({ error: error.message }, { status: error.status });
             const timedOut = error instanceof Error && error.name === 'AbortError';
             console.error(`[${adapter.agentName} Meetings] Invitation failed`, { reason: timedOut ? 'provider_timeout' : 'provider_error', sensitiveContentLogged: false });
@@ -266,6 +278,8 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
     };
 
     const GET = async (request: Request) => {
+        const accessDenied = await requireAgentAccess(request, adapter.agentKey, 'meeting');
+        if (accessDenied) return accessDenied;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 6_000);
         try {
@@ -280,6 +294,10 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
             const inviteId = new URL(request.url).searchParams.get('inviteId')?.trim() ?? '';
             if (!inviteId) {
                 const organizer = await adapter.readOrganizer(request);
+                if (organizer) {
+                    const browserDenied = await requireAgentBrowserAccess(request, adapter.agentKey, organizer.isolationId, 'meeting');
+                    if (browserDenied) return browserDenied;
+                }
                 return json({ authenticated: Boolean(organizer), displayName: organizer?.displayName ?? null, rawEmailReturned: false, memoryContentReturned: false });
             }
             const organizer = await requireOrganizer(request);
@@ -299,6 +317,7 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
             const invite = parseInvite(payload);
             return json({ invite: { ...invite, id: inviteId } });
         } catch (error) {
+            if (error instanceof Response) return error;
             if (error instanceof MeetingConciergeRequestError || error instanceof MeetingConciergeStatusTicketError) {
                 return json({ error: error.message }, { status: error.status });
             }
@@ -309,6 +328,8 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
     };
 
     const DELETE = async (request: Request) => {
+        const accessDenied = await requireAgentAccess(request, adapter.agentKey, 'meeting');
+        if (accessDenied) return accessDenied;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8_000);
         try {
@@ -357,6 +378,7 @@ export function createMeetingConciergeHandlers(adapter: MeetingConciergeServerAd
                 },
             });
         } catch (error) {
+            if (error instanceof Response) return error;
             if (error instanceof MeetingConciergeRequestError || error instanceof MeetingConciergeStatusTicketError) {
                 return json({ error: error.message }, { status: error.status });
             }

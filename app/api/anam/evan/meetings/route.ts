@@ -1,4 +1,5 @@
 import { EVAN_PERSONA_ID } from '@/lib/anam/persona-ids';
+import { readAccessIdentity } from '@/lib/access/auth';
 import {
     isTrustedBrowserOrigin,
     readAmyAnamBrowserSession,
@@ -6,7 +7,6 @@ import {
     readBoundedJsonObject,
     requestFingerprint,
 } from '@/lib/anam/session-spine';
-import { readAmyAnamContactFromRequest } from '@/lib/anam/contact-token';
 import { consumeAmyAnamDistributedRateLimit } from '@/lib/anam/session-spine-store';
 import { createMeetingConciergeHandlers } from '@/lib/meeting-concierge/v1/server';
 import { resolveMeetingPersonaSnapshot } from '@/lib/meeting-concierge/v1/persona-snapshot';
@@ -52,15 +52,11 @@ const evanMeetingConcierge = createMeetingConciergeHandlers({
         if (!spine.gatesOpen) return null;
         const browser = readAmyAnamBrowserSession(request, spine.signingSecret);
         if (!browser) return null;
-        const contact = readAmyAnamContactFromRequest({
-            request,
-            browserSessionId: browser.id,
-            secret: spine.signingSecret,
-        });
-        if (contact?.purpose !== 'evan_follow_up' || !contact.displayName) return null;
+        const identity = await readAccessIdentity(request);
+        if (!identity) return null;
         return {
             authenticated: true,
-            displayName: contact.displayName,
+            displayName: identity.name || 'Organizer',
             isolationId: browser.id,
         };
     },

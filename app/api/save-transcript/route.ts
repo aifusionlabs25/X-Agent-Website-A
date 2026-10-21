@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess } from '@/lib/access/policy';
+import { readAccessIdentity } from '@/lib/access/auth';
 import fs from 'fs/promises';
 import path from 'path';
 import { Resend } from 'resend';
@@ -7,6 +9,8 @@ import { GoogleSheetsService } from '@/lib/google-sheets';
 import { escapeHtml } from '@/lib/sanitize-html';
 import { ALL_AGENTS } from '@/lib/agents';
 import { AMY_CARA4_VARIANT, isAmyCara4Variant } from '@/lib/anam/session-config';
+import { AmyAnamRequestError, readBoundedJsonObject } from '@/lib/anam/session-spine';
+import { consumeAmyAnamDistributedRateLimit } from '@/lib/anam/session-spine-store';
 
 // Allow route to run for up to 60 seconds (Vercel max duration)
 export const maxDuration = 60;
@@ -14,19 +18,37 @@ export const maxDuration = 60;
 // Helper removed: We now rely on OpenAI to intelligently extract the visitor email.
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
+        const body = await readBoundedJsonObject(req, 256 * 1024);
         const { personaId, transcript, variant } = body;
+        if (typeof personaId !== 'string') {
+            return NextResponse.json({ error: 'A valid persona is required.' }, { status: 400 });
+        }
 
         if (!transcript || !Array.isArray(transcript)) {
             return NextResponse.json({ error: 'Invalid transcript format.' }, { status: 400 });
         }
 
-        if (transcript.length === 0) {
-            return NextResponse.json({ message: 'Transcript was empty, nothing to save.' }, { status: 200 });
-        }
         const agent = ALL_AGENTS.find(a => a.personaId === personaId);
         if (!agent) {
             return NextResponse.json({ error: 'Persona is not available on this site.' }, { status: 403 });
+        }
+        const accessDenied = await requireAgentAccess(req, agent.slug, 'actions');
+        if (accessDenied) return accessDenied;
+        const accessIdentity = await readAccessIdentity(req);
+        if (!accessIdentity) return NextResponse.json({ error: 'Sign in to continue' }, { status: 401 });
+        const rate = await consumeAmyAnamDistributedRateLimit({
+            fingerprint: `transcript-actions:${accessIdentity.id}:${agent.slug}`,
+            limit: 3,
+            windowSeconds: 60 * 60,
+        });
+        if (!rate.allowed) {
+            return NextResponse.json({ error: 'Too many session processing requests' }, {
+                status: 429,
+                headers: { 'Retry-After': String(rate.retryAfterSeconds) },
+            });
+        }
+        if (transcript.length === 0) {
+            return NextResponse.json({ message: 'Transcript was empty, nothing to save.' }, { status: 200 });
         }
         if (agent.slug === 'dani') {
             return NextResponse.json({
@@ -313,6 +335,9 @@ ${formattedTranscript}
         return NextResponse.json({ success: true, file: filename, emails_sent: true }, { status: 200 });
 
     } catch (error) {
+        if (error instanceof AmyAnamRequestError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         console.error('Error saving transcript / dispatching emails:', error);
         return NextResponse.json({ error: 'Failed to process session.' }, { status: 500 });
     }

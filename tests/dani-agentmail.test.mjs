@@ -8,13 +8,13 @@ import {
     clearDaniAnamFollowUpAuthorization,
     consumeDaniAnamFollowUpOtpChallenge,
     createDaniAnamFollowUpOtpChallenge,
-    dispatchDaniAnamPostSessionFollowUp,
+    dispatchDaniAnamPostSessionFollowUp as dispatchDaniWithPolicy,
     finalizeDaniAnamVerifiedFollowUpAuthorization,
-    queueDaniAnamConversationFollowUp,
+    queueDaniAnamConversationFollowUp as queueDaniWithPolicy,
     readDaniAnamAgentMailConfig,
     readDaniAnamFollowUpAuthorization,
     scheduleDaniAnamEmailRetryAfterDispatchFailure,
-    sendDaniAnamConversationFollowUp,
+    sendDaniAnamConversationFollowUp as sendDaniWithPolicy,
     storeDaniAnamFollowUpAuthorization,
 } from '../lib/anam/dani-agentmail.ts';
 import { createDaniAnamContactToken } from '../lib/anam/contact-token.ts';
@@ -25,6 +25,10 @@ import {
     resolveAnamSessionVariant,
 } from '../lib/anam/session-spine.ts';
 import { ensureAmyAnamHermesShadowQueued } from '../lib/anam/session-finalizer.ts';
+// Existing mail behavior cases run with an explicitly approved account.
+const queueDaniAnamConversationFollowUp = (input, options) => queueDaniWithPolicy(input, { accessAllowed: async () => true, ...options });
+const dispatchDaniAnamPostSessionFollowUp = (input, options) => dispatchDaniWithPolicy(input, { accessAllowed: async () => true, ...options });
+const sendDaniAnamConversationFollowUp = (input, options) => sendDaniWithPolicy({ browserSessionId: 'dani-authorized-test-browser', ...input }, { accessAllowed: async () => true, ...options });
 
 const env = {
     AMY_ANAM_SESSION_SPINE_ENABLED: 'true',
@@ -749,4 +753,25 @@ test('Dani browser integration uses agent-scoped typed contact authorization, pr
     assert.match(legacy, /Dani transcripts are accepted only through the provider-authoritative Anam session finalizer/);
     assert.match(tool, /email_cancelled/);
     assert.match(tool, /website only/i);
+});
+test('Dani rejects unapproved intents and stops queued delivery after revocation', async () => {
+    const transport = createMockTransport();
+    const input = {
+        externalSessionId: '11111111-2222-4333-8444-555555555555',
+        browserSessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        displayName: 'Pat', email: 'pat@example.com', contactSecret: env.DANI_ANAM_CONTACT_SECRET,
+    };
+    const denied = { env, fetchImpl: transport.fetchImpl, accessAllowed: async (agent, browserId, capability) => {
+        assert.deepEqual([agent, browserId, capability], ['dani', input.browserSessionId, 'actions']);
+        return false;
+    } };
+    await assert.rejects(queueDaniWithPolicy(input, denied), /approval is required/);
+    assert.equal(transport.redis.size, 0);
+    await queueDaniAnamConversationFollowUp(input, { env, fetchImpl: transport.fetchImpl });
+    assert.equal(transport.sent.length, 0);
+    const result = await dispatchDaniWithPolicy({
+        session: { browserSessionId: input.browserSessionId }, receipt: {}, turns,
+    }, denied);
+    assert.deepEqual(result, { status: 'email_unavailable', sent: false });
+    assert.equal(transport.sent.length, 0);
 });

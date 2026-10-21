@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import { verifyAmyAnamLiveIdentity } from '@/lib/anam/live-identity';
 import {
     AmyAnamRequestError,
@@ -30,6 +31,8 @@ function noStoreJson(body: unknown, init?: ResponseInit) {
 
 export async function POST(request: Request) {
     try {
+        const accessDenied = await requireAgentAccess(request, 'amy');
+        if (accessDenied) return accessDenied;
         const spineConfig = readAmyAnamSpineConfig();
         const memoryConfig = readAmyAnamMemoryConfig();
         if (!spineConfig.gatesOpen || !memoryConfig.gatesOpen) {
@@ -43,6 +46,8 @@ export async function POST(request: Request) {
         if (!browserSession) {
             return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
         }
+        const browserDenied = await requireAgentBrowserAccess(request, 'amy', browserSession.id);
+        if (browserDenied) return browserDenied;
 
         const body = await readBoundedJsonObject(request, 2 * 1024);
         const launchId = typeof body.launchId === 'string' ? body.launchId.trim() : '';

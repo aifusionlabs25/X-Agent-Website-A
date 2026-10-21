@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyTurn,emptyIntake,receipt,sha,view,readiness,CURRENT_JAMES_PERSONA_ID} from '../lib/james-canary/state.ts';
 import {finalizeBrief,confirmBrief,applyBriefCorrection,structuredBriefView} from '../lib/james-canary/structured-brief.ts';
-import {prepareDemoMessages,sendDemoSummaries,sendDemoMessage,verifiedTranscriptAttachment,readDemoEmailConfig,preflightDemoTransport,INTERNAL_DEMO_RECIPIENT} from '../lib/james-canary/demo-email.ts';
+import {prepareDemoMessages,sendDemoSummaries as sendDemoSummariesWithPolicy,sendDemoMessage,verifiedTranscriptAttachment,readDemoEmailConfig,preflightDemoTransport,INTERNAL_DEMO_RECIPIENT} from '../lib/james-canary/demo-email.ts';
+const sendDemoSummaries=(session,consent,deps)=>sendDemoSummariesWithPolicy(session,consent,{accessAllowed:async()=>true,...deps});
 
 const now=Date.parse('2026-10-13T18:05:00.000Z');
 const env=(mode='owner')=>({JAMES_DEMO_EMAIL_ENABLED:'true',JAMES_AGENTMAIL_API_KEY:'fake-james-key-long-enough-for-tests',JAMES_AGENTMAIL_ADDRESS:'james-demo@agentmail.to',JAMES_DEMO_REPLY_TO:'aifusionlabs@gmail.com',JAMES_DEMO_EMAIL_ACCESS_MODE:'visitor',JAMES_DEMO_EMAIL_DAILY_SEND_LIMIT:'25',JAMES_DEMO_EMAIL_BUNDLE:'three',JAMES_DEMO_EMAIL_RECIPIENT_MODE:mode});

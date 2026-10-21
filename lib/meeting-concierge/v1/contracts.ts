@@ -52,8 +52,6 @@ export type MeetingConciergeParticipationOption = {
 export type MeetingConciergeCheckInFields = {
     displayName: string;
     email: string;
-    accessCode: string;
-    memoryConsent: boolean;
 };
 
 export type MeetingConciergeEmailCodeRequest = {
@@ -104,11 +102,6 @@ export type MeetingConciergeClientAdapter = {
         options: MeetingConciergeParticipationOption[];
     };
     checkIn?:
-        | {
-            kind: 'credentials';
-            submit(fields: MeetingConciergeCheckInFields): Promise<MeetingConciergeOrganizer>;
-            defaultMemoryConsent: boolean;
-        }
         | {
             kind: 'contact';
             submit(fields: MeetingConciergeCheckInFields): Promise<MeetingConciergeOrganizer>;

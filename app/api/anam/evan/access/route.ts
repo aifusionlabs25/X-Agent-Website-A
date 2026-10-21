@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { bindAgentAccessBrowser, requireAgentAccess, requireAgentEntryAccess, requireAgentEntryBrowserAccess } from '@/lib/access/policy';
+import { readAccessIdentity } from '@/lib/access/auth';
 import {
     AMY_ANAM_BROWSER_COOKIE,
     AmyAnamRequestError,
@@ -49,6 +51,8 @@ function status(input: {
 
 export async function GET(request: Request) {
     try {
+        const accessDenied = await requireAgentEntryAccess(request, 'evan');
+        if (accessDenied) return accessDenied;
         const spine = readAmyAnamSpineConfig();
         if (!spine.gatesOpen) {
             return json({ error: 'Evan session access is temporarily unavailable' }, { status: 503 });
@@ -56,6 +60,8 @@ export async function GET(request: Request) {
         const emailFollowUpAvailable = readEvanAnamAgentMailConfig().effectiveGateOpen;
         const browser = readAmyAnamBrowserSession(request, spine.signingSecret);
         if (!browser) return json(status({ authenticated: false, emailFollowUpAvailable }));
+        const browserDenied = await requireAgentEntryBrowserAccess(request, 'evan', browser.id);
+        if (browserDenied) return browserDenied;
 
         const contact = readAmyAnamContactFromRequest({
             request,
@@ -77,6 +83,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const accessDenied = await requireAgentEntryAccess(request, 'evan');
+        if (accessDenied) return accessDenied;
         if (!isTrustedBrowserOrigin(request)) {
             return json({ error: 'Request origin is not allowed' }, { status: 403 });
         }
@@ -109,6 +117,7 @@ export async function POST(request: Request) {
                 return json({ error: 'Guest access cannot include contact details' }, { status: 400 });
             }
             const created = createAmyAnamBrowserSessionWithSecret(spine.signingSecret);
+            await bindAgentAccessBrowser(request, 'evan', created.session.id);
             const response = json(status({
                 authenticated: true,
                 guest: true,
@@ -130,14 +139,21 @@ export async function POST(request: Request) {
             ? body.displayName.normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, 120)
             : '';
         const email = normalizeAmyAnamMemoryEmail(typeof body.email === 'string' ? body.email : '');
+        const accessIdentity = await readAccessIdentity(request);
+        if (!accessIdentity || email !== accessIdentity.email.trim().toLowerCase()) {
+            return json({ error: 'Use the email address you signed in with' }, { status: 403 });
+        }
         if (displayName.length < 2 || /^(?:user|visitor|guest|customer)$/i.test(displayName)) {
             return json({ error: 'Enter the name you would like Mullins to use' }, { status: 400 });
         }
         if (body.followUpConsent !== true) {
             return json({ error: 'Choose the email recap option to continue with email' }, { status: 400 });
         }
+        const actionsDenied = await requireAgentAccess(request, 'evan', 'actions');
+        if (actionsDenied) return actionsDenied;
 
         const created = createAmyAnamBrowserSessionWithSecret(spine.signingSecret);
+        await bindAgentAccessBrowser(request, 'evan', created.session.id);
         const token = createAmyAnamContactToken({
             browserSessionId: created.session.id,
             displayName,

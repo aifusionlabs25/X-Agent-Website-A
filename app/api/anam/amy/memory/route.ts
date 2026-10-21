@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import {
     isTrustedBrowserOrigin,
     readAmyAnamBrowserSession,
@@ -23,11 +24,14 @@ async function authenticatedIdentity(request: Request) {
     const spine = readAmyAnamSpineConfig();
     const browserSession = readAmyAnamBrowserSession(request, spine.signingSecret);
     if (!browserSession) return null;
+    if (await requireAgentBrowserAccess(request, 'amy', browserSession.id)) return null;
     return readAmyAnamBrowserIdentity(browserSession.id);
 }
 
 export async function GET(request: Request) {
     try {
+        const accessDenied = await requireAgentAccess(request, 'amy');
+        if (accessDenied) return accessDenied;
         const identity = await authenticatedIdentity(request);
         if (!identity) return noStoreJson({ error: 'Authentication required' }, { status: 401 });
         const history = await readAmyAnamApprovedMemoryHistory(identity);

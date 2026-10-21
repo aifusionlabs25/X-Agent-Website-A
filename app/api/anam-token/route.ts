@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import { ALL_AGENTS } from '@/lib/agents';
 import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
 import { readDaniAnamAgentMailConfig } from '@/lib/anam/dani-agentmail';
@@ -74,6 +75,13 @@ export async function POST(req: Request) {
                 { status: resolution.status }
             );
         }
+
+        const agent = ALL_AGENTS.find(candidate => candidate.personaId === String(personaId).trim());
+        if (!agent) {
+            return noStoreJson({ error: 'Persona is not available on this site' }, { status: 403 });
+        }
+        const accessDenied = await requireAgentAccess(req, agent.slug);
+        if (accessDenied) return accessDenied;
 
         const spineConfig = readAmyAnamSpineConfig();
         const daniSessionSecrets = readDaniAnamSessionSecrets();
@@ -298,6 +306,9 @@ export async function POST(req: Request) {
                 browserCookieToken = created.token;
             }
 
+            const browserDenied = await requireAgentBrowserAccess(req, agent.slug, browserSession.id);
+            if (browserDenied) return browserDenied;
+
             if (isAmyCara4) {
                 const identity = await readAmyAnamBrowserIdentity(browserSession.id);
                 if (!identity) {
@@ -346,6 +357,9 @@ export async function POST(req: Request) {
                 limit: 5,
                 windowSeconds: 10 * 60,
             });
+            if (agentMailAvailable && await requireAgentAccess(req, agent.slug, 'actions')) {
+                agentMailAvailable = false;
+            }
             if (!browserRate.allowed) {
                 const response = noStoreJson(
                     { error: 'Too many session starts' },

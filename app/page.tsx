@@ -26,7 +26,7 @@ function prioritizeHomepageAgents(agents: AgentData[]) {
 export default function HomePage() {
   const hideAmy = process.env.NEXT_PUBLIC_HIDE_AMY === 'true';
 
-  const filterAgents = (agents: AgentData[]) => hideAmy ? agents.filter(a => a.slug !== 'amy') : agents;
+  const filterAgents = (agents: AgentData[]) => agents.filter(a => !a.paused && (!hideAmy || a.slug !== 'amy'));
 
   const displaySales = prioritizeHomepageAgents(filterAgents(SALES_AGENTS));
   const displayService = prioritizeHomepageAgents(filterAgents(SERVICE_AGENTS));
@@ -54,7 +54,7 @@ export default function HomePage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pb-12">
             <p className="text-zinc-600 text-[10px] leading-relaxed max-w-2xl italic">
-                * Taylor and other &quot;Generic&quot; designated agents represent fictional demo scenarios for Canyon Ridge Solutions. These experiences are built to demonstrate cross-industry automation capabilities and do not represent actual client affiliations.
+                * Fictional demo scenarios demonstrate cross-industry automation capabilities and do not represent actual client affiliations.
             </p>
         </div>
       </div>

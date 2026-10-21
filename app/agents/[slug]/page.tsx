@@ -9,6 +9,7 @@ import EvanMeetingScheduler from '@/components/evan/EvanMeetingScheduler';
 import AmyInsightLanding from '@/components/agents/AmyInsightLanding';
 import { AmyMeetingConcierge } from '@/components/amy/AmyMeetingScheduler';
 import DaniEditorialLanding from '@/components/dani/DaniEditorialLanding';
+import AgentAccessGate from '@/components/access/AgentAccessGate';
 
 interface Props {
     params: Promise<{ slug: string }>;
@@ -21,6 +22,10 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params;
+
+    if (slug === 'taylor') {
+        return { title: 'Taylor is unavailable · X Agents', robots: { index: false, follow: false } };
+    }
 
     if (slug === 'amy') {
         return {
@@ -53,6 +58,14 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
     const agent = ALL_AGENTS.find((a) => a.slug === slug);
     if (!agent) notFound();
 
+    if (agent.paused) {
+        return <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-zinc-950 px-6 text-center text-white">
+            <h1 className="text-3xl font-semibold">{agent.name} is unavailable</h1>
+            <p className="max-w-md text-zinc-400">This agent is paused while we review its demo.</p>
+            <Link href="/#agents" className="rounded-md border border-white/20 px-5 py-3 text-sm hover:bg-white/10">Browse other X Agents</Link>
+        </main>;
+    }
+
     if (agent.slug === 'amy') {
         const rawMeetingProvider = Array.isArray(resolvedSearchParams.meeting)
             ? resolvedSearchParams.meeting[0]
@@ -62,8 +75,8 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
             || rawMeetingProvider === 'teams'
             ? rawMeetingProvider
             : null;
-        if (meetingProvider) return <AmyMeetingConcierge initialProvider={meetingProvider} />;
-        return <AmyInsightLanding />;
+        if (meetingProvider) return <AgentAccessGate agent="amy" capability="meeting" showAuthorizedCheckpoint><AmyMeetingConcierge initialProvider={meetingProvider} /></AgentAccessGate>;
+        return <AgentAccessGate agent="amy" showAuthorizedCheckpoint><AmyInsightLanding /></AgentAccessGate>;
     }
 
     if (agent.slug === 'dani') {
@@ -78,12 +91,13 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
             || rawMeetingProvider === 'teams'
             ? rawMeetingProvider
             : null;
-        return (
+        const landing = (
             <DaniEditorialLanding
                 sessionComplete={rawSessionState === 'complete'}
                 meetingProvider={meetingProvider}
             />
         );
+        return <AgentAccessGate agent="dani" capability={meetingProvider ? 'meeting' : 'conversation'} showAuthorizedCheckpoint>{landing}</AgentAccessGate>;
     }
 
     if (agent.slug === 'evan') {
@@ -95,11 +109,11 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
             || rawMeetingProvider === 'teams'
             ? rawMeetingProvider
             : null;
-        if (meetingProvider) return <EvanMeetingScheduler initialProvider={meetingProvider} />;
-        return <EvanLandingPage agent={agent} />;
+        if (meetingProvider) return <AgentAccessGate agent="evan" capability="meeting" showAuthorizedCheckpoint><EvanMeetingScheduler initialProvider={meetingProvider} /></AgentAccessGate>;
+        return <AgentAccessGate agent="evan" showAuthorizedCheckpoint><EvanLandingPage agent={agent} /></AgentAccessGate>;
     }
 
-    return (
+    return <AgentAccessGate agent={agent.slug} showAuthorizedCheckpoint>
         <main className="min-h-screen bg-zinc-950 pt-20">
             {/* Cinematic backdrop */}
             <div className="relative w-full h-[50vh] overflow-hidden">
@@ -186,5 +200,5 @@ export default async function AgentDetailPage({ params, searchParams }: Props) {
                 </div>
             </div>
         </main>
-    );
+    </AgentAccessGate>;
 }

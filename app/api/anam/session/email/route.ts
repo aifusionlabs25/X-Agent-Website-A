@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import { queueAmyAnamConversationFollowUp } from '@/lib/anam/agentmail';
 import {
     cancelDaniAnamConversationFollowUp,
@@ -101,6 +102,10 @@ export async function POST(request: Request) {
         if (!isAmy && !isDani && !isEvan) {
             return noStoreJson({ error: 'Email is unavailable for this persona' }, { status: 409 });
         }
+        if (body.userConfirmed) {
+            const accessDenied = await requireAgentAccess(request, isDani ? 'dani' : isEvan ? 'evan' : 'amy', 'actions');
+            if (accessDenied) return accessDenied;
+        }
         const daniSessionSecrets = readDaniAnamSessionSecrets();
         if (isDani && !daniSessionSecrets.configured) {
             return noStoreJson({ error: 'Dani session access is temporarily unavailable' }, { status: 503 });
@@ -111,6 +116,11 @@ export async function POST(request: Request) {
         if (!browserSession) {
             return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
         }
+        const browserDenied = await requireAgentBrowserAccess(
+            request, isDani ? 'dani' : isEvan ? 'evan' : 'amy', browserSession.id,
+            body.userConfirmed ? 'actions' : 'conversation',
+        );
+        if (browserDenied) return browserDenied;
         const sharedContact = isDani ? null : readAmyAnamContactFromRequest({
             request,
             browserSessionId: browserSession.id,

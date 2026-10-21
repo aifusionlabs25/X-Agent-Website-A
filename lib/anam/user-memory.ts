@@ -9,7 +9,6 @@ export const AMY_ANAM_MEMORY_MAX_RECORDS = 8;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
-const MIN_ACCESS_CODE_CHARACTERS = 10;
 const MAX_SUMMARY_CHARACTERS = 1_400;
 const MAX_RECALL_SUMMARY_CHARACTERS = 800;
 
@@ -28,7 +27,6 @@ export type AmyAnamMemoryConfig = {
     killSwitchActive: boolean;
     configured: boolean;
     gatesOpen: boolean;
-    accessCode: string;
     identitySalt: string;
     redisUrl: string;
     redisToken: string;
@@ -100,11 +98,9 @@ export function readAmyAnamMemoryConfig(
     const spine = readAmyAnamSpineConfig(source);
     const enabled = value(source, 'AMY_ANAM_MEMORY_ENABLED') === 'true';
     const killSwitchActive = value(source, 'AMY_ANAM_MEMORY_KILL_SWITCH') !== 'false';
-    const accessCode = value(source, 'AMY_ANAM_MEMORY_ACCESS_CODE');
     const identitySalt = value(source, 'AMY_ANAM_MEMORY_IDENTITY_SALT');
     const configured = Boolean(
         spine.configured
-        && accessCode.length >= MIN_ACCESS_CODE_CHARACTERS
         && identitySalt.length >= 32
     );
     const gatesOpen = enabled
@@ -121,7 +117,6 @@ export function readAmyAnamMemoryConfig(
         killSwitchActive,
         configured,
         gatesOpen,
-        accessCode,
         identitySalt,
         redisUrl: spine.redisUrl,
         redisToken: spine.redisToken,

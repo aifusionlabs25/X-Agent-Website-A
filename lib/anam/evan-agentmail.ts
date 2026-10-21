@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isStoredBrowserAccessAllowed } from '../access/policy.ts';
 import { readAmyAgentMailProviderConfig, sendAmyEmailWithAgentMail } from '../email/amy-email-provider.ts';
 import { createAmyAnamContactToken, readAmyAnamContactToken } from './contact-token.ts';
 import { buildEvanEmailBundle } from './evan-agentmail-templates.ts';
@@ -8,7 +9,7 @@ import type { AmyAnamSessionReceipt, AmyAnamSessionRecord, AmyTranscriptTurn } f
 const TTL = 30 * 24 * 60 * 60;
 const DEFAULT_INBOX = 'hermes-hal@agentmail.to';
 const DEFAULT_INTERNAL = 'aifusionlabs@gmail.com';
-type Options = { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch };
+type Options = { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; accessAllowed?: typeof isStoredBrowserAccessAllowed };
 type PipelineItem = { result?: unknown; error?: string };
 
 type Intent = {
@@ -114,6 +115,9 @@ export async function queueEvanAnamConversationFollowUp(input: {
     email: string;
     contactSecret: string;
 }, options: Options = {}) {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('evan', input.browserSessionId, 'actions')) {
+        throw new Error('Evan email approval is required');
+    }
     if (!readEvanAnamAgentMailConfig(options.env ?? process.env).effectiveGateOpen) throw new Error('Evan AgentMail is unavailable');
     const receiptId = createHash('sha256').update(`evan:anam:agentmail:intent:v1:${input.externalSessionId}`).digest('hex').slice(0, 32);
     const intent: Intent = {
@@ -147,12 +151,16 @@ export async function queueEvanAnamConversationFollowUp(input: {
 
 export async function sendEvanAnamConversationFollowUp(input: {
     externalSessionId: string;
+    browserSessionId: string;
     displayName: string;
     email: string;
     sessionStartedAt: string;
     sessionEndedAt: string;
     turns: AmyTranscriptTurn[] | unknown;
 }, options: Options = {}) {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('evan', input.browserSessionId, 'actions')) {
+        return { status: 'email_unavailable' as const, sent: false as const };
+    }
     const config = readEvanAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) throw new Error('Evan AgentMail is unavailable');
     const receiptId = createHash('sha256').update(`evan:anam:agentmail:v1:${input.externalSessionId}`).digest('hex').slice(0, 32);
@@ -191,6 +199,9 @@ export async function sendEvanAnamConversationFollowUp(input: {
             turns: normalizeAmyTranscript(input.turns),
         });
         const providerOptions = { ...options, env: config.providerEnv };
+        if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('evan', input.browserSessionId, 'actions')) {
+            throw new Error('Evan email approval is required');
+        }
         const [visitor, admin, sales] = await Promise.allSettled([
             sendAmyEmailWithAgentMail({ to: input.email, ...bundle.visitor }, providerOptions),
             sendAmyEmailWithAgentMail({ to: config.adminEmail, ...bundle.admin }, providerOptions),
@@ -220,6 +231,9 @@ export async function dispatchEvanAnamPostSessionFollowUp(input: {
     receipt: AmyAnamSessionReceipt;
     turns: AmyTranscriptTurn[] | unknown;
 }, options: Options = {}) {
+    if (!await (options.accessAllowed ?? isStoredBrowserAccessAllowed)('evan', input.session.browserSessionId, 'actions')) {
+        return { status: 'email_unavailable' as const, sent: false as const };
+    }
     if (!readEvanAnamAgentMailConfig(options.env ?? process.env).effectiveGateOpen) {
         return { status: 'email_unavailable' as const, sent: false as const };
     }
@@ -239,6 +253,7 @@ export async function dispatchEvanAnamPostSessionFollowUp(input: {
     }
     const result = await sendEvanAnamConversationFollowUp({
         externalSessionId: input.session.externalSessionId,
+        browserSessionId: input.session.browserSessionId,
         displayName: intent.displayName,
         email: contact.email,
         sessionStartedAt: input.session.boundAt,

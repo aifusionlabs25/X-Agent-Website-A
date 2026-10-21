@@ -115,7 +115,12 @@ requireExact('AMY_ANAM_MEMORY_ENABLED', 'true');
 requireExact('AMY_ANAM_MEMORY_KILL_SWITCH', 'false');
 requireExact('AMY_ANAM_MEMORY_PROMOTION_ENABLED', 'true');
 requireExact('AMY_ANAM_MEMORY_PROMOTION_KILL_SWITCH', 'false');
-requireValue('AMY_ANAM_MEMORY_ACCESS_CODE', 8);
+// Shared verified-email access replaces Amy's reusable pilot code.
+requireValue('RESEND_API_KEY', 16);
+if (env.XAGENT_AUTH_SECRET !== undefined) requireValue('XAGENT_AUTH_SECRET', 32);
+if (value('NEXTAUTH_URL') && value('NEXTAUTH_URL').replace(/\/$/, '') !== 'https://xagent.aifusionlabs.app') {
+    failures.push('NEXTAUTH_URL must match the canonical production site.');
+}
 requireValue('AMY_ANAM_MEMORY_OPERATOR_SECRET', 32);
 
 const redisUrl = requireValue('AMY_ANAM_REDIS_REST_URL', 12).replace(/\/$/, '');

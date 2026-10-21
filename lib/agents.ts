@@ -9,6 +9,7 @@ export interface AgentData {
   thumbnailSrc: string;
   accentColor: string;
   liveUrl: string;
+  paused?: boolean;
   tenant?: string; // Fictional tenant name for demo agents
   companyUrl?: string; // Target URL for follow-up
   logoSrc?: string; // Dynamic path for logo
@@ -32,6 +33,7 @@ export const ALL_AGENTS: AgentData[] = [
     thumbnailSrc: "/agents/thumbnails/Taylor_Canyon_Ridge_thumb_512.png",
     accentColor: "#10b981",
     liveUrl: "/demo/taylor",
+    paused: true,
     tenant: "Canyon Ridge Solutions",
   },
   {
@@ -112,6 +114,10 @@ export const ALL_AGENTS: AgentData[] = [
     logoSrc: "/agents/thumbnails/Evan Mullins Moving logo.png",
   },
 ];
+
+export function isAgentPaused(slug: string): boolean {
+  return ALL_AGENTS.find((agent) => agent.slug === slug)?.paused === true;
+}
 
 // Sales row
 export const SALES_AGENTS: AgentData[] = [

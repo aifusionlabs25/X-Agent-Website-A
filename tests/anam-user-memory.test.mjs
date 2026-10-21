@@ -82,11 +82,11 @@ function memoryFetch() {
     return { fetchImpl, store };
 }
 
-test('memory gates require the session spine, access code, salt, and explicit switches', () => {
+test('memory gates require the session spine, salt, and explicit switches independently of the retired access code', () => {
     assert.equal(readAmyAnamMemoryConfig(env).gatesOpen, true);
     assert.equal(readAmyAnamMemoryConfig(env).promotionGatesOpen, true);
     assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_ACCESS_CODE: '12345678901' }).gatesOpen, true);
-    assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_ACCESS_CODE: '123456789' }).configured, false);
+    assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_ACCESS_CODE: '' }).configured, true);
     assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_KILL_SWITCH: 'true' }).gatesOpen, false);
     assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_IDENTITY_SALT: '' }).configured, false);
     assert.equal(readAmyAnamMemoryConfig({ ...env, AMY_ANAM_MEMORY_OPERATOR_SECRET: '' }).promotionGatesOpen, false);
@@ -316,12 +316,13 @@ test('check-in pauses before launch and clearly reports whether prior memory was
     assert.match(gate, /status\.authenticated && checkInResult/);
     assert.match(gate, /Previous conversation found\./);
     assert.match(gate, /No previous conversation found\./);
-    assert.match(gate, /check the email spelling/i);
-    assert.match(gate, /Check email/);
+    assert.match(gate, /signed-in account/i);
+    assert.match(gate, /Review preferences/);
     assert.match(gate, /Continue fresh/);
     assert.match(gate, /Your email stays private and is never shown to Amy\./);
-    assert.match(gate, /post-session recap, Visual Brief, and follow-up support/i);
-    assert.match(gate, /By continuing, you agree to receive Amy&apos;s session follow-up/i);
-    assert.match(gate, /will not ask you to repeat or confirm the address/i);
+    assert.match(gate, /Memory and email follow-up are optional/i);
+    assert.match(gate, /checked=\{followUpConsent\}/);
+    assert.match(gate, /readOnly/);
+    assert.doesNotMatch(gate, /value=\{accessCode\}/);
     assert.match(gate, /<details className="hidden">/);
 });

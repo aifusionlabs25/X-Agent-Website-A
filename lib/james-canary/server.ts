@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { NextResponse, after } from 'next/server.js';
+import { bindAgentAccessBrowser, requireAgentAccess, requireAgentBrowserAccess } from '../access/policy.ts';
 import { AMY_ANAM_BROWSER_COOKIE, amyAnamCookieOptions, createAmyAnamBrowserSessionWithSecret,
     readAmyAnamBrowserSession, readAmyAnamSpineConfig, createAmyAnamLaunch, isTrustedBrowserOrigin,
     readBoundedJsonObject, isUuid, requestFingerprint } from '../anam/session-spine.ts';
@@ -59,6 +60,8 @@ async function save(previous:Session|null,next:Session) {
 async function load(req:Request,id:unknown) {
     if(!isUuid(id))throw new Error('Invalid session identifier');
     const owner=browser(req); if(!owner)throw new Error('Session browser authorization expired');
+    const accessDenied=await requireAgentBrowserAccess(req,'james',owner.id);
+    if(accessDenied)throw accessDenied;
     const raw=await redis(['GET',prefix+id]); if(typeof raw!=='string')throw new Error('Session is unavailable or expired');
     const session=decode(raw,id); if(session.browserId!==owner.id)throw new Error('Session belongs to a different browser'); return session;
 }
@@ -68,6 +71,8 @@ function launch(session:Session) {
 }
 async function get(req:Request) {
     try {
+        const accessDenied=await requireAgentAccess(req,'james');
+        if(accessDenied)return accessDenied;
         const search=new URL(req.url).searchParams, id=search.get('id');
         let current=await load(req,id);
         const originalId=current.id;
@@ -94,6 +99,7 @@ async function get(req:Request) {
         return json({...view(current),...(current.id!==originalId?{previousSessionId:originalId}:{})});
     }
     catch(error){
+        if(error instanceof Response)return error;
         const message=error instanceof Error?error.message:'Session unavailable';
         // Expired note recovery must not become an expiry of James himself.
         // Storage outages and foreign-browser records remain errors, not reset permission.
@@ -117,6 +123,7 @@ function scheduleOwnerEmails(req:Request,session:Session) {
     if(!emailAllowed||!session.demoEmail?.automaticOwner||session.demoEmail.deliveries||session.demoEmail.automaticError||!session.providerId)return;
     (options.afterResponse||after)(async()=>{
         try{
+            if(await requireAgentAccess(req,'james','actions'))return;
             if(await redis(['SET',prefix+'automatic-email-worker:'+session.id,'1','NX','EX',180])!=='OK')return;
             // Reload after the closing response. Durable CAS reservations, not this
             // callback, arbitrate duplicate close events and simultaneous tabs.
@@ -147,8 +154,14 @@ function scheduleOwnerEmails(req:Request,session:Session) {
 async function post(req:Request) {
     let restartClaim:{key:string;id:string}|undefined;
     try {
+        const accessDenied=await requireAgentAccess(req,'james');
+        if(accessDenied)return accessDenied;
         if(!isTrustedBrowserOrigin(req))return json({error:'Request origin is not allowed'},403);
         const body=await readBoundedJsonObject(req,20*1024);
+        if(['demo-email-preflight','owner-test-preflight','preview-demo-email','send-demo-email'].includes(String(body.action))){
+            const actionsDenied=await requireAgentAccess(req,'james','actions');
+            if(actionsDenied)return actionsDenied;
+        }
         if(body.action==='demo-email-preflight'){
             if(!emailAllowed)throw new Error('Demo email is unavailable on this surface');
             const grant=verifyDemoGrant(req.headers.get('x-james-demo-access'));
@@ -163,12 +176,15 @@ async function post(req:Request) {
         }
         if(body.action==='start') {
             const ownerToken=req.headers.get('x-james-owner-test');
+            const demoToken=req.headers.get('x-james-demo-access');
+            const actionsDenied=(emailAllowed||ownerToken||demoToken)
+                ?await requireAgentAccess(req,'james','actions'):null;
+            if((ownerToken||demoToken)&&actionsDenied)return actionsDenied;
             if(options.allowDemoEmail&&ownerToken)throw new Error('Legacy owner authorization is not valid on this surface');
             const grant=ownerToken?verifyOwnerGrant(ownerToken):null;
             if(grant)emailConfiguration();
-            const demoToken=req.headers.get('x-james-demo-access');
             if(demoToken&&!emailAllowed)throw new Error('Demo email is unavailable on this surface');
-            const visitorEmail=Boolean(emailAllowed&&process.env.JAMES_DEMO_EMAIL_ENABLED==='true'&&readDemoAccessMode()==='visitor');
+            const visitorEmail=Boolean(!actionsDenied&&emailAllowed&&process.env.JAMES_DEMO_EMAIL_ENABLED==='true'&&readDemoAccessMode()==='visitor');
             if(visitorEmail&&demoToken)throw new Error('No email access code is needed; start without an operator code');
             const demoGrant=demoToken?verifyDemoGrant(demoToken):null;
             const rate=await consumeAmyAnamDistributedRateLimit({fingerprint:requestFingerprint(req,prefix+'start'),limit:5,windowSeconds:600});
@@ -199,7 +215,9 @@ async function post(req:Request) {
             const emailBundle=demoTransport?.bundle?{bundle:demoTransport.bundle,recipientMode:demoTransport.recipientMode,
                 ...(options.automaticOwnerEmail&&demoTransport.bundle==='three'&&demoTransport.recipientMode==='owner'?{automaticOwner:true as const}:{})}:{};
             let owner=browser(req), token:string|undefined;
+            if(owner&&await requireAgentBrowserAccess(req,'james',owner.id))owner=null;
             if(!owner){const created=createAmyAnamBrowserSessionWithSecret(secret());owner=created.session;token=created.token;}
+            await bindAgentAccessBrowser(req,'james',owner.id);
             const p=await provider('/personas/'+PERSONA_ID,undefined,options.runtimeClose?'persona-fetch':undefined);
             if(p.id!==PERSONA_ID)throw new Error('Persona identity did not match');
             const state:Session={id,browserId:owner.id,clientLabel:(options.allowDemoEmail?'xagent-james-notepad:':'xagent-james-canary:')+id,createdAt:new Date().toISOString(),revision:0,stateHash:'',
@@ -340,6 +358,8 @@ async function post(req:Request) {
         next=receipt(current,next,body);await save(current,next);
         if(body.action==='close')scheduleOwnerEmails(req,next);
         if(body.action==='close'&&next.ownerTest&&next.intake.handoff==='PREPARED'){
+            const actionsDenied=await requireAgentAccess(req,'james','actions');
+            if(actionsDenied)return json({...view(next),operation_notice:'Session closed. Email is not authorized for this access grant.'});
             try{next=await sendPreparedOwnerTest(next,{save,stamp:receipt});}
             catch{return json({...view(next),operation_notice:'Session closed. Legacy owner email requires attention; inspect saved state before any further action.'});}
         }
@@ -348,6 +368,7 @@ async function post(req:Request) {
         if(restartClaim)try{
             await redis(['EVAL',"if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end",1,restartClaim.key,restartClaim.id]);
         }catch{/* The bounded reservation expires; never remove another attempt's claim. */}
+        if(error instanceof Response)return error;
         return json({error:error instanceof Error?error.message:'Canary operation failed'},400);
     }
 }

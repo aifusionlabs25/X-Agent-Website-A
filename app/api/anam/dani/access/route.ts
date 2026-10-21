@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { bindAgentAccessBrowser, requireAgentAccess, requireAgentEntryAccess, requireAgentEntryBrowserAccess } from '@/lib/access/policy';
+import { readAccessIdentity } from '@/lib/access/auth';
 import {
     AmyAnamRequestError,
     isTrustedBrowserOrigin,
@@ -93,6 +95,8 @@ function status(input: {
 
 export async function GET(request: Request) {
     try {
+        const accessDenied = await requireAgentEntryAccess(request, 'dani');
+        if (accessDenied) return accessDenied;
         const spine = readAmyAnamSpineConfig();
         const daniSession = readDaniAnamSessionSecrets();
         if (!spine.gatesOpen || !daniSession.configured) {
@@ -109,6 +113,8 @@ export async function GET(request: Request) {
                 memoryAvailable: memoryEnrollmentAvailable,
             }));
         }
+        const browserDenied = await requireAgentEntryBrowserAccess(request, 'dani', browser.id);
+        if (browserDenied) return browserDenied;
 
         const cookieContact = emailConfig.effectiveGateOpen
             ? readDaniAnamContactFromRequest({
@@ -154,6 +160,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        const body = await readBoundedJsonObject(request, 4 * 1024);
+        const accessDenied = body.meetingBootstrap === true
+            ? await requireAgentAccess(request, 'dani', 'meeting')
+            : await requireAgentEntryAccess(request, 'dani');
+        if (accessDenied) return accessDenied;
+        if (body.followUpConsent === true) {
+            const actionsDenied = await requireAgentAccess(request, 'dani', 'actions');
+            if (actionsDenied) return actionsDenied;
+        }
         if (!isTrustedBrowserOrigin(request)) {
             return json({ error: 'Request origin is not allowed' }, { status: 403 });
         }
@@ -174,7 +189,6 @@ export async function POST(request: Request) {
             });
         }
 
-        const body = await readBoundedJsonObject(request, 4 * 1024);
         const allowedFields = new Set([
             'meetingBootstrap',
             'guest',
@@ -187,12 +201,16 @@ export async function POST(request: Request) {
             return json({ error: 'Session request contained unsupported fields' }, { status: 400 });
         }
 
-        const existingBrowser = readDaniAnamBrowserSession(request, daniSession.sessionSecret);
+        const candidateBrowser = readDaniAnamBrowserSession(request, daniSession.sessionSecret);
+        const existingBrowser = candidateBrowser && !await requireAgentEntryBrowserAccess(
+            request, 'dani', candidateBrowser.id,
+        ) ? candidateBrowser : null;
         const created = existingBrowser
             ? null
             : createDaniAnamBrowserSessionWithSecret(daniSession.sessionSecret);
         const browserSession = existingBrowser ?? created?.session;
         if (!browserSession) throw new Error('Dani browser session could not be created');
+        await bindAgentAccessBrowser(request, 'dani', browserSession.id);
         const emailConfig = readDaniAnamAgentMailConfig();
         const memoryConfig = readDaniAnamMemoryConfig();
         const memoryEnrollmentAvailable = memoryConfig.gatesOpen && emailConfig.effectiveGateOpen;
@@ -256,6 +274,10 @@ export async function POST(request: Request) {
             ? body.displayName.normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, 120)
             : '';
         const email = normalizeDaniAnamMemoryEmail(typeof body.email === 'string' ? body.email : '');
+        const accessIdentity = await readAccessIdentity(request);
+        if (!accessIdentity || email !== accessIdentity.email.trim().toLowerCase()) {
+            return json({ error: 'Use the email address you signed in with' }, { status: 403 });
+        }
         if (displayName.length < 2 || /^(?:user|visitor|guest|customer)$/i.test(displayName)) {
             return json({ error: 'Enter the name you would like Dani to use' }, { status: 400 });
         }
@@ -362,7 +384,7 @@ export async function DELETE(request: Request) {
     const browser = daniSession.sessionConfigured
         ? readDaniAnamBrowserSession(request, daniSession.sessionSecret)
         : null;
-    if (browser) {
+    if (browser && !await requireAgentEntryBrowserAccess(request, 'dani', browser.id)) {
         await clearDaniAnamFollowUpAuthorization(browser.id).catch(() => undefined);
         if (readDaniAnamMemoryConfig().gatesOpen) {
             await deleteDaniAnamBrowserIdentity(browser.id).catch(() => undefined);

@@ -11,6 +11,7 @@ type SubmitMode = 'email' | 'guest' | 'verify' | null;
 export default function DaniContactGate({ children }: { children: ReactNode }) {
     const [ready, setReady] = useState(false);
     const [checking, setChecking] = useState(true);
+    const [sessionAvailable, setSessionAvailable] = useState(false);
     const [submitting, setSubmitting] = useState<SubmitMode>(null);
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
@@ -32,7 +33,12 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
             signal: controller.signal,
         }).then(async response => {
             const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+            if (!response.ok) {
+                if (active) setError(typeof payload.error === 'string' ? payload.error : 'Dani session access is temporarily unavailable');
+                return;
+            }
             if (active) {
+                setSessionAvailable(true);
                 const followUpAvailable = payload.emailFollowUpAvailable === true;
                 setEmailFollowUpAvailable(followUpAvailable);
                 setFollowUpConsent(followUpAvailable);
@@ -41,7 +47,9 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
             // A prior guest or verified-contact cookie may remain valid for a few
             // hours, but recap consent is per conversation. Never use prior access
             // state to bypass the entry choice for a new Dani session.
-        }).catch(() => undefined).finally(() => {
+        }).catch(() => {
+            if (active) setError('Dani session access is temporarily unavailable');
+        }).finally(() => {
             if (active) setChecking(false);
         });
         return () => {
@@ -74,6 +82,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                 return;
             }
             if (!response.ok || payload.authenticated !== true) {
+                if (response.status === 503) setSessionAvailable(false);
                 throw new Error(typeof payload.error === 'string' ? payload.error : 'Dani could not be started');
             }
             setEmail('');
@@ -88,7 +97,7 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
     const submitEmail = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!followUpConsent && !memoryConsent) {
-            setError('Choose email recap, returning memory, or continue as a guest.');
+            setError('Choose email recap, returning memory, or continue without a contact email.');
             return;
         }
         await requestAccess('email');
@@ -183,12 +192,19 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                             Bring the problem. I&apos;ll help frame the path.
                         </h2>
                         <p className={`${styles.entryIntro} mt-3 max-w-[40rem] text-sm leading-6 text-[#626861] sm:mt-5 sm:text-[15px] sm:leading-7`}>
-                            {emailFollowUpAvailable || memoryAvailable
-                                ? 'Share a verified email for your recap, optional returning memory, or both. You can also continue as a guest.'
-                                : 'Dani is ready to talk without collecting your name or email. Continue as a guest to begin.'}
+                            {!sessionAvailable
+                                ? 'Dani conversations are temporarily unavailable in this preview.'
+                                : emailFollowUpAvailable || memoryAvailable
+                                ? 'Your agent access is already approved. A verified email for a recap or returning memory is optional; you can begin without sharing contact details.'
+                                : 'Your agent access is already approved. Begin without sharing your name or email.'}
                         </p>
+                        {error && (
+                            <p role="alert" className="mt-5 border-l-4 border-[#b63d2b] bg-[#f1ded5] px-4 py-3 text-sm leading-6 text-[#742a20]">
+                                {error}
+                            </p>
+                        )}
 
-                        {(emailFollowUpAvailable || memoryAvailable || challengeId) && <form
+                        {sessionAvailable && (emailFollowUpAvailable || memoryAvailable || challengeId) && <form
                             className={`${styles.entryForm} mt-5 grid gap-4 sm:mt-7`}
                             onSubmit={challengeId ? verifyEmail : submitEmail}
                             aria-busy={submitting !== null}
@@ -300,12 +316,6 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                                     </label>
                                 </div>
                             )}
-                            {error && (
-                                <p role="alert" className="border-l-4 border-[#b63d2b] bg-[#f1ded5] px-4 py-3 text-sm leading-6 text-[#742a20]">
-                                    {error}
-                                </p>
-                            )}
-
                             <button
                                 type="submit"
                                 disabled={submitting !== null}
@@ -337,17 +347,17 @@ export default function DaniContactGate({ children }: { children: ReactNode }) {
                             )}
                         </form>}
 
-                        {!challengeId && (emailFollowUpAvailable || memoryAvailable) && <div className={`${styles.mono} ${styles.entryDivider} my-3 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#7a7d74]`}>
+                        {sessionAvailable && !challengeId && (emailFollowUpAvailable || memoryAvailable) && <div className={`${styles.mono} ${styles.entryDivider} my-3 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#7a7d74]`}>
                             <span className="h-px flex-1 bg-[#c9c3b4]" /> Or <span className="h-px flex-1 bg-[#c9c3b4]" />
                         </div>}
-                        {!challengeId && <button
+                        {sessionAvailable && !challengeId && <button
                             type="button"
                             disabled={submitting !== null}
                             onClick={() => void requestAccess('guest')}
                             aria-label="Continue without email"
                             className={`${styles.entryAction} group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-[3px] border border-[#a9a292] bg-transparent px-5 text-sm font-extrabold text-[#151b19] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-[#126e64] hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#126e64] disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60 motion-reduce:transform-none`}
                         >
-                            {submitting === 'guest' ? 'Opening Dani...' : 'Continue as a guest'}
+                            {submitting === 'guest' ? 'Opening Dani...' : 'Continue without contact email'}
                             {submitting !== 'guest' && <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />}
                         </button>}
                         <p id="dani-session-privacy" className={`${styles.entryPrivacy} mt-4 flex max-w-[42rem] gap-2.5 text-[11px] leading-5 text-[#626861]`}>

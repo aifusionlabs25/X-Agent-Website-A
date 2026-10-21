@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import { parseEvanRouteToolStops } from '@/lib/anam/evan-address-route';
 import { geocodeEvanRouteStop } from '@/lib/anam/evan-geocoding';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
@@ -18,6 +19,8 @@ function noStoreJson(body: unknown, init?: ResponseInit) {
 }
 
 async function authorize(request: Request): Promise<Response | null> {
+    const accessDenied = await requireAgentAccess(request, 'evan', 'actions');
+    if (accessDenied) return accessDenied;
     if (!isTrustedBrowserOrigin(request)) {
         return noStoreJson({ error: 'Request origin is not allowed' }, { status: 403 });
     }
@@ -29,6 +32,8 @@ async function authorize(request: Request): Promise<Response | null> {
     }
     const browser = readAmyAnamBrowserSession(request, spine.signingSecret);
     if (!browser) return noStoreJson({ error: 'Evan session check-in is required' }, { status: 401 });
+    const browserDenied = await requireAgentBrowserAccess(request, 'evan', browser.id, 'actions');
+    if (browserDenied) return browserDenied;
     const rate = await consumeAmyAnamDistributedRateLimit({
         fingerprint: requestFingerprint(request, 'evan-route-geocode'),
         limit: 24,

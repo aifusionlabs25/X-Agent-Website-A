@@ -1,4 +1,5 @@
 import { after, NextResponse } from 'next/server';
+import { requireAgentAccess, requireAgentBrowserAccess } from '@/lib/access/policy';
 import { finalizeAmyAnamSession } from '@/lib/anam/session-finalizer';
 import {
     readDaniAnamBrowserSession,
@@ -121,6 +122,8 @@ export async function POST(request: Request) {
             launch.resolvedPersonaId,
             launch.agentSlug,
         );
+        const accessDenied = await requireAgentAccess(request, launchAgentSlug);
+        if (accessDenied) return accessDenied;
         if (hasArtifactMetadata && launchAgentSlug !== 'amy') {
             return noStoreJson({ error: 'Displayed artifact metadata did not match this agent' }, { status: 400 });
         }
@@ -134,6 +137,8 @@ export async function POST(request: Request) {
         if (!browserSession) {
             return noStoreJson({ error: 'Session ownership is required' }, { status: 401 });
         }
+        const browserDenied = await requireAgentBrowserAccess(request, launchAgentSlug, browserSession.id);
+        if (browserDenied) return browserDenied;
         if (!launch || launch.browserSessionId !== browserSession.id) {
             return noStoreJson({ error: 'Session ownership did not match' }, { status: 403 });
         }
