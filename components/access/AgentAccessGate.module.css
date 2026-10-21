@@ -49,8 +49,10 @@
 .embedded .title { font-size: clamp(1.8rem, 3vw, 2.4rem); }
 .embedded .loading { min-height: 200px; }
 .monogram { display: grid; place-items: center; position: absolute; inset: 0; color: #b6cba0; font: italic 24rem/.8 Georgia, serif; transform: rotate(-10deg); opacity: .35; }
-.ownerLink { position: fixed; z-index: 120; left: 1rem; bottom: 1rem; border: 1px solid #6d7965; padding: .55rem .75rem; background: #172019e8; color: #f6f5ef; font-size: .7rem; border-radius: 2px; }
-.ownerLink:focus-visible { outline: 3px solid #b6cba0; outline-offset: 3px; }
+.ownerToolbar { position: fixed; z-index: 120; left: 1rem; bottom: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; max-width: calc(100vw - 2rem); border: 1px solid #6d7965; padding: .55rem .75rem; background: #172019f2; color: #f6f5ef; font-size: .7rem; border-radius: 2px; }
+.ownerToolbar button, .ownerToolbar a { color: #d5f2c3; text-decoration: underline; text-underline-offset: 2px; }
+.ownerToolbar button:disabled { opacity: .6; }
+.ownerToolbar button:focus-visible, .ownerToolbar a:focus-visible { outline: 3px solid #b6cba0; outline-offset: 3px; }
 @keyframes access-spin { to { transform: rotate(360deg); } }
 @media (max-width: 700px) {
     .page { padding: 5.5rem 1rem 3rem; }

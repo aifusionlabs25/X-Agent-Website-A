@@ -121,7 +121,11 @@ function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', em
     const current = status?.scope === scope ? status : null;
     if (!checking && !error && current?.authorized === true && current.authenticated === true) return <>
         {children}
-        {current.owner && <Link href="/access/admin" target="_blank" rel="noopener noreferrer" className={styles.ownerLink}>Manage access ↗</Link>}
+        {current.owner && <div className={styles.ownerToolbar}>
+            <span>Owner access active · approval bypassed</span>
+            <button type="button" onClick={() => void logout()} disabled={busy}>Sign out to test visitor view</button>
+            <Link href="/access/admin" target="_blank" rel="noopener noreferrer">Manage access ↗</Link>
+        </div>}
     </>;
     const signInHref = `/access?${new URLSearchParams({ agent: agentSlug, capability, returnTo })}`;
     return (
