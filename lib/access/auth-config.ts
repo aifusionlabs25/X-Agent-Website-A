@@ -12,8 +12,8 @@ export class AccessUnavailableError extends Error {
 type Environment = Record<string, string | undefined>;
 
 export function readAccessRedisConfig(env: Environment = process.env) {
-    const url = env.AMY_ANAM_REDIS_REST_URL?.trim() ?? '';
-    const token = env.AMY_ANAM_REDIS_REST_TOKEN?.trim() ?? '';
+    const url = (env.VERCEL_ENV === 'preview' ? env.KV_REST_API_URL : env.AMY_ANAM_REDIS_REST_URL)?.trim() ?? '';
+    const token = (env.VERCEL_ENV === 'preview' ? env.KV_REST_API_TOKEN : env.AMY_ANAM_REDIS_REST_TOKEN)?.trim() ?? '';
     let validUrl = false;
     try {
         const parsed = new URL(url);

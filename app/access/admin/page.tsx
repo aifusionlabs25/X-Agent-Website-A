@@ -10,9 +10,10 @@ const LABELS: Record<AccessCapability, string> = { conversation: 'Conversations'
 const field = 'w-full rounded-xl border border-white/15 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20';
 
 export default function AccessAdminPage() {
-    const [records, setRecords] = useState<AccessRecord[]>([]);
+    const [records, setRecords] = useState<(AccessRecord & { notificationStatus?: string })[]>([]);
     const [agents, setAgents] = useState<Agent[]>([]);
     const [disabledAgents, setDisabledAgents] = useState<string[]>([]);
+    const [preview, setPreview] = useState(false);
     const [loading, setLoading] = useState(true);
     const [forbidden, setForbidden] = useState(false);
     const [error, setError] = useState('');
@@ -23,6 +24,7 @@ export default function AccessAdminPage() {
     const [days, setDays] = useState(7);
     const [capabilities, setCapabilities] = useState<AccessCapability[]>(['conversation']);
     const [checkedAt, setCheckedAt] = useState(0);
+    const openedRequest = useRef(false);
     const controller = useRef<AbortController | null>(null);
 
     const refresh = useCallback(() => {
@@ -37,8 +39,17 @@ export default function AccessAdminPage() {
             if (!Array.isArray(data.records) || !Array.isArray(data.agents) || !Array.isArray(data.disabledAgents)) {
                 throw new Error('Access controls could not be loaded. Please refresh.');
             }
+            setPreview(data.preview === true);
             setForbidden(false); setRecords(data.records); setAgents(data.agents); setDisabledAgents(data.disabledAgents);
             setCheckedAt(Date.now());
+            const requestId = new URLSearchParams(window.location.search).get('request');
+            const selected = data.records.find((record: AccessRecord) => record.notificationId === requestId);
+            if (selected && !openedRequest.current) {
+                openedRequest.current = true;
+                setEmail(selected.email); setAgent(selected.agent);
+                setCapabilities([...new Set<AccessCapability>([...selected.capabilities, ...(selected.requestedCapabilities ?? [])])]);
+                setNotice('Request opened from email. Review permissions and expiry before saving.');
+            }
             setAgent(current => current || data.agents[0]?.slug || '');
         }).catch(caught => {
             if (active.signal.aborted) return;
@@ -54,7 +65,7 @@ export default function AccessAdminPage() {
             const response = await fetch('/api/access/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error ?? 'The change could not be saved');
-            setNotice(message); await refresh();
+            setNotice(message + (data.notification === 'pending' ? ' Email delivery is pending. Use Retry email below.' : data.notification === 'sent' ? ' Notification emails were accepted for delivery.' : '')); await refresh();
         } catch (caught) { setError(caught instanceof Error ? caught.message : 'The change could not be saved'); }
         finally { setSaving(false); }
     }
@@ -73,15 +84,21 @@ export default function AccessAdminPage() {
     return <main className="min-h-screen bg-[#090b12] px-5 pb-24 pt-28 text-zinc-100 sm:px-10">
         <div className="mx-auto max-w-6xl">
             <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white"><ArrowLeft size={16} /> Back to X Agents</Link>
+            <Link href="/access/owner" className="mb-6 ml-6 inline-block text-sm text-indigo-300">Owner sign-in &amp; passkeys</Link>
             <header className="mb-9 flex flex-wrap items-end justify-between gap-5">
                 <div><p className="mb-3 text-xs font-semibold uppercase tracking-[.2em] text-indigo-300">Private pilot · Owner controls</p><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Decide who gets access.</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">Approve a person for specific agents. Sign-in verifies their email; these permissions determine what they can do.</p></div>
                 <button onClick={() => { setLoading(true); void refresh(); }} disabled={loading || saving} className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-3 text-sm hover:bg-white/5 disabled:opacity-50"><RefreshCw size={15} /> Refresh</button>
             </header>
             {error && <p role="alert" className="mb-6 rounded-xl border border-red-400/25 bg-red-400/10 p-4 text-sm text-red-200">{error}</p>}
             {notice && <p role="status" className="mb-6 flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-100"><Check size={16} />{notice}</p>}
-            {loading ? <p className="py-12 text-zinc-400">Loading access controls…</p> : forbidden ? <div className="rounded-2xl border border-white/10 bg-white/[.03] p-8"><LockKeyhole className="mb-4 text-indigo-300" /><h2 className="text-xl font-semibold">Owner sign-in required</h2><p className="my-4 text-sm text-zinc-400">Use the site owner’s email address to manage approvals.</p><Link href="/access?returnTo=%2Faccess%2Fadmin" className="inline-block rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold hover:bg-indigo-400">Sign in</Link></div> : agents.length > 0 && <>
+            {loading ? <p className="py-12 text-zinc-400">Loading access controls…</p> : forbidden ? <div className="rounded-2xl border border-white/10 bg-white/[.03] p-8"><LockKeyhole className="mb-4 text-indigo-300" /><h2 className="text-xl font-semibold">Owner sign-in required</h2><p className="my-4 text-sm text-zinc-400">Use your owner passkey or email to manage approvals.</p><Link href={`/access/owner?returnTo=${encodeURIComponent(typeof window === 'undefined' ? '/access/admin' : window.location.pathname + window.location.search)}`} className="inline-block rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold hover:bg-indigo-400">Sign in</Link></div> : agents.length > 0 && <>
+                {preview && <section className="mb-8 rounded-xl border border-amber-300/25 bg-amber-300/10 p-5">
+                    <h2 className="font-semibold text-amber-100">Preview mailbox test</h2>
+                    <p className="my-3 text-sm text-zinc-300">All notification copies go to the owner inbox. This sample visitor is fictional and has no live-site access. Choose an agent below, then send a sample request. Open the email to review and approve it.</p>
+                    <button disabled={saving} onClick={() => void update({ operation: 'preview-request', agent }, 'Sample request saved.')} className="rounded-lg border border-amber-200/30 px-4 py-2 text-sm text-amber-100">Send sample request</button>
+                </section>}
                 <section id="access-editor" className="mb-10 grid scroll-mt-28 gap-8 rounded-2xl border border-white/10 bg-white/[.025] p-6 md:grid-cols-[.75fr_1.25fr] md:p-8">
-                    <div><ShieldCheck className="mb-4 text-indigo-300" /><h2 className="text-xl font-semibold">Approve or update a tester</h2><p className="mt-3 text-sm leading-6 text-zinc-400">You can approve someone before they request access. They sign in using the exact email below. No invitation email is sent by this form.</p><p className="mt-4 text-sm leading-6 text-zinc-400">Revocation blocks new sessions and protected requests. A conversation or meeting already running may continue until it ends.</p></div>
+                    <div><ShieldCheck className="mb-4 text-indigo-300" /><h2 className="text-xl font-semibold">Approve or update a tester</h2><p className="mt-3 text-sm leading-6 text-zinc-400">You can approve someone before they request access. They sign in using the exact email below. A decision email is sent to the visitor and a confirmation to the owner inbox.</p><p className="mt-4 text-sm leading-6 text-zinc-400">Revocation blocks new sessions and protected requests. A conversation or meeting already running may continue until it ends.</p></div>
                     <form onSubmit={approve} className="grid gap-5 sm:grid-cols-2">
                         <label className="space-y-2 text-sm sm:col-span-2"><span>Tester’s email</span><input id="access-editor-email" className={field} type="email" required value={email} onChange={event => setEmail(event.target.value)} autoComplete="off" /></label>
                         <label className="space-y-2 text-sm"><span>Agent</span><select className={field} value={agent} onChange={event => setAgent(event.target.value)}>{agents.map(item => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>
@@ -93,7 +110,7 @@ export default function AccessAdminPage() {
                 <section className="mb-10"><h2 className="mb-4 text-xl font-semibold">Requests and approvals</h2><p className="mb-4 text-sm text-zinc-500">Most recent 200 records. Requests appear here after a tester verifies their email.</p>
                     {records.length === 0 ? <div className="rounded-xl border border-dashed border-white/15 p-8 text-sm text-zinc-400">No requests yet. You can approve your first tester above.</div> : <div className="overflow-x-auto rounded-xl border border-white/10"><table className="w-full text-left text-sm"><thead className="bg-white/5 text-xs uppercase tracking-wider text-zinc-400"><tr>{['Tester / agent', 'Status / expiry', 'Permissions', 'Actions'].map(label => <th key={label} className="px-5 py-4 font-medium">{label}</th>)}</tr></thead><tbody>{records.map(record => {
                         const expired = record.status === 'approved' && Boolean(record.expiresAt && Date.parse(record.expiresAt) <= checkedAt);
-                        return <tr key={`${record.email}:${record.agent}`} className="border-t border-white/10 align-top"><td className="px-5 py-4"><p>{record.email}</p><p className="mt-1 text-xs text-zinc-500">{agents.find(item => item.slug === record.agent)?.name ?? record.agent}</p></td><td className="px-5 py-4"><span className={record.status === 'approved' && !expired ? 'text-emerald-300' : 'text-amber-200'}>{expired ? 'Expired' : record.status}</span>{record.expiresAt && <p className="mt-1 whitespace-nowrap text-xs text-zinc-500">{new Date(record.expiresAt).toLocaleDateString()}</p>}</td><td className="px-5 py-4 text-zinc-400">{record.capabilities.map(item => LABELS[item]).join(', ')}{Boolean(record.requestedCapabilities?.length) && <p className="mt-1 text-amber-200">Requested: {record.requestedCapabilities!.map(item => LABELS[item]).join(', ')}</p>}</td><td className="px-5 py-4"><div className="flex flex-wrap gap-3"><button disabled={saving} onClick={() => review(record)} className="text-indigo-300 hover:text-indigo-100">Review</button>{record.status === 'approved' ? <button disabled={saving} onClick={() => void update({ operation: 'revoke', email: record.email, agent: record.agent }, 'Access revoked.')} className="text-red-300 hover:text-red-100">Revoke</button> : record.status === 'pending' && <button disabled={saving} onClick={() => void update({ operation: 'decline', email: record.email, agent: record.agent }, 'Request declined.')} className="text-zinc-400 hover:text-white">Decline</button>}</div></td></tr>;
+                        return <tr key={`${record.email}:${record.agent}`} className="border-t border-white/10 align-top"><td className="px-5 py-4"><p>{record.email}</p><p className="mt-1 text-xs text-zinc-500">{agents.find(item => item.slug === record.agent)?.name ?? record.agent}</p></td><td className="px-5 py-4"><span className={record.status === 'approved' && !expired ? 'text-emerald-300' : 'text-amber-200'}>{expired ? 'Expired' : record.status}</span>{record.expiresAt && <p className="mt-1 whitespace-nowrap text-xs text-zinc-500">{new Date(record.expiresAt).toLocaleDateString()}</p>}</td><td className="px-5 py-4 text-zinc-400">{record.capabilities.map(item => LABELS[item]).join(', ')}{Boolean(record.requestedCapabilities?.length) && <p className="mt-1 text-amber-200">Requested: {record.requestedCapabilities!.map(item => LABELS[item]).join(', ')}</p>}</td><td className="px-5 py-4"><div className="flex flex-wrap gap-3">{record.notificationStatus === 'pending' && <button disabled={saving} onClick={() => void update({ operation: 'retry-notification', email: record.email, agent: record.agent }, 'Email retry finished.')} className="text-amber-200">Retry email</button>}<button disabled={saving} onClick={() => review(record)} className="text-indigo-300 hover:text-indigo-100">Review</button>{record.status === 'approved' ? <button disabled={saving} onClick={() => void update({ operation: 'revoke', email: record.email, agent: record.agent }, 'Access revoked.')} className="text-red-300 hover:text-red-100">Revoke</button> : record.status === 'pending' && <button disabled={saving} onClick={() => void update({ operation: 'decline', email: record.email, agent: record.agent }, 'Request declined.')} className="text-zinc-400 hover:text-white">Decline</button>}</div></td></tr>;
                     })}</tbody></table></div>}
                 </section>
                 <section><h2 className="mb-4 text-xl font-semibold">Agent availability</h2><p className="mb-5 text-sm text-zinc-400">Pause access for everyone, including the owner. Public profiles stay visible.</p><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{agents.map(item => { const disabled = disabledAgents.includes(item.slug); return <div key={item.slug} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.025] p-4"><div><p className="font-medium">{item.name}</p><p className="mt-1 text-xs text-zinc-500">{disabled ? 'Paused' : 'Approved testers only'}</p></div><button disabled={saving} onClick={() => void update({ operation: 'set-agent-state', agent: item.slug, disabled: !disabled }, `${item.name} access ${disabled ? 'resumed' : 'paused'}.`)} className={`rounded-lg border px-3 py-2 text-xs ${disabled ? 'border-emerald-400/30 text-emerald-200' : 'border-white/15 text-zinc-300'} disabled:opacity-40`}>{disabled ? 'Resume' : 'Pause'}</button></div>; })}</div></section>

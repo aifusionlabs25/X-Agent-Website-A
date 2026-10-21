@@ -107,6 +107,7 @@ export default function AccessSignIn({ agentSlug, returnTo, verifyRequest = fals
                     <div className={styles.actions}><button type="submit" className={styles.primary} disabled={submitting || !email.trim()}>{submitting ? <LoaderCircle className={styles.spinner} size={16} /> : <Mail size={16} />}{submitting ? 'Sending link…' : 'Email me a sign-in link'}</button></div>
                 </form>}
             <p className={styles.footnote}>Signing in verifies your email. Agent access is granted separately by the owner.</p>
+            <Link className={styles.backLink} href={`/access/owner?returnTo=${encodeURIComponent(destination)}`}>Owner sign-in</Link>
         </>}
     </AccessFrame>;
 }

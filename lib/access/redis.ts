@@ -1,4 +1,5 @@
 import { Redis, type Requester } from '@upstash/redis';
+import { createHash } from 'node:crypto';
 import { AccessUnavailableError, readAccessRedisConfig } from './auth-config.ts';
 
 export async function accessRedisCommand(command: (string | number)[]): Promise<unknown> {
@@ -7,6 +8,9 @@ export async function accessRedisCommand(command: (string | number)[]): Promise<
         throw new AccessUnavailableError();
     }
     try {
+        // Preview keys are isolated from production and other preview branches,
+        // even when the hosting integration points at the same Redis instance.
+        if (process.env.VERCEL_ENV === 'preview') command = previewAccessCommand(command);
         const response = await fetch(config.url, {
             method: 'POST', cache: 'no-store', redirect: 'error',
             headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
@@ -28,6 +32,23 @@ export async function accessRedisCommand(command: (string | number)[]): Promise<
         if (!payload || payload.error || !Object.prototype.hasOwnProperty.call(payload, 'result')) throw new AccessUnavailableError();
         return payload.result;
     } catch { throw new AccessUnavailableError(); }
+}
+
+export function previewAccessCommand(command: (string | number)[]): (string | number)[] {
+    const scope = process.env.VERCEL_GIT_COMMIT_REF || process.env.VERCEL_URL;
+    if (!scope) throw new AccessUnavailableError();
+    const prefix = `xagent:preview:${createHash('sha256').update(scope).digest('hex').slice(0, 24)}:`;
+    const result = [...command];
+    const op = String(command[0]).toUpperCase();
+    const indices = op === 'EVAL' ? Array.from({ length: Number(command[2]) }, (_, index) => index + 3)
+        : ['MGET', 'DEL'].includes(op) ? command.slice(1).map((_, index) => index + 1)
+            : ['GET', 'GETDEL', 'SET', 'SMEMBERS', 'SADD', 'SREM', 'ZREVRANGE'].includes(op) ? [1] : [];
+    if (!indices.length) throw new AccessUnavailableError();
+    for (const index of indices) {
+        const key = String(result[index]);
+        result[index] = key.startsWith(prefix) ? key : prefix + key;
+    }
+    return result;
 }
 
 // The maintained adapter still uses the official SDK for command serialization

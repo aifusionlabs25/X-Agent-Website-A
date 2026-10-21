@@ -99,7 +99,7 @@ test('production, preview, forwarded-host and mutation origins are bounded', () 
     assert.equal(isTrustedAccessRequest(request(null, { 'x-forwarded-proto': 'http' }), config), false);
     assert.equal(isTrustedAccessRequest(new Request(`${ORIGIN}/api/auth/signin/email`, { method: 'POST' }), config), false);
     assert.equal(isTrustedAccessRequest(new Request(`${ORIGIN}/api/auth/signin/email`, { method: 'POST', headers: { origin: ORIGIN } }), config), true);
-    const preview = readAccessAuthConfig({ ...ENV, VERCEL_ENV: 'preview', VERCEL_URL: 'x-agent-offline.vercel.app' });
+    const preview = readAccessAuthConfig({ ...ENV, KV_REST_API_URL: ENV.AMY_ANAM_REDIS_REST_URL, KV_REST_API_TOKEN: ENV.AMY_ANAM_REDIS_REST_TOKEN, VERCEL_ENV: 'preview', VERCEL_URL: 'x-agent-offline.vercel.app' });
     assert.equal(preview.configured, true);
     assert.equal(isTrustedAccessRequest(new Request('https://x-agent-offline.vercel.app/api/access'), preview), true);
     assert.equal(isTrustedAccessRequest(request(), preview), false);

@@ -1,4 +1,5 @@
 import { readAccessIdentity } from '@/lib/access/auth';
+import { deliverAccessNotifications } from '@/lib/access/notifications';
 import { accessJson } from '@/lib/access/policy';
 import { consumeAccessRate, isAccessAgent, isAccessCapability, requestAccess } from '@/lib/access/grants';
 import { AmyAnamRequestError, isTrustedBrowserOrigin, readBoundedJsonObject, requestFingerprint } from '@/lib/anam/session-spine';
@@ -15,8 +16,9 @@ export async function POST(request: Request) {
             || !await consumeAccessRate(requestFingerprint(request, 'shared-access-request'), 50, 3600)) {
             return accessJson({ error: 'Too many access requests. Please try again later.' }, 429);
         }
-        await requestAccess(identity.email, body.agent, capability);
-        return accessJson({ requested: true });
+        const record = await requestAccess(identity.email, body.agent, capability);
+        const notification = record.notificationKind === 'request' ? await deliverAccessNotifications(record) : 'not-required';
+        return accessJson({ requested: true, notification });
     } catch (error) {
         if (error instanceof AmyAnamRequestError) return accessJson({ error: error.message }, error.status);
         return accessJson({ error: 'Your request could not be saved. Please try again.' }, 503);

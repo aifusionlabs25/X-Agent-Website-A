@@ -40,7 +40,7 @@ export function installJamesSharedAccess({ browserIds = [], capabilities = ['con
     globalThis.fetch = async (url, init = {}) => {
         if (String(url) === redisUrl && init.body) {
             const command = JSON.parse(init.body), [operation, key, value] = command;
-            if (typeof key === 'string' && (key.startsWith(AUTH) || key.startsWith(POLICY))) {
+            if (typeof key === 'string' && (key.startsWith(AUTH) || key.startsWith(POLICY) || key.startsWith('xagent:access:passkey:v1:'))) {
                 const op = operation.toUpperCase();
                 if (op === 'GET') return Response.json({ result: db.get(key) ?? null });
                 if (op === 'SMEMBERS') return Response.json({ result: [] });

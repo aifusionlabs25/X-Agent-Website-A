@@ -1,17 +1,11 @@
 import { readAccessIdentity } from './auth.ts';
 import { isAccessAgent, isAccessCapability, normalizeAccessEmail, readAccessRecord, recordAllows, listDisabledAccessAgents, storeAccessBrowser, readAccessBrowser, type AccessCapability } from './grants.ts';
 import { isTrustedBrowserOrigin } from '../anam/session-spine.ts';
+import { isAccessOwner } from './owners.ts';
+export { isAccessOwner } from './owners.ts';
 
 export function accessJson(body: unknown, status = 200): Response {
     return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', Vary: 'Cookie' } });
-}
-
-export function isAccessOwner(email: string): boolean {
-    // This is the existing site owner's address, also used by the site's
-    // operations configuration. Deployment config can explicitly replace it.
-    const configured = process.env.XAGENT_ACCESS_OWNER_EMAILS ?? 'aifusionlabs@gmail.com';
-    const owners = configured.split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
-    return owners.includes(normalizeAccessEmail(email));
 }
 
 export function agentAccessDisabled(agent: string): boolean {

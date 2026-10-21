@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { ALL_AGENTS } from '../agents.ts';
 import { accessRedisCommand } from './redis.ts';
 
@@ -13,6 +13,8 @@ export type AccessRecord = {
     expiresAt: string | null;
     updatedAt: string;
     updatedBy: string;
+    notificationId?: string;
+    notificationKind?: 'request' | 'decision';
 };
 
 const PREFIX = 'xagent:access:policy:v1:';
@@ -113,6 +115,8 @@ export async function requestAccess(email: string, agent: string, capability: Ac
         const existing = parseRecord(raw);
         const active = existing?.status === 'approved' && existing.expiresAt && Date.parse(existing.expiresAt) > Date.now();
         if (active && existing.capabilities.includes(capability)) return existing;
+        if (existing?.notificationId && ((active && existing.requestedCapabilities?.includes(capability))
+            || (existing.status === 'pending' && existing.capabilities.includes(capability)))) return existing;
         const record: AccessRecord = active ? {
             ...existing, requestedCapabilities: [...new Set([...(existing.requestedCapabilities ?? []), capability])],
             updatedAt: new Date().toISOString(),
@@ -122,6 +126,8 @@ export async function requestAccess(email: string, agent: string, capability: Ac
             requestedCapabilities: [], status: 'pending', expiresAt: null,
             updatedAt: new Date().toISOString(), updatedBy: normalizeAccessEmail(email),
         };
+        record.notificationId = randomUUID();
+        record.notificationKind = 'request';
         // A concurrent owner decision must never be overwritten by a request.
         const saved = await accessRedisCommand(['EVAL',
             "local old=redis.call('GET',KEYS[1]); if (old or '')~=ARGV[5] then return 0 end; redis.call('SET',KEYS[1],ARGV[1],'EX',ARGV[2]); redis.call('ZADD',KEYS[2],ARGV[3],ARGV[4]); return 1",

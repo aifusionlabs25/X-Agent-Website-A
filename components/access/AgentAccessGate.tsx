@@ -92,7 +92,7 @@ function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', em
             });
             const data = await response.json().catch(() => ({})) as Record<string, unknown>;
             if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Your request could not be submitted.');
-            setNotice('Your access request was submitted.');
+            setNotice(data.notification === 'pending' ? 'Your request is saved. Email notification is delayed; the owner can still review it.' : 'Your access request was submitted. We’ll email you when the owner makes a decision.');
             setChecking(true);
             await checkAccess();
         } catch (caught) {
@@ -129,7 +129,7 @@ function AgentAccessBoundary({ agent: agentSlug, capability = 'conversation', em
             {checking || (!current && !error) ? <div className={styles.loading} role="status"><LoaderCircle size={21} className={styles.spinner} /><p>Checking access to {name}…</p></div> : <>
                 <h1 className={styles.title}>{current?.authenticated ? current.requested ? 'Your request is pending.' : `Meet ${name}, with approval.` : `Sign in to meet ${name}.`}</h1>
                 <p className={styles.description}>{current?.authenticated
-                    ? current.requested ? 'The owner will review your request. You can check its status here.' : `Request permission to ${capability === 'meeting' ? `invite ${name} into a meeting` : `start a conversation with ${name}`}.`
+                    ? current.requested ? 'The owner will review your request. Watch your email for a decision, or check its status here.' : `Request permission to ${capability === 'meeting' ? `invite ${name} into a meeting` : `start a conversation with ${name}`}.`
                     : 'Use your email to sign in, then request access. Each agent is available only to approved visitors.'}</p>
                 {current?.email && <p className={styles.identity}>Signed in as <strong>{current.email}</strong></p>}
                 {error && <p className={styles.error} role="alert">{error}</p>}
