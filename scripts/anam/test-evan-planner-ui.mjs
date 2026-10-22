@@ -156,7 +156,7 @@ try {
         await page.waitForFunction(() => {
             const panel = document.querySelector('[data-testid="evan-move-planner"]');
             if (!panel || Number(getComputedStyle(panel).opacity) < 0.999) return false;
-            const expectedLeft = innerWidth >= 1024 ? innerWidth - Math.min(innerWidth * 0.58, 860) : 0;
+            const expectedLeft = innerWidth >= 1024 ? innerWidth - Math.min(innerWidth * 0.62, 980) : 0;
             return Math.abs(panel.getBoundingClientRect().left - expectedLeft) < 0.5;
         });
         try {
@@ -464,6 +464,7 @@ try {
     await planner.getByRole('heading', { name: 'Your move, at a glance', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Route', exact: true }).click();
     await waitForRoute(['100 Test Lane', '800 Abandoned Road']);
+    await planner.getByTestId('evan-route-stop-details').locator('summary').click();
     await planner.getByText('Address needs confirmation', { exact: true }).waitFor();
     assert.match(await map.innerText(), /1 street-level pin/i);
     pass('A view-only request supersedes a pending lookup with an explicit unresolved receipt and preserves the verified origin pin');
@@ -495,7 +496,6 @@ try {
     await page.goto(`${origin}/?gate=1`, { waitUntil: 'networkidle' });
     await page.getByLabel('Name', { exact: true }).fill('Avery Example');
     await page.getByLabel('Email', { exact: true }).fill('avery@example.test');
-    await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: 'Email my recap and continue' }).click();
     await page.waitForFunction(() => window.__evanHarness?.ready === true);
     await message('user', 'I am moving from Mesa to Gilbert next month. It is a two bedroom house. We need full packing and have a treadmill. There are stairs.', 'contact-route');
@@ -534,10 +534,14 @@ try {
                     noScore: !/\d+%|of 6 planning|Brief completeness/.test(panel.textContent) };
             });
             assert.deepEqual(fits, { noHorizontalOverflow: true, footerOnScreen: true, separateFooter: true, noScore: true });
+            const height = await page.getByTestId('evan-planner-content').evaluate(element => ({ visible: element.clientHeight, total: element.scrollHeight, scrollTop: element.scrollTop }));
+            (report.layoutMeasurements ??= []).push({ viewport, tab, ...height });
+            if (viewport.width >= 1024) assert.ok(height.total <= height.visible + 1, `Ordinary ${tab} should fit without scrolling: ${JSON.stringify({ viewport, height })}`);
+            assert.equal(height.scrollTop, 0, 'a newly selected view starts at the top');
             await capture(`evan-${tab.toLowerCase().replaceAll(' ', '-')}-${viewport.width}x${viewport.height}`);
         }
     }
-    pass('Brief, move list, and next steps fit their scroll regions with no score or footer overlap on laptop, short-window, and mobile views');
+    pass('Ordinary brief, move list, and next steps fit without desktop scrolling; mobile keeps accessible overflow and visible exit');
     await planner.getByRole('button', { name: 'Move list', exact: true }).click();
     await planner.getByText('Ask Mullins about', { exact: true }).waitFor();
     await planner.getByRole('button', { name: 'Move brief', exact: true }).click();
@@ -590,7 +594,7 @@ try {
     await assertStillLive();
     pass('Latest call timing, access, phone-only preference and mornings update live; contact capture cannot hang up');
     await message('persona', 'Thank you for speaking with Mullins Moving. Take care.', 'unauthorized-farewell');
-    await page.waitForFunction(() => window.__evanHarness.talks.includes('Is there anything else you would like to add about your move?'));
+    await page.waitForFunction(() => window.__evanHarness.talks.includes("I'm here and listening. Take your time."));
     assert.equal(await page.evaluate(() => window.__evanHarness.interruptCount), 1);
     await assertStillLive();
     pass('A farewell after a denied close is interrupted with one bounded recovery, not a hang-up or question loop');
@@ -710,7 +714,7 @@ try {
     await page.clock.fastForward(6_000);
     assert.equal((await endCall()).status, 'continue_conversation');
     await page.clock.fastForward(7_000);
-    assert.deepEqual(await page.evaluate(() => window.__evanHarness.talks), ['Is there anything else you would like to add about your move?']);
+    assert.deepEqual(await page.evaluate(() => window.__evanHarness.talks), ["I'm here and listening. Take your time."]);
     assert.equal(await page.evaluate(() => window.__evanHarness.interruptCount), 0);
     await assertStillLive();
     pass('A genuinely silent refused close recovers once without interrupting or extending the deadline on retry');

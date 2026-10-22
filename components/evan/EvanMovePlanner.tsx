@@ -85,29 +85,29 @@ function ContactCard({ contact }: { contact?: EvanPlannerContact }) {
         { key: 'phone', label: 'Phone', value: contact?.phone },
         { key: 'email', label: 'Email', value: contact?.email },
         { key: 'contactPreference', label: 'Preferred contact', value: contact?.contactPreference },
-        { key: 'callbackWindow', label: 'Best time to reach you', value: contact?.callbackWindow },
+        { key: 'callbackWindow', label: 'Best time', value: contact?.callbackWindow },
     ] as const;
 
     return (
         <section className="min-w-0 self-start border border-[#321064]/15 bg-[#fffaf0]" aria-label="Your contact details" data-testid="evan-planner-contact">
-            <div className="border-b border-[#321064]/10 px-3 py-2.5">
+            <div className="border-b border-[#321064]/10 px-3 py-2">
                 <h4 className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#43207f]">Your contact details</h4>
-                <p className="mt-1 text-[11px] leading-4 text-[#746180]">Optional. Tell Evan if a detail needs correcting.</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-[#746180]">Tell Evan if a detail needs correcting.</p>
             </div>
             <dl className="divide-y divide-[#321064]/10 px-3">
                 {fields.filter((field) => !contact?.hiddenFields.includes(field.key)).map((field) => (
-                    <div key={field.key} className="py-2" data-testid={`evan-contact-${field.key}`}>
-                        <dt className="text-[10px] font-bold uppercase tracking-[0.07em] text-[#7c6c89]">{field.label}</dt>
-                        <dd className="mt-0.5 break-words text-[13px] font-medium leading-5 text-[#43207f] [overflow-wrap:anywhere]">
+                    <div key={field.key} className="grid grid-cols-[70px_minmax(0,1fr)] items-baseline gap-x-2 py-1.5" data-testid={`evan-contact-${field.key}`}>
+                        <dt className="text-[10px] font-bold uppercase leading-4 tracking-[0.04em] text-[#7c6c89]">{field.label}</dt>
+                        <dd className="break-words text-[13px] font-medium leading-5 text-[#43207f] [overflow-wrap:anywhere]">
                             {field.value || <span className="font-normal text-[#8a7a95]">Not shared yet</span>}
                         </dd>
                         {field.key === 'phone' && field.value && (
-                            <p className="mt-0.5 text-[10px] leading-4 text-[#746180]">
+                            <p className="col-span-2 text-[10px] leading-4 text-[#746180]">
                                 {contact?.phoneConfirmed ? 'Confirmed in conversation' : 'Heard in conversation · please confirm'}
                             </p>
                         )}
                         {field.key === 'email' && field.value && (
-                            <p className="mt-0.5 text-[10px] leading-4 text-[#746180]">
+                            <p className="col-span-2 text-[10px] leading-4 text-[#746180]">
                                 {contact?.emailSource === 'check-in' ? 'From private check-in' : contact?.spokenEmailConfirmed ? 'Shared and confirmed in conversation' : 'Shared in conversation · please check spelling'}
                             </p>
                         )}
@@ -156,13 +156,13 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 90 }}
                     transition={{ type: 'spring', damping: 27, stiffness: 250 }}
-                    className="fixed inset-0 z-40 overflow-hidden border-l border-[#2a1050]/15 bg-[#faf7fd] text-[#321064] shadow-[-28px_0_90px_rgba(0,0,0,0.34)] lg:left-auto lg:w-[min(58vw,860px)]"
+                    className="fixed inset-x-0 top-0 z-40 h-dvh overflow-hidden border-l border-[#2a1050]/15 bg-[#faf7fd] text-[#321064] shadow-[-28px_0_90px_rgba(0,0,0,0.34)] lg:left-auto lg:w-[min(62vw,980px)]"
                     aria-label="Evan live move planner"
                     data-testid="evan-move-planner"
                 >
                     <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:repeating-linear-gradient(0deg,#5d24d6_0,#5d24d6_1px,transparent_1px,transparent_6px)]" />
                     <div className="relative flex h-full min-h-0 flex-col">
-                        <header className="flex-none border-b border-[#321064]/15 bg-[#2a1050] px-4 py-3 text-[#fffdf7] sm:px-5" data-testid="evan-planner-header">
+                        <header className="flex-none border-b border-[#321064]/15 bg-[#2a1050] px-4 py-2 text-[#fffdf7] sm:px-5" data-testid="evan-planner-header">
                             <div className="flex items-center justify-between gap-4">
                                 <div className="flex min-w-0 items-center gap-3">
                                     <div className="flex h-9 w-9 flex-none items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white p-1.5">
@@ -188,7 +188,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                     <X size={19} />
                                 </button>
                             </div>
-                            <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/10 pt-2 text-[10px] leading-4">
+                            <div className="mt-1 flex items-center justify-between gap-3 text-[10px] leading-4">
                                 <span className="inline-flex items-center gap-2 font-semibold uppercase tracking-[0.09em] text-white/70">
                                     <span className={`h-2 w-2 rounded-full ${model.status === 'building' ? 'animate-pulse bg-[#ffc857]' : 'bg-white/35'}`} />
                                     {captureState?.status === 'updating' ? 'Updating your details…'
@@ -206,16 +206,16 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                     type="button"
                                     onClick={() => setView(id)}
                                     aria-pressed={view === id}
-                                    className={`relative inline-flex min-h-11 min-w-max items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.09em] transition ${view === id ? 'text-[#321064]' : 'text-[#776886] hover:text-[#6230bb]'}`}
+                                    className={`relative inline-flex min-h-11 flex-1 items-center justify-center gap-2 whitespace-nowrap px-2 py-2 text-[10px] font-bold uppercase tracking-[0.04em] transition sm:flex-none sm:px-3 sm:text-[11px] sm:tracking-[0.09em] ${view === id ? 'text-[#321064]' : 'text-[#776886] hover:text-[#6230bb]'}`}
                                 >
-                                    <Icon size={15} />
+                                    <Icon size={15} className="hidden sm:block" />
                                     {label}
                                     {view === id && <motion.span layoutId="evan-planner-tab" className="absolute inset-x-3 bottom-0 h-[3px] bg-[#f6b93b]" />}
                                 </button>
                             ))}
                         </nav>
 
-                        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5" data-testid="evan-planner-content">
+                        <div key={view} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 sm:px-4 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#7540cf]" tabIndex={0} role="region" aria-label={`${TABS.find(tab => tab.id === view)?.label} details`} data-testid="evan-planner-content">
                             {model.status === 'listening' && view === 'readiness' ? <EmptyState view={view} /> : (
                                 <AnimatePresence mode="wait">
                                     <motion.div
@@ -244,13 +244,13 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                                     </div>
                                                 </div>
 
-                                                <h3 className="mt-4 font-serif text-[24px] leading-8">Working move brief</h3>
-                                                <p className="mt-0.5 text-[12px] leading-5 text-[#746180]">Your details take shape as you talk. You can correct or add to them at any time.</p>
-                                                <div className="mt-3 grid items-start gap-3 sm:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+                                                <h3 className="mt-2 font-serif text-xl leading-7">Working move brief</h3>
+                                                <p className="sr-only">Your details take shape as you talk. You can correct or add to them at any time.</p>
+                                                <div className="mt-2 grid items-start gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
                                                     <div className="min-w-0">
                                                         <dl className="divide-y divide-[#321064]/10 border border-[#321064]/15 bg-[#ffffff]">
                                                             {briefHighlights.length ? briefHighlights.map((signal) => (
-                                                                <div key={signal.label} className="grid gap-0.5 px-3 py-2.5 sm:grid-cols-[100px_minmax(0,1fr)] sm:gap-3">
+                                                                <div key={signal.label} className="grid gap-0.5 px-3 py-1.5 sm:grid-cols-[88px_minmax(0,1fr)] sm:gap-2">
                                                                     <dt className="text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-[#7c6c89]">{signal.label}</dt>
                                                                     <dd className="break-words text-[13px] font-medium leading-5 text-[#43207f]">{signal.value}</dd>
                                                                 </div>
@@ -280,17 +280,19 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
 
                                                 <EvanRouteMap stops={model.stops} />
 
-                                                {model.stops.length > 0 ? <div className="relative mt-5 ml-3 border-l-2 border-dashed border-[#5d24d6]/30 pl-8">
+                                                {model.stops.length > 0 ? <details className="mt-2 border border-[#321064]/15 bg-white" data-testid="evan-route-stop-details">
+                                                    <summary className="min-h-11 cursor-pointer px-3 py-3 text-xs font-semibold text-[#43207f] focus-visible:outline-2 focus-visible:outline-[#7540cf]">{model.stops.length} stops · View addresses and stop details</summary>
+                                                    <div className="grid gap-2 border-t border-[#321064]/10 p-2 sm:grid-cols-2">
                                                     {model.stops.map((stop, index) => (
-                                                        <div key={`${stop.kind}-${stop.displayAddress ?? stop.address ?? stop.city}-${index}`} className="relative pb-8 last:pb-0">
-                                                            <div className={`absolute -left-[45px] top-0 flex h-7 w-7 items-center justify-center rounded-full border-4 border-[#faf7fd] text-xs font-bold text-white ${stop.kind === 'Origin' ? 'bg-[#5d24d6]' : stop.kind === 'Destination' ? 'bg-[#f6b93b]' : 'bg-[#9b6ee5]'}`}>
+                                                        <div key={`${stop.kind}-${stop.displayAddress ?? stop.address ?? stop.city}-${index}`} className="flex min-w-0 items-start gap-2 bg-[#faf7fd] p-2">
+                                                            <div className={`flex h-6 w-6 flex-none items-center justify-center rounded-full text-xs font-bold text-white ${stop.kind === 'Origin' ? 'bg-[#5d24d6]' : stop.kind === 'Destination' ? 'bg-[#d99b20]' : 'bg-[#9b6ee5]'}`}>
                                                                 {index + 1}
                                                             </div>
-                                                            <div className="border border-[#321064]/15 bg-[#ffffff] p-4 shadow-[0_8px_24px_rgba(31,72,50,0.07)]">
+                                                            <div className="min-w-0 flex-1">
                                                                 <div className="flex items-start justify-between gap-4">
                                                                     <div className="min-w-0">
                                                                         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7f708b]">{stop.kind}{stop.label ? ` · ${stop.label}` : ''}</p>
-                                                                        <p className="mt-1 font-serif text-2xl text-[#2a1050]">{stop.city}</p>
+                                                                        <p className="mt-1 font-serif text-xl text-[#2a1050]">{stop.city}</p>
                                                                         {stop.displayAddress && <p className="mt-2 text-sm font-semibold leading-5 text-[#5d4670]">{stop.displayAddress}</p>}
                                                                         <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${stop.precision === 'address' ? 'bg-[#e8f7ed] text-[#237644]' : stop.precision === 'address-range' ? 'bg-[#fff3d5] text-[#8b6414]' : stop.precision === 'unresolved' ? 'bg-[#fde8e8] text-[#a33d3d]' : 'bg-[#eee7f8] text-[#6d35c5]'}`}>
                                                                             {stop.precision === 'address' ? <Check size={11} /> : <MapPin size={11} />}
@@ -302,7 +304,8 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                                             </div>
                                                         </div>
                                                     ))}
-                                                </div> : null}
+                                                    </div>
+                                                </details> : null}
                                             </section>
                                         )}
 
@@ -332,8 +335,8 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-4 border border-[#d99b20]/30 bg-[#fffaf0] px-3 py-3" data-testid="evan-planner-service-options">
-                                                    <h4 className="font-serif text-[20px] leading-6 text-[#2a1050]">Ask Mullins about</h4>
+                                                <details className="mt-3 border border-[#d99b20]/30 bg-[#fffaf0] px-3 pb-2" data-testid="evan-planner-service-options">
+                                                    <summary className="min-h-11 cursor-pointer py-2.5 font-serif text-lg leading-6 text-[#2a1050] focus-visible:outline-2 focus-visible:outline-[#7540cf]">Ask Mullins about</summary>
                                                     <p className="mt-1 text-[11px] leading-4 text-[#746180]">Options to discuss—not added to your move. The team confirms availability and pricing.</p>
                                                     <ul className="mt-3 grid gap-x-4 gap-y-2 text-[12px] leading-5 text-[#43207f] sm:grid-cols-2">
                                                         <li><span className="font-semibold">Packing &amp; unpacking</span><br />Help with selected rooms or the whole home.</li>
@@ -341,7 +344,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                                                         <li><span className="font-semibold">Specialty-item care</span><br />Discuss fragile, valuable, or oversized items.</li>
                                                         <li><span className="font-semibold">Boxes, tape &amp; packing supplies</span><br />Availability to confirm with Mullins.</li>
                                                     </ul>
-                                                </div>
+                                                </details>
                                             </section>
                                         )}
 
@@ -352,9 +355,9 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
 
                                                 <div className="mt-3 border border-[#321064]/15 bg-white">
                                                     <h4 className="border-b border-[#321064]/10 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#43207f]">Details to talk through</h4>
-                                                    <ul className="divide-y divide-[#321064]/10">
+                                                    <ul className="grid sm:grid-cols-2">
                                                         {model.openItems.length ? model.openItems.map((item) => (
-                                                            <li key={item} className="flex items-start gap-2.5 px-3 py-2.5">
+                                                            <li key={item} className="flex items-start gap-2 border-t border-[#321064]/10 px-3 py-2">
                                                                 <span className="mt-[7px] h-1.5 w-1.5 flex-none rounded-full bg-[#d99b20]" />
                                                                 <p className="min-w-0 text-[13px] leading-5 text-[#5a3d75]">{item}</p>
                                                             </li>
@@ -385,7 +388,7 @@ export default function EvanMovePlanner({ isOpen, turns, addressStops = null, co
                             )}
                         </div>
 
-                        <footer className="flex-none border-t border-[#321064]/15 bg-[#eee7f8] px-4 py-2 sm:px-5" data-testid="evan-planner-footer">
+                        <footer className="flex-none border-t border-[#321064]/15 bg-[#eee7f8] px-3 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] sm:px-4" data-testid="evan-planner-footer">
                             {onExitSession && (
                                 <div className="mb-2 lg:hidden">
                                     <EvanSessionExit placement="planner" onExit={onExitSession} disabled={isFinalizing} />

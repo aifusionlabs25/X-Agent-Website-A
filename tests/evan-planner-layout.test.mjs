@@ -82,6 +82,28 @@ test('compact route heading and tabs retain usable controls and all route detail
     assert.ok(nodes(tree).some(node => node.props['aria-label'] === 'Close Move Planner'));
 });
 
+test('planner uses dynamic screen height and keeps optional route details behind an accessible disclosure', () => {
+    const tree = render(plannerSource, plannerProps);
+    assert.match(byTestId(tree, 'evan-move-planner').props.className, /\bh-dvh\b/);
+    const content = byTestId(tree, 'evan-planner-content');
+    assert.equal(content.props.tabIndex, 0, 'long notes remain keyboard-scrollable');
+    assert.equal(content.props.role, 'region');
+    const details = byTestId(tree, 'evan-route-stop-details');
+    assert.equal(details.type, 'details');
+    assert.equal(details.props.open, undefined);
+    assert.ok(nodes(details).some(node => node.type === 'summary'));
+    assert.ok(nodes(details).some(node => node.props.children === 'Gilbert'));
+    assert.ok(nodes(details).some(node => node.props.children === 'Mesa'));
+});
+
+test('optional service catalogue does not displace the captured move list', () => {
+    const tree = render(plannerSource, { ...plannerProps, requestedView: 'inventory' });
+    const options = byTestId(tree, 'evan-planner-service-options');
+    assert.equal(options.type, 'details');
+    assert.equal(options.props.open, undefined);
+    assert.ok(nodes(options).some(node => node.type === 'summary' && node.props.children === 'Ask Mullins about'));
+});
+
 test('inline map height follows the dynamic viewport instead of a fixed desktop canvas', () => {
     for (const route of [[], stops]) {
         const tree = render(mapSource, { stops: route });
