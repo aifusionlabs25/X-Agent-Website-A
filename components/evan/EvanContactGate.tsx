@@ -4,6 +4,8 @@ import Image from 'next/image';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail, ShieldCheck, Truck, UserRound } from 'lucide-react';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
+import { EvanPlannerContactContext } from '@/components/evan/EvanPlannerContactContext';
+import type { EvanPlannerCheckIn } from '@/lib/anam/evan-planner-contact';
 
 type SubmitMode = 'email' | 'guest' | null;
 
@@ -14,8 +16,8 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
     const [submitting, setSubmitting] = useState<SubmitMode>(null);
     const [displayName, setDisplayName] = useState('');
     const [email, setEmail] = useState('');
-    const [followUpConsent, setFollowUpConsent] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [plannerCheckIn, setPlannerCheckIn] = useState<EvanPlannerCheckIn | undefined>(undefined);
 
     useEffect(() => {
         if (localTestMode) return;
@@ -35,13 +37,17 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                 cache: 'no-store',
                 body: JSON.stringify(mode === 'guest'
                     ? { guest: true }
-                    : { displayName, email, followUpConsent }),
+                    : { displayName, email, followUpConsent: true }),
             });
             const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
             if (!response.ok || payload.authenticated !== true) {
                 throw new Error(typeof payload.error === 'string' ? payload.error : 'Evan could not be started');
             }
+            // Keep only what this visitor entered, in this mounted gate. The
+            // signed server cookie remains the authority for email delivery.
+            setPlannerCheckIn(mode === 'email' ? { displayName: displayName.trim(), email: email.trim() } : undefined);
             setEmail('');
+            setDisplayName('');
             setReady(true);
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Evan could not be started');
@@ -62,7 +68,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
             </div>
         </main>
     );
-    if (ready) return <>{children}</>;
+    if (ready) return <EvanPlannerContactContext.Provider value={plannerCheckIn}>{children}</EvanPlannerContactContext.Provider>;
 
     return (
         <main className="relative flex min-h-[100svh] items-center justify-center overflow-x-hidden bg-[#100718] px-4 py-5 text-white sm:px-6 lg:h-[100svh] lg:overflow-hidden">
@@ -128,7 +134,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                     <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857] lg:mt-0">Before you meet Evan</p>
                     <h2 className="mt-2 font-[Georgia] text-[clamp(1.8rem,2.5vw,2.45rem)] font-bold leading-tight tracking-tight">Choose how you want to begin.</h2>
                     <p className="mt-2 max-w-2xl text-sm leading-5 text-[#d7cbe2]">
-                        Add your name and email for a written recap, or continue as a guest. Evan and the Live Move Planner are available either way.
+                        Add your name and email for a written recap, or continue without email. Evan and the Live Move Planner are available either way.
                     </p>
 
                     <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={submitEmail}>
@@ -155,18 +161,9 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                                 placeholder="you@example.com"
                             />
                         </label>
-                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-[#d7cbe2] transition hover:border-[#8f61e5]/50 sm:col-span-2">
-                            <input
-                                required
-                                type="checkbox"
-                                checked={followUpConsent}
-                                onChange={event => setFollowUpConsent(event.target.checked)}
-                                className="mt-0.5 h-4 w-4 shrink-0 accent-[#ffc857]"
-                            />
-                            <span>
-                                Email me one conversation recap after the session and share the session brief with Mullins Admin and Sales.
-                            </span>
-                        </label>
+                        <p className="rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-[#d7cbe2] sm:col-span-2">
+                            By choosing the email recap, you ask us to send one post-call summary to this address and route a move brief for team review. No quote or booking is created.
+                        </p>
                         {error && <p role="alert" className="rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-200 sm:col-span-2">{error}</p>}
                         <button
                             type="submit"
@@ -196,7 +193,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
 
                     <p className="mt-3 flex gap-2 text-[11px] leading-5 text-white/38">
                         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-[#ffc857]/75" />
-                        Email is optional. Guest conversations still include Evan and the Live Move Planner, but no customer recap or email follow-up will be sent.
+                        Email is optional. If you later give Evan an email address during the conversation, we can use it for one post-call recap. You can decline or correct it at any time.
                     </p>
                 </div>
             </section>

@@ -6,6 +6,7 @@ import {
     queueEvanAnamConversationFollowUp,
     readEvanAnamAgentMailConfig,
     sendEvanAnamConversationFollowUp,
+    dispatchEvanAnamPostSessionFollowUp,
 } from '../lib/anam/evan-agentmail.ts';
 import { sendAmyEmailWithAgentMail } from '../lib/email/amy-email-provider.ts';
 
@@ -66,6 +67,27 @@ test('Evan AgentMail config uses the verified Hermes Hal inbox and separate admi
     assert.equal(config.inboxAddress, 'hermes-hal@agentmail.to');
     assert.equal(config.adminEmail, 'aifusionlabs@gmail.com');
     assert.equal(config.salesEmail, 'aifusionlabs@gmail.com');
+    assert.equal(config.mullinsRecipientsConfigured, false, 'the AIFL inbox is a rehearsal destination');
+    assert.equal(readEvanAnamAgentMailConfig({ ...env, VERCEL_ENV: 'production' }).effectiveGateOpen, false);
+});
+
+test('public-demo production mail requires explicit AIFL routing and preserves kill switches', () => {
+    const demo = { ...env, VERCEL_ENV: 'production', EVAN_PUBLIC_DEMO_ENABLED: 'true' };
+    assert.equal(readEvanAnamAgentMailConfig(demo).effectiveGateOpen, false);
+    for (const routing of ['all-aifl', 'visitor-recap']) {
+        const approved = { ...demo, EVAN_PUBLIC_DEMO_MAIL_ROUTING: routing };
+        const config = readEvanAnamAgentMailConfig(approved);
+        assert.equal(config.effectiveGateOpen, true);
+        assert.equal(config.mullinsRecipientsConfigured, false);
+        assert.equal(config.adminEmail, 'aifusionlabs@gmail.com');
+        assert.equal(config.salesEmail, 'aifusionlabs@gmail.com');
+        assert.equal(config.visitorRecipientOverride, routing === 'all-aifl' ? 'aifusionlabs@gmail.com' : null);
+        for (const key of ['EVAN_MULLINS_ADMIN_EMAIL', 'EVAN_MULLINS_SALES_EMAIL', 'EVAN_DEMO_LEAD_EMAIL']) {
+            assert.equal(readEvanAnamAgentMailConfig({ ...approved, [key]: 'someone@example.com' }).effectiveGateOpen, false);
+        }
+        assert.equal(readEvanAnamAgentMailConfig({ ...approved, EVAN_ANAM_AGENTMAIL_KILL_SWITCH: 'true' }).effectiveGateOpen, false);
+        assert.equal(readEvanAnamAgentMailConfig({ ...approved, AMY_ANAM_SESSION_SPINE_KILL_SWITCH: 'true' }).effectiveGateOpen, false);
+    }
 });
 
 test('Evan intake turns the latest test into concise, useful, non-duplicated categories', () => {
@@ -180,7 +202,8 @@ test('the three Evan emails are polished for their audience and Admin receives a
     assert.doesNotMatch(bundle.admin.attachments[0].content, /wrong@example\.com|480-555-0186/);
 });
 
-test('queue and send reserve one intent/attempt, send three emails, and Base64-encode only the Admin attachment', async () => {
+for (const mailRouting of ['rehearsal', 'all-aifl', 'visitor-recap']) {
+test(`queue and send reserve one intent/attempt and send three emails (${mailRouting})`, async () => {
     const redis = new Map();
     const sent = [];
     const fetchImpl = async (url, init = {}) => {
@@ -204,7 +227,10 @@ test('queue and send reserve one intent/attempt, send three emails, and Base64-e
         }
         throw new Error(`Unexpected request: ${target}`);
     };
-    const options = { env, fetchImpl };
+    const testEnv = mailRouting === 'rehearsal' ? env : { ...env, VERCEL_ENV: 'production',
+        EVAN_PUBLIC_DEMO_ENABLED: 'true', EVAN_PUBLIC_DEMO_MAIL_ROUTING: mailRouting,
+        EVAN_CAPTURE_ENABLED: 'true', EVAN_CAPTURE_ENGINE: 'local', EVAN_CAPTURE_PRODUCTION_APPROVED: 'true' };
+    const options = { env: testEnv, fetchImpl };
     const input = {
         externalSessionId: '3d26775e-8732-41ed-8658-0ecb48a1eafe',
         browserSessionId: '2fd07342-77b9-435a-9954-fe66afad0fe7',
@@ -228,16 +254,18 @@ test('queue and send reserve one intent/attempt, send three emails, and Base64-e
     assert.equal(duplicate.duplicate, true);
     assert.equal(sent.length, 3);
     assert.deepEqual(sent.map(message => message.to[0]), [
-        'pat@example.com', 'aifusionlabs@gmail.com', 'aifusionlabs@gmail.com',
+        'aifusionlabs@gmail.com', 'aifusionlabs@gmail.com', mailRouting === 'all-aifl' ? 'aifusionlabs@gmail.com' : 'pat@example.com',
     ]);
-    assert.equal('attachments' in sent[0], false);
-    assert.equal(sent[1].attachments.length, 1);
+    assert.equal(sent[0].attachments.length, 1);
+    assert.equal('attachments' in sent[1], false);
     assert.equal('attachments' in sent[2], false);
-    const decoded = Buffer.from(sent[1].attachments[0].content, 'base64').toString('utf8');
+    const decoded = Buffer.from(sent[0].attachments[0].content, 'base64').toString('utf8');
     assert.match(decoded, /SANITIZED SESSION TRANSCRIPT/);
     assert.match(decoded, /\[private contact\]/);
-    assert.equal(sent[1].attachments[0].content_type, 'text/plain; charset=utf-8');
+    assert.equal(sent[0].attachments[0].content_type, 'text/plain; charset=utf-8');
+    assert.match(sent[2].text, /AI Fusion Labs for demo review, not to Mullins/);
 });
+}
 
 test('AgentMail attachment validation fails closed before contacting the provider', async () => {
     let called = false;
@@ -249,6 +277,72 @@ test('AgentMail attachment validation fails closed before contacting the provide
         fetchImpl: async () => { called = true; return new Response(); },
     }), /filename was invalid/);
     assert.equal(called, false);
+});
+
+test('a partial Mullins handoff never tells the visitor that Mullins received both briefs', async () => {
+    const productionEnv = {
+        ...env, VERCEL_ENV: 'production',
+        EVAN_MULLINS_ADMIN_EMAIL: 'admin@mullins.example',
+        EVAN_MULLINS_SALES_EMAIL: 'sales@mullins.example',
+    };
+    assert.equal(readEvanAnamAgentMailConfig(productionEnv).effectiveGateOpen, true);
+    const redis = new Map();
+    const sent = [];
+    const fetchImpl = async (url, init = {}) => {
+        if (String(url) === 'https://redis.test/pipeline') {
+            const [[operation, key, value, mode]] = JSON.parse(String(init.body));
+            let result = null;
+            if (operation === 'SET' && ((mode === 'NX' && !redis.has(key)) || (mode === 'XX' && redis.has(key)))) {
+                redis.set(key, value); result = 'OK';
+            } else if (operation === 'GET') result = redis.get(key) ?? null;
+            return new Response(JSON.stringify([{ result }]), { status: 200 });
+        }
+        const message = JSON.parse(String(init.body));
+        sent.push(message);
+        if (message.to[0] === 'admin@mullins.example') return new Response('{}', { status: 503 });
+        return new Response(JSON.stringify({ message_id: `message-${sent.length}`, thread_id: `thread-${sent.length}` }), { status: 200 });
+    };
+    const result = await sendEvanAnamConversationFollowUp({
+        externalSessionId: 'partial-handoff-session', displayName: 'Pat', email: 'pat@example.com',
+        sessionStartedAt: '2026-07-19T10:00:00Z', sessionEndedAt: '2026-07-19T10:10:00Z',
+        turns: ordinaryMoveTurns,
+    }, { env: productionEnv, fetchImpl });
+    assert.equal(result.visitorSent, true);
+    assert.equal(result.internalNotificationsSent, false);
+    assert.deepEqual(sent.map(message => message.to[0]), [
+        'admin@mullins.example', 'sales@mullins.example', 'pat@example.com',
+    ]);
+    assert.match(sent[2].text, /could not confirm that Mullins Moving received the internal move brief/i);
+    assert.doesNotMatch(sent[2].text, /will follow up within 24 to 48 hours/i);
+});
+
+test('a later spoken email refusal suppresses a website check-in recap', async () => {
+    const redis = new Map();
+    let sends = 0;
+    const fetchImpl = async (url, init = {}) => {
+        if (String(url) === 'https://redis.test/pipeline') {
+            const [[operation, key, value, mode]] = JSON.parse(String(init.body));
+            let result = null;
+            if (operation === 'SET' && mode === 'NX' && !redis.has(key)) { redis.set(key, value); result = 'OK'; }
+            else if (operation === 'GET') result = redis.get(key) ?? null;
+            return new Response(JSON.stringify([{ result }]), { status: 200 });
+        }
+        sends += 1;
+        return new Response(JSON.stringify({ message_id: 'unexpected', thread_id: 'unexpected' }), { status: 200 });
+    };
+    const externalSessionId = 'revoke-email-session';
+    const browserSessionId = 'revoke-browser-session';
+    await queueEvanAnamConversationFollowUp({
+        externalSessionId, browserSessionId, displayName: 'Pat', email: 'pat@example.com',
+        contactSecret: env.AMY_ANAM_SESSION_SECRET,
+    }, { env, fetchImpl });
+    const result = await dispatchEvanAnamPostSessionFollowUp({
+        session: { externalSessionId, browserSessionId },
+        receipt: { externalSessionId },
+        turns: [{ role: 'user', content: "Please don't email me a recap." }],
+    }, { env, fetchImpl });
+    assert.equal(result.status, 'email_declined');
+    assert.equal(sends, 0);
 });
 
 test('Evan browser integration makes email optional while preserving secure guest sessions and farewell-first close', async () => {
@@ -267,17 +361,18 @@ test('Evan browser integration makes email optional while preserving secure gues
     ]);
     assert.match(demo, /EvanContactGate/);
     assert.match(player, /send_mullins_follow_up_email/);
+    assert.match(player, /extractEvanGuestRecapRecipient\(transcriptRef\.current/);
+    assert.match(player, /email_pending_post_session/);
     assert.match(player, /registerToolCallHandler\(\s*'end_mullins_session'/s);
     assert.match(player, /requestedCloseReason = 'user_requested_end'/);
     assert.match(player, /evanCloseCoordinator\?\.arm\(\)/);
     assert.match(player, /completeFarewell\(\)/);
     assert.doesNotMatch(player, /Closing immediately after confirmed farewell/);
 
-    assert.match(gate, /type="checkbox"/);
-    assert.match(gate, /checked=\{followUpConsent\}/);
-    assert.match(gate, /Email me one conversation recap[\s\S]*Mullins Admin and Sales/);
+    assert.doesNotMatch(gate, /type="checkbox"/);
+    assert.match(gate, /send one post-call summary to this address and route a move brief for team review/);
     assert.match(gate, /\? \{ guest: true \}/);
-    assert.match(gate, /\{ displayName, email, followUpConsent \}/);
+    assert.match(gate, /\{ displayName, email, followUpConsent: true \}/);
     assert.match(gate, /Continue without email/);
     assert.match(gate, /Email is optional/);
     assert.match(gate, /grid-rows-\[auto_minmax\(0,1fr\)_auto\]/);
@@ -295,6 +390,8 @@ test('Evan browser integration makes email optional while preserving secure gues
 
     assert.match(tokenRoute, /Choose an email recap or continue without email first/);
     assert.match(tokenRoute, /contact\?\.purpose === 'evan_follow_up'/);
+    assert.match(tokenRoute, /evanGuestEmailAvailable: evanAgentMailConfig\.effectiveGateOpen/);
+    assert.match(tokenRoute, /evanMullinsHandoffConfigured/);
     assert.doesNotMatch(tokenRoute, /Complete the secure Evan email check-in first/);
     assert.match(bind, /queueEvanAnamConversationFollowUp/);
     assert.match(bind, /if \(contact\?\.displayName && contact\.purpose === 'evan_follow_up'\)/);

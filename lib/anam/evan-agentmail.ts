@@ -1,8 +1,12 @@
 import { createHash } from 'node:crypto';
 import { readAmyAgentMailProviderConfig, sendAmyEmailWithAgentMail } from '../email/amy-email-provider.ts';
 import { createAmyAnamContactToken, readAmyAnamContactToken } from './contact-token.ts';
-import { buildEvanEmailBundle } from './evan-agentmail-templates.ts';
-import { normalizeAmyTranscript, readAmyAnamSpineConfig } from './session-spine.ts';
+import { buildEvanEmailBundle, buildEvanGuestLeadBrief } from './evan-agentmail-templates.ts';
+import { extractEvanConsentedGuestLead, extractEvanGuestRecapRecipient, hasEvanRecapDecline } from './evan-guest-lead.ts';
+import { extractEvanCapture, readEvanCaptureConfig } from './evan-capture-service.ts';
+import { validateEvanCapture } from './evan-capture.ts';
+import { EVAN_PERSONA_ID } from './persona-ids.ts';
+import { EVAN_MULLINS_VARIANT, normalizeAmyTranscript, readAmyAnamSpineConfig, transcriptSha256 } from './session-spine.ts';
 import type { AmyAnamSessionReceipt, AmyAnamSessionRecord, AmyTranscriptTurn } from './session-spine.ts';
 
 const TTL = 30 * 24 * 60 * 60;
@@ -37,6 +41,8 @@ type Attempt = {
     deliveryStatus: { visitor: boolean; admin: boolean; sales: boolean };
     rawEmailStored: false;
     messageContentStored: false;
+    captureStatus?: 'ready' | 'unavailable';
+    captureTranscriptSha256?: string | null;
 };
 
 const envValue = (source: NodeJS.ProcessEnv, name: string) => String(source[name] ?? '').trim();
@@ -56,14 +62,41 @@ export function readEvanAnamAgentMailConfig(source: NodeJS.ProcessEnv = process.
         && flag(source, 'EVAN_ANAM_OUTBOUND_ACTIONS_ENABLED', 'AMY_ANAM_OUTBOUND_ACTIONS_ENABLED') === 'true'
         && flag(source, 'EVAN_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH', 'AMY_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH') === 'false';
     const configured = provider === 'agentmail' && providerConfig.configured && spine.configured;
+    const adminRecipient = envValue(source, 'EVAN_MULLINS_ADMIN_EMAIL').toLowerCase();
+    const salesRecipient = envValue(source, 'EVAN_MULLINS_SALES_EMAIL').toLowerCase();
+    const publicDemo = envValue(source, 'EVAN_PUBLIC_DEMO_ENABLED') === 'true';
+    const demoMailRouting = envValue(source, 'EVAN_PUBLIC_DEMO_MAIL_ROUTING');
+    const publicDemoConfigured = publicDemo
+        && ['all-aifl', 'visitor-recap'].includes(demoMailRouting)
+        && (!adminRecipient || adminRecipient === DEFAULT_INTERNAL)
+        && (!salesRecipient || salesRecipient === DEFAULT_INTERNAL)
+        && (!envValue(source, 'EVAN_DEMO_LEAD_EMAIL')
+            || envValue(source, 'EVAN_DEMO_LEAD_EMAIL').toLowerCase() === DEFAULT_INTERNAL);
+    // The AI Fusion Labs inbox is the rehearsal destination, even when it is
+    // explicitly placed in the Mullins-named environment variables.
+    const mullinsRecipientsConfigured = Boolean(
+        !publicDemo && adminRecipient && salesRecipient
+        && adminRecipient !== DEFAULT_INTERNAL && salesRecipient !== DEFAULT_INTERNAL
+    );
     return {
         provider,
+        publicDemo,
+        publicDemoConfigured,
+        visitorRecipientOverride: publicDemo && demoMailRouting === 'all-aifl' ? DEFAULT_INTERNAL : null,
         inboxAddress,
-        adminEmail: (envValue(source, 'EVAN_MULLINS_ADMIN_EMAIL') || DEFAULT_INTERNAL).toLowerCase(),
-        salesEmail: (envValue(source, 'EVAN_MULLINS_SALES_EMAIL') || DEFAULT_INTERNAL).toLowerCase(),
+        adminEmail: adminRecipient || DEFAULT_INTERNAL,
+        salesEmail: salesRecipient || DEFAULT_INTERNAL,
+        demoLeadEmail: (envValue(source, 'EVAN_DEMO_LEAD_EMAIL') || DEFAULT_INTERNAL).toLowerCase(),
+        guestDemoLeadEnabled: envValue(source, 'EVAN_GUEST_DEMO_LEAD_ENABLED') === 'true'
+            && (envValue(source, 'VERCEL_ENV') !== 'production' || publicDemoConfigured),
+        mullinsRecipientsConfigured,
         configured,
         requestedGateOpen,
-        effectiveGateOpen: configured && requestedGateOpen && spine.gatesOpen,
+        // A production visitor recap must never imply Mullins received the
+        // internal briefs while both recipients still default to the demo inbox.
+        effectiveGateOpen: configured && requestedGateOpen && spine.gatesOpen
+            && (!publicDemo || publicDemoConfigured)
+            && (envValue(source, 'VERCEL_ENV') !== 'production' || mullinsRecipientsConfigured || publicDemoConfigured),
         redisUrl: spine.redisUrl,
         redisToken: spine.redisToken,
         providerEnv,
@@ -72,6 +105,17 @@ export function readEvanAnamAgentMailConfig(source: NodeJS.ProcessEnv = process.
 
 const intentKey = (id: string) => `xagent:evan:anam:agentmail:intent:v1:${id}`;
 const attemptKey = (id: string) => `xagent:evan:anam:agentmail:attempt:v1:${id}`;
+const demoAttemptKey = (id: string) => `xagent:evan:anam:agentmail:demo-lead-attempt:v1:${id}`;
+
+type DemoAttempt = {
+    schemaVersion: 'evan_anam_demo_lead_attempt_v1';
+    externalSessionId: string;
+    status: 'pending' | 'sent' | 'failed';
+    receiptId: string;
+    providerMessageId: string | null;
+    completedAt: string | null;
+    rawContactStored: false;
+};
 
 async function redisCommand(command: Array<string | number>, options: Options = {}): Promise<unknown> {
     const config = readEvanAnamAgentMailConfig(options.env ?? process.env);
@@ -105,6 +149,19 @@ function parse<T>(raw: unknown, schema: string): T | null {
         throw new Error('Evan AgentMail receipt was invalid');
     }
     return value as T;
+}
+
+/** Only server-finalized transcript text enters the email extractor. Browser
+ * planner snapshots are never accepted here and cannot choose recipients. */
+async function prepareFinalEvanCapture(turns: AmyTranscriptTurn[], options: Options) {
+    if (!readEvanCaptureConfig(options.env ?? process.env).enabled) return {};
+    try {
+        return { captureRecord: await extractEvanCapture({ turns, revision: 0 }, options), captureStatus: 'ready' as const };
+    } catch {
+        // Preserve the existing three-message workflow, but explicitly report
+        // unavailable capture. Do not fall back to the old keyword summary.
+        return { captureRecord: validateEvanCapture({ facts: [] }, turns, 0), captureStatus: 'unavailable' as const };
+    }
 }
 
 export async function queueEvanAnamConversationFollowUp(input: {
@@ -152,9 +209,25 @@ export async function sendEvanAnamConversationFollowUp(input: {
     sessionStartedAt: string;
     sessionEndedAt: string;
     turns: AmyTranscriptTurn[] | unknown;
+    emailSource?: 'check-in' | 'spoken' | 'spoken-readback';
 }, options: Options = {}) {
     const config = readEvanAnamAgentMailConfig(options.env ?? process.env);
     if (!config.effectiveGateOpen) throw new Error('Evan AgentMail is unavailable');
+    const turns = normalizeAmyTranscript(input.turns);
+    if (readEvanCaptureConfig(options.env ?? process.env).enabled) {
+        const existing = parse<Attempt>(await redisCommand(['GET', attemptKey(input.externalSessionId)], options), 'evan_anam_agentmail_attempt_v1');
+        if (existing) return {
+            status: 'email_already_attempted' as const, sent: existing.status === 'sent', duplicate: true,
+            receiptId: existing.receiptId, provider: 'agentmail' as const,
+            deliveryCount: Object.values(existing.deliveryStatus).filter(Boolean).length,
+            visitorSent: existing.deliveryStatus.visitor,
+            internalNotificationsSent: existing.deliveryStatus.admin && existing.deliveryStatus.sales,
+            captureStatus: existing.captureStatus ?? 'unavailable',
+        };
+    }
+    // Capture is bounded and finishes before reserving the at-most-once send.
+    // All three messages reuse this exact immutable snapshot.
+    const capture = await prepareFinalEvanCapture(turns, options);
     const receiptId = createHash('sha256').update(`evan:anam:agentmail:v1:${input.externalSessionId}`).digest('hex').slice(0, 32);
     const pending: Attempt = {
         schemaVersion: 'evan_anam_agentmail_attempt_v1',
@@ -168,6 +241,7 @@ export async function sendEvanAnamConversationFollowUp(input: {
         deliveryStatus: { visitor: false, admin: false, sales: false },
         rawEmailStored: false,
         messageContentStored: false,
+        ...(capture.captureStatus ? { captureStatus: capture.captureStatus, captureTranscriptSha256: transcriptSha256(turns) } : {}),
     };
     const reserved = await redisCommand(['SET', attemptKey(input.externalSessionId), JSON.stringify(pending), 'NX', 'EX', TTL], options);
     if (reserved !== 'OK') {
@@ -188,30 +262,81 @@ export async function sendEvanAnamConversationFollowUp(input: {
             externalSessionId: input.externalSessionId,
             sessionStartedAt: input.sessionStartedAt,
             sessionEndedAt: input.sessionEndedAt,
-            turns: normalizeAmyTranscript(input.turns),
+            turns,
+            ...capture,
+            emailSource: input.emailSource,
         });
         const providerOptions = { ...options, env: config.providerEnv };
-        const [visitor, admin, sales] = await Promise.allSettled([
-            sendAmyEmailWithAgentMail({ to: input.email, ...bundle.visitor }, providerOptions),
+        const [admin, sales] = await Promise.allSettled([
             sendAmyEmailWithAgentMail({ to: config.adminEmail, ...bundle.admin }, providerOptions),
             sendAmyEmailWithAgentMail({ to: config.salesEmail, ...bundle.sales }, providerOptions),
         ]);
-        if (visitor.status === 'rejected') throw new Error('Visitor delivery was not confirmed');
+        const internalNotificationsSent = admin.status === 'fulfilled' && sales.status === 'fulfilled';
+        const handoffStatus = config.mullinsRecipientsConfigured && internalNotificationsSent
+            ? 'mullins-confirmed' as const
+            : config.mullinsRecipientsConfigured ? 'unconfirmed' as const : 'rehearsal' as const;
+        const visitorBundle = buildEvanEmailBundle({
+            displayName: input.displayName,
+            verifiedEmail: input.email,
+            externalSessionId: input.externalSessionId,
+            sessionStartedAt: input.sessionStartedAt,
+            sessionEndedAt: input.sessionEndedAt,
+            turns,
+            ...capture,
+            emailSource: input.emailSource,
+            handoffStatus,
+        });
+        const visitor = await sendAmyEmailWithAgentMail({ to: config.visitorRecipientOverride ?? input.email, ...visitorBundle.visitor }, providerOptions);
         const deliveryStatus = { visitor: true, admin: admin.status === 'fulfilled', sales: sales.status === 'fulfilled' };
         const sent: Attempt = {
             ...pending, status: 'sent', completedAt: new Date().toISOString(),
-            visitorMessageId: visitor.value.messageId, deliveryStatus,
+            visitorMessageId: visitor.messageId, deliveryStatus,
         };
         await redisCommand(['SET', attemptKey(input.externalSessionId), JSON.stringify(sent), 'XX', 'EX', TTL], options);
         return {
             status: 'email_sent' as const, sent: true, duplicate: false, receiptId,
             provider: 'agentmail' as const, deliveryCount: Object.values(deliveryStatus).filter(Boolean).length,
             visitorSent: true, internalNotificationsSent: deliveryStatus.admin && deliveryStatus.sales,
+            captureStatus: capture.captureStatus ?? 'legacy',
         };
     } catch {
         const failed: Attempt = { ...pending, status: 'failed', completedAt: new Date().toISOString(), failureCode: 'delivery_rejected_or_unknown' };
         await redisCommand(['SET', attemptKey(input.externalSessionId), JSON.stringify(failed), 'XX', 'EX', TTL], options).catch(() => undefined);
         throw new Error('Evan could not confirm email delivery');
+    }
+}
+
+async function sendEvanAnamGuestDemoLead(input: {
+    externalSessionId: string;
+    turns: AmyTranscriptTurn[];
+}, options: Options = {}) {
+    const lead = extractEvanConsentedGuestLead(input.turns);
+    if (!lead) return { status: 'email_not_requested' as const, sent: false as const };
+    const config = readEvanAnamAgentMailConfig(options.env ?? process.env);
+    if (!config.effectiveGateOpen || !config.guestDemoLeadEnabled) return { status: 'email_unavailable' as const, sent: false as const };
+    const capture = await prepareFinalEvanCapture(input.turns, options);
+    const receiptId = createHash('sha256').update(`evan:anam:demo-lead:v1:${input.externalSessionId}`).digest('hex').slice(0, 32);
+    const pending: DemoAttempt = {
+        schemaVersion: 'evan_anam_demo_lead_attempt_v1', externalSessionId: input.externalSessionId,
+        status: 'pending', receiptId, providerMessageId: null, completedAt: null,
+        rawContactStored: false,
+    };
+    const reserved = await redisCommand(['SET', demoAttemptKey(input.externalSessionId), JSON.stringify(pending), 'NX', 'EX', TTL], options);
+    if (reserved !== 'OK') {
+        const existing = parse<DemoAttempt>(await redisCommand(['GET', demoAttemptKey(input.externalSessionId)], options), 'evan_anam_demo_lead_attempt_v1');
+        if (!existing) throw new Error('Evan demo lead attempt reservation conflicted');
+        return { status: 'demo_lead_already_attempted' as const, sent: existing.status === 'sent', receiptId: existing.receiptId, duplicate: true };
+    }
+    try {
+        const brief = buildEvanGuestLeadBrief({ externalSessionId: input.externalSessionId, lead, turns: input.turns, ...capture });
+        const response = await sendAmyEmailWithAgentMail({ to: config.demoLeadEmail, ...brief }, { ...options, env: config.providerEnv });
+        const sent: DemoAttempt = { ...pending, status: 'sent', providerMessageId: response.messageId, completedAt: new Date().toISOString() };
+        await redisCommand(['SET', demoAttemptKey(input.externalSessionId), JSON.stringify(sent), 'XX', 'EX', TTL], options);
+        return { status: 'demo_lead_sent' as const, sent: true as const, receiptId, duplicate: false };
+    } catch {
+        const failed: DemoAttempt = { ...pending, status: 'failed', completedAt: new Date().toISOString() };
+        await redisCommand(['SET', demoAttemptKey(input.externalSessionId), JSON.stringify(failed), 'XX', 'EX', TTL], options).catch(() => undefined);
+        throw new Error('Evan demo lead delivery was not confirmed');
     }
 }
 
@@ -223,10 +348,49 @@ export async function dispatchEvanAnamPostSessionFollowUp(input: {
     if (!readEvanAnamAgentMailConfig(options.env ?? process.env).effectiveGateOpen) {
         return { status: 'email_unavailable' as const, sent: false as const };
     }
+    if (readEvanCaptureConfig(options.env ?? process.env).enabled) {
+        const turns = normalizeAmyTranscript(input.turns);
+        if (input.session.resolvedPersonaId !== EVAN_PERSONA_ID || input.session.agentSlug !== 'evan'
+            || input.session.variant !== EVAN_MULLINS_VARIANT || input.receipt.variant !== EVAN_MULLINS_VARIANT
+            || input.receipt.externalSessionId !== input.session.externalSessionId
+            || input.receipt.status !== 'completed' || input.receipt.transcript?.source !== 'anam_api'
+            || input.receipt.transcript.contentSha256 !== transcriptSha256(turns)) {
+            throw new Error('Evan finalized capture source did not match');
+        }
+    }
     const intent = parse<Intent>(await redisCommand(['GET', intentKey(input.session.externalSessionId)], options), 'evan_anam_agentmail_intent_v1');
-    if (!intent) return { status: 'email_not_requested' as const, sent: false as const };
+    if (!intent) {
+        if (input.receipt.externalSessionId !== input.session.externalSessionId) {
+            throw new Error('Evan demo lead post-session ownership did not match');
+        }
+        const turns = normalizeAmyTranscript(input.turns);
+        const recapRecipient = extractEvanGuestRecapRecipient(turns);
+        if (recapRecipient) {
+            // A guest may volunteer an address during the call. A single,
+            // explicit address in the final transcript authorizes one recap;
+            // a readback is an accuracy check, not a second consent gate.
+            return sendEvanAnamConversationFollowUp({
+                externalSessionId: input.session.externalSessionId,
+                displayName: recapRecipient.displayName,
+                email: recapRecipient.email,
+                emailSource: recapRecipient.confirmedByReadback ? 'spoken-readback' : 'spoken',
+                sessionStartedAt: input.session.boundAt,
+                sessionEndedAt: input.session.closeReceivedAt || input.receipt.completedAt,
+                turns,
+            }, options);
+        }
+        // Phone-only guest requests remain an internal demo notification;
+        // declining email never blocks the rest of Evan's conversation.
+        return sendEvanAnamGuestDemoLead({
+            externalSessionId: input.session.externalSessionId,
+            turns,
+        }, options);
+    }
     if (intent.browserSessionId !== input.session.browserSessionId || input.receipt.externalSessionId !== input.session.externalSessionId) {
         throw new Error('Evan AgentMail post-session ownership did not match');
+    }
+    if (hasEvanRecapDecline(normalizeAmyTranscript(input.turns))) {
+        return { status: 'email_declined' as const, sent: false as const };
     }
     const spine = readAmyAnamSpineConfig(options.env ?? process.env);
     const contact = readAmyAnamContactToken({
@@ -241,6 +405,7 @@ export async function dispatchEvanAnamPostSessionFollowUp(input: {
         externalSessionId: input.session.externalSessionId,
         displayName: intent.displayName,
         email: contact.email,
+        emailSource: 'check-in',
         sessionStartedAt: input.session.boundAt,
         sessionEndedAt: input.session.closeReceivedAt || input.receipt.completedAt,
         turns: input.turns,

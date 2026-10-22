@@ -1,0 +1,9 @@
+# Evan live test 23 — access endpoint attribution
+
+Run 23 used the protected `c08ipadtk` rehearsal preview. The route correction passed live: the Move Brief showed Gilbert → Chandler and the route map showed both city pins. The first explicit end request also passed. The new release blocker was an ACCESS row reading “Origin: ground floor, stairs” after the provider transcribed the caller as saying “There's one flight of stairs at pick up ground floor delivery.” The missing pause/comma merged two location facts into one parser clause; the parser then selected Origin because pickup appeared first, assigning the delivery floor to the wrong endpoint.
+
+The candidate now inserts a parsing boundary only for an explicit pickup/origin cue immediately followed by a floor phrase explicitly labeled delivery/destination. The live phrase yields `Origin: stairs` and `Destination: ground floor`; the older comma-separated phrase still passes. No route or map logic was changed. The regression uses the provider's exact access utterance alongside the two-city route.
+
+Evan's “rough range” wording in guest mode still merits human policy review against the prompt's ban on inventing ranges and unsupported handoff promises. One Anam `echo_gate` warning occurred; VoiceMeeter was not changed and this parser fix does not address audio overlap. Do not promote until the corrected access labels and preserved route pass together in an authorized live test.
+
+Local checks: 366 Evan release tests, the full repository test suite, TypeScript, and a production-style Next build passed. Rehearsal deployment `dpl_8sCASMpkj9K2AXA6UvuDvSufcQo6` (`rcyeu4gby`) is READY with no alias. Guest and synthetic-email entry plus token issuance passed without starting a live call or sending mail. Production remains on `dpl_532oXZx47MLz9UWBmRWkzDx4dqLF`.

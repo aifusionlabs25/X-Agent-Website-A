@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { parseEvanRouteToolStops } from '@/lib/anam/evan-address-route';
-import { geocodeEvanRouteStop } from '@/lib/anam/evan-geocoding';
+import { EvanGeocodingCancelledError, geocodeEvanRouteStops } from '@/lib/anam/evan-geocoding';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
 import {
     isTrustedBrowserOrigin,
@@ -45,6 +45,7 @@ async function authorize(request: Request): Promise<Response | null> {
 
 export async function POST(request: Request) {
     try {
+        if (request.signal.aborted) throw new EvanGeocodingCancelledError();
         const denied = await authorize(request);
         if (denied) return denied;
 
@@ -57,13 +58,10 @@ export async function POST(request: Request) {
             return noStoreJson({ error: 'No confirmed street addresses were provided' }, { status: 400 });
         }
 
-        const resolved = [];
-        for (const [index, stop] of stops.entries()) {
-            if (index > 0) await new Promise((resolve) => setTimeout(resolve, 225));
-            resolved.push(await geocodeEvanRouteStop(stop, {
-                apiKey: process.env.GEOAPIFY_API_KEY,
-            }));
-        }
+        const resolved = await geocodeEvanRouteStops(stops, {
+            apiKey: process.env.GEOAPIFY_API_KEY,
+            signal: request.signal,
+        });
         const mappedCount = resolved.filter((stop) => Boolean(stop.coordinates)).length;
         const publicStops = resolved.map((stop) => ({
             kind: stop.kind,
@@ -81,7 +79,10 @@ export async function POST(request: Request) {
             stops: publicStops,
             providerDetailReturned: false,
         });
-    } catch {
+    } catch (error) {
+        if (request.signal.aborted || error instanceof EvanGeocodingCancelledError) {
+            return noStoreJson({ error: 'Street-level route update cancelled' }, { status: 499 });
+        }
         return noStoreJson({ error: 'Street-level route update failed' }, { status: 500 });
     }
 }

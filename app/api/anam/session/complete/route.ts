@@ -162,6 +162,14 @@ export async function POST(request: Request) {
                 },
             } : {}),
         });
+        if (launchAgentSlug === 'evan') {
+            console.info('[Evan Anam] Session completion recorded', {
+                sessionRef: sessionId.slice(-8),
+                closeReason,
+                status: completionStatus,
+                contentLogged: false,
+            });
+        }
         if (completionStatus === 'terminal') {
             const existingReceipt = await readAmyAnamReceipt(sessionId);
             if (existingReceipt) {

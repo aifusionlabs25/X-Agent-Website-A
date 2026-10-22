@@ -1,5 +1,9 @@
 import type { AmyTranscriptTurn } from './session-spine.ts';
+import { AMY_ANAM_MAX_TURN_CHARACTERS, normalizeAmyTranscript } from './session-spine.ts';
 import { buildEvanMovePlan } from './evan-move-planner.ts';
+import type { EvanGuestLead } from './evan-guest-lead.ts';
+import { projectEvanCaptureContact, projectEvanCaptureIntake } from './evan-capture.ts';
+import type { EvanCaptureRecord } from './evan-capture.ts';
 
 export type EvanMovingIntake = {
     moveType: string[];
@@ -9,6 +13,7 @@ export type EvanMovingIntake = {
     access: string[];
     inventory: string[];
     services: string[];
+    packingPlan: string[];
     customerCare: string[];
     quoteRequests: string[];
     coverageQuestions: string[];
@@ -31,32 +36,58 @@ const CONTACT = {
 const clean = (value: unknown, max = 1_500) =>
     String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, max);
 
-const escapeHtml = (value: unknown) => clean(value, 30_000)
+// Bound inputs at capture/legacy normalization, not after multiple validated
+// facts are joined for HTML. Clipping here would disagree with the text recap.
+const escapeHtml = (value: unknown) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim()
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const unique = (items: string[], max = 8) => [...new Set(items.map(item => clean(item, 360)).filter(Boolean))].slice(0, max);
+
+// Capture has already validated a bounded record. Presentation must not apply
+// the legacy parser's per-item clipping or list caps to its current facts.
+const uniqueCaptured = (items: string[]) => [...new Set(items.filter(Boolean))];
 
 function append(intake: string[], value: string) {
     if (value && !intake.includes(value)) intake.push(value);
 }
 
 export function redactEvanTranscript(turns: AmyTranscriptTurn[]): AmyTranscriptTurn[] {
-    return turns.slice(0, 200).map(turn => ({
+    // Use the provider transcript's shared bounds, including late corrections.
+    // Sanitize before formatting so contact near a turn's limit is not cut into
+    // an unrecognizable, partially exposed fragment.
+    const phoneToken = '(?:\\d|zero|oh|one|two|three|four|five|six|seven|eight|nine)';
+    const spokenPhone = new RegExp(`(?<![\\p{L}\\d])(?:\\+?${phoneToken}[\\s,…().-]*){10,11}(?![\\s,…().-]*${phoneToken}\\b)`, 'giu');
+    const spokenEmail = /\b(?:(?:[a-z0-9][\s,-]+){1,30}[a-z0-9]|[a-z0-9.!#$%&'*+/=?^_`{|}~-]+)\s+(?:at|@)\s+[a-z0-9-]+(?:\s+dot\s+[a-z0-9-]+|\.[a-z0-9-]+)+\b/gi;
+    return normalizeAmyTranscript(turns).map(turn => ({
         role: turn.role,
-        content: clean(turn.content, 2_000)
-            .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[private contact]')
-            .replace(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/g, '[private contact]'),
+        content: clean(turn.content, AMY_ANAM_MAX_TURN_CHARACTERS)
+            .replace(spokenEmail, '[private contact]')
+            .replace(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[private contact]')
+            .replace(spokenPhone, '[private contact]'),
     }));
 }
 
+const CAPTURE_UNAVAILABLE_NOTICE = 'The structured move summary is unavailable. No move facts are confirmed by this recap; the Mullins team must review the transcript and confirm the details directly with you.';
+
+function unavailableCaptureIntake(): EvanMovingIntake {
+    return { moveType: [], originDestination: [], timing: [], propertyScope: [], access: [], inventory: [],
+        services: [], packingPlan: [], customerCare: [], quoteRequests: [], coverageQuestions: [], walkthrough: [],
+        contactPreferences: [], unknowns: [CAPTURE_UNAVAILABLE_NOTICE], missing: ['Manual transcript review and customer confirmation are required.'] };
+}
+
 export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingIntake {
-    const userTurns = turns
-        .filter(turn => turn.role === 'user')
-        .map(turn => ({ role: 'user' as const, content: clean(turn.content, 2_000) }))
+    const normalizedTurns = turns
+        .map(turn => ({ role: turn.role, content: clean(turn.content, 2_000) }))
         .filter(turn => Boolean(turn.content));
+    const userTurns = normalizedTurns
+        .filter(turn => turn.role === 'user')
+        .map(turn => ({ role: 'user' as const, content: turn.content }));
     const text = userTurns.map(turn => turn.content).join(' ');
-    const plan = buildEvanMovePlan(userTurns);
+    // Preserve adjacent readback/confirmation context. The shared planner still
+    // requires visitor-grounded facts; agent speech alone cannot create a route.
+    const plan = buildEvanMovePlan(normalizedTurns);
+    const storageRequested = plan.services.includes('Storage stop');
 
     const routeStops = [...plan.stops];
     const cityPattern = '(Phoenix|Mesa|Chandler|Surprise|Scottsdale|Tempe|Gilbert|Glendale|Queen Creek|Peoria|Goodyear|Avondale|Buckeye)';
@@ -68,7 +99,7 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
     const moveType: string[] = [];
     if (/\b(elderly|senior|walker|wheelchair|retirement|assisted living)\b/i.test(text)) append(moveType, 'Senior move');
     if (/\b(house|home|apartment|condo|residential)\b/i.test(text)) append(moveType, 'Residential move');
-    if (routeStops.length > 2 || /\bstorage unit\b/i.test(text)) append(moveType, 'Multi-stop move');
+    if (routeStops.length > 2 || storageRequested && /\bstorage unit\b/i.test(text)) append(moveType, 'Multi-stop move');
     if (/\b(commercial|office)\b/i.test(text)) append(moveType, 'Commercial move');
     if (/\b(long[- ]distance|out of state)\b/i.test(text)) append(moveType, 'Long-distance move');
 
@@ -83,14 +114,10 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
     else if (plan.timing) append(timing, capitalize(plan.timing));
 
     const kitchenPacking = /\b(?:full packing\b[^.!?]{0,35}\bkitchen\b|full kitchen packing)\b/i.test(text);
-    const services = unique([
-        kitchenPacking ? 'Full kitchen packing' : '',
-        !kitchenPacking && /\bfull packing\b/i.test(text) ? 'Full packing' : '',
-        !kitchenPacking && !/\bfull packing\b/i.test(text) && /\bpacking\b/i.test(text) ? 'Packing support' : '',
-        /\bunpacking\b/i.test(text) ? 'Unpacking' : '',
-        /\blabor[- ]only\b/i.test(text) ? 'Labor-only support' : '',
-        /\bdisassembl(?:e|y|ing)\b/i.test(text) ? 'Furniture disassembly' : '',
-    ]);
+    const services = unique(plan.services
+        .filter(service => ['Full packing', 'Packing support', 'Unpacking', 'Labor-only support', 'Furniture disassembly'].includes(service))
+        .map(service => service === 'Full packing' && kitchenPacking ? 'Full kitchen packing' : service));
+    const packingPlan = plan.packingPlan ? [plan.packingPlan] : [];
     const inventoryRules: Array<[RegExp, string]> = [
         [/\bsectional(?: sofa)?\b/i, 'Sectional'],
         [/\btreadmill\b/i, 'Treadmill'],
@@ -137,10 +164,11 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
         /\b(?:do not|don't) have (?:a )?(?:full|complete) inventory\b/i.test(text)
             ? 'Complete inventory / approximate volume needs confirmation'
             : '',
+        ...plan.possibleStops.map(stop => `Possible ${stop.label || 'additional'} stop in ${stop.city} (not confirmed)`),
     ]);
     const propertyScope = unique([
         plan.propertyScope ? capitalize(plan.propertyScope) : '',
-        /\bstorage unit\b/i.test(text) ? 'Storage unit stop' : '',
+        storageRequested && /\bstorage unit\b/i.test(text) ? 'Storage unit stop' : '',
     ]);
 
     const intake: EvanMovingIntake = {
@@ -151,6 +179,7 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
         access,
         inventory,
         services,
+        packingPlan,
         customerCare,
         quoteRequests,
         coverageQuestions,
@@ -169,7 +198,7 @@ export function buildEvanMovingIntake(turns: AmyTranscriptTurn[]): EvanMovingInt
     }
     if (!intake.access.length) missing.push('origin and destination access requirements');
     const storageAccessCaptured = /\bstorage unit\b[^.!?]{0,100}\b(stairs?|elevator|parking|driveway|gate|loading|ground floor|access)\b/i.test(text);
-    if (/\bstorage unit\b/i.test(text) && !storageAccessCaptured) missing.push('storage-unit access details');
+    if (storageRequested && /\bstorage unit\b/i.test(text) && !storageAccessCaptured) missing.push('storage-unit access details');
     const addressUnavailable = intake.unknowns.some(item => /street addresses/i.test(item));
     if (addressUnavailable || !/\b\d{1,6}\s+[A-Za-z0-9]/.test(text)) missing.push('exact street addresses');
     if (/\b(?:phone|contact number|reach me|call me)\b/i.test(text) && !findAuthorizedCallbackPhone(turns)) {
@@ -261,35 +290,42 @@ function shell(input: { preheader: string; eyebrow: string; title: string; intro
     return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f2f5f7;font-family:Arial,Helvetica,sans-serif;color:#1d2b3d;line-height:1.5"><div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f5f7"><tr><td align="center" style="padding:24px 10px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border:1px solid #dce3e9;border-radius:10px;overflow:hidden"><tr><td style="padding:24px 30px;background:#13243a"><img src="${CONTACT.logo}" width="185" alt="Mullins Moving" style="display:block;max-width:185px;height:auto"><p style="margin:16px 0 5px;color:#f4a261;font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase">${escapeHtml(input.eyebrow)}</p><h1 style="margin:0;color:#ffffff;font-size:27px;line-height:1.25">${escapeHtml(input.title)}</h1></td></tr><tr><td style="padding:24px 30px 0;color:#27384d;font-size:15px">${input.intro}</td></tr>${input.rows}<tr><td style="padding:24px 30px;background:#f7f9fb;color:#637083;font-size:12px;line-height:1.55">${input.footer}</td></tr></table></td></tr></table></body></html>`;
 }
 
-function recapBullets(intake: EvanMovingIntake): string[] {
+function recapBullets(intake: EvanMovingIntake, captureMode = false): string[] {
     const items: string[] = [];
     if (intake.moveType.length) items.push(`Move: ${listText(intake.moveType)}`);
     if (intake.originDestination.length) items.push(`Locations and route: ${listText(intake.originDestination)}`);
     if (intake.timing.length) items.push(`Requested timing: ${listText(intake.timing)}`);
-    if (intake.services.length || intake.inventory.length) items.push(`Services and special items: ${listText(unique([...intake.services, ...intake.inventory], 8))}`);
+    if (captureMode && intake.propertyScope.length) items.push(`Property / scope: ${listText(intake.propertyScope)}`);
+    if (intake.services.length || intake.inventory.length || intake.packingPlan.length) items.push([
+        intake.services.length || intake.inventory.length ? `${captureMode ? 'Services and move items' : 'Services and special items'}: ${listText(captureMode ? uniqueCaptured([...intake.services, ...intake.inventory]) : unique([...intake.services, ...intake.inventory], 8))}` : '',
+        intake.packingPlan.length ? `Packing plan: ${listText(intake.packingPlan)}` : '',
+    ].filter(Boolean).join('. '));
     if (intake.access.length) items.push(`Access: ${listText(intake.access)}`);
     if (intake.customerCare.length) items.push(`Customer-care priorities: ${listText(intake.customerCare)}`);
-    if (intake.quoteRequests.length || intake.coverageQuestions.length) items.push(`Questions for the Mullins team: ${listText(unique([...intake.quoteRequests, ...intake.coverageQuestions], 6))}`);
+    if (intake.quoteRequests.length || intake.coverageQuestions.length) items.push(`Questions for the Mullins team: ${listText(captureMode ? uniqueCaptured([...intake.quoteRequests, ...intake.coverageQuestions]) : unique([...intake.quoteRequests, ...intake.coverageQuestions], 6))}`);
     if (intake.unknowns.length) items.push(`Still to confirm: ${listText(intake.unknowns)}`);
-    return items.length ? items.slice(0, 8) : ['The Mullins team will confirm your move details directly with you.'];
+    if (captureMode && intake.contactPreferences.length) items.push(`Contact preferences shared: ${listText(intake.contactPreferences)}`);
+    return items.length ? captureMode ? items : items.slice(0, 8) : ['The Mullins team will confirm your move details directly with you.'];
 }
 
 function transcriptAttachment(input: {
     externalSessionId: string; displayName: string; verifiedEmail: string;
-    sessionStartedAt: string; sessionEndedAt: string; turns: AmyTranscriptTurn[];
+    sessionStartedAt: string; sessionEndedAt: string; turns: AmyTranscriptTurn[]; captureMode?: boolean;
 }) {
     const transcript = [
         'EVAN / MULLINS MOVING - SANITIZED SESSION TRANSCRIPT',
         `Session ID: ${clean(input.externalSessionId, 100)}`,
         `Visitor: ${clean(input.displayName, 120)}`,
-        `Verified check-in email: ${clean(input.verifiedEmail, 254)}`,
+        `Confirmed contact email: ${clean(input.verifiedEmail, 254)}`,
         `Started (Arizona): ${displayDate(input.sessionStartedAt)}`,
         `Ended (Arizona): ${displayDate(input.sessionEndedAt)}`,
         `Duration: ${duration(input.sessionStartedAt, input.sessionEndedAt)}`,
         '',
-        'Spoken email addresses and phone numbers are redacted below. Use the verified check-in email and the authorized callback number in the admin/sales brief.',
+        input.captureMode
+            ? 'Spoken email addresses and phone numbers are redacted below. The delivery email is separately authorized; any shared phone in the brief requires human verification and respect for contact preferences.'
+            : 'Spoken email addresses and phone numbers are redacted below. Use the confirmed contact email and authorized callback number in the admin/sales brief.',
         '',
-        ...input.turns.map((turn, index) => `${String(index + 1).padStart(2, '0')}. ${turn.role === 'user' ? 'VISITOR' : 'EVAN'}: ${clean(turn.content, 2_000)}`),
+        ...input.turns.map((turn, index) => `${String(index + 1).padStart(2, '0')}. ${turn.role === 'user' ? 'VISITOR' : 'EVAN'}: ${clean(turn.content, AMY_ANAM_MAX_TURN_CHARACTERS)}`),
         '',
     ].join('\n');
     const safeId = clean(input.externalSessionId, 100).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 36) || 'session';
@@ -303,13 +339,33 @@ export function buildEvanEmailBundle(input: {
     sessionStartedAt: string;
     sessionEndedAt: string;
     turns: AmyTranscriptTurn[];
+    emailSource?: 'check-in' | 'spoken' | 'spoken-readback';
+    handoffStatus?: 'mullins-confirmed' | 'rehearsal' | 'unconfirmed';
+    captureRecord?: EvanCaptureRecord;
+    captureStatus?: 'ready' | 'unavailable';
 }) {
-    const name = clean(input.displayName, 120) || 'Visitor';
-    const greetingName = firstName(name);
-    const callbackPhone = findAuthorizedCallbackPhone(input.turns);
+    const captureUnavailable = input.captureStatus === 'unavailable' || input.captureStatus === 'ready' && !input.captureRecord;
+    const captureMode = Boolean(input.captureRecord) || captureUnavailable;
+    const capturedContact = input.captureRecord && !captureUnavailable
+        ? projectEvanCaptureContact(input.captureRecord, { displayName: input.displayName, email: input.verifiedEmail }) : null;
+    // Empty/removed captured names are intentional; do not fall back to a stale name.
+    const name = clean(captureUnavailable ? '' : capturedContact ? capturedContact.displayName : input.displayName, 120) || 'Visitor';
+    const greetingName = name === 'Visitor' ? 'there' : firstName(name);
+    const emailSource = input.emailSource === 'spoken-readback'
+        ? 'shared and read back during the conversation'
+        : input.emailSource === 'spoken' ? 'shared during the conversation; verify spelling on follow-up' : 'secure website check-in';
+    const nextStep = input.handoffStatus === 'mullins-confirmed'
+        ? 'Your move brief has been sent to the Mullins Moving team. A team member will follow up within 24 to 48 hours to confirm details and discuss next steps. Mullins staff - not Evan - will determine availability, prepare any quote, and explain valuation or coverage options.'
+        : input.handoffStatus === 'rehearsal'
+            ? 'This is a rehearsal recap. The internal briefs went to AI Fusion Labs for demo review, not to Mullins Moving. No Mullins callback has been arranged. Contact Mullins Moving directly for an estimate.'
+            : 'We could not confirm that Mullins Moving received the internal move brief. Please contact Mullins Moving directly to arrange an estimate. Mullins staff - not Evan - will determine availability, prepare any quote, and explain valuation or coverage options.';
+    const callbackPhone = captureMode ? capturedContact?.phone || null : findAuthorizedCallbackPhone(input.turns);
+    const callbackLabel = captureMode ? capturedContact?.phoneConfirmed
+        ? 'Phone confirmed during call' : 'Phone shared (verify before follow-up)' : 'Authorized callback';
     const turns = redactEvanTranscript(input.turns);
-    const intake = buildEvanMovingIntake(turns);
-    const recap = recapBullets(intake);
+    const intake = captureUnavailable ? unavailableCaptureIntake()
+        : input.captureRecord ? projectEvanCaptureIntake(input.captureRecord) : buildEvanMovingIntake(turns);
+    const recap = captureUnavailable ? [CAPTURE_UNAVAILABLE_NOTICE] : recapBullets(intake, captureMode);
     const sessionDuration = duration(input.sessionStartedAt, input.sessionEndedAt);
     const visitorTurns = turns.filter(turn => turn.role === 'user').length;
     const evanTurns = turns.length - visitorTurns;
@@ -317,10 +373,11 @@ export function buildEvanEmailBundle(input: {
         .reduce((total, turn) => total + (turn.content.match(/\?/g)?.length ?? 0), 0);
     const priorityFlags = unique([
         intake.timing.some(item => /urgent|less than|within \d+ days|as soon/i.test(item)) ? 'Time-sensitive request' : '',
-        intake.customerCare.length ? 'Senior / mobility care' : '',
+        intake.customerCare.length ? captureMode ? 'Care priorities shared' : 'Senior / mobility care' : '',
         intake.originDestination.some(item => item.split(' \u2192 ').length > 2) ? 'Multiple locations' : '',
-        intake.inventory.length ? 'Specialty items' : '',
-        intake.quoteRequests.length ? 'Quote requested' : '',
+        intake.inventory.length ? captureMode ? 'Move items shared' : 'Specialty items' : '',
+        intake.quoteRequests.length ? captureMode ? 'Visitor questions' : 'Quote requested' : '',
+        captureUnavailable ? 'Manual transcript review required' : '',
     ]);
 
     const visitorText = [
@@ -328,7 +385,7 @@ export function buildEvanEmailBundle(input: {
         'Thank you for speaking with Evan, the Mullins Moving virtual concierge. Here is the working recap we captured:', '',
         ...recap.map(item => `- ${item}`), '',
         'What happens next',
-        'A Mullins Moving team member will review your information, confirm anything still needed, and discuss next steps with you. Mullins staff - not Evan - will determine availability, prepare any quote, and explain valuation or coverage options.', '',
+        nextStep, '',
         `Schedule a video planning call: ${CONTACT.calendly}`,
         `Call: ${CONTACT.phone}`,
         `Email: ${CONTACT.email}`,
@@ -346,7 +403,7 @@ export function buildEvanEmailBundle(input: {
         intro: `<p style="margin:0 0 10px">Thank you for speaking with Evan, the Mullins Moving virtual concierge.</p><p style="margin:0">Here is the working recap we captured. Please reply or call us if anything needs to be corrected.</p>`,
         rows: [
             section('Move details we heard', bullets(recap)),
-            section('What happens next', '<p style="margin:0;color:#27384d">A Mullins Moving team member will review your information, confirm anything still needed, and discuss next steps with you. <strong>Mullins staff - not Evan - will determine availability, prepare any quote, and explain valuation or coverage options.</strong></p>'),
+            section('What happens next', `<p style="margin:0;color:#27384d">${escapeHtml(nextStep)}</p>`),
             section('Plan the next conversation', `<p style="margin:0 0 10px;color:#27384d">Choose a video planning call, visit Mullins Moving, or speak with Evan again.</p>${button('Schedule a video call', CONTACT.calendly)}${button('Mullins Moving website', CONTACT.website, true)}${button('Talk with Evan again', CONTACT.evan, true)}`),
             section('Contact Mullins Moving', detailRows([
                 ['Phone', CONTACT.phone], ['Email', CONTACT.email], ['Office', CONTACT.address],
@@ -357,20 +414,24 @@ export function buildEvanEmailBundle(input: {
 
     const salesSections = ([
         ['Services requested', intake.services],
-        ['Specialty / high-care items', intake.inventory],
+        ['Packing plan', intake.packingPlan],
+        [captureMode ? 'Move items mentioned' : 'Specialty / high-care items', intake.inventory],
         ['Access considerations', intake.access],
         ['Customer-care priorities', intake.customerCare],
-        ['Quote request', intake.quoteRequests],
+        [captureMode ? 'Visitor questions / requests' : 'Quote request', intake.quoteRequests],
         ['Valuation / coverage questions', intake.coverageQuestions],
         ['Walkthrough preference', intake.walkthrough],
+        ['Details still to confirm', intake.unknowns],
+        ...(captureMode ? [['Contact preferences shared', intake.contactPreferences]] : []),
     ] as Array<[string, string[]]>).filter(([, items]) => items.length > 0);
     const repActions = unique([
-        callbackPhone
+        'Contact this lead as soon as possible after receipt; the customer-facing follow-up window is 24 to 48 hours when Mullins delivery is confirmed.',
+        captureMode ? 'Review the shared contact preferences and verify any phone number before follow-up; the delivery email is separately authorized.' : callbackPhone
             ? 'Contact the customer at the authorized callback number.'
             : 'Contact the customer at the verified email address.',
         intake.missing.length ? 'Confirm: ' + intake.missing.join('; ') + '.' : '',
         intake.customerCare.length ? 'Plan around these customer-care priorities: ' + intake.customerCare.join('; ') + '.' : '',
-        intake.inventory.length ? 'Review handling requirements for the listed specialty / high-care items.' : '',
+        intake.inventory.length ? captureMode ? 'Confirm the listed move items, quantities, and any handling requirements.' : 'Review handling requirements for the listed specialty / high-care items.' : '',
         intake.coverageQuestions.length ? 'Explain applicable valuation / coverage options without implying automatic full insurance.' : '',
         intake.walkthrough.length ? 'Coordinate the requested walkthrough format after availability is confirmed.' : '',
         'After the open details are verified, Mullins staff determines feasibility and prepares any quote.',
@@ -379,8 +440,8 @@ export function buildEvanEmailBundle(input: {
         'MULLINS SALES - MOVE FOLLOW-UP BRIEF',
         'Priority: ' + (priorityFlags.join(' | ') || 'Standard follow-up'), '',
         'Customer: ' + name,
-        'Verified email: ' + clean(input.verifiedEmail, 254) + ' (authoritative secure check-in address)',
-        'Authorized callback: ' + (callbackPhone ?? 'Not captured - use verified email'), '',
+        'Contact email: ' + clean(input.verifiedEmail, 254) + ` (${emailSource})`,
+        callbackLabel + ': ' + (callbackPhone ?? 'Not captured - use verified email'), '',
         'Move at a glance',
         '- Route: ' + listText(intake.originDestination),
         '- Timing: ' + listText(intake.timing),
@@ -398,8 +459,8 @@ export function buildEvanEmailBundle(input: {
     const atAGlanceRows: Array<[string, string]> = [
         ['Priority flags', priorityFlags.join(' | ') || 'Standard follow-up'],
         ['Customer', name],
-        ['Verified email', clean(input.verifiedEmail, 254) + ' (secure check-in; authoritative)'],
-        ['Authorized callback', callbackPhone ?? 'Not captured - use verified email'],
+        ['Contact email', clean(input.verifiedEmail, 254) + ` (${emailSource})`],
+        [callbackLabel, callbackPhone ?? 'Not captured - use verified email'],
         ['Route', listText(intake.originDestination)],
         ['Timing', listText(intake.timing)],
         ['Property / scope', listText(intake.propertyScope)],
@@ -414,7 +475,8 @@ export function buildEvanEmailBundle(input: {
         section('Recommended rep action plan', actionList),
     ].join('');
 
-    const adminSummary = recap.slice(0, 5);
+    const adminSummary = captureMode ? recap : recap.slice(0, 5);
+    const routingSuffix = intake.quoteRequests.length ? captureMode ? ' - visitor questions need review' : ' - quote discussion needed' : '';
     const adminText = [
         'MULLINS ADMIN - EVAN SESSION SNAPSHOT', '',
         `Session ID: ${clean(input.externalSessionId, 100)}`,
@@ -423,10 +485,10 @@ export function buildEvanEmailBundle(input: {
         `Duration: ${sessionDuration}`,
         `Visitor / Evan turns: ${visitorTurns} / ${evanTurns}`,
         `Visitor questions: ${questionCount}`,
-        `Checked-in visitor: ${name}`,
-        `Verified email: ${clean(input.verifiedEmail, 254)}`,
-        `Authorized callback: ${callbackPhone ?? 'Not captured'}`,
-        `Routing: Sales follow-up requested${intake.quoteRequests.length ? ' - quote discussion needed' : ''}`, '',
+        `Visitor: ${name}`,
+        `Contact email: ${clean(input.verifiedEmail, 254)} (${emailSource})`,
+        `${callbackLabel}: ${callbackPhone ?? 'Not captured'}`,
+        `Routing: Sales lead for prompt review${routingSuffix}`, '',
         'Quick operational summary', ...adminSummary.map(item => `- ${item}`), '',
         `Exceptions / missing data: ${intake.missing.join('; ')}`,
         'Transcript: Sanitized plain-text transcript attached. Spoken email addresses and phone numbers are redacted in the attachment.',
@@ -445,13 +507,13 @@ export function buildEvanEmailBundle(input: {
                 ['Visitor questions', String(questionCount)],
             ])),
             section('Identity and routing', detailRows([
-                ['Visitor', name], ['Verified email', clean(input.verifiedEmail, 254)],
-                ['Authorized callback', callbackPhone ?? 'Not captured'],
-                ['Routing', `Sales follow-up requested${intake.quoteRequests.length ? ' - quote discussion needed' : ''}`],
+                ['Visitor', name], ['Contact email', clean(input.verifiedEmail, 254) + ` (${emailSource})`],
+                [callbackLabel, callbackPhone ?? 'Not captured'],
+                ['Routing', `Sales lead for prompt review${routingSuffix}`],
             ])),
             section('Quick operational summary', bullets(adminSummary)),
             section('Exceptions / missing data', bullets(intake.missing)),
-            section('Transcript record', '<p style="margin:0;color:#27384d"><strong>Attached:</strong> sanitized plain-text transcript. Spoken email addresses and phone numbers are redacted in the attachment; use the verified check-in contact fields above.</p>'),
+            section('Transcript record', '<p style="margin:0;color:#27384d"><strong>Attached:</strong> sanitized plain-text transcript. Spoken email addresses and phone numbers are redacted in the attachment; verify the contact fields above on follow-up.</p>'),
         ].join(''),
         footer: 'Internal Mullins Moving operational record. Handle customer information according to company privacy and retention requirements.',
     });
@@ -467,7 +529,7 @@ export function buildEvanEmailBundle(input: {
             subject: `[EVAN SESSION] ${name} - ${sessionDuration} - transcript attached`,
             text: adminText,
             html: adminHtml,
-            attachments: [transcriptAttachment({ ...input, displayName: name, turns })],
+            attachments: [transcriptAttachment({ ...input, displayName: name, turns, captureMode })],
         },
         sales: {
             subject: `[ACTION] Mullins move lead - ${name}`,
@@ -481,5 +543,73 @@ export function buildEvanEmailBundle(input: {
                 footer: 'Internal Mullins Moving sales brief. Verify all consequential details directly with the customer before quoting or scheduling.',
             }),
         },
+    };
+}
+
+/** One internal demo brief for a guest's explicitly requested follow-up. */
+export function buildEvanGuestLeadBrief(input: {
+    externalSessionId: string;
+    lead: EvanGuestLead;
+    turns: AmyTranscriptTurn[];
+    captureRecord?: EvanCaptureRecord;
+    captureStatus?: 'ready' | 'unavailable';
+}) {
+    const captureUnavailable = input.captureStatus === 'unavailable' || input.captureStatus === 'ready' && !input.captureRecord;
+    const captureMode = Boolean(input.captureRecord) || captureUnavailable;
+    const capturedContact = input.captureRecord && !captureUnavailable ? projectEvanCaptureContact(input.captureRecord) : null;
+    const turns = redactEvanTranscript(input.turns);
+    const intake = captureUnavailable ? unavailableCaptureIntake()
+        : input.captureRecord ? projectEvanCaptureIntake(input.captureRecord) : buildEvanMovingIntake(turns);
+    const route = intake.originDestination[0] || 'Not confirmed';
+    const timing = intake.timing[0] || 'Not confirmed';
+    const scope = intake.propertyScope[0] || 'Not confirmed';
+    const fields: Array<[string, string]> = captureMode ? [
+        ['Name shared, verify before follow-up', capturedContact?.displayName || 'Not captured'],
+        [capturedContact?.phoneConfirmed ? 'Phone confirmed during call' : 'Phone shared, verify before follow-up', capturedContact?.phone || 'Not captured'],
+        ['Email shared, verify before follow-up', capturedContact?.email || 'Not captured'],
+        ['Preferred callback window', capturedContact?.callbackWindow || 'Not captured'],
+        ['Contact preference', capturedContact?.contactPreference || 'Not captured'],
+        ['Route', route], ['Timing', timing], ['Property / scope', scope],
+    ] : [
+        ['Name', input.lead.displayName || 'Not verbally confirmed'],
+        ...(input.lead.nameForReview ? [['Name shared, needs confirmation', input.lead.nameForReview] as [string, string]] : []),
+        ['Phone', input.lead.phone || 'Not verbally confirmed'],
+        ['Email', input.lead.email || 'Not verbally confirmed'],
+        ...(input.lead.emailForReview ? [['Email shared, needs confirmation', input.lead.emailForReview] as [string, string]] : []),
+        ['Preferred callback window', input.lead.callbackWindow || 'Not confirmed'],
+        ['Route', route], ['Timing', timing], ['Property / scope', scope],
+    ];
+    const name = captureMode ? capturedContact?.displayName || 'guest' : input.lead.displayName || 'guest';
+    const captureRecap = captureUnavailable ? [CAPTURE_UNAVAILABLE_NOTICE] : recapBullets(intake, true);
+    const contactBoundary = captureMode
+        ? capturedContact?.phoneConfirmed
+            ? 'The phone was read back and confirmed during this call. Other shared contact fields remain working notes. Respect the caller\'s contact preferences and verify uncertain details before use.'
+            : 'Shared contact fields are working notes, not readback verification or permission to disregard the caller\'s contact preferences. A human must verify details before use.'
+        : 'The primary phone and email fields contain only visitor-supplied details read back and confirmed during the call. Details marked for review were shared by the visitor but not read back and confirmed.';
+    const id = clean(input.externalSessionId, 100).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 36);
+    return {
+        subject: `[EVAN DEMO LEAD] Follow-up requested - ${name}`,
+        text: [
+            'EVAN DEMO / INTERNAL LEAD BRIEF',
+            'This is a demo notification to AI Fusion Labs, not proof that Mullins Moving received it.',
+            'The customer asked for follow-up. No callback, appointment, estimate, or email recap is scheduled by this message.',
+            `Session: ${id}`, '',
+            ...fields.map(([label, value]) => `${label}: ${value}`), '',
+            ...(captureMode ? ['Working move record', ...captureRecap.map(item => `- ${item}`), ''] : []),
+            contactBoundary,
+            'Any missing or uncertain details must be confirmed by a human before use.',
+        ].join('\n'),
+        html: shell({
+            preheader: 'Internal Evan demo lead requiring human review.',
+            eyebrow: 'AI Fusion Labs demo notification',
+            title: 'Evan follow-up request',
+            intro: '<p style="margin:0">This is a demo notification to AI Fusion Labs, not proof that Mullins Moving received it. The customer asked for follow-up, but no callback, appointment, estimate, or email recap is scheduled by this message.</p>',
+            rows: section('Visitor details and confirmation status', detailRows(fields))
+                + (captureMode ? section('Working move record', bullets(captureRecap)) : '')
+                + section('Review before action', `<p style="margin:0;color:#27384d">Session ${escapeHtml(id)}. ${captureMode ? escapeHtml(contactBoundary) : 'Primary phone and email fields contain only visitor-supplied, read-back details. Values marked for review were not read back and confirmed. A human must verify missing or uncertain details before use.'}</p>`),
+            footer: 'Internal demo brief. Do not treat this as a customer recap, CRM record, booking, or Mullins team delivery receipt.',
+        }),
+        ...(captureMode ? { attachments: [transcriptAttachment({ externalSessionId: input.externalSessionId,
+            displayName: name === 'guest' ? 'Visitor' : name, verifiedEmail: '', sessionStartedAt: '', sessionEndedAt: '', turns, captureMode: true })] } : {}),
     };
 }

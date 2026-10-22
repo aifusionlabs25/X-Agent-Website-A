@@ -38,6 +38,17 @@ export function parseEvanRouteToolStops(value: unknown): EvanRouteToolStop[] {
     }).sort((left, right) => left.order - right.order);
 }
 
+/** A malformed or city-only override never replaces the conversation route. */
+export function resolveEvanRouteToolStops(value: unknown): {
+    stops: EvanRouteToolStop[];
+    ignoredUnconfirmedStops: boolean;
+} {
+    const parsed = parseEvanRouteToolStops(value);
+    const ignoredUnconfirmedStops = value !== undefined
+        && (!Array.isArray(value) || value.length !== parsed.length);
+    return { stops: ignoredUnconfirmedStops ? [] : parsed, ignoredUnconfirmedStops };
+}
+
 export function routeToolStopsToMovePlanStops(stops: EvanRouteToolStop[]): MovePlanStop[] {
     return stops.map((stop) => ({
         kind: stop.kind,

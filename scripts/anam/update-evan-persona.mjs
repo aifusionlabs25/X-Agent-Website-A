@@ -2,12 +2,17 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 
 const API_BASE = 'https://api.anam.ai/v1';
-const EVAN_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
+const EVAN_ID = '6097c73e-b6ef-48c5-94c7-9a95d4863b99';
 const JAMES_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
-const CURRENT_KNOWLEDGE_TOOL_ID = 'ad2e09f5-1360-4f4e-b692-8aaaa55cc976';
+const PREVIOUS_EVAN_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
+const CURRENT_KNOWLEDGE_TOOL_ID = 'fc93e067-9254-4635-a4a6-645970d12548';
 const KNOWLEDGE_TOOL_NAME = 'Knowledge_Evan_Mullins_Moving';
 const INITIAL_MESSAGE = "Hi, I'm Evan with Mullins Moving. Tell me a little about the move you're planning, and I'll help you work through the details.";
 const apply = process.argv.includes('--apply');
+const confirmedReplacement = process.argv.includes('--confirm-6097-replacement');
+if (apply && !confirmedReplacement) {
+    throw new Error('Refusing apply without --confirm-6097-replacement. Dry-run is the default.');
+}
 
 const localEnv = await fs.readFile(new URL('../../.env.local', import.meta.url), 'utf8').catch(() => '');
 const envMap = Object.fromEntries(localEnv.split(/\r?\n/)
@@ -20,6 +25,9 @@ const apiKey = process.env.ANAM_API_KEY?.trim() || envMap.ANAM_API_KEY?.trim();
 if (!apiKey) throw new Error('ANAM_API_KEY is required and is never printed.');
 
 const personaManifest = JSON.parse(await fs.readFile(new URL('../../config/anam/evan/persona-manifest.json', import.meta.url), 'utf8'));
+if (personaManifest.personaId !== EVAN_ID || personaManifest.replacesPersonaId !== PREVIOUS_EVAN_ID) {
+    throw new Error('Refusing update: Evan replacement manifest identity is inconsistent.');
+}
 const VOICE_DETECTION_OPTIONS = personaManifest.voiceDetectionOptions;
 const emailToolDefinition = JSON.parse(await fs.readFile(
     new URL('../../config/anam/evan-agentmail-client-tool.json', import.meta.url),
@@ -85,64 +93,54 @@ async function waitForDocuments(groupId) {
     throw new Error('Timed out waiting for Evan knowledge documents to become READY.');
 }
 
-const [evan, james, groupPayload, toolPayload] = await Promise.all([
+const [evan, james, previousEvan, groupPayload, toolPayload] = await Promise.all([
     anam(`/personas/${EVAN_ID}`),
     anam(`/personas/${JAMES_ID}`),
+    anam(`/personas/${PREVIOUS_EVAN_ID}`),
     anam('/knowledge/groups'),
     anam('/tools?perPage=100'),
 ]);
-if (!/evan/i.test(evan.name) || !/mullins/i.test(evan.name)) throw new Error(`Refusing update: ${EVAN_ID} is not visibly Evan/Mullins.`);
+if (evan.id !== EVAN_ID || !/evan/i.test(evan.name)) throw new Error(`Refusing update: ${EVAN_ID} is not visibly the Evan candidate.`);
 if (!/james/i.test(james.name) || !/knowles/i.test(james.name)) throw new Error('Refusing update: protected James identity could not be verified.');
+if (!/evan/i.test(previousEvan.name) || !/mullins/i.test(previousEvan.name)) throw new Error('Refusing update: protected previous Evan identity could not be verified.');
 if (evan.avatarModel !== 'cara-4') throw new Error('Refusing update: live Evan is not Cara 4.');
 
 const groups = listData(groupPayload);
-const group = groups.find(candidate => candidate.name === manifest.folderName);
+const group = groups.find(candidate => candidate.id === manifest.folderId);
 if (!group?.id) throw new Error(`Knowledge folder is missing: ${manifest.folderName}`);
 const existingDocuments = listData(await anam(`/knowledge/groups/${group.id}/documents`));
 const missingDocuments = documents.filter(document => !existingDocuments.some(candidate => candidate.filename === document.filename));
 
 const tools = listData(toolPayload);
-const skipTurn = tools.find(item => item.name === 'skip_turn');
+const skipTurn = tools.find(item => idOf(item) === personaManifest.toolIds.skip_turn);
 const currentKnowledge = tools.find(item => idOf(item) === CURRENT_KNOWLEDGE_TOOL_ID);
 if (!idOf(skipTurn) || !currentKnowledge) throw new Error('Required Evan knowledge and skip_turn tools are unavailable.');
-const existingEmailTool = tools.find(item => item.name === emailToolDefinition.name);
+const existingEmailTool = tools.find(item => idOf(item) === personaManifest.toolIds[emailToolDefinition.name]);
+if (!existingEmailTool) throw new Error('Pinned Evan replacement email tool is unavailable.');
 let emailTool = existingEmailTool;
 if (apply) {
-    emailTool = idOf(existingEmailTool)
-        ? await anam('/tools/' + idOf(existingEmailTool), {
-            method: 'PUT',
-            body: JSON.stringify(emailToolDefinition),
-        })
-        : await anam('/tools', {
-            method: 'POST',
-            body: JSON.stringify(emailToolDefinition),
-        });
+    emailTool = await anam('/tools/' + idOf(existingEmailTool), {
+        method: 'PUT',
+        body: JSON.stringify(emailToolDefinition),
+    });
 }
-const existingEndSessionTool = tools.find(item => item.name === endSessionToolDefinition.name);
+const existingEndSessionTool = tools.find(item => idOf(item) === personaManifest.toolIds[endSessionToolDefinition.name]);
+if (!existingEndSessionTool) throw new Error('Pinned Evan replacement close tool is unavailable.');
 let endSessionTool = existingEndSessionTool;
 if (apply) {
-    endSessionTool = idOf(existingEndSessionTool)
-        ? await anam('/tools/' + idOf(existingEndSessionTool), {
-            method: 'PUT',
-            body: JSON.stringify(endSessionToolDefinition),
-        })
-        : await anam('/tools', {
-            method: 'POST',
-            body: JSON.stringify(endSessionToolDefinition),
-        });
+    endSessionTool = await anam('/tools/' + idOf(existingEndSessionTool), {
+        method: 'PUT',
+        body: JSON.stringify(endSessionToolDefinition),
+    });
 }
-const existingMovePlannerTool = tools.find(item => item.name === movePlannerToolDefinition.name);
+const existingMovePlannerTool = tools.find(item => idOf(item) === personaManifest.toolIds[movePlannerToolDefinition.name]);
+if (!existingMovePlannerTool) throw new Error('Pinned Evan replacement Move Planner tool is unavailable.');
 let movePlannerTool = existingMovePlannerTool;
 if (apply) {
-    movePlannerTool = idOf(existingMovePlannerTool)
-        ? await anam('/tools/' + idOf(existingMovePlannerTool), {
-            method: 'PUT',
-            body: JSON.stringify(movePlannerToolDefinition),
-        })
-        : await anam('/tools', {
-            method: 'POST',
-            body: JSON.stringify(movePlannerToolDefinition),
-        });
+    movePlannerTool = await anam('/tools/' + idOf(existingMovePlannerTool), {
+        method: 'PUT',
+        body: JSON.stringify(movePlannerToolDefinition),
+    });
 }
 const emailToolId = idOf(emailTool);
 const endSessionToolId = idOf(endSessionTool);
@@ -155,6 +153,7 @@ const nextToolIds = [CURRENT_KNOWLEDGE_TOOL_ID, idOf(skipTurn), ...(emailToolId 
 const plan = {
     mode: apply ? 'apply' : 'dry-run',
     protectedJamesPersonaId: JAMES_ID,
+    protectedPreviousEvanPersonaId: PREVIOUS_EVAN_ID,
     evanPersonaId: EVAN_ID,
     knowledgeGroupId: group.id,
     existingKnowledgeDocuments: existingDocuments.length,
@@ -171,6 +170,14 @@ if (!apply) {
     console.log(JSON.stringify(plan, null, 2));
     process.exit(0);
 }
+
+const rollbackDir = new URL('../../work/evan-6097-promotion/', import.meta.url);
+await fs.mkdir(rollbackDir, { recursive: true });
+await fs.writeFile(
+    new URL(`anam-before-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, rollbackDir),
+    `${JSON.stringify({ capturedAt: new Date().toISOString(), persona: evan, tools: evan.tools }, null, 2)}\n`,
+    'utf8',
+);
 
 await anam(`/knowledge/groups/${group.id}`, {
     method: 'PUT',
@@ -198,7 +205,7 @@ await anam(`/tools/${CURRENT_KNOWLEDGE_TOOL_ID}`, {
 await anam(`/personas/${EVAN_ID}`, {
     method: 'PUT',
     body: JSON.stringify({
-        name: 'Evan Mullins Moving Concierge',
+        name: personaManifest.expectedName,
         systemPrompt: prompt,
         initialMessage: INITIAL_MESSAGE,
         skipGreeting: false,
@@ -213,7 +220,7 @@ await anam(`/personas/${EVAN_ID}`, {
 async function verifyLive() {
     const [persona, tool] = await Promise.all([anam(`/personas/${EVAN_ID}`), anam(`/tools/${CURRENT_KNOWLEDGE_TOOL_ID}`)]);
     const failures = [];
-    if (persona.name !== 'Evan Mullins Moving Concierge') failures.push('name');
+    if (persona.name !== personaManifest.expectedName) failures.push('name');
     if (persona.avatarModel !== 'cara-4') failures.push('avatarModel');
     if (sha256(managedPromptOf(persona.brain?.systemPrompt ?? '')) !== sha256(prompt)) failures.push('prompt');
     if (persona.initialMessage !== INITIAL_MESSAGE) failures.push('initialMessage');

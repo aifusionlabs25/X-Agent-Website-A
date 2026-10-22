@@ -1,0 +1,11 @@
+# Evan live test 21 — route ASR recovery
+
+Run 21 used the protected `99pnt55vr` rehearsal preview. Evan asked for both route endpoints. The provider transcript recorded the caller's answer as “It's Gilbert, Arizona to Chanda, Arizona,” while the local Edge transcript said “Chandler” and Evan's later readback also said “Chandler.” The live brief and map stayed empty. Other move details updated; the normal end-session tool and page exit worked. This is a route-parser failure for the provider transcript, not evidence that the entire planner feed stopped.
+
+The parser recognized only Gilbert in that sentence. It did not know whether Gilbert was the pickup city because “It's” is not a role cue, and its incomplete-route flag only covered sentences containing “moving ... from ... to.” As a result, it showed neither a pin nor a clarification prompt. Evan's own readback is not a substitute for a caller-confirmed destination.
+
+The candidate now treats one known city followed by an unrecognized destination in a direct answer to Evan's from/to question as the **origin only**. The brief says “Gilbert → Destination to confirm”; the map shows one city-level origin pin and asks the caller to confirm the missing city. A later explicit caller statement such as “The destination is Chandler, Arizona” completes the route. No fuzzy city replacement or agent-speech-to-fact conversion is used. An unrelated sightseeing answer does not create pins. The regression uses the provider's exact run-21 wording.
+
+Local checks: 364 Evan release tests, TypeScript, the full repository test suite, and a production-style Next build passed. Rehearsal deployment `dpl_8NC2T8shnxzsUYmkNkMmdVhxwq6B` (`qwn0uqinb`) built READY with no alias. Guest and synthetic-email entry both issued session tokens; no live call or email was started. The public production domain remained on `dpl_532oXZx47MLz9UWBmRWkzDx4dqLF`.
+
+This is not proof that the live ASR and turn flow are fully repaired. The run also showed an awkward initial process answer and an incomplete response-time answer following an interrupted, two-question caller turn. Keep those as separate conversational findings. Do not promote to production until a fresh authorized live test demonstrates route correction, natural one-question discovery, and clean closure.

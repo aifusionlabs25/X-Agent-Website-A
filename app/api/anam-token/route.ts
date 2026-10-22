@@ -3,6 +3,7 @@ import { ALL_AGENTS } from '@/lib/agents';
 import { readAmyAnamAgentMailConfig } from '@/lib/anam/outbound-email-config';
 import { readDaniAnamAgentMailConfig } from '@/lib/anam/dani-agentmail';
 import { readEvanAnamAgentMailConfig } from '@/lib/anam/evan-agentmail';
+import { readEvanCaptureConfig } from '@/lib/anam/evan-capture-service';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
 import {
     readDaniAnamBrowserSession,
@@ -132,7 +133,16 @@ export async function POST(req: Request) {
                 console.error('[Evan Anam Configuration] Out of sync', {
                     personaIdMatches: personaReadiness.personaIdMatches,
                     identityMatches: personaReadiness.identityMatches,
+                    publishedRevisionMatches: personaReadiness.publishedRevisionMatches,
                     cara4AvatarConfigured: personaReadiness.cara4AvatarConfigured,
+                    avatarIdMatches: personaReadiness.avatarIdMatches,
+                    voiceIdMatches: personaReadiness.voiceIdMatches,
+                    llmIdMatches: personaReadiness.llmIdMatches,
+                    promptHashMatches: personaReadiness.promptHashMatches,
+                    voiceDetectionConfigured: personaReadiness.voiceDetectionConfigured,
+                    sessionDataRetentionConfigured: personaReadiness.sessionDataRetentionConfigured,
+                    anamTranscriptionPipelineConfigured: personaReadiness.anamTranscriptionPipelineConfigured,
+                    toolAttachmentMatches: personaReadiness.toolAttachmentMatches,
                     missingToolNames: personaReadiness.missingToolNames,
                     missingPromptMarkers: personaReadiness.missingPromptMarkers,
                 });
@@ -417,6 +427,12 @@ export async function POST(req: Request) {
             memoryUnlockAvailable,
             ...(memoryPolicyContext ? { memoryPolicyContext } : {}),
             agentMailAvailable,
+            ...(isEvan ? {
+                evanCaptureEnabled: readEvanCaptureConfig().enabled,
+                evanGuestEmailAvailable: evanAgentMailConfig.effectiveGateOpen,
+                evanMullinsHandoffConfigured: evanAgentMailConfig.effectiveGateOpen
+                    && evanAgentMailConfig.mullinsRecipientsConfigured,
+            } : {}),
             rawEmailReturned: false,
             identityHashReturned: false,
         });

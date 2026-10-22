@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 
 const API_BASE = 'https://api.anam.ai/v1';
-const EVAN_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
+const EVAN_ID = '6097c73e-b6ef-48c5-94c7-9a95d4863b99';
 const JAMES_ID = '8a991c93-0c95-42c5-8c22-a67428946eb8';
+const PREVIOUS_EVAN_ID = '4b7e933a-ea04-4b84-b418-72c0762545e6';
 const TOOL_NAME = 'Knowledge_Evan_Mullins_Moving';
 const REQUIRED_TOOLS = [TOOL_NAME, 'skip_turn', 'end_mullins_session', 'send_mullins_follow_up_email', 'show_move_planner'];
 const localEnv = await fs.readFile(new URL('../../.env.local', import.meta.url), 'utf8').catch(() => '');
@@ -25,30 +26,42 @@ async function anam(pathname) {
     return response.json();
 }
 
-const [evan, james, tools, groups] = await Promise.all([
+const [evan, james, previousEvan, tools, groups] = await Promise.all([
     anam(`/personas/${EVAN_ID}`),
     anam(`/personas/${JAMES_ID}`),
+    anam(`/personas/${PREVIOUS_EVAN_ID}`),
     anam('/tools?perPage=100'),
     anam('/knowledge/groups'),
 ]);
 const toolList = Array.isArray(tools) ? tools : tools.data ?? tools.tools ?? [];
 const groupList = Array.isArray(groups) ? groups : groups.data ?? [];
-const knowledgeTool = toolList.find(tool => tool.name === TOOL_NAME);
-const group = groupList.find(candidate => candidate.name === manifest.folderName);
+const knowledgeTool = toolList.find(tool => idOf(tool) === personaManifest.toolIds[TOOL_NAME]);
+const group = groupList.find(candidate => candidate.id === manifest.folderId);
 if (!group?.id) throw new Error('Managed Evan knowledge folder is missing.');
 const documents = await anam(`/knowledge/groups/${group.id}/documents`);
 const names = new Set((evan.tools ?? []).map(tool => tool.name));
 const failures = [];
-if (!/evan/i.test(evan.name) || !/mullins/i.test(evan.name)) failures.push('Evan identity');
+if (evan.id !== personaManifest.personaId) failures.push('Evan persona ID');
+if (evan.name !== personaManifest.expectedName) failures.push('Evan identity');
 if (!/james/i.test(james.name) || !/knowles/i.test(james.name)) failures.push('protected James identity');
+if (!/evan/i.test(previousEvan.name) || !/mullins/i.test(previousEvan.name)) failures.push('protected previous Evan identity');
 if (evan.avatarModel !== 'cara-4') failures.push('Cara 4');
+if ((evan.avatar?.id ?? evan.avatarId) !== personaManifest.expectedAvatarId) failures.push('avatar ID');
+if ((evan.voice?.id ?? evan.voice?.voiceId ?? evan.voiceId) !== personaManifest.expectedVoiceId) failures.push('voice ID');
+if ((evan.brain?.llm?.id ?? evan.brain?.llmId ?? evan.llm?.id ?? evan.llmId) !== personaManifest.expectedLlmId) failures.push('LLM ID');
+if (!Number.isFinite(Date.parse(evan.publishedAt)) || Date.parse(evan.publishedAt) < Date.parse(personaManifest.minimumPublishedAt)) failures.push('published revision');
 if (sha256(managedPromptOf(evan.brain?.systemPrompt ?? '')) !== sha256(prompt)) failures.push('prompt hash');
 if (evan.zeroDataRetention !== false) failures.push('session data retention');
 if (evan.enableAudioPassthrough !== false) failures.push('Anam transcription pipeline');
 for (const [name, value] of Object.entries(personaManifest.voiceDetectionOptions)) {
     if (evan.voiceDetectionOptions?.[name] !== value) failures.push(`voiceDetectionOptions.${name}`);
 }
-for (const name of REQUIRED_TOOLS) if (!names.has(name)) failures.push(`tool ${name}`);
+const attachedTools = new Map((evan.tools ?? []).map(tool => [tool.name, idOf(tool)]));
+if (attachedTools.size !== REQUIRED_TOOLS.length) failures.push('tool count');
+for (const name of REQUIRED_TOOLS) {
+    if (!names.has(name)) failures.push(`tool ${name}`);
+    if (attachedTools.get(name) !== personaManifest.toolIds[name]) failures.push(`tool ID ${name}`);
+}
 if (!idOf(knowledgeTool)) failures.push('managed knowledge tool');
 if (JSON.stringify(knowledgeTool?.config?.documentFolderIds ?? []) !== JSON.stringify([group.id])) failures.push('knowledge folder isolation');
 const expected = new Set(manifest.documents);
@@ -60,6 +73,7 @@ console.log(JSON.stringify({
     ready: true,
     evanPersonaId: evan.id,
     protectedJamesPersonaId: james.id,
+    protectedPreviousEvanPersonaId: previousEvan.id,
     avatarModel: evan.avatarModel,
     promptSha256: sha256(managedPromptOf(evan.brain.systemPrompt)),
     voiceDetectionOptions: evan.voiceDetectionOptions,

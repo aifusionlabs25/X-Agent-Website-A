@@ -1,25 +1,57 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
-import { EVAN_PERSONA_ID, EVAN_REQUIRED_PROMPT_MARKERS, EVAN_REQUIRED_TOOL_NAMES, inspectEvanPersonaReadiness, readEvanPersonaReadiness } from '../lib/anam/persona-readiness.ts';
+import {
+    EVAN_EXPECTED_AVATAR_ID,
+    EVAN_EXPECTED_LLM_ID,
+    EVAN_EXPECTED_NAME,
+    EVAN_EXPECTED_VOICE_ID,
+    EVAN_MINIMUM_PUBLISHED_AT,
+    EVAN_PERSONA_ID,
+    EVAN_REQUIRED_PROMPT_MARKERS,
+    EVAN_REQUIRED_TOOL_IDS,
+    EVAN_REQUIRED_TOOL_NAMES,
+    EVAN_REQUIRED_VOICE_DETECTION,
+    inspectEvanPersonaReadiness,
+    readEvanPersonaReadiness,
+} from '../lib/anam/persona-readiness.ts';
 import { isEvanLocalTestMode } from '../lib/anam/evan-local-test-mode.ts';
+
+const managedEvanPrompt = await readFile(
+    new URL('../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url),
+    'utf8',
+);
 
 const healthyPersona = () => ({
     id: EVAN_PERSONA_ID,
-    name: 'Evan Mullins Moving Concierge',
+    name: EVAN_EXPECTED_NAME,
+    publishedAt: EVAN_MINIMUM_PUBLISHED_AT,
     avatarModel: 'cara-4',
+    avatar: { id: EVAN_EXPECTED_AVATAR_ID },
+    voice: { id: EVAN_EXPECTED_VOICE_ID },
     zeroDataRetention: false,
     enableAudioPassthrough: false,
-    tools: EVAN_REQUIRED_TOOL_NAMES.map(name => ({ name })),
-    brain: { systemPrompt: EVAN_REQUIRED_PROMPT_MARKERS.join('\n') },
+    voiceDetectionOptions: { ...EVAN_REQUIRED_VOICE_DETECTION },
+    tools: EVAN_REQUIRED_TOOL_NAMES.map(name => ({ name, _toolId: EVAN_REQUIRED_TOOL_IDS[name] })),
+    brain: { systemPrompt: managedEvanPrompt, llm: { id: EVAN_EXPECTED_LLM_ID } },
 });
 
 test('Evan readiness requires exact identity, Cara 4, managed prompt, and safe tools', () => {
     assert.equal(inspectEvanPersonaReadiness(healthyPersona()).ready, true);
+    assert.equal(EVAN_EXPECTED_LLM_ID, '2032d289-6faa-46e6-819c-fbe4dd79a37a');
+    assert.equal(inspectEvanPersonaReadiness({
+        ...healthyPersona(),
+        brain: { ...healthyPersona().brain, llm: { id: 'a7cf662c-2ace-4de1-a21e-ef0fbf144bb7' } },
+    }).llmIdMatches, false);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), id: '8a991c93-0c95-42c5-8c22-a67428946eb8' }).ready, false);
+    assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), id: '4b7e933a-ea04-4b84-b418-72c0762545e6' }).ready, false);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), name: 'James Knowles Law Firm' }).ready, false);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), avatarModel: 'cara-3' }).ready, false);
     assert.equal(inspectEvanPersonaReadiness({ ...healthyPersona(), tools: [{ name: 'Knowledge_Liv' }] }).ready, false);
+    assert.equal(inspectEvanPersonaReadiness({
+        ...healthyPersona(),
+        tools: EVAN_REQUIRED_TOOL_NAMES.map(name => ({ name, _toolId: name === 'show_move_planner' ? 'wrong-id' : EVAN_REQUIRED_TOOL_IDS[name] })),
+    }).ready, false);
 });
 
 test('live readiness fetch is bounded, no-store, and does not leak the API key', async () => {
@@ -47,8 +79,12 @@ test('agent IDs are unique and Evan never uses the James ID', async () => {
 test('managed prompt enforces reliability and action honesty', async () => {
     const prompt = await readFile(new URL('../config/anam/evan/EVAN_ANAM_SYSTEM_PROMPT_2026-07-16.md', import.meta.url), 'utf8');
     for (const marker of EVAN_REQUIRED_PROMPT_MARKERS) assert.ok(prompt.includes(marker));
+    const routeGate = prompt.indexOf('Before asking about a new intake topic, check whether a stated pickup or destination city is unclear.');
+    const nextQuestion = prompt.indexOf('Otherwise, ask one short question only about a useful detail');
+    assert.ok(routeGate > 0 && nextQuestion > routeGate, 'unresolved route clarification must precede ordinary intake');
+    assert.match(prompt, /If a city sounds unfamiliar or inconsistent with its stated state, ask only for that city's spelling or ZIP and stop/i);
     assert.match(prompt, /at most one meaningful next question/i);
-    assert.match(prompt, /Do not restart the intake/i);
+    assert.match(prompt, /or restart intake/i);
     assert.match(prompt, /relaxed, patient, and conversational/i);
     assert.match(prompt, /thoughtful, experienced moving concierge, not a scripted intake bot/i);
     assert.match(prompt, /Vary brief acknowledgments and question openings/i);
@@ -58,17 +94,31 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /area code, three-digit prefix, then four-digit line number/i);
     assert.match(prompt, /Say zero as "oh"/i);
     assert.match(prompt, /Did I get that right\?/i);
-    assert.match(prompt, /Ask one useful moving-detail question at a time/i);
-    assert.match(prompt, /complete date including month and flexibility/i);
+    assert.match(prompt, /ask one short question only about a useful detail/i);
+    assert.match(prompt, /date \(including month and flexibility\)/i);
     assert.match(prompt, /Never silently guess or change a person's name/i);
+    assert.match(prompt, /is there an elevator at the pickup, or is it stairs only/i);
+    assert.match(prompt, /Keep that access detail unresolved until the caller answers/i);
+    assert.match(prompt, /Packing and unpacking are separate services/i);
+    assert.match(prompt, /After one question, stop speaking and wait for the answer/i);
+    assert.match(prompt, /approved pilot follow-up window is 24 to 48 hours after Mullins receives the brief/i);
+    assert.match(prompt, /does not mean "no unpacking service needed"/i);
+    assert.match(prompt, /immediately after the visitor's own explicit goodbye does not undo that goodbye/i);
+    assert.match(prompt, /retain all of them without reciting every fact/i);
+    assert.match(prompt, /keeping named cities specific when discussing the route/i);
     assert.match(prompt, /send_mullins_follow_up_email/);
-    assert.match(prompt, /three messages are scheduled/i);
+    assert.match(prompt, /private check-in reserved a post-call recap/i);
     assert.match(prompt, /Email follow-up is optional/i);
-    assert.match(prompt, /backend reserves the three-message bundle when the verified Evan session binds/i);
-    assert.match(prompt, /never visible to you/i);
-    assert.match(prompt, /Continuing without email is a normal guest option/i);
-    assert.match(prompt, /Never ask for, spell, repeat, or confirm an email address during the conversation/i);
+    assert.match(prompt, /voluntarily during the call; either permits one post-call recap/i);
+    assert.match(prompt, /Do not ask twice after a decline/i);
+    assert.match(prompt, /Continuing without a recap is normal/i);
+    assert.match(prompt, /voluntarily shared email permits one post-call recap/i);
     assert.match(prompt, /No tool books a move/i);
+    assert.match(prompt, /Do not claim staff have already received details/i);
+    assert.match(prompt, /Do not say Mullins "handles," "can move," or "accepts" the item/i);
+    assert.match(prompt, /For fragile-dish packing, answer directly/i);
+    assert.match(prompt, /Never announce a check unless a tool call actually starts/i);
+    assert.match(prompt, /never stop after only saying you are checking/i);
     assert.match(prompt, /Never ask whether it is okay to end the call/i);
     assert.match(prompt, /Would you like me to end our call now\?" is forbidden/i);
     assert.match(prompt, /"take care,".*are already confirmation/i);
@@ -76,14 +126,18 @@ test('managed prompt enforces reliability and action honesty', async () => {
     assert.match(prompt, /when `end_mullins_session` returns `farewell_required`[\s\S]*Thank you for speaking with Mullins Moving\. Take care\./i);
     assert.match(prompt, /items intended for donation so the team can confirm what transportation options are available/i);
     assert.match(prompt, /loading order, destination labels, time, and cost/i);
-    assert.match(prompt, /assisted-living or managed-facility name and address/i);
+    assert.match(prompt, /assisted-living or managed-facility moves, note the facility name, address, and move-in hours/i);
     assert.match(prompt, /Never say a quote or estimate will be emailed/i);
-    assert.match(prompt, /Mullins staff must separately review any estimate or walkthrough request/i);
+    assert.match(prompt, /After the caller finishes, if major furniture and the approximate box count are both still unknown and relevant, ask one concise inventory question/i);
+    assert.match(prompt, /What are the main furniture pieces, and roughly how many boxes\?/i);
+    assert.match(prompt, /give the direct answer in about 30 spoken words/i);
+    assert.match(prompt, /Mullins staff must separately review estimates and walkthroughs/i);
     assert.match(prompt, /you can refresh the Live Move Planner whenever the visitor adds or corrects move details/i);
     assert.match(prompt, /call `show_move_planner` again after capturing the correction/i);
     assert.match(prompt, /location map, stops, or their order/i);
     assert.match(prompt, /city-center pins and a stop-order line/i);
     assert.match(prompt, /Never say an item, stop, route order, or other detail was added, corrected, saved, or is accurate unless the receipt supports that visible fact/i);
+    assert.match(prompt, /Do not say "the planner reflects those details" or "everything is captured" unless every detail you named is present in the receipt/i);
     assert.match(prompt, /Once the session has ended, new changes must go to the Mullins team/i);
 });
 
@@ -129,14 +183,17 @@ test('knowledge manifest is complete and excludes internal/Tavus material', asyn
     const manifest = JSON.parse(await readFile(new URL('../config/anam/evan/knowledge-manifest.json', import.meta.url), 'utf8'));
     const files = (await readdir(new URL('../config/anam/evan/knowledge/', import.meta.url))).sort();
     assert.deepEqual(files, [...manifest.documents].sort());
-    assert.equal(files.length, 8);
+    assert.equal(files.length, 9);
     assert.ok(manifest.excludedClasses.some(value => /Tavus/i.test(value)));
     for (const file of files) {
         const content = await readFile(new URL(`../config/anam/evan/knowledge/${file}`, import.meta.url), 'utf8');
-        assert.match(content, /Verified: 2026-07-16/);
+        assert.match(content, /Verified: 2026-(?:07-16|10-21)/);
         assert.match(content, /https:\/\/www\.mullins-moving\.com\//);
         assert.doesNotMatch(content, /TEST-SPECIFIC BEHAVIOR RULES|PAL BLUEPRINT|founder questionnaire/i);
     }
+    const packing = await readFile(new URL('../config/anam/evan/knowledge/09_packing_fragile_dishes.md', import.meta.url), 'utf8');
+    assert.match(packing, /wrapping dishes in packing paper/i);
+    assert.match(packing, /does not establish a separate fragile-dish price/i);
 });
 
 test('token route allowlists personas and fails closed before minting an unready Evan session', async () => {

@@ -1,8 +1,12 @@
+import { isEvanTerminalFarewell } from './evan-close-intent.ts';
+
 type TimerHandle = ReturnType<typeof setTimeout>;
+type ClosePhase = 'idle' | 'armed' | 'draining' | 'stopped' | 'disposed';
 
 export type EvanFarewellCloseCoordinator = {
     arm: () => boolean;
-    completeFarewell: () => boolean;
+    completeFarewell: (text: string, interrupted?: boolean) => boolean;
+    cancelPending: () => boolean;
     dispose: () => void;
     isArmed: () => boolean;
 };
@@ -10,6 +14,7 @@ export type EvanFarewellCloseCoordinator = {
 export function createEvanFarewellCloseCoordinator(input: {
     stopStreaming: () => void | Promise<void>;
     onStopError?: () => void;
+    onStopReason?: (reason: 'farewell_complete' | 'fallback_timeout') => void;
     fallbackMs?: number;
     audioDrainMs?: number;
     schedule?: typeof setTimeout;
@@ -18,10 +23,11 @@ export function createEvanFarewellCloseCoordinator(input: {
     const schedule = input.schedule ?? setTimeout;
     const cancel = input.cancel ?? clearTimeout;
     const fallbackMs = input.fallbackMs ?? 12_000;
-    const audioDrainMs = input.audioDrainMs ?? 2_500;
-    let armed = false;
-    let disposed = false;
-    let stopRequested = false;
+    // The provider has marked the genuine farewell complete. Keep a brief
+    // playback margin without leaving a long invitation to restart the call.
+    const audioDrainMs = input.audioDrainMs ?? 1_000;
+    let phase: ClosePhase = 'idle';
+    let generation = 0;
     let fallbackTimer: TimerHandle | null = null;
     let audioDrainTimer: TimerHandle | null = null;
 
@@ -29,38 +35,55 @@ export function createEvanFarewellCloseCoordinator(input: {
         if (timer !== null) cancel(timer);
     };
 
-    const stopOnce = () => {
-        if (disposed || stopRequested) return;
-        stopRequested = true;
-        armed = false;
+    const clearTimers = () => {
         clearTimer(fallbackTimer);
+        clearTimer(audioDrainTimer);
         fallbackTimer = null;
-        void Promise.resolve(input.stopStreaming()).catch(() => input.onStopError?.());
+        audioDrainTimer = null;
+    };
+
+    const stopOnce = (scheduledGeneration: number, reason: 'farewell_complete' | 'fallback_timeout') => {
+        if (generation !== scheduledGeneration || (phase !== 'armed' && phase !== 'draining')) return;
+        phase = 'stopped';
+        generation += 1;
+        clearTimers();
+        try { input.onStopReason?.(reason); } catch { /* Diagnostics must not block teardown. */ }
+        try {
+            void Promise.resolve(input.stopStreaming()).catch(() => input.onStopError?.());
+        } catch {
+            input.onStopError?.();
+        }
     };
 
     return {
         arm: () => {
-            if (disposed || stopRequested || armed) return false;
-            armed = true;
-            fallbackTimer = schedule(stopOnce, fallbackMs);
+            if (phase !== 'idle') return false;
+            phase = 'armed';
+            const armedGeneration = ++generation;
+            fallbackTimer = schedule(() => stopOnce(armedGeneration, 'fallback_timeout'), fallbackMs);
             return true;
         },
-        completeFarewell: () => {
-            if (disposed || stopRequested || !armed || audioDrainTimer !== null) return false;
-            armed = false;
+        completeFarewell: (text, interrupted = false) => {
+            if (phase !== 'armed' || interrupted || !isEvanTerminalFarewell(text)) return false;
+            phase = 'draining';
+            const farewellGeneration = ++generation;
             clearTimer(fallbackTimer);
             fallbackTimer = null;
-            audioDrainTimer = schedule(stopOnce, audioDrainMs);
+            audioDrainTimer = schedule(() => stopOnce(farewellGeneration, 'farewell_complete'), audioDrainMs);
+            return true;
+        },
+        cancelPending: () => {
+            if (phase !== 'armed' && phase !== 'draining') return false;
+            phase = 'idle';
+            generation += 1;
+            clearTimers();
             return true;
         },
         dispose: () => {
-            disposed = true;
-            armed = false;
-            clearTimer(fallbackTimer);
-            clearTimer(audioDrainTimer);
-            fallbackTimer = null;
-            audioDrainTimer = null;
+            phase = 'disposed';
+            generation += 1;
+            clearTimers();
         },
-        isArmed: () => armed,
+        isArmed: () => phase === 'armed' || phase === 'draining',
     };
 }

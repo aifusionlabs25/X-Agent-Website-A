@@ -1,0 +1,893 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "evan-capture-varied-v1",
+  "source": "Entirely synthetic; no real customer transcripts, identities, addresses, or contact details.",
+  "purpose": "Evaluate grounded shared-record capture independently of phrasing and downstream presentation.",
+  "splitPolicy": "Development is inspectable while implementing. Freeze implementation before reading or running holdout. Any holdout-informed revision retires that split as a clean holdout.",
+  "evidenceConvention": "sourceTurns are zero-based indexes into turns. A source can include an agent question only together with the user's grounded answer; agent-only facts are forbidden.",
+  "expectationConvention": "Only listed fields are asserted, except explicitly empty inventory/route arrays which assert no facts in that category. Contact values are canonical; wording of non-contact facts may vary without losing meaning. Absent/removed facts must not appear as current confirmed facts in structured outputs; transcript history may retain them.",
+  "quantityKinds": ["exact", "range", "approximate", "at-least", "at-most", "unspecified"],
+  "cases": [
+    {
+      "id": "dev-01-bundled-self-introduction",
+      "split": "development",
+      "category": "contact-bundled",
+      "tags": ["name", "phone", "natural-positive", "regression"],
+      "turns": [
+        {"role": "agent", "content": "What is the best number for a callback?"},
+        {"role": "user", "content": "Sure. I’m Jordan Avery. You can reach me at 602-555-0101. Afternoons are better for a callback."}
+      ],
+      "expectations": {
+        "contact": {
+          "displayName": {"value": "Jordan Avery", "sourceTurns": [1]},
+          "phone": {"value": "6025550101", "sourceTurns": [1]},
+          "phoneConfirmed": {"value": false, "sourceTurns": [1]},
+          "callbackWindow": {"value": "Afternoons", "sourceTurns": [1]}
+        },
+        "absent": [{"field": "timing", "value": "Afternoons", "reason": "This is a callback window, not a move time."}]
+      },
+      "notes": "The introducer, punctuation, and callback question must not cause the self-introduction to be dropped. Supplying a number is not readback confirmation."
+    },
+    {
+      "id": "dev-02-bundled-contact-inventory-route",
+      "split": "development",
+      "category": "bundled-domains",
+      "metamorphicGroup": "dev-full-intake-equivalence",
+      "tags": ["contact", "inventory", "route", "timing", "packing"],
+      "turns": [
+        {"role": "user", "content": "My name is Mira Patel, phone 480-555-0102. We’re moving from Tempe to Mesa in early November, and the date is flexible. We’re taking one sideboard, two ottomans, and about twenty cartons. We’ll pack everything ourselves."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Mira Patel", "sourceTurns": [0]}, "phone": {"value": "4805550102", "sourceTurns": [0]}},
+        "inventory": [
+          {"item": "sideboard", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]},
+          {"item": "ottoman", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]},
+          {"item": "carton", "quantity": {"kind": "approximate", "value": 20}, "sourceTurns": [0]}
+        ],
+        "route": [{"kind": "Origin", "city": "Tempe", "sourceTurns": [0]}, {"kind": "Destination", "city": "Mesa", "sourceTurns": [0]}],
+        "details": [{"field": "timing", "value": "Early November; date flexible", "sourceTurns": [0]}, {"field": "packing", "value": "Customer packs everything", "sourceTurns": [0]}],
+        "absent": [{"field": "services", "value": "Paid packing assistance", "reason": "Customer-handled packing is not a service request."}]
+      },
+      "notes": "Do not invent a year or a specific date. Cartons and boxes are acceptable semantic aliases; approximate twenty must not become exact twenty."
+    },
+    {
+      "id": "dev-03-split-contact-inventory-route",
+      "split": "development",
+      "category": "split-turns",
+      "metamorphicGroup": "dev-full-intake-equivalence",
+      "tags": ["question-context", "contact", "inventory", "route", "packing"],
+      "turns": [
+        {"role": "agent", "content": "What name should I put on your move notes?"},
+        {"role": "user", "content": "Mira Patel."},
+        {"role": "agent", "content": "And your phone number?"},
+        {"role": "user", "content": "480 555 0102."},
+        {"role": "user", "content": "We’re leaving Tempe and moving to Mesa. Early November would work, but the date is flexible."},
+        {"role": "user", "content": "We have a sideboard, a pair of ottomans, and roughly 20 cartons to move."},
+        {"role": "user", "content": "We’ll take care of all the packing."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Mira Patel", "sourceTurns": [0, 1]}, "phone": {"value": "4805550102", "sourceTurns": [2, 3]}},
+        "inventory": [
+          {"item": "sideboard", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [5]},
+          {"item": "ottoman", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [5]},
+          {"item": "carton", "quantity": {"kind": "approximate", "value": 20}, "sourceTurns": [5]}
+        ],
+        "route": [{"kind": "Origin", "city": "Tempe", "sourceTurns": [4]}, {"kind": "Destination", "city": "Mesa", "sourceTurns": [4]}],
+        "details": [{"field": "timing", "value": "Early November; date flexible", "sourceTurns": [4]}, {"field": "packing", "value": "Customer packs everything", "sourceTurns": [6]}]
+      },
+      "notes": "Same final facts as dev-02 despite a conversational split and equivalent quantity expressions."
+    },
+    {
+      "id": "dev-04-reordered-lowercase-intake",
+      "split": "development",
+      "category": "transcription-variation",
+      "metamorphicGroup": "dev-full-intake-equivalence",
+      "tags": ["lowercase", "punctuation", "reordered", "contact", "inventory"],
+      "turns": [
+        {"role": "user", "content": "we'll pack all of it ourselves the move is tempe to mesa early november but flexible on the date"},
+        {"role": "user", "content": "inventory is a sideboard two ottomans around twenty cartons"},
+        {"role": "user", "content": "my name is mira patel my phone is 480 555 0102"}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "mira patel", "sourceTurns": [2]}, "phone": {"value": "4805550102", "sourceTurns": [2]}},
+        "inventory": [
+          {"item": "sideboard", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [1]},
+          {"item": "ottoman", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [1]},
+          {"item": "carton", "quantity": {"kind": "approximate", "value": 20}, "sourceTurns": [1]}
+        ],
+        "route": [{"kind": "Origin", "city": "Tempe", "sourceTurns": [0]}, {"kind": "Destination", "city": "Mesa", "sourceTurns": [0]}],
+        "details": [{"field": "timing", "value": "Early November; date flexible", "sourceTurns": [0]}, {"field": "packing", "value": "Customer packs everything", "sourceTurns": [0]}]
+      },
+      "notes": "Case-insensitive name comparison is permitted, but do not invent spelling or expand the name. No punctuation should not merge the phone into the name."
+    },
+    {
+      "id": "dev-05-unfamiliar-inventory-list",
+      "split": "development",
+      "category": "open-vocabulary-inventory",
+      "tags": ["unseen-furniture", "quantities", "qualifiers"],
+      "turns": [
+        {"role": "agent", "content": "What furniture is coming with you?"},
+        {"role": "user", "content": "A tall secretary desk, two étagères, a cedar hope chest, and four bar stools. The chest has a cracked lid, so please be careful with it."}
+      ],
+      "expectations": {
+        "inventory": [
+          {"item": "secretary desk", "quantity": {"kind": "exact", "value": 1}, "qualifiers": ["tall"], "sourceTurns": [1]},
+          {"item": "étagère", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [1]},
+          {"item": "hope chest", "quantity": {"kind": "exact", "value": 1}, "qualifiers": ["cedar", "cracked lid"], "sourceTurns": [1]},
+          {"item": "bar stool", "quantity": {"kind": "exact", "value": 4}, "sourceTurns": [1]}
+        ],
+        "details": [{"field": "care", "value": "Protect the hope chest's cracked lid", "sourceTurns": [1]}]
+      },
+      "notes": "Vocabulary may be preserved verbatim; a furniture taxonomy is not required. Lossy labels such as furniture or desk for the entire list do not satisfy item recall."
+    },
+    {
+      "id": "dev-06-unspecified-inventory-counts",
+      "split": "development",
+      "category": "quantity-uncertainty",
+      "tags": ["inventory", "no-fabricated-count", "fragments"],
+      "turns": [
+        {"role": "agent", "content": "What is on your move list so far?"},
+        {"role": "user", "content": "Bookshelves, dining chairs, and plastic totes. I haven’t counted those yet."}
+      ],
+      "expectations": {
+        "inventory": [
+          {"item": "bookshelf", "quantity": {"kind": "unspecified"}, "sourceTurns": [0, 1]},
+          {"item": "dining chair", "quantity": {"kind": "unspecified"}, "sourceTurns": [0, 1]},
+          {"item": "plastic tote", "quantity": {"kind": "unspecified"}, "sourceTurns": [0, 1]}
+        ],
+        "uncertain": [{"field": "inventory.quantity", "value": "Counts for bookshelves, dining chairs, and plastic totes", "reason": "Not counted", "sourceTurns": [1]}]
+      },
+      "notes": "Plural nouns imply neither an exact count of two nor one; item presence is confirmed while count is unknown."
+    },
+    {
+      "id": "dev-07-inventory-ranges-bounds",
+      "split": "development",
+      "category": "quantity-ranges",
+      "tags": ["inventory", "range", "lower-bound", "upper-bound"],
+      "turns": [
+        {"role": "user", "content": "We’ll have between 12 and 16 wardrobe boxes, at least six framed prints, and no more than three rolling carts to move."}
+      ],
+      "expectations": {
+        "inventory": [
+          {"item": "wardrobe box", "quantity": {"kind": "range", "min": 12, "max": 16}, "sourceTurns": [0]},
+          {"item": "framed print", "quantity": {"kind": "at-least", "min": 6}, "sourceTurns": [0]},
+          {"item": "rolling cart", "quantity": {"kind": "at-most", "max": 3}, "sourceTurns": [0]}
+        ]
+      },
+      "notes": "No more than is a quantity bound, not negation of the cart. Preserve bounded uncertainty; do not choose the midpoint or maximum as an exact count."
+    },
+    {
+      "id": "dev-08-quantity-correction-not-addition",
+      "split": "development",
+      "category": "inventory-correction",
+      "tags": ["count-replacement", "checkpoint", "no-double-count"],
+      "turns": [
+        {"role": "user", "content": "We’re moving eight dining chairs and one trestle table."},
+        {"role": "agent", "content": "I have eight dining chairs and a trestle table."},
+        {"role": "user", "content": "Make that six chairs, not eight. The trestle table is still coming."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 0, "expectations": {"inventory": [{"item": "dining chair", "quantity": {"kind": "exact", "value": 8}, "sourceTurns": [0]}, {"item": "trestle table", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}]}}
+      ],
+      "expectations": {
+        "inventory": [{"item": "dining chair", "quantity": {"kind": "exact", "value": 6}, "sourceTurns": [0, 2]}, {"item": "trestle table", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 2]}],
+        "removed": [{"field": "inventory.quantity", "value": "8 dining chairs", "sourceTurns": [2]}],
+        "absent": [{"field": "inventory.quantity", "value": "14 dining chairs", "reason": "A replacement is not an addition."}]
+      },
+      "notes": "No additive merge, no stale eight in any current consumer, and no collateral removal of the table."
+    },
+    {
+      "id": "dev-09-inventory-add-remove-reinstate",
+      "split": "development",
+      "category": "inventory-state-transitions",
+      "tags": ["addition", "removal", "reinstatement", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "Two armchairs and one bookcase are coming."},
+        {"role": "user", "content": "There’s one more armchair in the den to add."},
+        {"role": "user", "content": "Take the bookcase off the list. It’s staying here."},
+        {"role": "user", "content": "Actually, put the bookcase back on the move list after all."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 1, "expectations": {"inventory": [{"item": "armchair", "quantity": {"kind": "exact", "value": 3}, "sourceTurns": [0, 1]}, {"item": "bookcase", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}]}},
+        {"afterTurn": 2, "expectations": {"inventory": [{"item": "armchair", "quantity": {"kind": "exact", "value": 3}, "sourceTurns": [0, 1]}], "removed": [{"field": "inventory", "value": "bookcase", "sourceTurns": [2]}]}}
+      ],
+      "expectations": {
+        "inventory": [{"item": "armchair", "quantity": {"kind": "exact", "value": 3}, "sourceTurns": [0, 1]}, {"item": "bookcase", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 3]}]
+      },
+      "notes": "An explicit additional item increments; a repeated reference does not. A previously removed fact can be reinstated by the user."
+    },
+    {
+      "id": "dev-10-local-negation-mixed-list",
+      "split": "development",
+      "category": "local-negation",
+      "tags": ["inventory", "contrast", "negative-control"],
+      "turns": [
+        {"role": "user", "content": "We aren’t moving the piano, but the loveseat and two end tables are coming. No sofa either; we donated that. Please include one floor lamp."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "loveseat", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}, {"item": "end table", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}, {"item": "floor lamp", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}],
+        "absent": [{"field": "inventory", "value": "piano", "reason": "Explicitly not moving"}, {"field": "inventory", "value": "sofa", "reason": "Donated and excluded"}]
+      },
+      "notes": "Negation applies to its local item, not every later item in the turn. Loveseat must not be conflated with the explicitly excluded sofa."
+    },
+    {
+      "id": "dev-11-tentative-item-not-confirmed",
+      "split": "development",
+      "category": "uncertain-inventory",
+      "tags": ["uncertainty", "mixed-certainty", "inventory"],
+      "turns": [
+        {"role": "user", "content": "The dining table is definitely coming. We might bring the grandfather clock, but my sister may keep it. I haven’t decided about the clock."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "dining table", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}],
+        "uncertain": [{"field": "inventory", "value": "grandfather clock", "quantity": {"kind": "exact", "value": 1}, "reason": "Ownership decision pending", "sourceTurns": [0]}],
+        "absent": [{"field": "inventory.confirmed", "value": "grandfather clock", "reason": "Mentioned only as a possible move item"}]
+      },
+      "notes": "Uncertainty must remain visible without being promoted into confirmed scope or suppressed together with the confirmed table."
+    },
+    {
+      "id": "dev-12-hypothetical-items-no-scope",
+      "split": "development",
+      "category": "hypothetical-negative",
+      "tags": ["inventory", "packing", "service-question"],
+      "turns": [
+        {"role": "user", "content": "If I bought a pool table later, could you move it? And how would you pack a glass cabinet? These are just questions; neither is part of this move."}
+      ],
+      "expectations": {
+        "inventory": [],
+        "absent": [{"field": "inventory", "value": "pool table", "reason": "Hypothetical purchase"}, {"field": "inventory", "value": "glass cabinet", "reason": "Service question, explicitly outside this move"}, {"field": "services", "value": "Packing assistance", "reason": "Asking how is not requesting the service"}]
+      },
+      "notes": "Do not create tentative items for clearly counterfactual examples. An unresolved factual decision differs from a hypothetical question."
+    },
+    {
+      "id": "dev-13-quoted-third-party-description",
+      "split": "development",
+      "category": "quoted-negative",
+      "tags": ["quoted", "third-party", "inventory", "contact", "route"],
+      "turns": [
+        {"role": "user", "content": "The sample form says, ‘My name is Alex Sample, my phone is 602-555-0103, and I’m moving a sofa from Phoenix to Chandler.’ That’s only the example, not my information. My move list is one rocking chair."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "rocking chair", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}],
+        "route": [],
+        "absent": [{"field": "contact.displayName", "value": "Alex Sample", "reason": "Quoted form example"}, {"field": "contact.phone", "value": "6025550103", "reason": "Quoted form example"}, {"field": "inventory", "value": "sofa", "reason": "Quoted form example"}]
+      },
+      "notes": "Quotation alone is not always exclusion; the explicit example attribution controls this case. The actual user fact following the quote must survive."
+    },
+    {
+      "id": "dev-14-agent-only-inventory-contact",
+      "split": "development",
+      "category": "agent-only-negative",
+      "tags": ["grounding", "agent-suggestion", "acknowledgment"],
+      "turns": [
+        {"role": "user", "content": "I’m only comparing moving services today."},
+        {"role": "agent", "content": "For example, I could note a king bed, six chairs, a Phoenix-to-Mesa route, and a contact named Taylor Sample at 480-555-0104."},
+        {"role": "user", "content": "Okay, thanks for explaining."}
+      ],
+      "expectations": {
+        "inventory": [],
+        "route": [],
+        "absent": [{"field": "contact.displayName", "value": "Taylor Sample", "reason": "Only the agent supplied it"}, {"field": "contact.phone", "value": "4805550104", "reason": "Only the agent supplied it"}]
+      },
+      "notes": "A polite acknowledgment does not authorize importing example facts from the agent."
+    },
+    {
+      "id": "dev-15-explicit-name-unicode",
+      "split": "development",
+      "category": "contact-name-variation",
+      "tags": ["unicode", "hyphenated-name", "diacritics", "contact"],
+      "turns": [
+        {"role": "user", "content": "Please put the move under Ana María O’Neill-Soto. My email is ana.maria@example.test."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Ana María O’Neill-Soto", "sourceTurns": [0]}, "email": {"value": "ana.maria@example.test", "sourceTurns": [0]}, "spokenEmailConfirmed": {"value": false, "sourceTurns": [0]}}
+      },
+      "notes": "Preserve all name components and diacritics. Apostrophe normalization is acceptable; truncation or replacing accented characters with different letters is not."
+    },
+    {
+      "id": "dev-16-no-name-from-role-or-state",
+      "split": "development",
+      "category": "contact-false-positive",
+      "tags": ["name", "occupation", "descriptive-im", "negative-control"],
+      "turns": [
+        {"role": "user", "content": "Sure, I’m moving next week. I’m a cabinet maker, and I’m in Mesa today. You can reach me at 480-555-0105."}
+      ],
+      "expectations": {
+        "contact": {"phone": {"value": "4805550105", "sourceTurns": [0]}},
+        "inventory": [],
+        "route": [],
+        "details": [{"field": "timing", "value": "Next week", "sourceTurns": [0]}],
+        "absent": [{"field": "contact.displayName", "reason": "No personal name supplied"}, {"field": "inventory", "value": "cabinet", "reason": "Occupation, not inventory"}]
+      },
+      "notes": "Do not turn I’m moving or I’m a cabinet maker into a name. Current location does not establish a pickup or destination."
+    },
+    {
+      "id": "dev-17-contact-correction-and-confirmation",
+      "split": "development",
+      "category": "contact-correction",
+      "tags": ["phone", "readback", "checkpoint", "replacement"],
+      "turns": [
+        {"role": "user", "content": "My phone is 602-555-0106."},
+        {"role": "agent", "content": "I heard 602-555-0106. Is that your callback number?"},
+        {"role": "user", "content": "Yes, that’s correct."},
+        {"role": "user", "content": "Sorry, use my mobile instead: 480-555-0107. The 602 number is no longer mine."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 2, "expectations": {"contact": {"phone": {"value": "6025550106", "sourceTurns": [0]}, "phoneConfirmed": {"value": true, "sourceTurns": [0, 1, 2]}}}}
+      ],
+      "expectations": {
+        "contact": {"phone": {"value": "4805550107", "sourceTurns": [3]}, "phoneConfirmed": {"value": false, "sourceTurns": [3]}},
+        "removed": [{"field": "contact.phone", "value": "6025550106", "sourceTurns": [3]}]
+      },
+      "notes": "Replacing a read-back number must reset confirmation. An earlier confirmation cannot certify the replacement."
+    },
+    {
+      "id": "dev-18-contact-privacy-removal",
+      "split": "development",
+      "category": "contact-removal",
+      "tags": ["privacy", "contact", "no-follow-up", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "My name is Ren Park. My phone is 623-555-0108 and my email is ren.park@example.test. Please call me after 4 pm."},
+        {"role": "user", "content": "Please remove my contact details from the move notes. I don’t want any follow-up."}
+      ],
+      "expectations": {
+        "contact": {"contactPreference": {"value": "No follow-up requested", "sourceTurns": [1]}},
+        "removed": [{"field": "contact.displayName", "value": "Ren Park", "sourceTurns": [1]}, {"field": "contact.phone", "value": "6235550108", "sourceTurns": [1]}, {"field": "contact.email", "value": "ren.park@example.test", "sourceTurns": [1]}, {"field": "contact.callbackWindow", "value": "After 4 pm", "sourceTurns": [1]}]
+      },
+      "notes": "Removal applies to current display/contact capture. This fixture does not authorize deleting stored transcripts or changing server delivery policy. No follow-up preference should remain visible."
+    },
+    {
+      "id": "dev-19-route-correction-retains-inventory",
+      "split": "development",
+      "category": "route-correction",
+      "tags": ["route", "correction", "inventory", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "From Phoenix to Chandler. We have a queen bed and a desk to move."},
+        {"role": "user", "content": "Correction: the destination is Gilbert, not Chandler. The pickup is still Phoenix."}
+      ],
+      "expectations": {
+        "route": [{"kind": "Origin", "city": "Phoenix", "sourceTurns": [0, 1]}, {"kind": "Destination", "city": "Gilbert", "sourceTurns": [1]}],
+        "inventory": [{"item": "queen bed", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}, {"item": "desk", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}],
+        "removed": [{"field": "route.destination", "value": "Chandler", "sourceTurns": [1]}]
+      },
+      "notes": "City correction must propagate everywhere without resetting unrelated inventory."
+    },
+    {
+      "id": "dev-20-route-possible-stop-commitment",
+      "split": "development",
+      "category": "route-certainty-transition",
+      "tags": ["route", "possible-stop", "checkpoint", "commitment"],
+      "turns": [
+        {"role": "user", "content": "The move is from Scottsdale to Tempe. We may need a storage stop in Mesa, but I’m not sure yet."},
+        {"role": "agent", "content": "I’ll leave the Mesa storage stop as a possibility."},
+        {"role": "user", "content": "Thanks."},
+        {"role": "user", "content": "I checked. Definitely include that Mesa storage stop between pickup and delivery."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 2, "expectations": {"route": [{"kind": "Origin", "city": "Scottsdale", "sourceTurns": [0]}, {"kind": "Destination", "city": "Tempe", "sourceTurns": [0]}], "uncertain": [{"field": "route.additionalStop", "value": "Storage stop in Mesa", "reason": "Not yet decided", "sourceTurns": [0]}]}}
+      ],
+      "expectations": {
+        "route": [{"kind": "Origin", "city": "Scottsdale", "sourceTurns": [0]}, {"kind": "Additional stop", "city": "Mesa", "purpose": "Storage", "sourceTurns": [0, 3]}, {"kind": "Destination", "city": "Tempe", "sourceTurns": [0]}],
+        "absent": [{"field": "uncertain", "value": "Storage stop in Mesa", "reason": "The user resolved this uncertainty explicitly."}]
+      },
+      "notes": "The storage city may appear only in uncertain notes before commitment, never in confirmed route pins or directions."
+    },
+    {
+      "id": "dev-21-move-time-versus-callback",
+      "split": "development",
+      "category": "temporal-scope",
+      "tags": ["timing", "callback", "correction", "ambiguity"],
+      "turns": [
+        {"role": "user", "content": "The move is on November 18. For a callback, weekdays after 5 pm are best."},
+        {"role": "user", "content": "Actually, make the move November 20. The callback window hasn’t changed."}
+      ],
+      "expectations": {
+        "contact": {"callbackWindow": {"value": "Weekdays after 5 pm", "sourceTurns": [0, 1]}},
+        "details": [{"field": "timing", "value": "November 20", "sourceTurns": [1]}],
+        "removed": [{"field": "timing", "value": "November 18", "sourceTurns": [1]}],
+        "absent": [{"field": "timing", "value": "Weekdays after 5 pm", "reason": "Callback scope only"}]
+      },
+      "notes": "No year or booked appointment is implied. Same-domain latest-value handling must not overwrite another domain's time."
+    },
+    {
+      "id": "dev-22-access-location-and-negation",
+      "split": "development",
+      "category": "access-location",
+      "tags": ["stairs", "elevator", "origin", "destination", "negation"],
+      "turns": [
+        {"role": "user", "content": "Pickup is in Tempe, on the third floor with no elevator. Delivery is in Mesa, ground floor, no stairs. The loading bay at delivery must be reserved."}
+      ],
+      "expectations": {
+        "route": [{"kind": "Origin", "city": "Tempe", "sourceTurns": [0]}, {"kind": "Destination", "city": "Mesa", "sourceTurns": [0]}],
+        "details": [{"field": "access.origin", "value": "Third floor; no elevator", "sourceTurns": [0]}, {"field": "access.destination", "value": "Ground floor; no stairs; loading bay reservation required", "sourceTurns": [0]}],
+        "absent": [{"field": "access.origin", "value": "Elevator available", "reason": "Explicitly denied"}, {"field": "access.destination", "value": "Stairs", "reason": "Explicitly denied"}, {"field": "access.destination", "value": "Loading bay reserved", "reason": "Requirement is not a completed reservation."}]
+      },
+      "notes": "Retain which endpoint an access fact belongs to and distinguish a required action from its completion. Do not infer exact stair-flight count from floor number."
+    },
+    {
+      "id": "dev-23-packing-mixed-scope-correction",
+      "split": "development",
+      "category": "packing-scope",
+      "tags": ["packing", "correction", "service-boundary", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "We need you to pack everything."},
+        {"role": "user", "content": "Change that. We’ll pack the bedrooms and living room ourselves. We only need help packing the dishes and glassware."}
+      ],
+      "expectations": {
+        "details": [{"field": "packing.customerScope", "value": "Bedrooms and living room", "sourceTurns": [1]}, {"field": "packing.requestedScope", "value": "Dishes and glassware only", "sourceTurns": [1]}],
+        "removed": [{"field": "services", "value": "Full packing for the entire home", "sourceTurns": [1]}],
+        "absent": [{"field": "packing.requestedScope", "value": "Entire kitchen", "reason": "Dishes and glassware do not establish all kitchen contents."}]
+      },
+      "notes": "Do not broaden a limited request to full packing or all kitchen packing. Unnumbered dishes/glassware may also appear in inventory with unspecified quantity."
+    },
+    {
+      "id": "dev-24-readback-no-agent-fact-expansion",
+      "split": "development",
+      "category": "readback-grounding",
+      "tags": ["agent-overreach", "inventory", "confirmation"],
+      "turns": [
+        {"role": "user", "content": "We have a sofa to move."},
+        {"role": "agent", "content": "So a sofa, a piano, and full packing. Is that correct?"},
+        {"role": "user", "content": "The sofa is correct. I never said a piano, and we’ll handle packing ourselves."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "sofa", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 2]}],
+        "details": [{"field": "packing", "value": "Customer packs everything", "sourceTurns": [2]}],
+        "absent": [{"field": "inventory", "value": "piano", "reason": "Agent invention explicitly rejected"}, {"field": "services", "value": "Full packing", "reason": "Agent invention explicitly rejected"}]
+      },
+      "notes": "Do not let an agent summary contaminate the canonical record, even before the user rejects the unsupported additions."
+    },
+    {
+      "id": "dev-25-stale-question-context",
+      "split": "development",
+      "category": "context-lifetime",
+      "tags": ["contact", "number-confusion", "stale-question", "negative-control"],
+      "turns": [
+        {"role": "agent", "content": "What is your callback number?"},
+        {"role": "user", "content": "I’d rather not give it yet."},
+        {"role": "user", "content": "My order reference is 6025550109. That’s not a phone number."},
+        {"role": "user", "content": "I need to move two stools."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "stool", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [3]}],
+        "absent": [{"field": "contact.phone", "reason": "Callback question was declined; later number is an order reference."}]
+      },
+      "notes": "Question context is consumed by the next relevant turn and cannot turn all later digit strings into contact information."
+    },
+    {
+      "id": "dev-26-repeated-item-not-additive",
+      "split": "development",
+      "category": "inventory-coreference",
+      "tags": ["deduplication", "pronouns", "qualifiers", "dimensions"],
+      "turns": [
+        {"role": "user", "content": "We’re taking one dresser. It has six drawers."},
+        {"role": "agent", "content": "Anything special about the dresser?"},
+        {"role": "user", "content": "That dresser is solid oak. The same one I mentioned is about five feet wide."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "dresser", "quantity": {"kind": "exact", "value": 1}, "qualifiers": ["six drawers", "solid oak", "about five feet wide"], "sourceTurns": [0, 2]}],
+        "absent": [{"field": "inventory.quantity", "value": "6 dressers", "reason": "Drawer count is an attribute."}, {"field": "inventory.quantity", "value": "2 dressers", "reason": "Repeated reference is not another item."}]
+      },
+      "notes": "Object attributes must not be promoted into separate inventory counts or duplicate objects."
+    },
+    {
+      "id": "dev-27-property-count-not-inventory",
+      "split": "development",
+      "category": "numeric-role-disambiguation",
+      "tags": ["property", "bedroom", "inventory", "negative-control"],
+      "turns": [
+        {"role": "user", "content": "It’s a three-bedroom apartment, unit 12. We’re only moving one twin bed and two nightstands. The other bedrooms are empty."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "twin bed", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}, {"item": "nightstand", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}],
+        "details": [{"field": "property", "value": "Three-bedroom apartment; unit 12", "sourceTurns": [0]}],
+        "absent": [{"field": "inventory.quantity", "value": "3 beds", "reason": "Bedroom count is not bed count."}, {"field": "inventory.quantity", "value": "12 items", "reason": "Unit number is not item count."}]
+      },
+      "notes": "The inventory is a partial move even though property scope is three bedrooms. Do not infer contents of rooms."
+    },
+    {
+      "id": "dev-28-contact-name-question-fragment",
+      "split": "development",
+      "category": "contact-name-variation",
+      "tags": ["name", "non-western-name", "question-context", "phone"],
+      "turns": [
+        {"role": "agent", "content": "Who am I speaking with?"},
+        {"role": "user", "content": "李 明. You can write it as Li Ming. My mobile number is 623 555 0110."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Li Ming", "acceptedValues": ["李 明", "Li Ming", "李 明 (Li Ming)"], "sourceTurns": [0, 1]}, "phone": {"value": "6235550110", "sourceTurns": [1]}}
+      },
+      "notes": "The user supplies both spellings, so either faithful name form is acceptable. Do not infer a transliteration in cases where none is supplied."
+    },
+    {
+      "id": "dev-29-quoted-user-authorized-inventory",
+      "split": "development",
+      "category": "quoted-positive",
+      "tags": ["quote", "explicit-adoption", "inventory", "counterexample"],
+      "turns": [
+        {"role": "user", "content": "I’m reading my actual move list: ‘one futon, three folding screens, two shoe cabinets.’ Those are all ours and all three item types are coming."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "futon", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}, {"item": "folding screen", "quantity": {"kind": "exact", "value": 3}, "sourceTurns": [0]}, {"item": "shoe cabinet", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}]
+      },
+      "notes": "A blanket ignore-quoted-text rule would incorrectly lose these explicit user-adopted facts. Three item types is not the total object count."
+    },
+    {
+      "id": "dev-30-uncertainty-resolved-without-overwrite",
+      "split": "development",
+      "category": "inventory-certainty-transition",
+      "tags": ["uncertainty", "correction", "checkpoint", "selective-resolution"],
+      "turns": [
+        {"role": "user", "content": "We might take a treadmill and perhaps the workbench. We are definitely taking two tool cabinets."},
+        {"role": "user", "content": "The treadmill is staying. I’m still deciding about the workbench."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "tool cabinet", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}],
+        "uncertain": [{"field": "inventory", "value": "workbench", "quantity": {"kind": "exact", "value": 1}, "reason": "Still deciding", "sourceTurns": [0, 1]}],
+        "removed": [{"field": "uncertain.inventory", "value": "treadmill", "sourceTurns": [1]}],
+        "absent": [{"field": "inventory", "value": "treadmill", "reason": "Explicitly staying"}]
+      },
+      "notes": "Resolve only the named uncertainty. A useful tentative record must not become an ever-growing bag of stale possibilities."
+    },
+    {
+      "id": "dev-31-question-with-embedded-actual-facts",
+      "split": "development",
+      "category": "factual-question",
+      "tags": ["question-form", "inventory", "dimensions", "care"],
+      "turns": [
+        {"role": "user", "content": "What’s the safest way to move my 90-inch sofa? It’s on our move list, and the legs do not come off."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "sofa", "quantity": {"kind": "exact", "value": 1}, "qualifiers": ["90-inch", "legs do not come off"], "sourceTurns": [0]}],
+        "absent": [{"field": "inventory.quantity", "value": "90 sofas", "reason": "Dimension is not quantity."}, {"field": "services", "value": "Furniture disassembly", "reason": "A question and fixed legs do not request disassembly."}]
+      },
+      "notes": "Question punctuation cannot be a blanket reason to discard explicit actual facts."
+    },
+    {
+      "id": "dev-32-targeted-removal-does-not-clear-route",
+      "split": "development",
+      "category": "cross-domain-removal",
+      "tags": ["removal", "inventory", "route", "packing", "contact"],
+      "turns": [
+        {"role": "user", "content": "My name is Casey Morgan. Phoenix to Mesa, one sofa and two lamps. I need packing help for the lamps."},
+        {"role": "user", "content": "Remove the sofa. Keep the two lamps, the same route, and packing for the lamps."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Casey Morgan", "sourceTurns": [0]}},
+        "inventory": [{"item": "lamp", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0, 1]}],
+        "route": [{"kind": "Origin", "city": "Phoenix", "sourceTurns": [0]}, {"kind": "Destination", "city": "Mesa", "sourceTurns": [0]}],
+        "details": [{"field": "packing.requestedScope", "value": "Two lamps", "sourceTurns": [0, 1]}],
+        "removed": [{"field": "inventory", "value": "sofa", "sourceTurns": [1]}]
+      },
+      "notes": "Removal must be scoped to the intended entity and field. Other current facts and their provenance must remain intact."
+    },
+    {
+      "id": "dev-33-alias-aware-removal-reinstatement",
+      "split": "development",
+      "category": "inventory-coreference",
+      "tags": ["aliases", "removal", "reinstatement", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "One couch and two bedside tables are on the move list."},
+        {"role": "user", "content": "Remove the sofa, and change the nightstands to one. I mean the same pieces I just mentioned."},
+        {"role": "user", "content": "Put that couch back. Just one couch and one nightstand now."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 1, "expectations": {"inventory": [{"item": "nightstand", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 1]}], "removed": [{"field": "inventory", "value": "sofa", "acceptedValues": ["sofa", "couch"], "sourceTurns": [1]}, {"field": "inventory.quantity", "value": "2 bedside tables", "sourceTurns": [1]}]}}
+      ],
+      "expectations": {
+        "inventory": [{"item": "sofa", "acceptedValues": ["sofa", "couch"], "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 2]}, {"item": "nightstand", "acceptedValues": ["nightstand", "bedside table"], "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 1, 2]}]
+      },
+      "notes": "Aliases denote the same explicitly linked objects. Stable entity identity is needed so a changed label neither duplicates nor resurrects a removed fact before reinstatement."
+    },
+    {
+      "id": "dev-34-two-distinct-same-city-stops",
+      "split": "development",
+      "category": "route-entity-identity",
+      "tags": ["route", "same-city", "address", "removal", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "Pickup is Phoenix and delivery is Tempe. Between them, stop at my storage unit at 100 Example Road in Mesa, then at the donation center at 200 Example Avenue in Mesa."},
+        {"role": "user", "content": "Cancel only the donation center stop. Keep the Mesa storage unit."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 0, "expectations": {"route": [{"kind": "Origin", "city": "Phoenix", "sourceTurns": [0]}, {"kind": "Additional stop", "city": "Mesa", "address": "100 Example Road", "purpose": "Storage", "sourceTurns": [0]}, {"kind": "Additional stop", "city": "Mesa", "address": "200 Example Avenue", "purpose": "Donation", "sourceTurns": [0]}, {"kind": "Destination", "city": "Tempe", "sourceTurns": [0]}]}}
+      ],
+      "expectations": {
+        "route": [{"kind": "Origin", "city": "Phoenix", "sourceTurns": [0]}, {"kind": "Additional stop", "city": "Mesa", "address": "100 Example Road", "purpose": "Storage", "sourceTurns": [0, 1]}, {"kind": "Destination", "city": "Tempe", "sourceTurns": [0]}],
+        "removed": [{"field": "route.additionalStop", "value": "Donation center at 200 Example Avenue in Mesa", "sourceTurns": [1]}]
+      },
+      "notes": "Addresses are fictional, for local parsing only: never geocode them. City alone is not a stop identity; targeted removal must not delete another stop in the same city."
+    },
+    {
+      "id": "dev-35-third-party-email-not-user-contact",
+      "split": "development",
+      "category": "contact-false-positive",
+      "tags": ["email", "quoted", "third-party", "negative-control"],
+      "turns": [
+        {"role": "agent", "content": "What is your email address?"},
+        {"role": "user", "content": "I’m not giving mine. The sample says ‘my email is sample.person@example.test’; that is just placeholder text. My landlord’s email is owner@example.test, but don’t use it as my contact."}
+      ],
+      "expectations": {
+        "absent": [{"field": "contact.email", "reason": "User declined; both addresses belong to explicitly excluded non-user sources."}, {"field": "contact.proposedEmail", "reason": "Neither address is a proposed user contact address."}]
+      },
+      "notes": "An immediately preceding email question does not override explicit ownership attribution, quotation, or refusal."
+    },
+    {
+      "id": "dev-36-recap-refusal-not-contact-removal",
+      "split": "development",
+      "category": "contact-consent-scope",
+      "tags": ["contact", "email", "recap", "scope-boundary"],
+      "turns": [
+        {"role": "user", "content": "My email is jae.kim@example.test, and my name is Jae Kim."},
+        {"role": "user", "content": "Don’t send me a recap email, but keep my contact details on the move notes. I still want the coordinator to contact me by email."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Jae Kim", "sourceTurns": [0]}, "email": {"value": "jae.kim@example.test", "sourceTurns": [0]}, "contactPreference": {"value": "Email for coordinator follow-up", "sourceTurns": [1]}},
+        "details": [{"field": "communication.recap", "value": "Recap email declined", "sourceTurns": [1]}],
+        "absent": [{"field": "contact.contactPreference", "value": "No follow-up requested", "reason": "Only recap email was declined."}, {"field": "contact.hiddenFields", "value": "email", "reason": "User explicitly asked to retain contact information."}]
+      },
+      "notes": "Capture distinctions only; this offline fixture does not send, suppress, or authorize a real email. Display privacy, recap preference, and coordinator contact preference are separate dimensions."
+    },
+    {
+      "id": "hold-01-contact-natural-bundle",
+      "split": "holdout",
+      "category": "contact-bundled",
+      "tags": ["name", "phone", "email", "natural-positive"],
+      "turns": [
+        {"role": "agent", "content": "How should the move coordinator get in touch?"},
+        {"role": "user", "content": "Of course — this is Noor El-Amin. Best to text me on 623.555.0111; no calls while I’m at work. My email’s noor.elamin@example.test."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Noor El-Amin", "sourceTurns": [1]}, "phone": {"value": "6235550111", "sourceTurns": [1]}, "email": {"value": "noor.elamin@example.test", "sourceTurns": [1]}, "contactPreference": {"value": "Text message; no calls while at work", "sourceTurns": [1]}},
+        "absent": [{"field": "contact.callbackWindow", "reason": "No usable callback time was supplied."}]
+      },
+      "notes": "A workplace restriction must not erase the explicit text preference or invent working hours."
+    },
+    {
+      "id": "hold-02-open-vocabulary-quantity",
+      "split": "holdout",
+      "category": "open-vocabulary-inventory",
+      "metamorphicGroup": "hold-inventory-equivalence",
+      "tags": ["inventory", "unseen-furniture", "range", "approximate"],
+      "turns": [
+        {"role": "user", "content": "Here’s what’s going: one hall tree, a pair of chaise lounges, ten to fourteen archive crates, and approximately thirty records in a single carrying case."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "hall tree", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}, {"item": "chaise lounge", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}, {"item": "archive crate", "quantity": {"kind": "range", "min": 10, "max": 14}, "sourceTurns": [0]}, {"item": "record carrying case", "quantity": {"kind": "exact", "value": 1}, "qualifiers": ["contains approximately 30 records"], "sourceTurns": [0]}],
+        "absent": [{"field": "inventory.quantity", "value": "30 carrying cases", "reason": "Contents count must not replace container count."}]
+      },
+      "notes": "Records may be represented as a nested contained-item quantity instead of a qualifier, but must not be counted as thirty separate carrying cases."
+    },
+    {
+      "id": "hold-03-reordered-inventory-paraphrase",
+      "split": "holdout",
+      "category": "transcription-variation",
+      "metamorphicGroup": "hold-inventory-equivalence",
+      "tags": ["reordered", "punctuation", "quantity", "inventory"],
+      "turns": [
+        {"role": "agent", "content": "Which things will the crew collect?"},
+        {"role": "user", "content": "one case with around 30 records inside two chaise lounges and a hall tree"},
+        {"role": "user", "content": "also archive crates somewhere between ten and fourteen of those"}
+      ],
+      "expectations": {
+        "inventory": [{"item": "hall tree", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 1]}, {"item": "chaise lounge", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0, 1]}, {"item": "archive crate", "quantity": {"kind": "range", "min": 10, "max": 14}, "sourceTurns": [2]}, {"item": "record carrying case", "quantity": {"kind": "exact", "value": 1}, "qualifiers": ["contains approximately 30 records"], "sourceTurns": [0, 1]}]
+      },
+      "notes": "Semantic equivalence with hold-02 should survive answer fragments, reordered objects, word/digit variants, and missing punctuation."
+    },
+    {
+      "id": "hold-04-third-party-versus-owned",
+      "split": "holdout",
+      "category": "quoted-negative",
+      "tags": ["third-party", "inventory", "contact", "contrast"],
+      "turns": [
+        {"role": "user", "content": "My neighbor Sam Cho said, ‘I’m taking a hutch and a king bed; call me at 480-555-0112.’ That’s their move. For mine, please list a trundle bed and one sewing cabinet."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "trundle bed", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}, {"item": "sewing cabinet", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}],
+        "absent": [{"field": "inventory", "value": "hutch", "reason": "Neighbor's separate move"}, {"field": "inventory", "value": "king bed", "reason": "Neighbor's separate move"}, {"field": "contact.displayName", "value": "Sam Cho", "reason": "Neighbor, not user identity"}, {"field": "contact.phone", "value": "4805550112", "reason": "Neighbor's number"}]
+      },
+      "notes": "Correct ownership attribution is required without ignoring the real inventory in the final sentence."
+    },
+    {
+      "id": "hold-05-hypothetical-contrast-real-item",
+      "split": "holdout",
+      "category": "hypothetical-negative",
+      "tags": ["hypothetical", "actual-fact", "inventory", "packing"],
+      "turns": [
+        {"role": "user", "content": "Suppose we had an aquarium — would you drain it? We don’t have one, I’m just curious. The real awkward thing we need moved is a single potter’s wheel. We’re not asking for packing."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "potter’s wheel", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0]}],
+        "details": [{"field": "packing", "value": "No packing assistance requested", "sourceTurns": [0]}],
+        "absent": [{"field": "inventory", "value": "aquarium", "reason": "Explicit hypothetical with no ownership"}, {"field": "services", "value": "Packing assistance", "reason": "Explicitly declined"}]
+      },
+      "notes": "Neither a whole-turn hypothetical filter nor a whole-turn positive matcher is sufficient."
+    },
+    {
+      "id": "hold-06-agent-suggestion-compound-yes",
+      "split": "holdout",
+      "category": "agent-only-negative",
+      "tags": ["agent-only", "ambiguous-confirmation", "inventory", "contact"],
+      "turns": [
+        {"role": "user", "content": "We’re moving from Glendale to Peoria. I haven’t made the inventory yet."},
+        {"role": "agent", "content": "I’ll assume three beds and ten boxes, and put your name down as Robin Example. Would you like me to explain the estimate process?"},
+        {"role": "user", "content": "Yes, please."}
+      ],
+      "expectations": {
+        "inventory": [],
+        "route": [{"kind": "Origin", "city": "Glendale", "sourceTurns": [0]}, {"kind": "Destination", "city": "Peoria", "sourceTurns": [0]}],
+        "uncertain": [{"field": "inventory", "value": "Complete inventory", "reason": "User has not prepared it", "sourceTurns": [0]}],
+        "absent": [{"field": "contact.displayName", "value": "Robin Example", "reason": "Agent assumption not confirmed by user"}]
+      },
+      "notes": "Yes answers the final process question; it does not adopt unsupported earlier assertions."
+    },
+    {
+      "id": "hold-07-negative-count-correction",
+      "split": "holdout",
+      "category": "inventory-correction",
+      "tags": ["range-replacement", "negation", "coreference", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "Eight to ten storage trunks are going, plus two coat racks."},
+        {"role": "user", "content": "I counted. There are exactly seven trunks, not ten. Leave the coat racks at home."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 0, "expectations": {"inventory": [{"item": "storage trunk", "quantity": {"kind": "range", "min": 8, "max": 10}, "sourceTurns": [0]}, {"item": "coat rack", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}]}}
+      ],
+      "expectations": {
+        "inventory": [{"item": "storage trunk", "quantity": {"kind": "exact", "value": 7}, "sourceTurns": [0, 1]}],
+        "removed": [{"field": "inventory.quantity", "value": "8 to 10 storage trunks", "sourceTurns": [1]}, {"field": "inventory", "value": "coat rack", "sourceTurns": [1]}]
+      },
+      "notes": "The rejected ten is not the replacement value. Exact counting resolves a previous range rather than adding a second batch."
+    },
+    {
+      "id": "hold-08-inventory-list-retraction-replacement",
+      "split": "holdout",
+      "category": "inventory-state-transitions",
+      "tags": ["reset", "replacement-list", "cross-domain-preservation"],
+      "turns": [
+        {"role": "user", "content": "The move is Mesa to Queen Creek. Add a recliner, two curio cabinets, and a weight bench."},
+        {"role": "user", "content": "Start the item list over. We sold that furniture. The entire new list is four stackable storage cubes and one drafting table. The route is unchanged."}
+      ],
+      "expectations": {
+        "inventory": [{"item": "stackable storage cube", "quantity": {"kind": "exact", "value": 4}, "sourceTurns": [1]}, {"item": "drafting table", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [1]}],
+        "route": [{"kind": "Origin", "city": "Mesa", "sourceTurns": [0, 1]}, {"kind": "Destination", "city": "Queen Creek", "sourceTurns": [0, 1]}],
+        "removed": [{"field": "inventory", "value": "recliner", "sourceTurns": [1]}, {"field": "inventory", "value": "curio cabinet", "sourceTurns": [1]}, {"field": "inventory", "value": "weight bench", "sourceTurns": [1]}]
+      },
+      "notes": "A complete item-list replacement is not a full-session reset and must not leave the old list in current email sections."
+    },
+    {
+      "id": "hold-09-possible-inventory-explicit-commitment",
+      "split": "holdout",
+      "category": "inventory-certainty-transition",
+      "tags": ["uncertainty", "commitment", "multiple-objects", "checkpoint"],
+      "turns": [
+        {"role": "user", "content": "Our two brass bedsteads are definitely coming. The harmonium might come, and I may bring the spinning wheel too."},
+        {"role": "user", "content": "Please make the harmonium a definite move item. The spinning wheel is still a maybe."}
+      ],
+      "checkpoints": [
+        {"afterTurn": 0, "expectations": {"inventory": [{"item": "brass bedstead", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}], "uncertain": [{"field": "inventory", "value": "harmonium", "quantity": {"kind": "exact", "value": 1}, "reason": "Might come", "sourceTurns": [0]}, {"field": "inventory", "value": "spinning wheel", "quantity": {"kind": "exact", "value": 1}, "reason": "May come", "sourceTurns": [0]}]}}
+      ],
+      "expectations": {
+        "inventory": [{"item": "brass bedstead", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0]}, {"item": "harmonium", "quantity": {"kind": "exact", "value": 1}, "sourceTurns": [0, 1]}],
+        "uncertain": [{"field": "inventory", "value": "spinning wheel", "quantity": {"kind": "exact", "value": 1}, "reason": "Still undecided", "sourceTurns": [0, 1]}],
+        "absent": [{"field": "uncertain.inventory", "value": "harmonium", "reason": "Now explicitly confirmed"}]
+      },
+      "notes": "Promotion must be selective, leave no duplicate tentative/confirmed object, and not promote neighboring possibilities."
+    },
+    {
+      "id": "hold-10-access-correction-mixed-endpoints",
+      "split": "holdout",
+      "category": "access-location",
+      "tags": ["access", "correction", "endpoint", "uncertainty"],
+      "turns": [
+        {"role": "user", "content": "Pickup is a second-floor apartment in Chandler, and there’s an elevator. Delivery in Gilbert has two steps by the front door."},
+        {"role": "user", "content": "The manager just told me the pickup elevator is out of service. We’ll need the stairs there. I don’t know yet if the truck can use the delivery driveway."}
+      ],
+      "expectations": {
+        "route": [{"kind": "Origin", "city": "Chandler", "sourceTurns": [0]}, {"kind": "Destination", "city": "Gilbert", "sourceTurns": [0]}],
+        "details": [{"field": "access.origin", "value": "Second floor; elevator unavailable; stairs required", "sourceTurns": [0, 1]}, {"field": "access.destination", "value": "Two steps by front door", "sourceTurns": [0]}],
+        "uncertain": [{"field": "access.destination", "value": "Truck access to driveway", "reason": "User does not know", "sourceTurns": [1]}],
+        "removed": [{"field": "access.origin", "value": "Usable elevator", "sourceTurns": [1]}]
+      },
+      "notes": "Preserve delivery steps while changing only pickup elevator availability; no driveway approval may be inferred."
+    },
+    {
+      "id": "hold-11-route-direction-and-possible-cancellation",
+      "split": "holdout",
+      "category": "route-correction",
+      "tags": ["route", "direction", "possible-stop", "removal"],
+      "turns": [
+        {"role": "user", "content": "I said Tempe to Scottsdale, but I had it backwards: pickup in Scottsdale, delivery in Tempe. There could be a donation stop in Phoenix."},
+        {"role": "user", "content": "No donation stop after all. Just the pickup and delivery."}
+      ],
+      "expectations": {
+        "route": [{"kind": "Origin", "city": "Scottsdale", "sourceTurns": [0]}, {"kind": "Destination", "city": "Tempe", "sourceTurns": [0]}],
+        "removed": [{"field": "uncertain.route.additionalStop", "value": "Donation stop in Phoenix", "sourceTurns": [1]}],
+        "absent": [{"field": "route.origin", "value": "Tempe", "reason": "Explicit in-turn direction correction"}, {"field": "route.destination", "value": "Scottsdale", "reason": "Explicit in-turn direction correction"}, {"field": "route.additionalStop", "value": "Phoenix", "reason": "Tentative stop canceled"}]
+      },
+      "notes": "The first route phrase in a turn is not always authoritative; ordered clause-level corrections matter."
+    },
+    {
+      "id": "hold-12-contact-removal-partial-reentry",
+      "split": "holdout",
+      "category": "contact-removal",
+      "tags": ["contact", "privacy", "reentry", "callback"],
+      "turns": [
+        {"role": "user", "content": "I’m Élodie Martin. My phone is 602-555-0113 and my email is elodie.old@example.test. Call after six."},
+        {"role": "user", "content": "Erase my phone and callback time from the notes. Email only. Use elodie.new@example.test instead of the old email."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Élodie Martin", "sourceTurns": [0]}, "email": {"value": "elodie.new@example.test", "sourceTurns": [1]}, "contactPreference": {"value": "Email only", "sourceTurns": [1]}},
+        "removed": [{"field": "contact.phone", "value": "6025550113", "sourceTurns": [1]}, {"field": "contact.callbackWindow", "value": "After six", "sourceTurns": [1]}, {"field": "contact.email", "value": "elodie.old@example.test", "sourceTurns": [1]}]
+      },
+      "notes": "No check-in identity is supplied here. If testing with a separately verified delivery email, display proposals and delivery authority must be scored as distinct fields."
+    },
+    {
+      "id": "hold-13-timing-window-and-no-invented-date",
+      "split": "holdout",
+      "category": "temporal-scope",
+      "tags": ["timing", "window", "callback", "uncertainty"],
+      "turns": [
+        {"role": "user", "content": "We’re aiming for the last week of February, not a particular day yet. A call is fine between noon and two on Tuesdays. I’m not saying the move has to be on a Tuesday."}
+      ],
+      "expectations": {
+        "contact": {"callbackWindow": {"value": "Tuesdays between noon and 2 pm", "sourceTurns": [0]}},
+        "details": [{"field": "timing", "value": "Last week of February; exact day undecided", "sourceTurns": [0]}],
+        "uncertain": [{"field": "timing", "value": "Exact move day", "reason": "Not chosen", "sourceTurns": [0]}],
+        "absent": [{"field": "timing", "value": "Tuesday", "reason": "Applies only to callback"}, {"field": "timing.exactDate", "reason": "No day or year is supplied."}]
+      },
+      "notes": "Preserve a planning window without creating a date, weekday commitment, or booked appointment."
+    },
+    {
+      "id": "hold-14-packing-refusal-not-self-commitment",
+      "split": "holdout",
+      "category": "packing-scope",
+      "tags": ["packing", "negation", "uncertainty", "question"],
+      "turns": [
+        {"role": "user", "content": "Don’t include paid packing. I haven’t worked out who will pack the china yet. Could you tell me what materials people usually use?"}
+      ],
+      "expectations": {
+        "details": [{"field": "packing", "value": "Paid packing declined", "sourceTurns": [0]}],
+        "uncertain": [{"field": "packing", "value": "Who will pack the china", "reason": "User has not decided", "sourceTurns": [0]}],
+        "absent": [{"field": "services", "value": "Packing assistance", "reason": "Explicitly declined"}, {"field": "packing", "value": "Customer will pack everything", "reason": "Refusal of paid packing does not identify who will pack."}]
+      },
+      "notes": "A materials question is not service consent. Do not collapse declined assistance and promised self-packing into the same fact."
+    },
+    {
+      "id": "hold-15-name-correction-and-identity-attribution",
+      "split": "holdout",
+      "category": "contact-correction",
+      "tags": ["name", "unicode", "correction", "third-party"],
+      "turns": [
+        {"role": "agent", "content": "Whose name should go on this move?"},
+        {"role": "user", "content": "Søren Dahl. My brother is Sean Dahl, but this is my move, not his."},
+        {"role": "agent", "content": "I have Sean Dahl."},
+        {"role": "user", "content": "No, Søren, spelled S-Ø-R-E-N. Keep Dahl as the surname. My number is 480-555-0114."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Søren Dahl", "sourceTurns": [1, 3]}, "phone": {"value": "4805550114", "sourceTurns": [3]}},
+        "absent": [{"field": "contact.displayName", "value": "Sean Dahl", "reason": "Brother's identity and incorrect agent readback"}]
+      },
+      "notes": "The canonical name must remain grounded in the user despite the agent's mistaken readback. Preserve the supplied diacritic."
+    },
+    {
+      "id": "hold-16-long-mixed-turn-grounding",
+      "split": "holdout",
+      "category": "bundled-domains",
+      "tags": ["inventory", "contact", "route", "packing", "care", "local-negation"],
+      "turns": [
+        {"role": "user", "content": "Hi, this is Priya Nair, 623-555-0115 is my mobile. We’re going from Peoria to Surprise. For the load: a marble-topped credenza, three plant stands, and maybe the garden bench if the buyer doesn’t collect it. We sold the treadmill, so leave it out. We’ll box the books ourselves, but please pack the credenza’s marble top. It already has a hairline crack."},
+        {"role": "user", "content": "One correction: two plant stands, since one stays with the house. Everything else I said still applies."}
+      ],
+      "expectations": {
+        "contact": {"displayName": {"value": "Priya Nair", "sourceTurns": [0]}, "phone": {"value": "6235550115", "sourceTurns": [0]}},
+        "inventory": [{"item": "credenza", "quantity": {"kind": "exact", "value": 1}, "qualifiers": ["marble top", "hairline crack in marble top"], "sourceTurns": [0]}, {"item": "plant stand", "quantity": {"kind": "exact", "value": 2}, "sourceTurns": [0, 1]}, {"item": "book", "quantity": {"kind": "unspecified"}, "sourceTurns": [0]}],
+        "route": [{"kind": "Origin", "city": "Peoria", "sourceTurns": [0]}, {"kind": "Destination", "city": "Surprise", "sourceTurns": [0]}],
+        "details": [{"field": "packing.customerScope", "value": "Books", "sourceTurns": [0]}, {"field": "packing.requestedScope", "value": "Credenza marble top", "sourceTurns": [0]}, {"field": "care", "value": "Marble top already has a hairline crack", "sourceTurns": [0]}],
+        "uncertain": [{"field": "inventory", "value": "garden bench", "quantity": {"kind": "exact", "value": 1}, "reason": "Depends on buyer collection", "sourceTurns": [0]}],
+        "removed": [{"field": "inventory.quantity", "value": "3 plant stands", "sourceTurns": [1]}],
+        "absent": [{"field": "inventory", "value": "treadmill", "reason": "Sold and explicitly excluded"}, {"field": "services", "value": "Full packing", "reason": "Only one specified item's component needs assistance."}]
+      },
+      "notes": "End-to-end stress case: preserve object-level care, uncertainty, limited packing scope, local removal, and one targeted correction across every consumer."
+    }
+  ]
+}

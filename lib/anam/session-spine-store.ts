@@ -67,16 +67,27 @@ function finalizationKey(sessionId: string): string {
     return `xagent:amy:anam:finalization:v1:${sessionId}`;
 }
 
-function finalizationDueKey(): string {
-    return 'xagent:amy:anam:finalization-due:v1';
+function recoveryQueueKey(key: string, options: StoreOptions): string {
+    const namespace = (options.env ?? process.env).ANAM_RECOVERY_NAMESPACE;
+    // An unset namespace preserves production's existing queues. An explicitly
+    // configured but invalid value must never fall back into those queues.
+    if (namespace === undefined) return key;
+    if (namespace !== namespace.trim() || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(namespace)) {
+        throw new Error('Anam recovery namespace must be 1-32 lowercase letters, digits, or hyphens');
+    }
+    return `${key}:scope:${namespace}`;
 }
 
-function daniEmailRetryDueKey(): string {
-    return 'xagent:dani:anam:agentmail:retry-due:v1';
+function finalizationDueKey(options: StoreOptions): string {
+    return recoveryQueueKey('xagent:amy:anam:finalization-due:v1', options);
 }
 
-function recoveryDrainLockKey(): string {
-    return 'xagent:amy:anam:recovery-drain-lock:v1';
+function daniEmailRetryDueKey(options: StoreOptions): string {
+    return recoveryQueueKey('xagent:dani:anam:agentmail:retry-due:v1', options);
+}
+
+function recoveryDrainLockKey(options: StoreOptions): string {
+    return recoveryQueueKey('xagent:amy:anam:recovery-drain-lock:v1', options);
 }
 
 function completionByLaunchKey(launchId: string): string {
@@ -349,7 +360,7 @@ export async function listDueAmyAnamFinalizationIds(input: {
     const limit = Math.max(1, Math.min(16, Math.trunc(input.limit) || 1));
     const result = await redisCommand([
         'ZRANGEBYSCORE',
-        finalizationDueKey(),
+        finalizationDueKey(options),
         '-inf',
         dueAt,
         'LIMIT',
@@ -366,7 +377,7 @@ export async function removeAmyAnamFinalizationDueEntry(
     externalSessionId: string,
     options: StoreOptions = {},
 ): Promise<void> {
-    await redisCommand(['ZREM', finalizationDueKey(), externalSessionId], options);
+    await redisCommand(['ZREM', finalizationDueKey(options), externalSessionId], options);
 }
 
 export async function scheduleAmyAnamFinalizationDueEntry(input: {
@@ -378,8 +389,8 @@ export async function scheduleAmyAnamFinalizationDueEntry(input: {
         throw new Error('Amy Anam finalization retry schedule was invalid');
     }
     await redisPipeline([
-        ['ZADD', finalizationDueKey(), Math.trunc(input.dueAt), externalSessionId],
-        ['EXPIRE', finalizationDueKey(), AMY_ANAM_RECORD_TTL_SECONDS],
+        ['ZADD', finalizationDueKey(options), Math.trunc(input.dueAt), externalSessionId],
+        ['EXPIRE', finalizationDueKey(options), AMY_ANAM_RECORD_TTL_SECONDS],
     ], options);
 }
 
@@ -392,8 +403,8 @@ export async function scheduleDaniAnamEmailRetryDueEntry(input: {
         throw new Error('Dani AgentMail retry schedule was invalid');
     }
     await redisPipeline([
-        ['ZADD', daniEmailRetryDueKey(), Math.trunc(input.dueAt), externalSessionId],
-        ['EXPIRE', daniEmailRetryDueKey(), AMY_ANAM_RECORD_TTL_SECONDS],
+        ['ZADD', daniEmailRetryDueKey(options), Math.trunc(input.dueAt), externalSessionId],
+        ['EXPIRE', daniEmailRetryDueKey(options), AMY_ANAM_RECORD_TTL_SECONDS],
     ], options);
 }
 
@@ -405,7 +416,7 @@ export async function listDueDaniAnamEmailRetryIds(input: {
     const limit = Math.max(1, Math.min(16, Math.trunc(input.limit) || 1));
     const result = await redisCommand([
         'ZRANGEBYSCORE',
-        daniEmailRetryDueKey(),
+        daniEmailRetryDueKey(options),
         '-inf',
         dueAt,
         'LIMIT',
@@ -424,7 +435,7 @@ export async function hasDaniAnamEmailRetryDueEntry(
 ): Promise<boolean> {
     if (!SAFE_SESSION_ID_PATTERN.test(String(externalSessionId ?? '').trim())) return false;
     return await redisCommand([
-        'ZSCORE', daniEmailRetryDueKey(), externalSessionId,
+        'ZSCORE', daniEmailRetryDueKey(options), externalSessionId,
     ], options) !== null;
 }
 
@@ -432,7 +443,7 @@ export async function removeDaniAnamEmailRetryDueEntry(
     externalSessionId: string,
     options: StoreOptions = {},
 ): Promise<void> {
-    await redisCommand(['ZREM', daniEmailRetryDueKey(), externalSessionId], options);
+    await redisCommand(['ZREM', daniEmailRetryDueKey(options), externalSessionId], options);
 }
 
 export async function acquireAmyAnamRecoveryDrainLock(
@@ -441,7 +452,7 @@ export async function acquireAmyAnamRecoveryDrainLock(
 ): Promise<boolean> {
     const result = await redisCommand([
         'SET',
-        recoveryDrainLockKey(),
+        recoveryDrainLockKey(options),
         lockToken,
         'NX',
         'EX',
@@ -464,7 +475,7 @@ export async function releaseAmyAnamRecoveryDrainLock(
         'EVAL',
         script,
         1,
-        recoveryDrainLockKey(),
+        recoveryDrainLockKey(options),
         lockToken,
     ], options);
 }
@@ -553,7 +564,7 @@ export async function recordAmyAnamCompletion(input: {
         launchKey(input.launch.launchId),
         sessionKey(input.externalSessionId),
         finalizationKey(input.externalSessionId),
-        finalizationDueKey(),
+        finalizationDueKey(options),
         receiptKey(input.externalSessionId),
         completionByLaunchKey(input.launch.launchId),
         input.browserSessionId,
@@ -599,7 +610,7 @@ export async function markAmyAnamVerificationPending(input: {
         script,
         3,
         finalizationKey(input.finalization.externalSessionId),
-        finalizationDueKey(),
+        finalizationDueKey(options),
         receiptKey(input.finalization.externalSessionId),
         JSON.stringify(finalization),
         nextAttemptAt,
@@ -649,7 +660,7 @@ export async function markAmyAnamFinalizationPending(input: {
         4,
         sessionKey(session.externalSessionId),
         finalizationKey(session.externalSessionId),
-        finalizationDueKey(),
+        finalizationDueKey(options),
         receiptKey(session.externalSessionId),
         JSON.stringify(session),
         JSON.stringify(finalization),
@@ -698,7 +709,7 @@ export async function markAmyAnamFinalizationFailed(input: {
         4,
         sessionKey(input.finalization.externalSessionId),
         finalizationKey(input.finalization.externalSessionId),
-        finalizationDueKey(),
+        finalizationDueKey(options),
         receiptKey(input.finalization.externalSessionId),
         session ? JSON.stringify(session) : '',
         JSON.stringify(finalization),
@@ -770,7 +781,7 @@ export async function requeueAmyAnamProviderResponseFailure(
         4,
         sessionKey(externalSessionId),
         finalizationKey(externalSessionId),
-        finalizationDueKey(),
+        finalizationDueKey(options),
         receiptKey(externalSessionId),
         JSON.stringify(session),
         JSON.stringify(finalization),
@@ -889,7 +900,7 @@ export async function writeAmyAnamReceipt(
         receiptKey(session.externalSessionId),
         sessionKey(session.externalSessionId),
         finalizationKey(session.externalSessionId),
-        finalizationDueKey(),
+        finalizationDueKey(options),
     ];
     const args: Array<string | number> = [
         JSON.stringify(receipt),

@@ -1,0 +1,11 @@
+# Evan live test 22 — destination-first route correction
+
+Run 22 used the protected `qwn0uqinb` rehearsal preview. The first route utterance was transcribed by Anam as “It's Kilba Arizona to Chanda Arizona,” so neither city was safe to pin. Evan appropriately asked the caller to repeat the cities. The next user turn was clearly transcribed as “Sorry, my destination is Chandler, Arizona. It's Gilbert, Arizona to Chandler, Arizona.” The live planner showed only Chandler as a destination and never added Gilbert as an origin. Access, timing, inventory, tentative packing, discovery pacing, guest boundary, and normal first-request closure passed.
+
+The parser processes each sentence separately. It accepted “my destination is Chandler” but required Evan's preceding question to contain route words before accepting the following “It's Gilbert ... to Chandler” pair. His clarification question only asked the caller to repeat the city names, so that contextual gate failed. The map and brief agreed on the incomplete parser result; this was not a separate rendering failure.
+
+The candidate now carries explicit destination context from an earlier sentence of the **same caller turn**. When the later sentence gives an origin-to-that-destination pair, both cities are added. This also works when the same completed user turn is applied directly to an existing route. It does not use Evan's own recap as evidence and does not convert the earlier unrecognized `Kilba`/`Chanda` into pins. The regression replays the provider's correction and verifies two map coordinates, the route summary, and the Google Maps directions path.
+
+Local checks: 365 Evan release tests, the full repository test suite, TypeScript, and the production-style Next build passed. Rehearsal deployment `dpl_2kS8c9GZLxwiXsDNMp4e5Z7e82sD` (`c08ipadtk`) is READY with no alias. Guest and synthetic-email entry plus token issuance both passed without starting a live call or sending mail. Production remains on `dpl_532oXZx47MLz9UWBmRWkzDx4dqLF`.
+
+The new parser behavior still requires a separately authorized live retest before release. In particular, the first `Kilba`/`Chanda` utterance is intentionally not converted into pins; the decisive check is that a clearly spoken destination-first correction fills both origin and destination live.
