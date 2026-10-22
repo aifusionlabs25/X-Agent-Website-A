@@ -1,0 +1,10 @@
+.git
+.vercel
+node_modules
+.next
+.env*
+*.log
+*.tsbuildinfo
+work
+coverage
+AgentMail

@@ -1,11 +1,12 @@
 # Evan public-demo release preparation — October 22, 2026
 
-Status: locally verified release candidate; NOT published and NOT yet production-certified.
+Status: layout accepted after live run 57; NOT published and NOT yet production-certified.
 
 ## Preserved baseline
 
-- Stable ref: `codex/evan-stable-2026-10-22-run56`.
-- Stable commit: `ac9835d6456fd330b2e3faa7bf65987acab657d4` (unchanged).
+- New accepted layout checkpoint: `codex/evan-stable-2026-10-22-run57-layout`; tested application source `dee7dc51c4ffef75af675ae71cd82d76cb8cebee`.
+- Previous stable ref: `codex/evan-stable-2026-10-22-run56`.
+- Previous stable commit: `ac9835d6456fd330b2e3faa7bf65987acab657d4` (unchanged).
 - Three qualifying rehearsal runs: 54, 55, 56. Their evidence remains in the checkpoint.
 - Release integration base: `origin/main` at `eb3ce310a94acff6a98f9929f08f4a0c41f927c6`.
 - Integration is in a separate managed worktree; the dirty original worktrees were not modified.
@@ -39,4 +40,4 @@ Status: locally verified release candidate; NOT published and NOT yet production
 5. Verify the staged artifact's entry, live capture, closure and controlled AIFL inbox delivery; local mocked delivery is not evidence of real inbox delivery in production mode.
 6. Recheck the current production deployment before approval and record rollback target, then obtain explicit user publication approval. Baseline last observed production: `dpl_532oXZx47MLz9UWBmRWkzDx4dqLF`.
 
-No additional live consistency test has been started. Evaluate's run 56 remains the accepted baseline, with both voice sides reported idle.
+Run 57 tested the isolated layout preview `4luzkxwja` and passed the unchanged behavior scorecard at 100/100. The user accepted secondary-detail scrolling and requested the new stable checkpoint. No further live call is authorized by saving that checkpoint. Nova-off confirmation was still pending in the run-57 report; do not infer either microphone or voice-session state.
