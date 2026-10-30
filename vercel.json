@@ -1,13 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    {
-      "path": "/api/anam/session/recover?slot=a",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/anam/session/recover?slot=b",
-      "schedule": "0 22 * * *"
-    }
-  ]
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci --ignore-scripts --no-audit --no-fund"
 }

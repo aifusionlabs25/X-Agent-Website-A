@@ -1,3 +1,0 @@
-# Persona knowledge bundles are byte-hashed by their manifests.
-# Keep their checked-out bytes stable across Windows, macOS, Linux, and Vercel.
-config/anam/**/knowledge/*.md text eol=lf
