@@ -1,9 +1,9 @@
 {
-  "schema": "capture-private-preview-luna-plan.v0.1",
-  "testId": "eb172848-0284-4875-b030-d701468d8716",
-  "sourceId": "88bdbcd2-f01b-4678-96b3-e635b9d27cad",
-  "parentCommit": "de1a553982417a581703a0cf08349157257d72ce",
-  "parentSourceDigest": "b8612a11d62b6d06be7cb84bfb6d248f5259009c06b908571b6e86138d1de958",
+  "schema": "capture-private-preview-luna-plan.v0.2",
+  "testId": "76e7e045-27cd-43a3-9fd7-d6d6582df7c1",
+  "sourceId": "a8149f2b-805a-4128-b3e2-ab0a6b9664cd",
+  "parentCommit": "dcac0070e2d7114aa487adf9add02825d975b1b3",
+  "parentSourceDigest": "ac0c4a73ca7cc6b116b034a191b1335edd233947ffe4149199195efca9416fdc",
   "branch": "codex/capture-private-preview-20261029",
   "projectId": "prj_bV8rj56Sxm9BnNSgTxp5DcHrPVvs",
   "openaiProjectId": "proj_tHxIpgHptxCy4RruSDw9xU4k",
@@ -26,7 +26,7 @@
   "taxReserveMicrodollars": 10000,
   "proposedGrossCapMicrodollars": 20000,
   "resourceExpiresAt": "2026-11-02T00:00:00Z",
-  "approved": false,
+  "approved": true,
   "liveCredentialVerified": false,
   "liveSpendControlsVerified": false
 }
