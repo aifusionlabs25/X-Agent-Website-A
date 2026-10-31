@@ -3,6 +3,7 @@ import { createHmac,randomBytes,timingSafeEqual,randomUUID,createHash } from 'no
 import manifest from '@/config/factory/aiowa-service-guide.json';
 import { appendTurn,beginClosing,recordHandoffAttempt,decide,approve,digest,appendSdkCloseEvidence,appendToolEvidence,reconcileVisitorEvidence,type Handoff,type Turn } from '@/lib/factory/handoff';
 import * as store from '@/lib/factory/store';
+import { recordProviderHandoffAttempt } from '@/lib/factory/handoff-binding';
 import { fetchAnamSessionMetadata } from '@/lib/anam/session-api';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -89,6 +90,11 @@ export async function POST(req:NextRequest) {
             case 'turn': appendTurn(state,b.turn as Turn); break;
             case 'handoff': {
                 toolResult=recordHandoffAttempt(state,b.proposals,manifest.configured_fields,b.request_id);
+                break;
+            }
+            case 'provider_handoff': {
+                toolResult=recordProviderHandoffAttempt(state,b.proposals,manifest.configured_fields,b.request_id,
+                    {local_session_id:b.local_session_id,provider_session_id:b.provider_session_id,tool_call_id:b.tool_call_id});
                 break;
             }
             case 'closing': beginClosing(state); break;

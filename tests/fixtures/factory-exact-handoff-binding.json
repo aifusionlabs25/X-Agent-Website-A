@@ -1,0 +1,286 @@
+{
+  "kind": "RETAINED_SYNTHETIC_OWNER_QA_NOT_LIVE_SUCCESS",
+  "source_commit": "66b2159604f8145d89201034c40c9e5e77ac082e",
+  "local_session_id": "1a7ec204-5fc3-4f3e-8c1e-db47f726cfd1",
+  "provider_session_id": "3cbf4e79-6d55-4b5e-b0bd-db41c124e9b8",
+  "launch_label": "factory:b395e846f7599f6d87f6582fc63ae0dc:622a1618-c6b9-471c-aaba-125bff2021ff",
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "original_turns": [
+    {
+      "id": "persona::engine::initial_message::3cbf4e79-6d55-4b5e-b0bd-db41c124e9b8",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::24f16b63-3c35-49fb-ba35-ea5bee33a096",
+      "role": "user",
+      "content": "Hi, could you briefly tell me what A Iowa offers?"
+    },
+    {
+      "id": "persona::24f16b63-3c35-49fb-ba35-ea5bee33a096",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide. I can help with questions about AIowa Agents."
+    },
+    {
+      "id": "user::508cbaea-a58a-4ae4-a63f-08638aa0deea",
+      "role": "user",
+      "content": "I run a plumbing supply distributor with 6 staff. Customer requests arrive in a shared inbox and we sometimes lose track of who owns each request."
+    },
+    {
+      "id": "persona::508cbaea-a58a-4ae4-a63f-08638aa0deea",
+      "role": "persona",
+      "content": "That sounds like a common challenge. AIowa Agents can help with workflows like routing and tracking customer requests so each one has a clear owner. Would you like me to explain how that documented workflow works?"
+    },
+    {
+      "id": "user::46dd2340-d317-40bd-889d-5a985ff61657",
+      "role": "user",
+      "content": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though."
+    },
+    {
+      "id": "persona::46dd2340-d317-40bd-889d-5a985ff61657",
+      "role": "persona",
+      "content": "That's a useful clarification. Let me check what's documented on that.\n\nThanks, that's a clear requirement. The documented inbox-triage workflow can read, sort, and draft replies to inbound emails, and it operates based on the approval level you choose. So a setup where every outgoing message requires a person to approve it before it goes out is consistent with how the workflow is described.\n\nI don't have approved details confirming how ownership tracking specifically works in a shared-inbox setup, so I can't confirm that part without more information. Would you like me to prepare a brief for human review that captures your needs — the shared inbox, the ownership tracking, and the approval requirement?"
+    },
+    {
+      "id": "user::671a619b-c671-4465-95c2-d02d32e2c38b",
+      "role": "user",
+      "content": "Not yet, but one correction. Um, we have 4 staff that handle customer requests, not 6."
+    },
+    {
+      "id": "persona::671a619b-c671-4465-95c2-d02d32e2c38b",
+      "role": "persona",
+      "content": "Thanks for the correction. I'll note that 4 staff handle customer requests, not 6."
+    },
+    {
+      "id": "user::a9f5de55-38d6-4066-a799-ecbdb660761e",
+      "role": "user",
+      "content": "How would human approval work? Would it cover changes to our records as well as outgoing messages?"
+    },
+    {
+      "id": "persona::a9f5de55-38d6-4066-a799-ecbdb660761e",
+      "role": "persona",
+      "content": "Let me check what's documented on that.\n\nI can confirm the documented workflow supports an approval level you choose, which governs whether the agent drafts, sorts, or flags emails. So requiring a person to approve every outgoing message is consistent with that.\n\nHowever, I don't have approved information confirming whether the approval requirement would also cover changes to your records — that's a specific detail I can't confirm from the documented material. I can note that as an open question if you'd like it included in a review brief later."
+    },
+    {
+      "id": "user::88a0fb9e-49f9-4d93-9474-9efc129a68f5",
+      "role": "user",
+      "content": "Okay. You know, I don't know whether our supplier portal has an API. So we'll leave that as unconfirmed for right now. And what would this cost and can you guarantee it prevents every mistake?"
+    },
+    {
+      "id": "persona::88a0fb9e-49f9-4d93-9474-9efc129a68f5",
+      "role": "persona",
+      "content": "I appreciate you flagging that. I'll note the supplier portal API as unconfirmed.\n\nOn your two questions: I don't have approved pricing information to share, so I can't confirm what this would cost. And I can't guarantee it prevents every mistake — the documented workflow describes drafting, sorting, and flagging based on your approval level, but I can't make reliability or error-elimination claims beyond what's documented.\n\nWould you like me to prepare a brief for human review that captures your needs and these open questions?"
+    },
+    {
+      "id": "user::a2196ab2-91e9-49cc-a9d3-255f40ed79fe",
+      "role": "user",
+      "content": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback."
+    },
+    {
+      "id": "persona::a2196ab2-91e9-49cc-a9d3-255f40ed79fe",
+      "role": "persona",
+      "content": "I can prepare that brief for owner review. Let me gather the details from our conversation.\n\nI have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent."
+    },
+    {
+      "id": "user::cd5e2a51-a140-4fc3-843b-ca26ae6336a5",
+      "role": "user",
+      "content": "Okay. Please don't email anyone, book anything, access our system or change records. This is only an unsent human review brief."
+    },
+    {
+      "id": "persona::cd5e2a51-a140-4fc3-843b-ca26ae6336a5",
+      "role": "persona",
+      "content": "I understand, and I want to be clear about what happened: I was not able to prepare a valid handoff brief. Your original conversation is retained for owner review, but nothing has been sent, and no external actions have been taken. I won't email anyone, book anything, access your systems, or change any records."
+    },
+    {
+      "id": "user::ed24720c-8feb-4add-8e2e-d603c62e01f9",
+      "role": "user",
+      "content": "Okay, thanksolibia"
+    },
+    {
+      "id": "user::71e40465-4f56-47b6-8b3e-2d60d7acaa6c",
+      "role": "user",
+      "content": ". That's all. Goodbye."
+    },
+    {
+      "id": "persona::71e40465-4f56-47b6-8b3e-2d60d7acaa6c",
+      "role": "persona",
+      "content": "You're welcome. Goodbye.\n\nGoodbye."
+    }
+  ],
+  "original_attempt": {
+    "arguments": {
+      "proposals": [
+        {
+          "evidence": "I run a plumbing supply distributor with 6 staff. Customer requests arrive in a shared inbox and we sometimes lose track of who owns each request.",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "I run a plumbing supply distributor with 6 staff. Customer requests arrive in a shared inbox and we sometimes lose track of who owns each request.",
+          "visitor_message_id": "user::508cbaea-a58a-4ae4-a63f-08638aa0deea"
+        },
+        {
+          "evidence": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "field_id": "field_38a16b2f271396177f6f571a",
+          "value": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "visitor_message_id": "user::46dd2340-d317-40bd-889d-5a985ff61657"
+        },
+        {
+          "evidence": "Not yet, but one correction. Um, we have 4 staff that handle customer requests, not 6.",
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "value": "Not yet, but one correction. Um, we have 4 staff that handle customer requests, not 6.",
+          "visitor_message_id": "user::671a619b-c671-4465-95c2-d02d32e2c38b"
+        },
+        {
+          "evidence": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "field_id": "field_9c115246b07dd59d817f38f2",
+          "value": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "visitor_message_id": "user::46dd2340-d317-40bd-889d-5a985ff61657"
+        },
+        {
+          "evidence": "How would human approval work? Would it cover changes to our records as well as outgoing messages?",
+          "field_id": "field_bd7bb66666cf498e4a67ad45",
+          "value": "How would human approval work? Would it cover changes to our records as well as outgoing messages?",
+          "visitor_message_id": "user::a9f5de55-38d6-4066-a799-ecbdb660761e"
+        },
+        {
+          "evidence": "Okay. You know, I don't know whether our supplier portal has an API. So we'll leave that as unconfirmed for right now. And what would this cost and can you guarantee it prevents every mistake?",
+          "field_id": "field_4c6278b8c6c68a0f10d1e844",
+          "value": "Okay. You know, I don't know whether our supplier portal has an API. So we'll leave that as unconfirmed for right now. And what would this cost and can you guarantee it prevents every mistake?",
+          "visitor_message_id": "user::88a0fb9e-49f9-4d93-9474-9efc129a68f5"
+        },
+        {
+          "evidence": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "field_id": "field_d3e520db582317c04d1c4446",
+          "value": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "visitor_message_id": "user::88a0fb9e-49f9-4d93-9474-9efc129a68f5"
+        },
+        {
+          "evidence": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "field_id": "field_81624036fc30c6fe7287415a",
+          "value": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "visitor_message_id": "user::88a0fb9e-49f9-4d93-9474-9efc129a68f5"
+        }
+      ]
+    },
+    "completedAt": "2026-10-31T16:39:52.340Z",
+    "correlationId": "a2196ab2-91e9-49cc-a9d3-255f40ed79fe",
+    "documentsAccessed": null,
+    "durationSeconds": 0.346,
+    "errorMessage": null,
+    "result": "{\"status\":\"UNMAPPED_OWNER_REVIEW\",\"accepted\":false,\"accepted_proposal_count\":0,\"owner_approved\":false,\"submission_status\":\"UNSUBMITTED\",\"external_actions\":[],\"reason\":\"Mapping requires a known field and an exact persisted visitor span; value must remain verbatim\",\"issues\":[{\"index\":6,\"field_id\":\"field_d3e520db582317c04d1c4446\",\"problems\":[\"EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE\"]},{\"index\":7,\"field_id\":\"field_81624036fc30c6fe7287415a\",\"problems\":[\"EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE\"]}],\"visitor_message\":\"I have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.\",\"instruction\":\"This preparation attempt failed. Tell the visitor using visitor_message. Do not say a brief is prepared or ready, or that the information was mapped. Do not retry automatically or ask the visitor to repeat the entire intake.\"}",
+    "startedAt": "2026-10-31T16:39:51.995Z",
+    "status": "completed",
+    "toolCallId": "call_cf9b36dd87e7457db6d7a9e1",
+    "toolName": "factory_handoff",
+    "toolSubtype": null,
+    "toolType": "client",
+    "turnIndex": 7
+  },
+  "original_quarantine": [
+    {
+      "request_id": "d6415057-ac84-4b37-87f3-4a6e0b96c598",
+      "proposals": [
+        {
+          "evidence": "I run a plumbing supply distributor with 6 staff. Customer requests arrive in a shared inbox and we sometimes lose track of who owns each request.",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "I run a plumbing supply distributor with 6 staff. Customer requests arrive in a shared inbox and we sometimes lose track of who owns each request.",
+          "visitor_message_id": "user::508cbaea-a58a-4ae4-a63f-08638aa0deea"
+        },
+        {
+          "evidence": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "field_id": "field_38a16b2f271396177f6f571a",
+          "value": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "visitor_message_id": "user::46dd2340-d317-40bd-889d-5a985ff61657"
+        },
+        {
+          "evidence": "Not yet, but one correction. Um, we have 4 staff that handle customer requests, not 6.",
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "value": "Not yet, but one correction. Um, we have 4 staff that handle customer requests, not 6.",
+          "visitor_message_id": "user::671a619b-c671-4465-95c2-d02d32e2c38b"
+        },
+        {
+          "evidence": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "field_id": "field_9c115246b07dd59d817f38f2",
+          "value": "Well, I'd like draft replies in a clear record of who owns each request. A person must approve every outgoing message though.",
+          "visitor_message_id": "user::46dd2340-d317-40bd-889d-5a985ff61657"
+        },
+        {
+          "evidence": "How would human approval work? Would it cover changes to our records as well as outgoing messages?",
+          "field_id": "field_bd7bb66666cf498e4a67ad45",
+          "value": "How would human approval work? Would it cover changes to our records as well as outgoing messages?",
+          "visitor_message_id": "user::a9f5de55-38d6-4066-a799-ecbdb660761e"
+        },
+        {
+          "evidence": "Okay. You know, I don't know whether our supplier portal has an API. So we'll leave that as unconfirmed for right now. And what would this cost and can you guarantee it prevents every mistake?",
+          "field_id": "field_4c6278b8c6c68a0f10d1e844",
+          "value": "Okay. You know, I don't know whether our supplier portal has an API. So we'll leave that as unconfirmed for right now. And what would this cost and can you guarantee it prevents every mistake?",
+          "visitor_message_id": "user::88a0fb9e-49f9-4d93-9474-9efc129a68f5"
+        },
+        {
+          "evidence": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "field_id": "field_d3e520db582317c04d1c4446",
+          "value": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "visitor_message_id": "user::88a0fb9e-49f9-4d93-9474-9efc129a68f5"
+        },
+        {
+          "evidence": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "field_id": "field_81624036fc30c6fe7287415a",
+          "value": "Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.",
+          "visitor_message_id": "user::88a0fb9e-49f9-4d93-9474-9efc129a68f5"
+        }
+      ],
+      "reason": "Mapping requires a known field and an exact persisted visitor span; value must remain verbatim"
+    }
+  ],
+  "source_hashes": {
+    "saved-session-response.json": "a921bd9e218934b7394bc28406ff5abc8e2825ae22dcb0188ed85f3f678ba863",
+    "provider-session.json": "ece17aa23bfbc0655e1415265d059f909e49be24b96f0333c66e0a0484039f1d"
+  }
+}

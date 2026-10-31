@@ -8,11 +8,13 @@ export { clearExit } from './visitor-exit.ts';
 export type Field = {id:string; label:string};
 export type Turn = {id:string; role:'user'|'persona'; content:string};
 export type Proposal = {field_id:string; visitor_message_id:string; evidence:string; value:string};
+export type ReferenceBinding = {index:number;from_message_id:string;to_message_id:string;start:number;end:number;source_sha256:string};
 export type Decision = {proposal_id:string; decision:'ACCEPT'|'REJECT'; at:string};
 export type HandoffResult = {
     status:'PENDING_OWNER_REVIEW'|'UNMAPPED_OWNER_REVIEW'; accepted:boolean;
     accepted_proposal_count:number; owner_approved:false; submission_status:'UNSUBMITTED'; external_actions:never[];
     reason?:string; issues:Array<{index:number;field_id:string|null;problems:string[]}>;
+    reference_bindings?:ReferenceBinding[];
     visitor_message:string; instruction:string;
 };
 export type Handoff = {
@@ -30,6 +32,9 @@ export type Handoff = {
     closing_after_turn_id?:string;
     sdk_close_events?:Array<SdkCloseReceipt & {assurance:'CLIENT_INSTRUMENTATION_NOT_PROVIDER_RELEASE'}>;
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
+    handoff_binding_attempts?:Array<{request_id:string;tool_call_id:string;local_session_id:string;provider_session_id:string;
+        input_sha256:string;local_turns_sha256:string;original_proposals:unknown;resolved_proposals:unknown;
+        bindings:ReferenceBinding[];applied:boolean;result:HandoffResult}>;
     evidence_reviewed:boolean; approved:boolean; submission_status:'UNSUBMITTED'; external_actions:never[];
 };
 export const digest = (value:unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');

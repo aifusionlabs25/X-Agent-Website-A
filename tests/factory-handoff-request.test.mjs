@@ -10,6 +10,48 @@ test('retained direct request keeps the exact sentence and leaves other clauses 
     assert.ok(raw.slice(r.end).includes('Do not email anyone.'));
 });
 
+test('a natural affirmative prefix retains the saved explicit unsent request verbatim',()=>{
+    const raw='Yeah, please prepare an unsent brief asking whether this workflow could be suitable. I want a human assessment, not a booked meeting or a promised callback.';
+    const evidence='Yeah, please prepare an unsent brief asking whether this workflow could be suitable.';
+    const r=requestedHandoffSpan(raw);
+    assert.deepEqual(r,{start:0,end:evidence.length,evidence});
+    assert.equal(raw.slice(r.start,r.end),evidence);
+    assert.equal(raw.slice(r.end),' I want a human assessment, not a booked meeting or a promised callback.');
+});
+
+test('colloquial affirmative prefixes still require an explicit local preparation request',()=>{
+    for(const evidence of [
+        'Yeah, could you draft a summary for the owner to review?',
+        'Yep, create a short local review note about our intake process.',
+        'Yup please prepare a concise brief for human review!',
+        'YEAH, I would like you to create an unsent handoff note.',
+    ]) {
+        const raw=`We are exploring options.\n  ${evidence}  `;
+        const start=raw.indexOf(evidence);
+        assert.deepEqual(requestedHandoffSpan(raw),{start,end:start+evidence.length,evidence});
+    }
+});
+
+test('affirmative prefixes do not override quotation, negation, conditions or delivery boundaries',()=>{
+    for(const raw of [
+        'Yeah.',
+        'Yep, please.',
+        'Yup, that sounds useful.',
+        'Yeah, an unsent brief would be useful.',
+        'Yeah, please prepare a summary of your services.',
+        'Yeah, do not prepare an unsent brief.',
+        "Yep, please don't draft a local summary.",
+        'Yup, create a local brief. Actually, cancel drafting it.',
+        'Yeah, if we proceed, please prepare an unsent brief.',
+        'Yep, could you draft a local summary after I confirm?',
+        '"Yeah, please draft an unsent brief."',
+        'The manager wrote:\nYup, create a local review note.',
+        'Yeah, please send the unsent brief.',
+        'Yep, create an unsent summary and send it to our manager.',
+        'Yup, please draft a local brief, then email it.',
+    ]) assert.equal(requestedHandoffSpan(raw),null,raw);
+});
+
 test('independently phrased direct local preparation requests preserve raw offsets',()=>{
     for(const raw of [
         'Could you create a concise summary for owner review?',
