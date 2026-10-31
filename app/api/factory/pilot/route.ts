@@ -1,7 +1,7 @@
 import { NextRequest,NextResponse } from 'next/server';
 import { createHmac,randomBytes,timingSafeEqual,randomUUID,createHash } from 'node:crypto';
 import manifest from '@/config/factory/aiowa-service-guide.json';
-import { appendTurn,propose,decide,approve,digest,appendSdkCloseEvidence,type Handoff,type Turn,type Proposal } from '@/lib/factory/handoff';
+import { appendTurn,recordHandoffAttempt,decide,approve,digest,appendSdkCloseEvidence,appendToolEvidence,reconcileVisitorEvidence,type Handoff,type Turn } from '@/lib/factory/handoff';
 import * as store from '@/lib/factory/store';
 import { fetchAnamSessionMetadata } from '@/lib/anam/session-api';
 export const runtime='nodejs';
@@ -88,27 +88,14 @@ export async function POST(req:NextRequest) {
             }
             case 'turn': appendTurn(state,b.turn as Turn); break;
             case 'handoff': {
-                try {
-                    propose(state,b.proposals as Proposal[],manifest.configured_fields);
-                    toolResult={status:'PENDING_OWNER_REVIEW',submission_status:'UNSUBMITTED',external_actions:[],note:'Local proposals retained. No sending, routing, booking, follow-up or external action occurred.'};
-                } catch(error) {
-                    state.quarantined_proposals??=[];
-                    if(state.quarantined_proposals.length>=24)throw new Error('Proposal review bound reached');
-                    const reason=error instanceof Error?error.message:'Proposal validation failed';
-                    state.quarantined_proposals.push({request_id:b.request_id,proposals:b.proposals??null,reason});
-                    state.evidence_reviewed=false;state.approved=false;
-                    toolResult={status:'UNMAPPED_OWNER_REVIEW',reason,accepted:false,submission_status:'UNSUBMITTED',external_actions:[],note:'Proposed mapping was not adopted. Original visitor evidence and the rejected proposal are retained for owner review.'};
-                }
+                toolResult=recordHandoffAttempt(state,b.proposals,manifest.configured_fields,b.request_id);
                 break;
             }
             case 'closing': if(!['ACTIVE','CLOSING_PENDING'].includes(state.status)) throw new Error('Session cannot begin closing'); state.status='CLOSING_PENDING'; break;
             case 'sdk_close_receipt': appendSdkCloseEvidence(state,b.receipt); break;
             case 'tool_receipt': {
-                if(b.provider_session_id!==state.provider_session_id || !/^[\w-]{1,200}$/.test(b.tool_call_id||'')
-                    || !['factory_handoff','factory_end_session'].includes(b.tool_name) || !['SDK_COMPLETED','SDK_FAILED'].includes(b.phase)) throw new Error('Tool receipt session/name binding mismatch');
-                state.tool_events??=[];if(state.tool_events.length>=100)throw new Error('Tool evidence bound reached');
-                state.tool_events.push({tool_call_id:b.tool_call_id,tool_name:b.tool_name,phase:b.phase,result:b.result,
-                    exposure:'SDK_EVENT_NOT_PROOF_OF_MODEL_CONSUMPTION'}); break;
+                appendToolEvidence(state,{tool_call_id:b.tool_call_id,tool_name:b.tool_name,phase:b.phase,result:b.result,
+                    exposure:'SDK_EVENT_NOT_PROOF_OF_MODEL_CONSUMPTION'},b.provider_session_id); break;
             }
             case 'reconcile': {
                 if(!state.provider_session_id) throw new Error('No bound provider session');
@@ -118,17 +105,12 @@ export async function POST(req:NextRequest) {
                     || transcript.totalMessages!==transcript.messages.length) throw new Error('Complete provider transcript unavailable; preserve browser evidence for review');
                 const providerTurns=transcript.messages as Array<{role:string;message:string}>;
                 if(providerTurns.length>200 || providerTurns.some(p=>!['user','persona'].includes(p.role)||typeof p.message!=='string'||p.message.length>8000)) throw new Error('Provider transcript exceeded evidence contract');
-                state.provider_transcript_verified=state.turns.filter(t=>t.role==='user').every(t=>providerTurns.some(p=>p.role==='user'&&p.message===t.content));
-                // Never lose a provider-finalized visitor turn merely because a browser event was missed.
-                // Its ID is a local capture reference, NOT claimed to be a provider-assigned message ID.
-                providerTurns.forEach((p,i)=>{if(p.message.trim()&&!state!.turns.some(t=>t.role===p.role&&t.content===p.message)){
-                    state!.turns.push({id:'provider-capture:'+i+':'+digest(p).slice(0,12),role:p.role as 'user'|'persona',content:p.message});
-                    state!.evidence_reviewed=false;state!.approved=false;
-                }});
+                const reconciliation=reconcileVisitorEvidence(state,transcript);
                 state.provider_evidence={metadata:meta,transcript};
                 if(meta.endTime) { state.provider_release_verified=true; state.status='CLOSED'; }
                 state.receipts.push({at:new Date().toISOString(),kind:'PROVIDER_READBACK',sha256:digest({meta,transcript})});
-                toolResult={provider_release_verified:state.provider_release_verified,transcript_verified:state.provider_transcript_verified}; break;
+                toolResult={provider_release_verified:state.provider_release_verified,transcript_verified:state.provider_transcript_verified,
+                    reconciliation_reason:reconciliation.reason}; break;
             }
             case 'decision': decide(state,b.proposal_id,b.decision,manifest.configured_fields); break;
             case 'review_evidence': if(!state.provider_transcript_verified) throw new Error('Reconcile the provider transcript first'); state.evidence_reviewed=true; break;
