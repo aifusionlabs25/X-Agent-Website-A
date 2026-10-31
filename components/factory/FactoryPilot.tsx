@@ -4,7 +4,9 @@ import { AnamEvent,createClient,type AnamClient } from '@anam-ai/js-sdk';
 import type { Handoff,Field,Turn } from '@/lib/factory/handoff';
 import { liveTranscript,submitTypedTurn } from '@/lib/factory/live-transcript';
 import { sdkCloseTracker,type SdkCloseTracker,type CloseReason } from '@/lib/factory/sdk-close';
-import { collectionReferenceContext,visitorReferenceContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks } from '@/lib/factory/handoff-context';
+import { collectionReferenceContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks,handoffRequestStatus } from '@/lib/factory/handoff-context';
+import { committedTurnEffects } from '@/lib/factory/turn-effects';
+import { createFarewellCloseCoordinator,type FarewellCloseCoordinator } from '@/lib/anam/farewell-close-coordinator';
 import styles from './pilot.module.css';
 type Manifest={name:string;persona_id:string;voice_name:string;package_sha256:string;configured_fields:Field[]};
 export default function FactoryPilot() {
@@ -16,7 +18,7 @@ export default function FactoryPilot() {
     const [history,setHistory]=useState<Handoff[]>([]);
     const [closeTrace,setCloseTrace]=useState<ReturnType<SdkCloseTracker['snapshot']>|null>(null);
     const current=useRef<Handoff|null>(null), client=useRef<AnamClient|null>(null), queue=useRef<Promise<unknown>>(Promise.resolve());
-    const stopping=useRef(false),endArmed=useRef(false),timer=useRef<ReturnType<typeof setTimeout>|null>(null);
+    const stopping=useRef(false),farewell=useRef<FarewellCloseCoordinator|null>(null);
     const submitting=useRef(false);
     const closer=useRef<SdkCloseTracker|null>(null);
     const accept=(s:Handoff|null)=>{current.current=s;setState(s);};
@@ -25,7 +27,7 @@ export default function FactoryPilot() {
         if(!r.ok) throw new Error(v.error||'Preview unavailable'); setManifest(v.manifest);accept(v.state);setHistory(v.history||[]);
         setStatus(v.state?.status==='CLOSED'?closedSessionStatus(v.state):v.state?.status||'Ready when you are. No session has started.');
     }
-    useEffect(()=>{void refresh().catch(e=>setError(e.message));return()=>{if(timer.current)clearTimeout(timer.current);if(client.current&&!stopping.current){stopping.current=true;void closer.current?.close('UNMOUNT').catch(()=>{});}};},[]); // only hydrate, never auto-launch
+    useEffect(()=>{void refresh().catch(e=>setError(e.message));return()=>{farewell.current?.dispose();if(client.current&&!stopping.current){stopping.current=true;void closer.current?.close('UNMOUNT').catch(()=>{});}};},[]); // only hydrate, never auto-launch
     function post(action:string, data:Record<string,unknown>={}) {
         const request_id=crypto.randomUUID();
         const run=async()=>{
@@ -36,14 +38,20 @@ export default function FactoryPilot() {
     }
     async function reconcile() {setStatus('Checking provider release and original transcript…');const r=await post('reconcile');setStatus(closedSessionStatus(r.state));}
     async function stop(reason:CloseReason='OWNER_FINISH') {
-        if(stopping.current||!client.current)return;stopping.current=true;endArmed.current=false;
-        if(timer.current)clearTimeout(timer.current);setStatus('Closing the Anam session…');
-        if(current.current?.status==='ACTIVE')await post('closing');
+        if(stopping.current||!client.current)return;stopping.current=true;farewell.current?.dispose();
+        setStatus('Closing the Anam session…');
+        // Storage/context failure must not prevent the actual SDK release.
+        if(current.current?.status==='ACTIVE')try{await post('closing');}catch(e){setError(e instanceof Error?e.message:'Closing state not retained; provider reconciliation is required.');}
         if(!closer.current)throw new Error('SDK close tracker unavailable; preserve the session for reconciliation');
         await closer.current.close(reason);
         await reconcile();
     }
-    function armClose() {endArmed.current=true; if(!timer.current)timer.current=setTimeout(()=>void stop('VISITOR_EXIT').catch(e=>setError(e.message)),12000);}
+    function armClose() {farewell.current?.arm();}
+    function afterTurn(s:Handoff,turn:Turn) {
+        committedTurnEffects(s,turn,{armClose,finalReply:()=>{farewell.current?.completeFarewell();},
+            context:message=>{client.current?.addContext(message);},
+            contextFailure:()=>setError('Session context delivery was unavailable. Saved request and closure state remain authoritative; no preparation success is implied.')});
+    }
     async function launch() {
         if(busy||current.current)return;setBusy(true);setError('');setStatus('Verifying exact persona, image, voice and storage…');
         try {
@@ -57,6 +65,8 @@ export default function FactoryPilot() {
                     local_session_id:launchState.id,launch_label:launchState.launch_label,provider_session_id:boundProviderId}}));
             }});
             closer.current=tracker;
+            farewell.current=createFarewellCloseCoordinator({stopStreaming:()=>stop('VISITOR_EXIT'),
+                onStopError:()=>setError('Session close could not be verified. Preserve the session for reconciliation.')});
             c.addListener(AnamEvent.SESSION_READY,id=>{boundProviderId=id;binding=post('bind',{provider_session_id:id});void binding.then(()=>{
                 c.addContext(collectionReferenceContext(manifest?.configured_fields||[]));
                 setStatus('Connected — Olivia · Cindy voice');
@@ -64,8 +74,7 @@ export default function FactoryPilot() {
             const persist=(turns:Turn[])=>{
                 for(const turn of turns) {
                     void binding.then(()=>post('turn',{turn})).then(v=>{
-                        if(turn.role==='user') {c.addContext(visitorReferenceContext(turn));if(v.state.status==='CLOSING_PENDING')armClose();}
-                        else if(endArmed.current){if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(()=>void stop('VISITOR_EXIT').catch(e=>setError(e.message)),2500);}
+                        afterTurn(v.state,turn);
                     }).catch(e=>setError(e.message));
                 }
                 setDrafts(transcript.drafts());setTransport(transcript.trace());
@@ -115,9 +124,9 @@ export default function FactoryPilot() {
         const turn:Turn={id:'typed-visitor::'+crypto.randomUUID(),role:'user',content};
         try {
             await submitTypedTurn(turn,t=>post('turn',{turn:t}),t=>{
-                c.addContext(visitorReferenceContext(t));
+                if(!current.current)throw new Error('Committed session state unavailable');
+                afterTurn(current.current,t);
                 c.sendUserMessage(t.content);
-                if(current.current?.status==='CLOSING_PENDING')armClose();
             });
         } catch(e){setError((e instanceof Error?e.message:'Typed message dispatch failed')+' — no automatic resubmission. Provider evidence must be reconciled.');}
         finally{submitting.current=false;}
@@ -148,6 +157,7 @@ export default function FactoryPilot() {
                 <dl className={styles.meta}><div><dt>Package</dt><dd>{manifest?.package_sha256.slice(0,12)}</dd></div><div><dt>Session</dt><dd>{state?.status||'Not started'}</dd></div><div><dt>Provider release</dt><dd>{state?.provider_release_verified?'Verified':'Not verified'}</dd></div></dl>
                 <h3>Configured collection fields</h3>{manifest?.configured_fields.map(f=>{const values=state?.proposals.filter(p=>p.field_id===f.id&&state.decisions.some(d=>d.proposal_id===p.id&&d.decision==='ACCEPT'));return <div key={f.id} className={styles.field}><strong>{f.label}</strong>{values?.length?values.map(p=><p key={p.id}>{p.value}</p>):<span>Not owner-mapped</span>}</div>;})}
                 <h3>Proposals awaiting owner decision</h3>{unresolved.length===0?<p>No pending field proposals. Unmapped visitor words remain in the original evidence.</p>:unresolved.map(p=><div key={p.id} className={styles.proposal}><strong>{manifest?.configured_fields.find(f=>f.id===p.field_id)?.label}</strong><blockquote>{p.evidence}</blockquote><button disabled={busy||!state?.provider_transcript_verified} onClick={()=>void action('decision',{proposal_id:p.id,decision:'ACCEPT'})}>Accept exact mapping</button><button className={styles.secondary} disabled={busy||!state?.provider_transcript_verified} onClick={()=>void action('decision',{proposal_id:p.id,decision:'REJECT'})}>Do not adopt</button></div>)}
+                {state&&handoffRequestStatus(state)&&<p>{handoffRequestStatus(state)}</p>}
                 {Boolean(state?.quarantined_proposals?.length)&&<details><summary>Unmapped proposals — not adopted</summary>{state?.quarantined_proposals?.map(q=><div className={styles.proposal} key={q.request_id}><strong>{q.reason}</strong><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(q.proposals,null,2)}</pre><p>Needs owner clarification or a new exact mapping. No active Accept action is available for this invalid proposal.</p></div>)}</details>}
                 {(active||state?.status==='CLOSED')&&<details><summary>Map exact visitor words</summary><p>Owner mapping, not semantic inference. Corrections and prior evidence remain visible.</p><select aria-label="Collection field" value={mappingField} onChange={e=>setMappingField(e.target.value)}><option value="">Choose field</option>{manifest?.configured_fields.map(f=><option key={f.id} value={f.id}>{f.label}</option>)}</select><select aria-label="Visitor evidence" value={mappingTurn} onChange={e=>{setMappingTurn(e.target.value);setSpan(state?.turns.find(t=>t.id===e.target.value)?.content||'');}}><option value="">Choose visitor message</option>{state?.turns.filter(t=>t.role==='user').map(t=><option key={t.id} value={t.id}>{t.content}</option>)}</select><textarea aria-label="Exact evidence span" value={span} onChange={e=>setSpan(e.target.value)}/><button disabled={busy||!mappingField||!mappingTurn||!span} onClick={()=>void action('handoff',{proposals:[{field_id:mappingField,visitor_message_id:mappingTurn,evidence:span,value:span}]})}>Propose exact mapping</button></details>}
                 {state?.provider_session_id&&<button className={styles.secondary} disabled={busy} onClick={()=>void reconcile().catch(e=>setError(e.message))}>Verify closure &amp; reconcile evidence</button>}

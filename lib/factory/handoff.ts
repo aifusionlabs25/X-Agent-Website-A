@@ -2,6 +2,9 @@
 import { createHash } from 'node:crypto';
 import type { SdkCloseReceipt } from './sdk-close';
 import { reconcileTranscript,type ProviderTranscript,type Reconciliation } from './transcript-reconciliation.ts';
+import { clearExit,closingCourtesy } from './visitor-exit.ts';
+import { requestedHandoffSpan } from './handoff-request.ts';
+export { clearExit } from './visitor-exit.ts';
 export type Field = {id:string; label:string};
 export type Turn = {id:string; role:'user'|'persona'; content:string};
 export type Proposal = {field_id:string; visitor_message_id:string; evidence:string; value:string};
@@ -21,6 +24,10 @@ export type Handoff = {
     provider_evidence?:unknown;
     transcript_reconciliations?:Reconciliation[];
     tool_events?:Array<{tool_call_id:string;tool_name:string;phase:string;result:unknown;exposure:string}>;
+    handoff_requests?:Array<{visitor_message_id:string;evidence:string;start:number;end:number;
+        source:'HOST_PERSISTED_VISITOR_REQUEST';status:'REQUESTED_NOT_MAPPED'}>;
+    visitor_exit?:{visitor_message_id:string;evidence:string;source:'HOST_PERSISTED_VISITOR_EXIT'};
+    closing_after_turn_id?:string;
     sdk_close_events?:Array<SdkCloseReceipt & {assurance:'CLIENT_INSTRUMENTATION_NOT_PROVIDER_RELEASE'}>;
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     evidence_reviewed:boolean; approved:boolean; submission_status:'UNSUBMITTED'; external_actions:never[];
@@ -59,14 +66,36 @@ export function assertProposal(p:Proposal, turns:Turn[], fields:Field[]) {
 }
 export function appendTurn(state:Handoff, turn:Turn) {
     if (!['ACTIVE','CLOSING_PENDING'].includes(state.status)) throw new Error('Conversation is not accepting turns');
-    if (state.status==='CLOSING_PENDING' && turn.role==='user') throw new Error('Visitor exit has begun');
     if (!turn || !['user','persona'].includes(turn.role) || typeof turn.id!=='string' || !/^[\w:.-]{1,200}$/.test(turn.id) || turn.id.startsWith('provider-capture:')
         || typeof turn.content!=='string' || !turn.content.trim() || turn.content.length>8000 || state.turns.length>=200) throw new Error('Invalid finalized turn');
     const previous = state.turns.find(t=>t.id===turn.id);
     if (previous) { if (JSON.stringify(previous)!==JSON.stringify(turn)) throw new Error('Finalized evidence is immutable'); return; }
+    // Native speech may finalize one goodbye as several courtesy fragments.
+    // Retain those verbatim, without reopening intake for new substantive turns.
+    if (state.status==='CLOSING_PENDING' && turn.role==='user' && !closingCourtesy(turn.content)) throw new Error('Visitor exit has begun');
     state.turns.push({...turn});
     state.approved=false; state.evidence_reviewed=false; state.provider_transcript_verified=false;
-    if (turn.role==='user' && clearExit(turn.content)) state.status='CLOSING_PENDING';
+    if(turn.role==='user') {
+        const request=requestedHandoffSpan(turn.content);
+        if(request) {
+            const row={visitor_message_id:turn.id,...request,source:'HOST_PERSISTED_VISITOR_REQUEST' as const,status:'REQUESTED_NOT_MAPPED' as const};
+            state.handoff_requests=[...(state.handoff_requests||[]),row];
+            state.receipts.push({at:new Date().toISOString(),kind:'HANDOFF_REQUESTED',sha256:digest(row)});
+            // This is neither a provider tool call nor a prepared/mapped brief.
+        }
+        if(clearExit(turn.content)) {
+            beginClosing(state);
+            if(!state.visitor_exit) {
+                state.visitor_exit={visitor_message_id:turn.id,evidence:turn.content,source:'HOST_PERSISTED_VISITOR_EXIT'};
+                state.receipts.push({at:new Date().toISOString(),kind:'VISITOR_EXIT_REQUESTED',sha256:digest(state.visitor_exit)});
+            }
+        }
+    }
+}
+export function beginClosing(state:Handoff) {
+    if(!['ACTIVE','CLOSING_PENDING'].includes(state.status))throw new Error('Session cannot begin closing');
+    if(state.status==='ACTIVE')state.closing_after_turn_id=state.turns.at(-1)?.id;
+    state.status='CLOSING_PENDING';
 }
 
 /** Called only after server-side provider/persona/launch authentication. This
@@ -99,12 +128,9 @@ export function reconcileVisitorEvidence(state:Handoff,transcript:ProviderTransc
     if(!receipt.verified||additions.length){state.evidence_reviewed=false;state.approved=false;}
     return receipt;
 }
-export function clearExit(text:string) {
-    // Detection only. Raw evidence is never normalized or replaced.
-    return /^(?:(?:thanks|thank you)(?:[, ]+(?:for your help|[a-z]+))?[.! ,]*)?(?:(?:goodbye|bye)(?:[, ]+[a-z]+)?|that['’]s all(?:[, ]+thank you)?|i['’]m all set(?:[, ]+thanks)?|we['’]re done)[.! ,]*$/i.test(text.trim());
-}
 export function propose(state:Handoff, proposals:Proposal[], fields:Field[]) {
-    if (!['ACTIVE','CLOSED'].includes(state.status)) throw new Error('Handoff proposals are not available during closure');
+    if (!['ACTIVE','CLOSED'].includes(state.status)
+        && !(state.status==='CLOSING_PENDING'&&state.handoff_requests?.length)) throw new Error('Handoff proposals are not available during closure without a retained request');
     if (!Array.isArray(proposals) || proposals.length===0 || proposals.length>24) throw new Error('A nonempty bounded set of exact proposals is required');
     for (const p of proposals) assertProposal(p,state.turns,fields);
     for (const p of proposals) { const id=digest(p); if (!state.proposals.some(v=>v.id===id)) state.proposals.push({...p,id}); }

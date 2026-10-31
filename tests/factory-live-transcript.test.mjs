@@ -65,7 +65,8 @@ test('typed capture failure blocks dispatch; unknown dispatch outcome is not ret
     assert.equal(calls,1);assert.deepEqual(persisted,t);
 });
 test('typed visitor exit is captured before dispatch and still cannot manufacture CLOSED',async()=>{
-    const {appendTurn}=await import('../lib/factory/handoff.ts');const s={status:'ACTIVE',turns:[],approved:false,evidence_reviewed:false,provider_transcript_verified:false};
+    const {appendTurn}=await import('../lib/factory/handoff.ts');const s={status:'ACTIVE',turns:[],receipts:[],approved:false,evidence_reviewed:false,provider_transcript_verified:false};
     await submitTypedTurn({id:'typed-visitor::bye',role:'user',content:'Thanks, Olivia. Goodbye.'},async t=>appendTurn(s,t),()=>{assert.equal(s.status,'CLOSING_PENDING');});
     assert.equal(s.status,'CLOSING_PENDING');
+    assert.equal(s.receipts[0].kind,'VISITOR_EXIT_REQUESTED');
 });

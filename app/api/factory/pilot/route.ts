@@ -1,7 +1,7 @@
 import { NextRequest,NextResponse } from 'next/server';
 import { createHmac,randomBytes,timingSafeEqual,randomUUID,createHash } from 'node:crypto';
 import manifest from '@/config/factory/aiowa-service-guide.json';
-import { appendTurn,recordHandoffAttempt,decide,approve,digest,appendSdkCloseEvidence,appendToolEvidence,reconcileVisitorEvidence,type Handoff,type Turn } from '@/lib/factory/handoff';
+import { appendTurn,beginClosing,recordHandoffAttempt,decide,approve,digest,appendSdkCloseEvidence,appendToolEvidence,reconcileVisitorEvidence,type Handoff,type Turn } from '@/lib/factory/handoff';
 import * as store from '@/lib/factory/store';
 import { fetchAnamSessionMetadata } from '@/lib/anam/session-api';
 export const runtime='nodejs';
@@ -91,7 +91,7 @@ export async function POST(req:NextRequest) {
                 toolResult=recordHandoffAttempt(state,b.proposals,manifest.configured_fields,b.request_id);
                 break;
             }
-            case 'closing': if(!['ACTIVE','CLOSING_PENDING'].includes(state.status)) throw new Error('Session cannot begin closing'); state.status='CLOSING_PENDING'; break;
+            case 'closing': beginClosing(state); break;
             case 'sdk_close_receipt': appendSdkCloseEvidence(state,b.receipt); break;
             case 'tool_receipt': {
                 appendToolEvidence(state,{tool_call_id:b.tool_call_id,tool_name:b.tool_name,phase:b.phase,result:b.result,
