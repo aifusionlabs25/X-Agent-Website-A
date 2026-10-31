@@ -1,5 +1,6 @@
 /** Generic evidence boundary. Streamed speech is NOT certified by this verifier. */
 import { createHash } from 'node:crypto';
+import type { SdkCloseReceipt } from './sdk-close';
 export type Field = {id:string; label:string};
 export type Turn = {id:string; role:'user'|'persona'; content:string};
 export type Proposal = {field_id:string; visitor_message_id:string; evidence:string; value:string};
@@ -12,10 +13,34 @@ export type Handoff = {
     provider_release_verified:boolean; provider_transcript_verified:boolean;
     provider_evidence?:unknown;
     tool_events?:Array<{tool_call_id:string;tool_name:string;phase:string;result:unknown;exposure:string}>;
+    sdk_close_events?:Array<SdkCloseReceipt & {assurance:'CLIENT_INSTRUMENTATION_NOT_PROVIDER_RELEASE'}>;
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     evidence_reviewed:boolean; approved:boolean; submission_status:'UNSUBMITTED'; external_actions:never[];
 };
 export const digest = (value:unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function appendSdkCloseEvidence(state:Handoff,event:SdkCloseReceipt) {
+    const keys=['at','invocation_id','launch_label','local_session_id','method','phase','provider_session_id','reason'];
+    if(!event||Object.keys(event).sort().join()!==keys.sort().join()
+        ||event.local_session_id!==state.id||event.launch_label!==state.launch_label
+        ||event.provider_session_id!==state.provider_session_id||event.method!=='stopStreaming'
+        ||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(event.invocation_id||'')
+        ||!['VISITOR_EXIT','OWNER_FINISH','UNMOUNT','BIND_FAILED'].includes(event.reason)
+        ||!['INVOKED','RESOLVED','REJECTED'].includes(event.phase)
+        ||typeof event.at!=='string'||!Number.isFinite(Date.parse(event.at))
+        ||!['TOKEN_READY','ACTIVE','CLOSING_PENDING','CLOSED'].includes(state.status))
+        throw new Error('SDK close receipt must bind the exact local/provider session and supported method');
+    const rows=state.sdk_close_events||[],same=rows.filter(e=>e.invocation_id===event.invocation_id);
+    const duplicate=same.find(e=>e.phase===event.phase);
+    const record={...event,assurance:'CLIENT_INSTRUMENTATION_NOT_PROVIDER_RELEASE' as const};
+    if(duplicate){if(Object.entries(record).some(([k,v])=>Reflect.get(duplicate,k)!==v))throw new Error('SDK close evidence is immutable');return;}
+    if(rows.length>=16)throw new Error('SDK close evidence bound reached');
+    if(same.some(e=>e.reason!==event.reason||e.method!==event.method))throw new Error('SDK close invocation binding changed');
+    if(event.phase==='INVOKED'&&same.length||event.phase!=='INVOKED'&&(!same.some(e=>e.phase==='INVOKED')||same.some(e=>e.phase!=='INVOKED')))
+        throw new Error('SDK close phases must preserve one invocation and its actual result');
+    if(same.some(e=>Date.parse(e.at)>Date.parse(event.at)))throw new Error('SDK close event order changed');
+    state.sdk_close_events=[...rows,record];
+    // No status, provider-release, transcript, fact or approval mutation here.
+}
 export function assertProposal(p:Proposal, turns:Turn[], fields:Field[]) {
     if (!p || Object.keys(p).sort().join() !== ['evidence','field_id','value','visitor_message_id'].sort().join()
         || !fields.some(f=>f.id===p.field_id) || typeof p.evidence!=='string' || !p.evidence.trim()

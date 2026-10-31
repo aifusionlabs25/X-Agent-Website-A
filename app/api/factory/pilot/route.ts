@@ -1,7 +1,7 @@
 import { NextRequest,NextResponse } from 'next/server';
 import { createHmac,randomBytes,timingSafeEqual,randomUUID,createHash } from 'node:crypto';
 import manifest from '@/config/factory/aiowa-service-guide.json';
-import { appendTurn,propose,decide,approve,digest,type Handoff,type Turn,type Proposal } from '@/lib/factory/handoff';
+import { appendTurn,propose,decide,approve,digest,appendSdkCloseEvidence,type Handoff,type Turn,type Proposal } from '@/lib/factory/handoff';
 import * as store from '@/lib/factory/store';
 import { fetchAnamSessionMetadata } from '@/lib/anam/session-api';
 export const runtime='nodejs';
@@ -102,6 +102,7 @@ export async function POST(req:NextRequest) {
                 break;
             }
             case 'closing': if(!['ACTIVE','CLOSING_PENDING'].includes(state.status)) throw new Error('Session cannot begin closing'); state.status='CLOSING_PENDING'; break;
+            case 'sdk_close_receipt': appendSdkCloseEvidence(state,b.receipt); break;
             case 'tool_receipt': {
                 if(b.provider_session_id!==state.provider_session_id || !/^[\w-]{1,200}$/.test(b.tool_call_id||'')
                     || !['factory_handoff','factory_end_session'].includes(b.tool_name) || !['SDK_COMPLETED','SDK_FAILED'].includes(b.phase)) throw new Error('Tool receipt session/name binding mismatch');
