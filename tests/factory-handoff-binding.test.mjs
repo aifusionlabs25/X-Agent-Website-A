@@ -167,16 +167,16 @@ const {PublicEventEmitter}=require('../node_modules/@anam-ai/js-sdk/dist/main/mo
 const {InternalEventEmitter}=require('../node_modules/@anam-ai/js-sdk/dist/main/modules/InternalEventEmitter.js');
 const {InternalEvent}=require('../node_modules/@anam-ai/js-sdk/dist/main/types/index.js');
 test('installed SDK passes session/call identity and returns only committed audited pending result with no retry',async()=>{
-    const s=setup(),delivered=[],contexts=[];
+    const s=setup(),delivered=[];
     const inside=new InternalEventEmitter(),m=new ToolCallManager(new PublicEventEmitter(),inside);
     m.setActiveSession('provider');inside.addListener(InternalEvent.TOOL_CALL_RESULT_READY,e=>delivered.push(e));
     let commits=0;
     m.registerHandler('factory_handoff',{...toolEvidenceCallbacks(async()=>{},assert.fail),onStart:event=>
         submitHandoff(event.arguments.proposals,async proposals=>{commits++;return recordProviderHandoffAttempt(s,proposals,fields,'sdk',{
-            local_session_id:s.id,provider_session_id:event.sessionId,tool_call_id:event.toolCallId});},x=>contexts.push(x),assert.fail)});
+            local_session_id:s.id,provider_session_id:event.sessionId,tool_call_id:event.toolCallId});})});
     await m.processToolCallStartedEvent({session_id:'provider',tool_call_id:'call-sdk',tool_name:'factory_handoff',tool_type:'client',
         arguments:{proposals:[p('earlier',s.turns[1].content)]},timestamp:new Date().toISOString()});
     assert.equal(commits,1);assert.equal(delivered.length,1);assert.equal(JSON.parse(delivered[0].result).accepted,true);
-    assert.equal(JSON.parse(delivered[0].result).reference_bindings.length,1);assert.match(contexts[0],/PENDING_OWNER_REVIEW/);
+    assert.equal(JSON.parse(delivered[0].result).reference_bindings.length,1);assert.equal(JSON.parse(delivered[0].result).status,'PENDING_OWNER_REVIEW');
     assert.equal(s.approved,false);assert.deepEqual(s.external_actions,[]);
 });

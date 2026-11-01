@@ -90,8 +90,7 @@ export default function FactoryPilot() {
             c.registerToolCallHandler('factory_handoff',{...evidenceCallbacks,onStart:async p=>{
                 await binding;
                 return submitHandoff(p.arguments.proposals,async proposals=>(await post('provider_handoff',{proposals,
-                    local_session_id:launchState.id,provider_session_id:p.sessionId,tool_call_id:p.toolCallId})).toolResult,
-                    message=>c.addContext(message),()=>setError('Handoff speech context was unavailable. Check the saved result; this warning does not confirm preparation.'));
+                    local_session_id:launchState.id,provider_session_id:p.sessionId,tool_call_id:p.toolCallId})).toolResult);
             }});
             c.registerToolCallHandler('factory_end_session',{...evidenceCallbacks,onStart:async()=>{
                 await binding; await post('closing');armClose();return JSON.stringify(exitReceipt());

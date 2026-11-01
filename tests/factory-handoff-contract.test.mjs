@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {recordHandoffAttempt,assertProposal,appendTurn,appendToolEvidence,reconcileVisitorEvidence,decide,approve} from '../lib/factory/handoff.ts';
-import {collectionReferenceContext,visitorReferenceContext,handoffOutcomeContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks} from '../lib/factory/handoff-context.ts';
+import {collectionReferenceContext,visitorReferenceContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks} from '../lib/factory/handoff-context.ts';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/factory-owner-led-handoff.json',import.meta.url),'utf8'));
 const copy=()=>structuredClone(fixture);
 const fresh=()=>({id:'local',version:1,status:'ACTIVE',provider_session_id:'provider',turns:[],proposals:[],decisions:[],
@@ -99,15 +99,16 @@ test('UI status distinguishes verified closure from transcript-review readiness'
     assert.match(closedSessionStatus({status:'CLOSED',provider_release_verified:true,provider_transcript_verified:true}),/approval is separate/);
 });
 
-test('outcome reaches context only after commit; unknown outcome never retries or becomes success',async()=>{
+test('outcome returns only after commit; unknown outcome never retries or becomes success',async()=>{
     const order=[],s=fresh();appendTurn(s,turn);let release;
-    const pending=submitHandoff([proposal],async input=>{order.push('commit-start');await new Promise(r=>release=r);order.push('committed');return recordHandoffAttempt(s,input,fields,'once');},v=>order.push(v),()=>{});
+    const pending=submitHandoff([proposal],async input=>{order.push('commit-start');await new Promise(r=>release=r);order.push('committed');return recordHandoffAttempt(s,input,fields,'once');});
     await Promise.resolve();assert.deepEqual(order,['commit-start']);release();const result=JSON.parse(await pending);
-    assert.equal(result.accepted,true);assert.equal(order[1],'committed');assert.ok(order[2].includes(handoffOutcomeContext(result)));
-    let calls=0;const context=[];await assert.rejects(submitHandoff([proposal],async()=>{calls++;throw Error('response lost');},v=>context.push(v),()=>{}));
-    assert.equal(calls,1);assert.match(context[0],/UNKNOWN/);assert.match(context[0],/Do not retry/);
-    let contextFailures=0;const r=await submitHandoff([],async input=>recordHandoffAttempt(s,input,fields,'bad'),()=>{throw Error('channel unavailable');},()=>contextFailures++);
-    assert.equal(JSON.parse(r).accepted,false);assert.equal(contextFailures,1);
+    assert.equal(result.accepted,true);assert.deepEqual(order,['commit-start','committed']);
+    let calls=0;await assert.rejects(submitHandoff([proposal],async()=>{calls++;throw Error('private database details');}),e=>{
+        assert.match(e.message,/UNKNOWN/);assert.match(e.message,/Do not retry/);assert.doesNotMatch(e.message,/private database/);return true;
+    });assert.equal(calls,1);
+    const r=await submitHandoff([],async input=>recordHandoffAttempt(s,input,fields,'bad'));
+    assert.equal(JSON.parse(r).accepted,false);
 });
 
 const require=createRequire(import.meta.url);
@@ -119,7 +120,7 @@ test('installed SDK returns committed rejection and captures completion without 
     const pub=new PublicEventEmitter(),inside=new InternalEventEmitter(),manager=new ToolCallManager(pub,inside),delivered=[],s=fresh();
     manager.setActiveSession('provider');inside.addListener(InternalEvent.TOOL_CALL_RESULT_READY,p=>delivered.push(p));
     const callbacks=toolEvidenceCallbacks(async p=>appendToolEvidence(s,{tool_call_id:p.tool_call_id,tool_name:p.tool_name,phase:p.phase,result:p.result,exposure:'SDK_EVENT_NOT_PROOF_OF_MODEL_CONSUMPTION'},p.provider_session_id),assert.fail);
-    manager.registerHandler('factory_handoff',{...callbacks,onStart:p=>submitHandoff(p.arguments.proposals,async input=>recordHandoffAttempt(s,input,fields,'sdk-test'),()=>{},assert.fail)});
+    manager.registerHandler('factory_handoff',{...callbacks,onStart:p=>submitHandoff(p.arguments.proposals,async input=>recordHandoffAttempt(s,input,fields,'sdk-test'))});
     const event={session_id:'provider',tool_call_id:'call-1',tool_name:'factory_handoff',tool_type:'client',arguments:{proposals:[]},timestamp:new Date().toISOString()};
     await manager.processToolCallStartedEvent(event);
     assert.equal(delivered.length,1);assert.equal(JSON.parse(delivered[0].result).accepted,false);
