@@ -1,0 +1,166 @@
+{
+  "source": "Selected exact browser API visitor IDs/text; intervening assistant turns represented by explicitly synthetic separators. Not a full original transcript.",
+  "turns": [
+    {
+      "id": "user::b4301d3d-2ba8-446c-9e33-ab1c14a69632",
+      "content": "I run a small plumbing supply business.",
+      "role": "user"
+    },
+    {
+      "id": "user::d956767e-bcb3-4b74-80ba-fef246fb858d",
+      "content": "What could you all help us",
+      "role": "user"
+    },
+    {
+      "id": "user::463b15f8-7cb2-4a38-9733-de8cac73943e",
+      "content": "with?",
+      "role": "user"
+    },
+    {
+      "id": "separator:1",
+      "content": "assistant separator",
+      "role": "persona"
+    },
+    {
+      "id": "user::2b7cdcc9-f273-48ce-ab62-e3e8e3e0e645",
+      "content": "Yeah, sure, we get quote requests by email. and staff copy them into a spreadsheet.",
+      "role": "user"
+    },
+    {
+      "id": "user::a9eae274-dc58-4123-82fd-31f0709fbc3c",
+      "content": "and details sometimes get missed.",
+      "role": "user"
+    },
+    {
+      "id": "separator:2",
+      "content": "assistant separator",
+      "role": "persona"
+    },
+    {
+      "id": "user::cfd43b87-8fcf-4dba-9a77-d85cc40fcc13",
+      "content": "We use Microsoft 365 and Excel. I want staff to review every quote before anything goes to a customer though.",
+      "role": "user"
+    },
+    {
+      "id": "separator:3",
+      "content": "assistant separator",
+      "role": "persona"
+    },
+    {
+      "id": "user::be7f9f2a-f3b4-4979-a8fa-3da251d54827",
+      "content": "What would you need to understand before recommending an approach?",
+      "role": "user"
+    },
+    {
+      "id": "separator:4",
+      "content": "assistant separator",
+      "role": "persona"
+    },
+    {
+      "id": "user::7859d76b-059e-407f-99d0-534a817736d0",
+      "content": "Yeah, please prepare a summary of what we've discussed for a review and keep it here, don't email it or send anything.",
+      "role": "user"
+    }
+  ],
+  "provider_session_id": "14d02ff8-86d4-4fbe-9761-a601b0d7cd36",
+  "call": {
+    "arguments": {
+      "proposals": [
+        {
+          "evidence": "I run a small plumbing supply business. What could you all help us with?",
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "value": "I run a small plumbing supply business. What could you all help us with?",
+          "visitor_message_id": "user::b4301d3d-2ba8-446c-9e33-ab1c14a69632"
+        },
+        {
+          "evidence": "Yeah, sure, we get quote requests by email. and staff copy them into a spreadsheet. and details sometimes get missed.",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "Yeah, sure, we get quote requests by email. and staff copy them into a spreadsheet. and details sometimes get missed.",
+          "visitor_message_id": "user::2b7cdcc9-f273-48ce-ab62-e3e8e3e0e645"
+        },
+        {
+          "evidence": "We use Microsoft 365 and Excel. I want staff to review every quote before anything goes to a customer though.",
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "value": "We use Microsoft 365 and Excel. I want staff to review every quote before anything goes to a customer though.",
+          "visitor_message_id": "user::cfd43b87-8fcf-4dba-9a77-d85cc40fcc13"
+        },
+        {
+          "evidence": "We use Microsoft 365 and Excel. I want staff to review every quote before anything goes to a customer though.",
+          "field_id": "field_9c115246b07dd59d817f38f2",
+          "value": "We use Microsoft 365 and Excel. I want staff to review every quote before anything goes to a customer though.",
+          "visitor_message_id": "user::cfd43b87-8fcf-4dba-9a77-d85cc40fcc13"
+        },
+        {
+          "evidence": "Yeah, please prepare a summary of what we've discussed for a review and keep it here, don't email it or send anything.",
+          "field_id": "field_81624036fc30c6fe7287415a",
+          "value": "Yeah, please prepare a summary of what we've discussed for a review and keep it here, don't email it or send anything.",
+          "visitor_message_id": "user::be7f9f2a-f3b4-4979-a8fa-3da251d54827"
+        }
+      ]
+    },
+    "completedAt": "2026-11-01T02:30:23.503Z",
+    "correlationId": "7859d76b-059e-407f-99d0-534a817736d0",
+    "documentsAccessed": null,
+    "durationSeconds": 0.321,
+    "errorMessage": null,
+    "result": "{\"status\":\"UNMAPPED_OWNER_REVIEW\",\"accepted\":false,\"accepted_proposal_count\":0,\"owner_approved\":false,\"submission_status\":\"UNSUBMITTED\",\"external_actions\":[],\"reason\":\"Mapping requires a known field and an exact persisted visitor span; value must remain verbatim\",\"issues\":[{\"index\":0,\"field_id\":\"field_79a7766c1a75986cfcdd6b58\",\"problems\":[\"EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE\"]},{\"index\":1,\"field_id\":\"field_2188e6ea8250ac870752ef5d\",\"problems\":[\"EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE\"]},{\"index\":4,\"field_id\":\"field_81624036fc30c6fe7287415a\",\"problems\":[\"EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE\"]}],\"visitor_message\":\"I have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.\",\"instruction\":\"This preparation attempt failed. Tell the visitor using visitor_message. Do not say a brief is prepared or ready, or that the information was mapped. Do not retry automatically or ask the visitor to repeat the entire intake.\"}",
+    "startedAt": "2026-11-01T02:30:23.182Z",
+    "status": "completed",
+    "toolCallId": "call_3cac1ea6bfcb4e06bdc5def0",
+    "toolName": "factory_handoff",
+    "toolSubtype": null,
+    "toolType": "client",
+    "turnIndex": 7
+  },
+  "provider_evidence_sha256": "1353880f6e53887fba706b0ab845f41c6198bd8314328c4e6a328055e97922d5",
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ]
+}

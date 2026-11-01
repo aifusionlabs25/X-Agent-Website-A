@@ -5,7 +5,7 @@ import type { ToolCallHandler } from '@anam-ai/js-sdk';
  * Add each persisted quote once; never send a bare ID that can be mistaken for
  * the source of every fact. Raw words are JSON-quoted data, not instructions. */
 export function collectionReferenceContext(fields:Field[]) {
-    return 'Factory active host capabilities: factory_handoff prepares exact local proposals for owner review; factory_end_session requests a short farewell and SDK close. '
+    return 'Factory active host capabilities: factory_handoff prepares exact local proposals for owner review; factory_end_session records visitor exit and schedules SDK close, without requesting another farewell. '
         +'These local client tools are available in this session. No email, booking, CRM or other external-action capability is provided by these tools. '
         +'When a visitor explicitly requests an unsent human-review brief, call factory_handoff with supported exact proposals. A statement that you will prepare it is not execution. '
         +'Do not invent mappings or retry an invalid/unknown outcome; if exact mappings cannot be formed, say preparation is not verified and original evidence needs owner review. '

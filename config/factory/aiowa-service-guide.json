@@ -10,7 +10,7 @@
   "voice_id": "9173c0ac-4fc0-11f1-84b0-52bacf74fa75",
   "voice_name": "Cindy Baker - Receptionist",
   "llm_id": "65421f1c-c7de-4bc4-ac27-d171c16ef41f",
-  "prompt_sha256": "118a57d4ad3568f3f56540f69cdd6b5020402cd6d725be6e1a628a0d7c42e2e5",
+  "prompt_sha256": "f6e1d101625fa2ead1525f2a61875f398266c882fb816856b2c17dc710a0189c",
   "grounding_followup": {
     "source_prompt_sha256": "b047d1c456c98cb514c5e12d4e67fcd4ae8d825c1291ff653d82fc44aa6cd86e",
     "owner_authorized": true,

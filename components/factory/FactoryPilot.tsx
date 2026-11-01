@@ -6,6 +6,7 @@ import { liveTranscript,submitTypedTurn } from '@/lib/factory/live-transcript';
 import { sdkCloseTracker,type SdkCloseTracker,type CloseReason } from '@/lib/factory/sdk-close';
 import { collectionReferenceContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks,handoffRequestStatus } from '@/lib/factory/handoff-context';
 import { committedTurnEffects } from '@/lib/factory/turn-effects';
+import { exitReceipt } from '@/lib/factory/exit-receipt';
 import { createFarewellCloseCoordinator,type FarewellCloseCoordinator } from '@/lib/anam/farewell-close-coordinator';
 import styles from './pilot.module.css';
 type Manifest={name:string;persona_id:string;voice_name:string;package_sha256:string;configured_fields:Field[]};
@@ -93,7 +94,7 @@ export default function FactoryPilot() {
                     message=>c.addContext(message),()=>setError('Handoff speech context was unavailable. Check the saved result; this warning does not confirm preparation.'));
             }});
             c.registerToolCallHandler('factory_end_session',{...evidenceCallbacks,onStart:async()=>{
-                await binding; await post('closing');armClose();return JSON.stringify({status:'FAREWELL_REQUIRED',instruction:'Give one short farewell. The SDK will close. Nothing has been sent or submitted.'});
+                await binding; await post('closing');armClose();return JSON.stringify(exitReceipt());
             }});
             c.addListener(AnamEvent.CONNECTION_CLOSED,()=>{if(!stopping.current){stopping.current=true;void reconcile().catch(e=>setError(e.message));}});
             await c.streamToVideoElement('factory-olivia-video');

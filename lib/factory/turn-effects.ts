@@ -19,5 +19,5 @@ export function committedTurnEffects(state:Handoff,turn:Turn,effects:{
     context(visitorReferenceContext(turn));
     const request=handoffRequestContext(state,turn);
     if(request)context(request);
-    if(state.status==='CLOSING_PENDING')context('Factory committed visitor exit: end intent is recorded. Give one short natural farewell without a new question or intake. The host will close with the supported SDK; no handoff, approval or delivery success is implied.');
+    if(state.status==='CLOSING_PENDING')context('Factory committed visitor exit: end intent is recorded. This is a state receipt, not a request for another spoken reply. The host will close with the supported SDK; no handoff, approval or delivery success is implied.');
 }

@@ -1,6 +1,7 @@
 /** Generic evidence boundary. Streamed speech is NOT certified by this verifier. */
 import { createHash } from 'node:crypto';
 import type { SdkCloseReceipt } from './sdk-close';
+import type { FragmentBinding } from './handoff-fragments';
 import { reconcileTranscript,type ProviderTranscript,type Reconciliation } from './transcript-reconciliation.ts';
 import { clearExit,closingCourtesy } from './visitor-exit.ts';
 import { requestedHandoffSpan } from './handoff-request.ts';
@@ -15,6 +16,7 @@ export type HandoffResult = {
     accepted_proposal_count:number; owner_approved:false; submission_status:'UNSUBMITTED'; external_actions:never[];
     reason?:string; issues:Array<{index:number;field_id:string|null;problems:string[]}>;
     reference_bindings?:ReferenceBinding[];
+    fragment_bindings?:FragmentBinding[];
     visitor_message:string; instruction:string;
 };
 export type Handoff = {
@@ -34,7 +36,7 @@ export type Handoff = {
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     handoff_binding_attempts?:Array<{request_id:string;tool_call_id:string;local_session_id:string;provider_session_id:string;
         input_sha256:string;local_turns_sha256:string;original_proposals:unknown;resolved_proposals:unknown;
-        bindings:ReferenceBinding[];applied:boolean;result:HandoffResult}>;
+        bindings:ReferenceBinding[];fragment_bindings?:FragmentBinding[];applied:boolean;result:HandoffResult}>;
     evidence_reviewed:boolean; approved:boolean; submission_status:'UNSUBMITTED'; external_actions:never[];
 };
 export const digest = (value:unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
