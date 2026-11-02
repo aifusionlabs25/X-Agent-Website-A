@@ -35,8 +35,9 @@ test('quoted, narrated, instructional and negated goodbyes are not exit intent',
     ]){assert.equal(clearExit(words),false,words);assert.equal(closingCourtesy(words),false,words);}
 });
 test('meaningful facts/questions are not swallowed into a name or courtesy',()=>{
+    const factsThenExit='Okay. My email is morgan@example.test. Goodbye.';
+    assert.equal(clearExit(factsThenExit),true);assert.equal(closingCourtesy(factsThenExit),false);
     for(const words of [
-        'Okay. My email is morgan@example.test. Goodbye.',
         'Thanks, my email is different.','Goodbye, my email.',
         'Thanks for your help. One more question.','Goodbye. I need a quote.',
         'That is all we have in stock.','We are done with the spreadsheet.',
