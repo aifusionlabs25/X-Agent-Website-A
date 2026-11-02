@@ -1,3 +1,4 @@
+import { contradictingCorrection } from './handoff-corrections.ts';
 /** Generic evidence boundary. Streamed speech is NOT certified by this verifier. */
 import { createHash } from 'node:crypto';
 import type { SdkCloseReceipt } from './sdk-close';
@@ -66,6 +67,7 @@ export function appendSdkCloseEvidence(state:Handoff,event:SdkCloseReceipt) {
 export function assertProposal(p:Proposal, turns:Turn[], fields:Field[]) {
     if (!p || Object.keys(p).sort().join() !== ['evidence','field_id','value','visitor_message_id'].sort().join()
         || !fields.some(f=>f.id===p.field_id) || typeof p.evidence!=='string' || !p.evidence.trim()
+        || contradictingCorrection(turns,p.visitor_message_id,p.evidence)
         || p.evidence.length>4000 || typeof p.value!=='string' || p.value!==p.evidence
         || !turns.some(t=>t.role==='user' && t.id===p.visitor_message_id && t.content.includes(p.evidence))) {
         throw new Error('Mapping requires a known field and an exact persisted visitor span; value must remain verbatim');
@@ -157,6 +159,7 @@ export function proposalIssues(input:unknown, turns:Turn[], fields:Field[]):Hand
         if(!turn)problems.push('UNKNOWN_VISITOR_MESSAGE');
         if(typeof p.evidence!=='string'||!p.evidence.trim()||p.evidence.length>4000)problems.push('INVALID_EVIDENCE_SPAN');
         else if(turn&&!turn.content.includes(p.evidence))problems.push('EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE');
+        if(typeof p.evidence==='string'&&turn&&contradictingCorrection(turns,p.visitor_message_id,p.evidence))problems.push('LATER_EXPLICIT_CORRECTION_REQUIRES_CURRENT_EVIDENCE');
         if(typeof p.value!=='string'||p.value!==p.evidence)problems.push('VALUE_MUST_EQUAL_EXACT_EVIDENCE');
         return problems.length?[{index,field_id:typeof p.field_id==='string'?p.field_id:null,problems}]:[];
     });

@@ -12,7 +12,7 @@ export function collectionReferenceContext(fields:Field[]) {
         +'Factory handoff contract: use only configured fields and persisted visitor evidence references. '
         +'Each proposal must copy an exact span from its own visitor_message_id and use that same exact text as value. '
         +'Do not paraphrase evidence, use assistant suggestions as visitor facts, reuse the latest ID for earlier facts, or fill missing fields. '
-        +'Retain corrections, unknowns and restrictions with their original references. '
+        +'Retain corrections, unknowns and restrictions with their original references. Select the latest corrected fact for each field; earlier contradicted facts are history, not current proposals. Do not erase unrelated facts when applying a correction. '
         +'Call the tool before reporting success. While it is pending, do not say information is prepared or retained for review. '
         +'Tool completion is not handoff success: report the committed business outcome once, with no automatic retry or external action. '
         +'Configured field data: '+JSON.stringify(fields);

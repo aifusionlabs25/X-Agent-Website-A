@@ -25,12 +25,17 @@ export function recordProviderHandoffAttempt(state:Handoff,input:unknown,fields:
         const issues=proposalIssues(resolved,state.turns,fields);
         const projections=new Map<number,Proposal[]>();
         for(const issue of issues) {
-            // Unknown/assistant IDs, invalid fields/schema/values and missing evidence
+            // Assistant IDs, invalid fields/schema/values and missing evidence
             // never gain an alternate source. Already-valid references stay untouched.
-            if(issue.index<0||issue.problems.length!==1||issue.problems[0]!=='EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE')continue;
+            if(issue.index<0||issue.problems.length!==1)continue;
             const p=resolved[issue.index] as Proposal;
+            const unknownNativeReference=issue.problems[0]==='UNKNOWN_VISITOR_MESSAGE'
+                && /^user::[a-f0-9-]{36}$/i.test(p.visitor_message_id)
+                && !state.turns.some(t=>t.id===p.visitor_message_id);
+            if(issue.problems[0]!=='EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE'&&!unknownNativeReference)continue;
             const matches=state.turns.filter(t=>t.role==='user'&&t.content.includes(p.evidence));
             if(matches.length===0) {
+                if(unknownNativeReference)continue; // Unknown IDs require one existing exact span, never fragment reconstruction.
                 const projection=projectSpeechFragments(p,state.turns,issue.index);
                 if(projection){projections.set(issue.index,projection.proposals);fragmentBindings.push(projection.binding);}
                 continue;

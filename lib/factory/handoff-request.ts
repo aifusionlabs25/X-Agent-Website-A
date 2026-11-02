@@ -4,8 +4,8 @@
  * returns null and stays in the retained transcript for owner review. */
 export type HandoffRequestSpan={start:number;end:number;evidence:string};
 
-const requestStart=/^(?:(?:okay|ok|yes|yeah|yep|yup|sure|alright|all right)[, ]+)?(?:(?:please\s+)|(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)|(?:i(?:['’]d| would)\s+like\s+you\s+to\s+)|(?:i\s+(?:want|need)\s+you\s+to\s+))?(?:prepare|create|draft)\s+(?:(?:a|an|the|my|our|this)\s+)?(?:(?:unsent|local|short|concise|human-review|owner-review|draft|review-ready)\s+){0,4}(?:brief|summary|review note|handoff note|note)\b/i;
-const internalScope=/\b(?:unsent|local|human-review|owner-review)\b|\bfor\s+(?:(?:a|the)\s+)?(?:human|owner)(?:[ -]review|\s+to\s+review)\b/i;
+const requestStart=/^(?:(?:uh|um|okay|ok|yes|yeah|yep|yup|sure|alright|all right)[, ]+)?(?:(?:please\s+)|(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)|(?:i(?:['’]d| would)\s+like\s+you\s+to\s+)|(?:i\s+(?:want|need)\s+you\s+to\s+))?(?:prepare|create|draft)\s+(?:(?:a|an|the|my|our|this)\s+)?(?:(?:unsent|not sent|local|short|concise|human[ -]review|owner[ -]review|draft|review-ready)\s+){0,4}(?:brief|summary|review note|handoff note|note)\b/i;
+const internalScope=/\b(?:unsent|not sent|local|human[ -]review|owner[ -]review)\b|\bfor\s+(?:(?:a|the)\s+)?(?:human|owner)(?:[ -]review|\s+to\s+review)\b/i;
 const conditional=/\b(?:if|unless|once)\b|\b(?:when|after)\s+(?:i|we|you)\b/i;
 const negatedPreparation=/\b(?:do not|don['’]t|never|not to|stop|cancel)\s+(?:(?:actually|please)\s+)*(?:prepare|create|draft|preparing|creating|drafting)\b/i;
 const conflictingDelivery=/\b(?:and|then|also)\s+(?:please\s+)?(?:send|email|submit|book|deliver)\b/i;
