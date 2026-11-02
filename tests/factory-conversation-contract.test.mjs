@@ -76,5 +76,5 @@ test('real handler wiring uses the single result adapter, while native speech an
  const source=readFileSync(new URL('../components/factory/FactoryPilot.tsx',import.meta.url),'utf8');
  const handler=source.slice(source.indexOf("c.registerToolCallHandler('factory_handoff'"),source.indexOf("c.registerToolCallHandler('factory_end_session'"));
  assert.ok(handler.includes('return submitHandoff('));assert.ok(!handler.includes('addContext'));
- assert.ok(source.includes('JSON.stringify(exitReceipt())'));assert.ok(source.includes("tracker.close('VISITOR_EXIT')")||source.includes("stop('VISITOR_EXIT')"));
+ assert.ok(source.includes('JSON.stringify(exitReceipt(exitReplies.receipt(p.userActionCorrelationId)))'));assert.ok(source.includes("tracker.close('VISITOR_EXIT')")||source.includes("stop('VISITOR_EXIT')"));
 });

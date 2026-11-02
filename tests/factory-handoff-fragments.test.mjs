@@ -95,5 +95,5 @@ test('farewell receipt and host status no longer request another spoken farewell
  const last={id:'p',role:'persona',content:"You're welcome."};s.turns.push(last);committedTurnEffects(s,last,effects);
  assert.equal(finished,1);assert.equal(s.provider_release_verified,false);assert.equal(s.status,'CLOSING_PENDING');
  const source=readFileSync(new URL('../components/factory/FactoryPilot.tsx',import.meta.url),'utf8');
- assert.ok(source.includes('JSON.stringify(exitReceipt())'));assert.ok(!source.includes("status:'FAREWELL_REQUIRED'"));
+ assert.ok(source.includes('JSON.stringify(exitReceipt(exitReplies.receipt(p.userActionCorrelationId)))'));assert.ok(!source.includes("status:'FAREWELL_REQUIRED'"));
 });

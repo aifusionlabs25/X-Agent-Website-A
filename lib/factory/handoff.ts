@@ -1,4 +1,5 @@
 import { contradictingCorrection } from './handoff-corrections.ts';
+import type { SupersededProposal } from './handoff-current';
 /** Generic evidence boundary. Streamed speech is NOT certified by this verifier. */
 import { createHash } from 'node:crypto';
 import type { SdkCloseReceipt } from './sdk-close';
@@ -18,6 +19,7 @@ export type HandoffResult = {
     reason?:string; issues:Array<{index:number;field_id:string|null;problems:string[]}>;
     reference_bindings?:ReferenceBinding[];
     fragment_bindings?:FragmentBinding[];
+    superseded_proposals?:SupersededProposal[];
     visitor_message:string; instruction:string;
 };
 export type Handoff = {
@@ -37,6 +39,7 @@ export type Handoff = {
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     handoff_binding_attempts?:Array<{request_id:string;tool_call_id:string;local_session_id:string;provider_session_id:string;
         input_sha256:string;local_turns_sha256:string;original_proposals:unknown;resolved_proposals:unknown;
+        selected_proposals?:unknown;superseded_proposals?:SupersededProposal[];
         bindings:ReferenceBinding[];fragment_bindings?:FragmentBinding[];applied:boolean;result:HandoffResult}>;
     evidence_reviewed:boolean; approved:boolean; submission_status:'UNSUBMITTED'; external_actions:never[];
 };

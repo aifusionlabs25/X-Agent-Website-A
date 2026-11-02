@@ -6,7 +6,7 @@ import { liveTranscript,submitTypedTurn } from '@/lib/factory/live-transcript';
 import { sdkCloseTracker,type SdkCloseTracker,type CloseReason } from '@/lib/factory/sdk-close';
 import { collectionReferenceContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks,handoffRequestStatus } from '@/lib/factory/handoff-context';
 import { committedTurnEffects } from '@/lib/factory/turn-effects';
-import { exitReceipt } from '@/lib/factory/exit-receipt';
+import { exitReceipt,exitReplyObserver } from '@/lib/factory/exit-receipt';
 import { createFarewellCloseCoordinator,type FarewellCloseCoordinator } from '@/lib/anam/farewell-close-coordinator';
 import styles from './pilot.module.css';
 type Manifest={name:string;persona_id:string;voice_name:string;package_sha256:string;configured_fields:Field[]};
@@ -57,7 +57,7 @@ export default function FactoryPilot() {
         if(busy||current.current)return;setBusy(true);setError('');setStatus('Verifying exact persona, image, voice and storage…');
         try {
             const r=await post('start');const c=createClient(r.sessionToken);client.current=c;
-            let binding:Promise<unknown>=Promise.resolve();const transcript=liveTranscript();
+            let binding:Promise<unknown>=Promise.resolve();const transcript=liveTranscript(),exitReplies=exitReplyObserver();
             let boundProviderId:string|null=null;
             const launchState=r.state as Handoff;
             const tracker=sdkCloseTracker({stop:()=>c.stopStreaming(),report:event=>{
@@ -81,10 +81,10 @@ export default function FactoryPilot() {
                 setDrafts(transcript.drafts());setTransport(transcript.trace());
             };
             c.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED,e=>{
-                try{persist(transcript.stream(e));}catch(e){setError(e instanceof Error?e.message:'Transcript stream failed');}
+                try{exitReplies.observe(e);persist(transcript.stream(e));}catch(e){setError(e instanceof Error?e.message:'Transcript stream failed');}
             });
             c.addListener(AnamEvent.MESSAGE_HISTORY_UPDATED,messages=>{
-                try{persist(transcript.history(messages));}catch(e){setError(e instanceof Error?e.message:'Transcript history failed');}
+                try{messages.forEach(m=>exitReplies.observe(m));persist(transcript.history(messages));}catch(e){setError(e instanceof Error?e.message:'Transcript history failed');}
             });
             const evidenceCallbacks=toolEvidenceCallbacks(event=>post('tool_receipt',event),e=>setError(e instanceof Error?e.message:'Tool evidence could not be retained'));
             c.registerToolCallHandler('factory_handoff',{...evidenceCallbacks,onStart:async p=>{
@@ -92,8 +92,9 @@ export default function FactoryPilot() {
                 return submitHandoff(p.arguments.proposals,async proposals=>(await post('provider_handoff',{proposals,
                     local_session_id:launchState.id,provider_session_id:p.sessionId,tool_call_id:p.toolCallId})).toolResult);
             }});
-            c.registerToolCallHandler('factory_end_session',{...evidenceCallbacks,onStart:async()=>{
-                await binding; await post('closing');armClose();return JSON.stringify(exitReceipt());
+            c.registerToolCallHandler('factory_end_session',{...evidenceCallbacks,onStart:async p=>{
+                await binding; await post('closing');armClose();
+                return JSON.stringify(exitReceipt(exitReplies.receipt(p.userActionCorrelationId)));
             }});
             c.addListener(AnamEvent.CONNECTION_CLOSED,()=>{if(!stopping.current){stopping.current=true;void reconcile().catch(e=>setError(e.message));}});
             await c.streamToVideoElement('factory-olivia-video');
