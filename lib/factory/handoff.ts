@@ -13,6 +13,8 @@ export type Turn = {id:string; role:'user'|'persona'; content:string};
 export type Proposal = {field_id:string; visitor_message_id:string; evidence:string; value:string};
 export type ReferenceBinding = {index:number;from_message_id:string;to_message_id:string;start:number;end:number;source_sha256:string};
 export type Decision = {proposal_id:string; decision:'ACCEPT'|'REJECT'; at:string};
+export type SupersededMapping = {proposal:Proposal & {id:string};replacement_proposal_id:string;
+    correction_turn:Turn;correction_turn_sha256:string;prior_decision:Decision|null};
 export type HandoffResult = {
     status:'PENDING_OWNER_REVIEW'|'UNMAPPED_OWNER_REVIEW'; accepted:boolean;
     accepted_proposal_count:number; owner_approved:false; submission_status:'UNSUBMITTED'; external_actions:never[];
@@ -26,6 +28,7 @@ export type Handoff = {
     id:string; version:number; package_sha256:string; persona_id:string; launch_label:string;
     status:'RESERVED'|'TOKEN_READY'|'ACTIVE'|'CLOSING_PENDING'|'CLOSED'; provider_session_id:string|null;
     turns:Turn[]; proposals:Array<Proposal & {id:string}>; decisions:Decision[];
+    superseded_mappings?:SupersededMapping[];
     receipts:Array<{at:string; kind:string; sha256:string}>; processed:string[];
     provider_release_verified:boolean; provider_transcript_verified:boolean;
     provider_evidence?:unknown;
@@ -38,6 +41,7 @@ export type Handoff = {
     sdk_close_events?:Array<SdkCloseReceipt & {assurance:'CLIENT_INSTRUMENTATION_NOT_PROVIDER_RELEASE'}>;
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     handoff_binding_attempts?:Array<{request_id:string;tool_call_id:string;local_session_id:string;provider_session_id:string;
+        request_turn_id?:string|null;
         input_sha256:string;local_turns_sha256:string;original_proposals:unknown;resolved_proposals:unknown;
         selected_proposals?:unknown;superseded_proposals?:SupersededProposal[];
         bindings:ReferenceBinding[];fragment_bindings?:FragmentBinding[];applied:boolean;result:HandoffResult}>;
@@ -145,8 +149,31 @@ export function propose(state:Handoff, proposals:Proposal[], fields:Field[]) {
         && !(state.status==='CLOSING_PENDING'&&state.handoff_requests?.length)) throw new Error('Handoff proposals are not available during closure without a retained request');
     if (!Array.isArray(proposals) || proposals.length===0 || proposals.length>24) throw new Error('A nonempty bounded set of exact proposals is required');
     for (const p of proposals) assertProposal(p,state.turns,fields);
+    // Replace only a validated same-field correction, never the whole field.
+    // Keep every original quote, source, decision and correction in the archive.
+    // Compound older quotes remain flagged for owner review: silently removing
+    // one would also discard independent facts that have not been remapped.
+    const replacements:SupersededMapping[]=[];
+    for(const prior of state.proposals) {
+        const correction=contradictingCorrection(state.turns,prior.visitor_message_id,prior.evidence);
+        if(!correction||prior.evidence.split(/[.!?;\n]+/).filter(s=>s.trim()).length!==1
+            ||/[,;:()\n]|\b(?:and|but|also|plus|with)\b/i.test(prior.evidence)
+            ||(prior.evidence.match(/\b\d+\b/g)||[]).length>1)continue;
+        const candidates=proposals.filter(p=>p.field_id===prior.field_id&&p.visitor_message_id===correction.id
+            &&p.evidence===correction.content&&p.value===correction.content);
+        const unique=[...new Map(candidates.map(p=>[digest(p),p])).values()];
+        if(unique.length!==1)continue;
+        replacements.push({proposal:structuredClone(prior),replacement_proposal_id:digest(unique[0]),
+            correction_turn:structuredClone(correction),correction_turn_sha256:digest(correction),
+            prior_decision:structuredClone(state.decisions.find(d=>d.proposal_id===prior.id)||null)});
+    }
+    if((state.superseded_mappings?.length||0)+replacements.length>200)throw new Error('Superseded mapping evidence bound reached');
+    if(replacements.length) {
+        state.superseded_mappings=[...(state.superseded_mappings||[]),...replacements];
+        state.proposals=state.proposals.filter(p=>!replacements.some(r=>r.proposal.id===p.id));
+    }
     for (const p of proposals) { const id=digest(p); if (!state.proposals.some(v=>v.id===id)) state.proposals.push({...p,id}); }
-    state.approved=false;
+    state.approved=false; state.evidence_reviewed=false;
 }
 
 /** Diagnostics never repair a quote, choose another turn or relax assertProposal. */
@@ -216,6 +243,7 @@ export function decide(state:Handoff, id:string, decision:'ACCEPT'|'REJECT', fie
 export function approve(state:Handoff) {
     if (state.status!=='CLOSED' || !state.provider_release_verified || !state.provider_transcript_verified
         || !state.evidence_reviewed || !state.turns.some(t=>t.role==='user')
-        || state.proposals.some(p=>!state.decisions.some(d=>d.proposal_id===p.id))) throw new Error('Close, reconcile and review all original evidence/proposals before approval');
+        || state.proposals.some(p=>!state.decisions.some(d=>d.proposal_id===p.id)
+            ||state.decisions.some(d=>d.proposal_id===p.id&&d.decision==='ACCEPT')&&contradictingCorrection(state.turns,p.visitor_message_id,p.evidence))) throw new Error('Close, reconcile and review all original evidence/proposals before approval');
     state.approved=true;
 }

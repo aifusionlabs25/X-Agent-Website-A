@@ -20,6 +20,9 @@ export function recordProviderHandoffAttempt(state:Handoff,input:unknown,fields:
             ||prior.input_sha256!==inputHash)throw new Error('Handoff tool input is immutable');
         return structuredClone(prior.result); // Return the same committed outcome, never retry resolution.
     }
+    const requestTurnId=state.handoff_requests?.at(-1)?.visitor_message_id??null;
+    if(requestTurnId&&attempts.some(a=>a.request_turn_id===requestTurnId))
+        throw new Error('This visitor request already has a retained preparation attempt; do not retry it');
     if(attempts.length>=24)throw new Error('Handoff binding evidence bound reached');
     const original=structuredClone(input??null);let resolved=structuredClone(original);
     const bindings:ReferenceBinding[]=[],fragmentBindings:FragmentBinding[]=[];
@@ -64,7 +67,7 @@ export function recordProviderHandoffAttempt(state:Handoff,input:unknown,fields:
         result.superseded_proposals=structuredClone(selection.superseded);
         result.instruction+=' Earlier contradicted proposals were excluded in favor of exact supplied corrections. Only the selected current proposals await owner review; the original history remains retained.';
     }
-    const attempt={request_id:requestId,...identity,input_sha256:inputHash,local_turns_sha256:digest(state.turns),
+    const attempt={request_id:requestId,...identity,request_turn_id:requestTurnId,input_sha256:inputHash,local_turns_sha256:digest(state.turns),
         original_proposals:original,resolved_proposals:resolved,selected_proposals:structuredClone(selection.selected),
         superseded_proposals:selection.superseded,bindings,fragment_bindings:fragmentBindings,applied:result.accepted,result:structuredClone(result)};
     state.handoff_binding_attempts=[...attempts,attempt];
