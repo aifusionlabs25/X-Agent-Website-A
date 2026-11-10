@@ -4,6 +4,7 @@ import manifest from '@/config/factory/aiowa-service-guide.json';
 import { appendTurn,beginClosing,recordHandoffAttempt,decide,approve,digest,appendSdkCloseEvidence,appendToolEvidence,reconcileVisitorEvidence,type Handoff,type Turn } from '@/lib/factory/handoff';
 import * as store from '@/lib/factory/store';
 import { recordProviderHandoffAttempt } from '@/lib/factory/handoff-binding';
+import {appendContextSendEvidence} from '@/lib/factory/context-send-evidence';
 import { fetchAnamSessionMetadata } from '@/lib/anam/session-api';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -99,6 +100,7 @@ export async function POST(req:NextRequest) {
             }
             case 'closing': beginClosing(state); break;
             case 'sdk_close_receipt': appendSdkCloseEvidence(state,b.receipt); break;
+            case 'context_send_receipt': appendContextSendEvidence(state,b.receipt); break;
             case 'tool_receipt': {
                 appendToolEvidence(state,{tool_call_id:b.tool_call_id,tool_name:b.tool_name,phase:b.phase,result:b.result,
                     exposure:'SDK_EVENT_NOT_PROOF_OF_MODEL_CONSUMPTION'},b.provider_session_id); break;

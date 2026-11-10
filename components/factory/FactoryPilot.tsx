@@ -6,6 +6,7 @@ import { liveTranscript,submitTypedTurn } from '@/lib/factory/live-transcript';
 import { sdkCloseTracker,type SdkCloseTracker,type CloseReason } from '@/lib/factory/sdk-close';
 import { collectionReferenceContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks,handoffRequestStatus } from '@/lib/factory/handoff-context';
 import { committedTurnEffects } from '@/lib/factory/turn-effects';
+import {contextSendTracker,type ContextSendTracker} from '@/lib/factory/context-send';
 import { exitReceipt,exitReplyObserver } from '@/lib/factory/exit-receipt';
 import { contradictingCorrection } from '@/lib/factory/handoff-corrections';
 import { createFarewellCloseCoordinator,type FarewellCloseCoordinator } from '@/lib/anam/farewell-close-coordinator';
@@ -23,6 +24,7 @@ export default function FactoryPilot() {
     const stopping=useRef(false),farewell=useRef<FarewellCloseCoordinator|null>(null);
     const submitting=useRef(false);
     const closer=useRef<SdkCloseTracker|null>(null);
+    const contextSender=useRef<ContextSendTracker|null>(null);
     const accept=(s:Handoff|null)=>{current.current=s;setState(s);};
     async function refresh() {
         const r=await fetch('/api/factory/pilot',{cache:'no-store'}), v=await r.json();
@@ -51,7 +53,10 @@ export default function FactoryPilot() {
     function armClose() {farewell.current?.arm();}
     function afterTurn(s:Handoff,turn:Turn) {
         committedTurnEffects(s,turn,{armClose,finalReply:()=>{farewell.current?.completeFarewell();},
-            context:message=>{client.current?.addContext(message);},
+            context:(message,kind)=>{
+                if(!contextSender.current)throw new Error('Context sender unavailable');
+                contextSender.current.send(kind,turn.id,message);
+            },
             contextFailure:()=>setError('Session context delivery was unavailable. Saved request and closure state remain authoritative; no preparation success is implied.')});
     }
     async function launch() {
@@ -61,6 +66,15 @@ export default function FactoryPilot() {
             let binding:Promise<unknown>=Promise.resolve();const transcript=liveTranscript(),exitReplies=exitReplyObserver();
             let boundProviderId:string|null=null;
             const launchState=r.state as Handoff;
+            const contextTracker=contextSendTracker({send:message=>c.addContext(message),report:event=>{
+                if(!boundProviderId)throw new Error('Context evidence requires a bound provider session');
+                return post('context_send_receipt',{receipt:{...event,local_session_id:launchState.id,
+                    provider_session_id:boundProviderId,launch_label:launchState.launch_label}}).catch(()=>{
+                    setError('Context-send evidence could not be retained. Provider receipt and model consumption are unverified.');
+                    throw new Error('Context telemetry unavailable');
+                });
+            }});
+            contextSender.current=contextTracker;
             const tracker=sdkCloseTracker({stop:()=>c.stopStreaming(),report:event=>{
                 if(event.reason!=='UNMOUNT')setCloseTrace(tracker.snapshot());
                 return binding.then(()=>post('sdk_close_receipt',{receipt:{...event,
@@ -70,7 +84,7 @@ export default function FactoryPilot() {
             farewell.current=createFarewellCloseCoordinator({stopStreaming:()=>stop('VISITOR_EXIT'),
                 onStopError:()=>setError('Session close could not be verified. Preserve the session for reconciliation.')});
             c.addListener(AnamEvent.SESSION_READY,id=>{boundProviderId=id;binding=post('bind',{provider_session_id:id});void binding.then(()=>{
-                c.addContext(collectionReferenceContext(manifest?.configured_fields||[]));
+                contextTracker.send('COLLECTION',null,collectionReferenceContext(manifest?.configured_fields||[]));
                 setStatus('Connected — Olivia · Cindy voice');
             }).catch(e=>{setError(e.message);if(!stopping.current){stopping.current=true;void tracker.close('BIND_FAILED').catch(()=>{});}});});
             const persist=(turns:Turn[])=>{

@@ -3,6 +3,7 @@ import type { SupersededProposal } from './handoff-current';
 /** Generic evidence boundary. Streamed speech is NOT certified by this verifier. */
 import { createHash } from 'node:crypto';
 import type { SdkCloseReceipt } from './sdk-close';
+import type { ContextSendReceipt,contextAssurance } from './context-send';
 import type { FragmentBinding } from './handoff-fragments';
 import type { FormatBinding } from './handoff-format';
 import type { CurrentFactSelection } from './handoff-current-spans';
@@ -45,6 +46,7 @@ export type Handoff = {
     visitor_exit?:{visitor_message_id:string;evidence:string;source:'HOST_PERSISTED_VISITOR_EXIT'};
     closing_after_turn_id?:string;
     sdk_close_events?:Array<SdkCloseReceipt & {assurance:'CLIENT_INSTRUMENTATION_NOT_PROVIDER_RELEASE'}>;
+    context_send_events?:Array<ContextSendReceipt & {payload_sha256:string;source_turn_sha256:string|null;assurance:typeof contextAssurance}>;
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     handoff_binding_attempts?:Array<{request_id:string;tool_call_id:string;local_session_id:string;provider_session_id:string;
         request_turn_id?:string|null;
@@ -99,7 +101,8 @@ export function appendTurn(state:Handoff, turn:Turn) {
     state.turns.push({...turn});
     state.approved=false; state.evidence_reviewed=false; state.provider_transcript_verified=false;
     if(turn.role==='user') {
-        const request=requestedHandoffSpan(turn.content);
+        const request=requestedHandoffSpan(turn.content,{hasSuccessfulHandoff:Boolean(state.handoff_binding_attempts?.some(a=>
+            a.applied===true&&a.result.accepted===true&&a.request_turn_id!==undefined))});
         if(request) {
             const row={visitor_message_id:turn.id,...request,source:'HOST_PERSISTED_VISITOR_REQUEST' as const,status:'REQUESTED_NOT_MAPPED' as const};
             state.handoff_requests=[...(state.handoff_requests||[]),row];

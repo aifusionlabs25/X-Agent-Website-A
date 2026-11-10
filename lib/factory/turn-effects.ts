@@ -1,10 +1,11 @@
 import type { Handoff,Turn } from './handoff';
 import { visitorReferenceContext,handoffRequestContext } from './handoff-context.ts';
+import type {ContextKind} from './context-send';
 
 /** Apply only a successfully committed turn. Lifecycle cleanup must not depend
  * on optional model context delivery, model tool use, or farewell wording. */
 export function committedTurnEffects(state:Handoff,turn:Turn,effects:{
-    armClose:()=>void;finalReply:()=>void;context:(text:string)=>void;contextFailure:(error:unknown)=>void;
+    armClose:()=>void;finalReply:()=>void;context:(text:string,kind:ContextKind)=>void;contextFailure:(error:unknown)=>void;
 }) {
     const index=state.turns.findIndex(t=>t.id===turn.id&&t.role===turn.role&&t.content===turn.content);
     if(index<0)throw new Error('Committed exact turn required before host effects');
@@ -15,9 +16,9 @@ export function committedTurnEffects(state:Handoff,turn:Turn,effects:{
         if(turn.role==='persona'&&exitIndex>=0&&index>exitIndex)effects.finalReply();
     }
     if(turn.role!=='user')return;
-    const context=(text:string)=>{try{effects.context(text);}catch(error){effects.contextFailure(error);}};
-    context(visitorReferenceContext(turn));
+    const context=(text:string,kind:ContextKind)=>{try{effects.context(text,kind);}catch(error){effects.contextFailure(error);}};
+    context(visitorReferenceContext(turn),'VISITOR_REFERENCE');
     const request=handoffRequestContext(state,turn);
-    if(request)context(request);
-    if(state.status==='CLOSING_PENDING')context('Factory committed visitor exit: end intent is recorded. This is a state receipt, not a request for another spoken reply. The host will close with the supported SDK; no handoff, approval or delivery success is implied.');
+    if(request)context(request,'HANDOFF_REQUEST');
+    if(state.status==='CLOSING_PENDING')context('Factory committed visitor exit: end intent is recorded. This is a state receipt, not a request for another spoken reply. The host will close with the supported SDK; no handoff, approval or delivery success is implied.','VISITOR_EXIT');
 }
