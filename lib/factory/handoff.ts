@@ -4,6 +4,8 @@ import type { SupersededProposal } from './handoff-current';
 import { createHash } from 'node:crypto';
 import type { SdkCloseReceipt } from './sdk-close';
 import type { FragmentBinding } from './handoff-fragments';
+import type { FormatBinding } from './handoff-format';
+import type { CurrentFactSelection } from './handoff-current-spans';
 import { reconcileTranscript,type ProviderTranscript,type Reconciliation } from './transcript-reconciliation.ts';
 import { clearExit,closingCourtesy } from './visitor-exit.ts';
 import { requestedHandoffSpan } from './handoff-request.ts';
@@ -14,14 +16,18 @@ export type Proposal = {field_id:string; visitor_message_id:string; evidence:str
 export type ReferenceBinding = {index:number;from_message_id:string;to_message_id:string;start:number;end:number;source_sha256:string};
 export type Decision = {proposal_id:string; decision:'ACCEPT'|'REJECT'; at:string};
 export type SupersededMapping = {proposal:Proposal & {id:string};replacement_proposal_id:string;
-    correction_turn:Turn;correction_turn_sha256:string;prior_decision:Decision|null};
+    correction_turn:Turn;correction_turn_sha256:string;prior_decision:Decision|null;
+    retained_proposal_ids?:string[];current_fact_selection?:CurrentFactSelection};
 export type HandoffResult = {
     status:'PENDING_OWNER_REVIEW'|'UNMAPPED_OWNER_REVIEW'; accepted:boolean;
     accepted_proposal_count:number; owner_approved:false; submission_status:'UNSUBMITTED'; external_actions:never[];
     reason?:string; issues:Array<{index:number;field_id:string|null;problems:string[]}>;
     reference_bindings?:ReferenceBinding[];
     fragment_bindings?:FragmentBinding[];
+    format_bindings?:FormatBinding[];
     superseded_proposals?:SupersededProposal[];
+    current_fact_selections?:CurrentFactSelection[];
+    prior_current_fact_selections?:CurrentFactSelection[];
     visitor_message:string; instruction:string;
 };
 export type Handoff = {
@@ -44,7 +50,8 @@ export type Handoff = {
         request_turn_id?:string|null;
         input_sha256:string;local_turns_sha256:string;original_proposals:unknown;resolved_proposals:unknown;
         selected_proposals?:unknown;superseded_proposals?:SupersededProposal[];
-        bindings:ReferenceBinding[];fragment_bindings?:FragmentBinding[];applied:boolean;result:HandoffResult}>;
+        current_fact_selections?:CurrentFactSelection[];prior_current_fact_selections?:CurrentFactSelection[];
+        bindings:ReferenceBinding[];fragment_bindings?:FragmentBinding[];format_bindings?:FormatBinding[];applied:boolean;result:HandoffResult}>;
     evidence_reviewed:boolean; approved:boolean; submission_status:'UNSUBMITTED'; external_actions:never[];
 };
 export const digest = (value:unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');

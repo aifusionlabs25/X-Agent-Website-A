@@ -1,0 +1,164 @@
+{
+  "schema": "factory.saved-handoff-format-replay.v0.1",
+  "source_commit": "bf8d6551eba9e21da11fb9a22947c3bcff2ac951",
+  "source_evidence_sha256": "df187c559c3d228ff060b9dcf12c83e122889fe24b64999baa96952df27fff39",
+  "captured_provider_session_id": "28bc95c3-458c-46a4-be77-b8c08d6ba3d5",
+  "captured_local_session_id": "7708f995-2605-4b12-9f3f-a4df7a8a7146",
+  "tool_call_id": "call_9bfb923a11e54e48909d6b2f",
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "turns_before_attempt": [
+    {
+      "id": "persona::engine::initial_message::28bc95c3-458c-46a4-be77-b8c08d6ba3d5",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::1bdf1ce9-7a37-4277-8a31-d00754f6155c",
+      "role": "user",
+      "content": "I, I uh have a plumbing supply business called Copper Mesa Supply. We have 6 staff that handle quote requests arriving by email. They copy details into a spreadsheet, but we sometimes miss requests. We want help collecting request details and preparing draft quotes. A person must approve every quote before anything goes to the customer though."
+    },
+    {
+      "id": "persona::1bdf1ce9-7a37-4277-8a31-d00754f6155c",
+      "role": "persona",
+      "content": "Thanks—that’s a clear fit to explore. AIowa Agents can help with workflow automation, and a documented use case is collecting request details from incoming messages and preparing drafts for human review. Your requirement that a person approve every quote before it goes out is an important constraint to keep in place.\n\nOne question: what tools do you currently use for quotes and customer communication—just the spreadsheet and email, or also a CRM or quoting software?"
+    },
+    {
+      "id": "user::e379d778-290b-45a4-94c8-c9da947ff06a",
+      "role": "user",
+      "content": "No, just uh email and Excel."
+    },
+    {
+      "id": "persona::e379d778-290b-45a4-94c8-c9da947ff06a",
+      "role": "persona",
+      "content": "Got it—email and Excel only. That’s useful context. The documented workflow can work with email as the intake point and prepare draft quotes for your team to review, with human approval before anything is sent.\n\nWould you like me to prepare a short human-review brief with what you’ve shared so far, so someone can follow up on next steps?"
+    },
+    {
+      "id": "user::591a9169-bd82-4410-a813-f99ea5de4baf",
+      "role": "user",
+      "content": "Yeah, do that and um, one correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether or not if it has an API."
+    }
+  ],
+  "turns_sha256": "9a69567bfcacd3ed0cee43c874bcf37f4be8e53a1ff3575ba51b435226b8b3e4",
+  "original_proposals": [
+    {
+      "evidence": "I, I uh have a plumbing supply business called Copper Mesa Supply. We have 6 staff that handle quote requests arriving by email. They copy details into a spreadsheet, but we sometimes miss requests. We want help collecting request details and preparing draft quotes. A person must approve every quote before anything goes to the customer though.",
+      "field_id": "field_2188e6ea8250ac870752ef5d",
+      "value": "I, I uh have a plumbing supply business called Copper Mesa Supply. We have 6 staff that handle quote requests arriving by email. They copy details into a spreadsheet, but we sometimes miss requests. We want help collecting request details and preparing draft quotes. A person must approve every quote before anything goes to the customer though.",
+      "visitor_message_id": "user::1bdf1ce9-7a37-4277-8a31-d00754f6155c"
+    },
+    {
+      "evidence": "I, I uh have a plumbing supply business called Copper Mesa Supply. We have 6 staff that handle quote requests arriving by email. They copy details into a spreadsheet, but we sometimes miss requests. We want help collecting request details and preparing draft quotes. A person must approve every quote before anything goes to the customer though.",
+      "field_id": "field_38a16b2f271396177f6f571a",
+      "value": "We want help collecting request details and preparing draft quotes.",
+      "visitor_message_id": "user::1bdf1ce9-7a37-4277-8a31-d00754f6155c"
+    },
+    {
+      "evidence": "No, just uh email and Excel.",
+      "field_id": "field_826677e8f4ff46c2079f4825",
+      "value": "No, just uh email and Excel.",
+      "visitor_message_id": "user::e379d778-290b-45a4-94c8-c9da947ff06a"
+    },
+    {
+      "evidence": "I, I uh have a plumbing supply business called Copper Mesa Supply. We have 6 staff that handle quote requests arriving by email. They copy details into a spreadsheet, but we sometimes miss requests. We want help collecting request details and preparing draft quotes. A person must approve every quote before anything goes to the customer though.",
+      "field_id": "field_79a7766c1a75986cfcdd6b58",
+      "value": "I, I uh have a plumbing supply business called Copper Mesa Supply. We have 6 staff that handle quote requests arriving by email. They copy details into a spreadsheet, but we sometimes miss requests. We want help collecting request details and preparing draft quotes. A person must approve every quote before anything goes to the customer though.",
+      "visitor_message_id": "user::1bdf1ce9-7a37-4277-8a31-d00754f6155c"
+    },
+    {
+      "evidence": "I, I uh have a plumbing supply business called Copper Mesa Supply. We have 6 staff that handle quote requests arriving by email. They copy details into a spreadsheet, but we sometimes miss requests. We want help collecting request details and preparing draft quotes. A person must approve every quote before anything goes to the customer though.",
+      "field_id": "field_9c115246b07dd59d817f38f2",
+      "value": "A person must approve every quote before anything goes to the customer though.",
+      "visitor_message_id": "user::1bdf1ce9-7a37-4277-8a31-d00754f6155c"
+    },
+    {
+      "evidence": "Yeah, do that and um, one correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether or not if it has an API.",
+      "field_id": "field_4c6278b8c6c68a0f10d1e844",
+      "value": "Yeah, do that and um, one correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether or not if it has an API.",
+      "visitor_message_id": "user::e379d778-290b-45a4-94c8-c9da947ff06a"
+    }
+  ],
+  "captured_result": {
+    "accepted": false,
+    "accepted_proposal_count": 0,
+    "external_actions": [],
+    "instruction": "This preparation attempt failed. Tell the visitor using visitor_message. Do not say a brief is prepared or ready, or that the information was mapped. Do not retry automatically or ask the visitor to repeat the entire intake.",
+    "issues": [
+      {
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "index": 1,
+        "problems": [
+          "VALUE_MUST_EQUAL_EXACT_EVIDENCE"
+        ]
+      },
+      {
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "index": 4,
+        "problems": [
+          "VALUE_MUST_EQUAL_EXACT_EVIDENCE"
+        ]
+      },
+      {
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "index": 5,
+        "problems": [
+          "EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE"
+        ]
+      }
+    ],
+    "owner_approved": false,
+    "reason": "Mapping requires a known field and an exact persisted visitor span; value must remain verbatim",
+    "status": "UNMAPPED_OWNER_REVIEW",
+    "submission_status": "UNSUBMITTED",
+    "visitor_message": "I have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent."
+  },
+  "replay_note": "Saved payload and exact hash-matched pre-call turn prefix. JSON turn keys reordered to id,role,content to match captured hash; contents unchanged. Replay is offline reconstruction, not a provider result."
+}

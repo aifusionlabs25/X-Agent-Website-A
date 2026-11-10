@@ -26,22 +26,34 @@ const oldSource=execFileSync('git',['show','9dfb5c88bb5a348336cdd16faa2c1ff60f48
 new Function('require','exports','module',ts.transpileModule(oldSource,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(
  name=>name==='./handoff.ts'?handoff:name==='./handoff-fragments.ts'?fragments:assert.fail(name),old.exports,old);
 
-test('retained six-proposal call: old rejection reproduced; new selection retains five exact current proposals',()=>{
+test('retained nonnumeric compound call stays blocked rather than deleting unrelated history',()=>{
  const before=replay(),after=replay(),raw=structuredClone(captured.original_proposals),turnHash=handoff.digest(after.turns);
  const rejected=old.exports.recordProviderHandoffAttempt(before,raw,fields,'offline-before',identity(before));
  assert.equal(rejected.accepted,false);assert.deepEqual(rejected.issues,captured.result.issues);
  const result=recordProviderHandoffAttempt(after,raw,fields,'offline-after',identity(after));
- assert.equal(result.accepted,true);assert.equal(result.accepted_proposal_count,5);
- assert.equal(after.proposals[0].value,raw[1].value);assert.ok(!after.proposals.some(p=>p.value===raw[0].value));
- for(const p of after.proposals){const {id,...proposal}=p;handoff.assertProposal(proposal,after.turns,fields);}
- for(const i of [2,3,4])assert.ok(after.proposals.some(p=>p.value===raw[i].value));
- assert.equal(result.reference_bindings.length,1);assert.equal(result.superseded_proposals.length,1);
+ assert.equal(result.accepted,false);assert.equal(result.accepted_proposal_count,0);assert.equal(after.proposals.length,0);
+ assert.ok(result.issues.some(row=>row.problems.includes('LATER_EXPLICIT_CORRECTION_REQUIRES_CURRENT_EVIDENCE')));
  const audit=after.handoff_binding_attempts[0];assert.deepEqual(audit.original_proposals,raw);
- assert.deepEqual(audit.superseded_proposals[0].original,raw[0]);assert.deepEqual(audit.superseded_proposals[0].replacement,raw[1]);
+ assert.deepEqual(after.quarantined_proposals[0].proposals,raw);assert.deepEqual(audit.superseded_proposals,[]);
+ assert.deepEqual(audit.current_fact_selections,[]);assert.equal(audit.bindings.length,1);
  assert.equal(handoff.digest(after.turns),turnHash);assert.equal(after.approved,false);assert.deepEqual(after.external_actions,[]);
  assert.deepEqual(readFileSync(path),bytes);
  const once=handoff.digest(after);assert.deepEqual(recordProviderHandoffAttempt(after,raw,fields,'same-call',identity(after)),result);assert.equal(handoff.digest(after),once);
  assert.throws(()=>recordProviderHandoffAttempt(after,raw.slice(1),fields,'changed',identity(after)),/immutable/);
+});
+
+test('constructed exact nonnumeric spans preserve the unaffected fact and supplied correction separately',()=>{
+ const s=replay(),raw=structuredClone(captured.original_proposals),original=JSON.stringify(raw);
+ // Offline test-selected input, not a provider reply: isolate the unchanged
+ // first sentence rather than replacing the whole compound quotation.
+ const first=raw[0].evidence.slice(0,raw[0].evidence.indexOf('.')+1);
+ raw[0]={...raw[0],evidence:first,value:first};
+ const result=recordProviderHandoffAttempt(s,raw,fields,'constructed-only',identity(s));
+ assert.equal(result.accepted,true);assert.equal(s.proposals.length,6);
+ assert.ok(s.proposals.some(p=>p.value===first));assert.ok(s.proposals.some(p=>p.value===raw[1].value));
+ for(const p of s.proposals){const {id,...proposal}=p;assert.equal(id,handoff.digest(proposal));handoff.assertProposal(proposal,s.turns,fields);}
+ assert.equal(JSON.stringify(captured.original_proposals),original);assert.deepEqual(readFileSync(path),bytes);
+ assert.equal(s.approved,false);assert.deepEqual(s.external_actions,[]);
 });
 
 test('absent, cross-field, partial, duplicate or invalid correction cannot silently remove the old fact',()=>{

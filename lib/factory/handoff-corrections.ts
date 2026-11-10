@@ -3,9 +3,24 @@ import type {Turn} from './handoff';
 const words=(s:string)=>s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 const correctionStart=/^(?:(?:(?:one|a|small|quick)\s+)?correction\b|actually\b|(?:just\s+)?to correct\b|i (?:meant|mean|need to correct)\b)/i;
 const uncertainOrNarrated=/\b(?:if|maybe|perhaps|might|unsure|uncertain|think|guess|said|says|told|quoted|wrote|asked)\b/i;
+const disclaimedPrefix=/\b(?:no|not|never|without|cannot|can['’]t|don['’]t|doesn['’]t|didn['’]t|isn['’]t|aren['’]t|wasn['’]t|weren['’]t|won['’]t|wouldn['’]t|shouldn['’]t|ignore|disregard|deny|reject|pretend|imagine|suppose|example|hypothetical|say|saying|quote|quoting)\b/i;
 const scaffold=new Set(['we','i','you','they','it','our','my','the','a','an','there','is','are','was','were','has','have','had','of','to','be','now','actually','correction','one','quick','small','just','correct']);
 const countLabels=new Set(['count','total','number','amount','size']);
 const clauseBoundary=/\b(?:and|but|with|for|in|on|at|from|not)\b/i;
+
+/** Consent or another affirmative clause may precede an explicit correction.
+ * Only punctuation/coordinators open this additional path; arbitrary substrings
+ * do not. Keep the complete prefix available to uncertainty/narration checks,
+ * and never treat a negation before the marker as part of its correction. */
+function correctionStarts(raw:string):number[] {
+    const starts=correctionStart.test(raw.trimStart())?[0]:[];
+    for(const boundary of raw.matchAll(/[,;.!\n]\s*|\b(?:and|but)\s+/gi)) {
+        const start=boundary.index!+boundary[0].length,prefix=raw.slice(0,start);
+        if(correctionStart.test(raw.slice(start))&&!/[?:：]/.test(prefix)
+            &&!uncertainOrNarrated.test(prefix)&&!disclaimedPrefix.test(prefix))starts.push(start);
+    }
+    return starts;
+}
 
 /** A number alone is not a fact identity. Require a shared concrete unit or
  * subject, e.g. staff/count-of-staff. Other counts may coexist only when their
@@ -55,9 +70,11 @@ export function contradictingCorrection(turns:Turn[],sourceId:string,evidence:st
     if(source<0)return null;
     const original=' '+words(evidence)+' ';
     for(const turn of turns.slice(source+1)) {
-        if(turn.role!=='user'||/["“”`]/.test(turn.content))continue;
-        if(!correctionStart.test(turn.content.trim()))continue;
+        if(turn.role!=='user'||/["“”`]|(?:^|[\s([{])['‘]/u.test(turn.content))continue;
+        const starts=correctionStarts(turn.content);
+        if(!starts.length)continue;
         for(const match of turn.content.matchAll(/\bnot\s+([^.!?;,]+)(?:[.!?;,]|$)/gi)) {
+            if(!starts.some(start=>start<match.index!))continue;
             const statement=turn.content.slice(0,match.index!+match[0].length);
             if(statement.includes('?')||uncertainOrNarrated.test(statement))continue;
             const phrase=words(match[1]).replace(/^(?:the|a|an|our|my) /,'');
