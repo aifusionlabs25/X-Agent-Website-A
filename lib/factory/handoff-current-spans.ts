@@ -9,7 +9,7 @@ export type CurrentFactSelection={
     rule:'EXACT_POSITIVE_COUNT_PARTITION';
 };
 
-const frames=/\b(?:(?:we|i|they)[ \t]+have|(?:our|the)[ \t]+team[ \t]+has|there[ \t]+are)[ \t]+(\d+)[ \t]+([\p{L}]+)\b/giu;
+const frames=/\b(?:(?:(?:we|i|they)[ \t]+have|(?:our|the)[ \t]+team[ \t]+has|there[ \t]+are)[ \t]+)?(\d+)[ \t]+([\p{L}]+)\b/giu;
 const quoted=/["“”`]|(?:^|[\s([{])['‘]/u;
 // These scopes can govern a later sentence. A narrow projection should decline
 // narrated or hypothetical source material, rather than detach its frame.
@@ -68,16 +68,20 @@ export function projectCurrentFact(original:Proposal,input:unknown,turns:Turn[],
         // A substring following "if", "not", "said:", or a comma is not a
         // sentence assertion just because the provider quote starts there.
         const prefix=source.content.slice(0,frameStart);
-        if(prefix.trim()&&!/[.!?][ \t\r\n]+$/.test(prefix))continue;
+        if(prefix.trim()&&!/(?:^|[.!?][ \t\r\n]+)(?:(?:uh|um)[, \t]+)?$/i.test(prefix))continue;
         if(/\.{2,}[ \t\r\n]*$/.test(prefix))continue;
         if(sourceFrames.filter(other=>other[1]===frame[1]&&other[2].toLowerCase()===frame[2].toLowerCase()).length!==1)continue;
         const after=source.content.slice(frameEnd),terminal=/^[ \t]*(?:[.!](?=\s|$)|$)/.exec(after);
         const relative=/^[ \t]+(?:that|who)[ \t]+\p{L}/iu.test(after);
-        if(!terminal&&!relative)continue;
+        // A bare subject count may precede a positive work predicate. Remove
+        // only the contradicted count; retain the predicate as an exact span.
+        const direct=/^\d/.test(frame[0])&&/^[ \t]+(?:handle|process|manage|review|answer|receive|prepare)[ \t]+\p{L}/iu.test(after);
+        if(!terminal&&!relative&&!direct)continue;
         // A question or another count inside the relative clause can change
         // the scope of the assertion; leave such cases to owner review.
         const sentenceTail=after.split(/[.!]/,1)[0];
-        if(relative&&(/[?]|\d/.test(sentenceTail)))continue;
+        if((relative||direct)&&(/[?]|\d/.test(sentenceTail)))continue;
+        if(direct&&/\b(?:if|unless|maybe|might|only|except|not|never)\b/i.test(sentenceTail))continue;
         const removeEnd=terminal?frameEnd+terminal[0].length:frameEnd;
         if(frameStart<start||removeEnd>end)continue;
         if(contradictingCorrection(turns,source.id,frame[0])?.id!==correction.id

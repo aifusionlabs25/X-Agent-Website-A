@@ -7,6 +7,7 @@ import { sdkCloseTracker,type SdkCloseTracker,type CloseReason } from '@/lib/fac
 import { collectionReferenceContext,submitHandoff,closedSessionStatus,toolEvidenceCallbacks,handoffRequestStatus } from '@/lib/factory/handoff-context';
 import { committedTurnEffects } from '@/lib/factory/turn-effects';
 import {contextSendTracker,type ContextSendTracker} from '@/lib/factory/context-send';
+import {handoffOutputGate,type HandoffOutputGate,type HandoffOutputEvent} from '@/lib/factory/handoff-output-gate';
 import { exitReceipt,exitReplyObserver } from '@/lib/factory/exit-receipt';
 import { contradictingCorrection } from '@/lib/factory/handoff-corrections';
 import { createFarewellCloseCoordinator,type FarewellCloseCoordinator } from '@/lib/anam/farewell-close-coordinator';
@@ -17,6 +18,7 @@ export default function FactoryPilot() {
     const [error,setError]=useState(''),[busy,setBusy]=useState(false),[text,setText]=useState(''),[muted,setMuted]=useState(false);
     const [mappingField,setMappingField]=useState(''),[mappingTurn,setMappingTurn]=useState(''),[span,setSpan]=useState('');
     const [status,setStatus]=useState('Loading the approved Preview…');
+    const [handoffNotice,setHandoffNotice]=useState('');
     const [drafts,setDrafts]=useState<Turn[]>([]),[transport,setTransport]=useState<unknown[]>([]);
     const [history,setHistory]=useState<Handoff[]>([]);
     const [closeTrace,setCloseTrace]=useState<ReturnType<SdkCloseTracker['snapshot']>|null>(null);
@@ -25,7 +27,21 @@ export default function FactoryPilot() {
     const submitting=useRef(false);
     const closer=useRef<SdkCloseTracker|null>(null);
     const contextSender=useRef<ContextSendTracker|null>(null);
-    const accept=(s:Handoff|null)=>{current.current=s;setState(s);};
+    const outputGate=useRef<HandoffOutputGate|null>(null);
+    const pendingOutputEvents=useRef<HandoffOutputEvent[]>([]);
+    const accept=(s:Handoff|null)=>{
+        current.current=s;setState(s);
+        if(!s)return;
+        outputGate.current?.committed(s);
+        // Early output control precedes persistence. Retain its telemetry only
+        // once the referenced visitor turn is actually committed.
+        if(s.provider_session_id){
+            const ready=pendingOutputEvents.current.filter(e=>e.visitor_message_id===null||s.turns.some(t=>t.id===e.visitor_message_id));
+            pendingOutputEvents.current=pendingOutputEvents.current.filter(e=>!ready.includes(e));
+            for(const e of ready)void post('handoff_output_receipt',{receipt:{...e,local_session_id:s.id,
+                provider_session_id:s.provider_session_id,launch_label:s.launch_label}}).catch(()=>setError('Handoff output evidence could not be saved.'));
+        }
+    };
     async function refresh() {
         const r=await fetch('/api/factory/pilot',{cache:'no-store'}), v=await r.json();
         if(!r.ok) throw new Error(v.error||'Preview unavailable'); setManifest(v.manifest);accept(v.state);setHistory(v.history||[]);
@@ -66,6 +82,9 @@ export default function FactoryPilot() {
             let binding:Promise<unknown>=Promise.resolve();const transcript=liveTranscript(),exitReplies=exitReplyObserver();
             let boundProviderId:string|null=null;
             const launchState=r.state as Handoff;
+            outputGate.current=handoffOutputGate({localSessionId:launchState.id,providerSessionId:()=>boundProviderId,
+                output:held=>{const video=document.getElementById('factory-olivia-video') as HTMLVideoElement|null;if(video)video.muted=held;},
+                notice:setHandoffNotice,report:e=>{pendingOutputEvents.current.push(e);}});
             const contextTracker=contextSendTracker({send:message=>c.addContext(message),report:event=>{
                 if(!boundProviderId)throw new Error('Context evidence requires a bound provider session');
                 return post('context_send_receipt',{receipt:{...event,local_session_id:launchState.id,
@@ -89,6 +108,7 @@ export default function FactoryPilot() {
             }).catch(e=>{setError(e.message);if(!stopping.current){stopping.current=true;void tracker.close('BIND_FAILED').catch(()=>{});}});});
             const persist=(turns:Turn[])=>{
                 for(const turn of turns) {
+                    if(turn.role==='user')outputGate.current?.visitor(turn);
                     void binding.then(()=>post('turn',{turn})).then(v=>{
                         afterTurn(v.state,turn);
                     }).catch(e=>setError(e.message));
@@ -96,8 +116,9 @@ export default function FactoryPilot() {
                 setDrafts(transcript.drafts());setTransport(transcript.trace());
             };
             c.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED,e=>{
-                try{exitReplies.observe(e);persist(transcript.stream(e));}catch(e){setError(e instanceof Error?e.message:'Transcript stream failed');}
+                try{if(e.role==='persona')outputGate.current?.persona();exitReplies.observe(e);persist(transcript.stream(e));}catch(e){setError(e instanceof Error?e.message:'Transcript stream failed');}
             });
+            c.addListener(AnamEvent.USER_SPEECH_STARTED,()=>outputGate.current?.speechStarted());
             c.addListener(AnamEvent.MESSAGE_HISTORY_UPDATED,messages=>{
                 try{messages.forEach(m=>exitReplies.observe(m));persist(transcript.history(messages));}catch(e){setError(e instanceof Error?e.message:'Transcript history failed');}
             });
@@ -139,6 +160,7 @@ export default function FactoryPilot() {
         if(!active||!c||!text.trim()||submitting.current)return;
         submitting.current=true;const content=text.trim();setText('');setError('');
         const turn:Turn={id:'typed-visitor::'+crypto.randomUUID(),role:'user',content};
+        outputGate.current?.visitor(turn);
         try {
             await submitTypedTurn(turn,t=>post('turn',{turn:t}),t=>{
                 if(!current.current)throw new Error('Committed session state unavailable');
@@ -164,11 +186,13 @@ export default function FactoryPilot() {
                     {active&&<><button onClick={()=>{const c=client.current;if(c){if(muted)c.unmuteInputAudio();else c.muteInputAudio();setMuted(!muted);}}}>{muted?'Enable microphone':'Mute microphone'}</button><button className={styles.secondary} onClick={()=>void stop().catch(e=>setError(e.message))}>Finish conversation</button></>}
                     <form onSubmit={e=>{e.preventDefault();void sendText();}}><label htmlFor="visitor-input">Or type your message</label><div className={styles.inline}><input id="visitor-input" value={text} onChange={e=>setText(e.target.value)} disabled={!active} placeholder="Your question or workflow…"/><button disabled={!active||!text.trim()}>Send</button></div></form>
                     <small>Microphone access starts only after you click Start. Use synthetic information for this owner QA Preview.</small>
+                    {handoffNotice&&<p role="status">{handoffNotice}</p>}
                 </div>
                 {drafts.length>0&&<div className={styles.transcript} aria-label="Live transcript — awaiting finalization">{drafts.map(t=><p key={t.id}><strong>Olivia · live, not yet finalized</strong><br/>{t.content}</p>)}</div>}
                 <details className={styles.transcript}><summary>Original conversation evidence ({state?.turns.length||0} turns)</summary>{state?.turns.map(t=><p key={t.id}><strong>{t.role==='user'?'Visitor':'Olivia'}</strong><br/>{t.content}</p>)}</details>
                 <details><summary>Transcript transport diagnostics</summary><p>SDK event metadata only; not proof of spoken delivery.</p><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(transport,null,2)}</pre></details>
                 <details><summary>Session-close evidence</summary><p>Client-instrumented SDK invocation/result only. Verified provider release is a separate receipt.</p><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify({local:closeTrace,persisted:state?.sdk_close_events||[]},null,2)}</pre></details>
+                <details><summary>Handoff acknowledgment evidence</summary><p>Client media-control observations, not proof of audio heard or model consumption. Original replies remain in the transcript.</p><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(state?.handoff_output_events||[],null,2)}</pre></details>
                 <details><summary>Previous test sessions ({history.length})</summary><p>Read-only evidence, retained for a limited time—not permanent storage. Download records you want to keep.</p>{history.map(s=><div key={s.id}><p>{s.id} · {s.status} · {s.turns.length} turns · {s.approved?'Handoff approved':'Handoff not approved'}</p><button onClick={()=>downloadSaved(s)}>Download saved session</button></div>)}</details>
             </section>
             <aside className={styles.review} aria-label="Owner handoff review"><div className={styles.label}>OWNER OPERATIONS</div><h2>A handoff, not an action.</h2><p>UNSUBMITTED · No email, booking, CRM update or external business action.</p>

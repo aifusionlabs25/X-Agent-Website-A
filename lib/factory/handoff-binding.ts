@@ -3,6 +3,7 @@ import { projectSpeechFragments,type FragmentBinding } from './handoff-fragments
 import { selectCurrentProposals } from './handoff-current.ts';
 import { preserveQuotedValue } from './handoff-format.ts';
 import { projectCurrentFact,type CurrentFactSelection } from './handoff-current-spans.ts';
+import {includeProvenCorrections} from './handoff-correction-evidence.ts';
 
 export type HandoffToolIdentity={local_session_id:string;provider_session_id:string;tool_call_id:string};
 
@@ -62,13 +63,18 @@ export function recordProviderHandoffAttempt(state:Handoff,input:unknown,fields:
     // Validate the complete derived batch atomically. Diagnostics refer to these
     // selected rows; quarantine and the audit retain the unchanged raw payload.
     // Never fall back to raw input that could bypass a derived correction guard.
-    const selection=selectCurrentProposals(resolved,state.turns,fields);
+    // Only a current, explicit, unconsumed local-review request permits host
+    // completion of a mechanically proved correction. Legacy/unbound calls
+    // retain their original strict missing-witness behavior.
+    const correctionEvidence=requestTurnId!==null
+        ?includeProvenCorrections(resolved,state.turns,fields):{proposals:resolved,bindings:[]};
+    const selection=selectCurrentProposals(correctionEvidence.proposals,state.turns,fields);
     const priorSelections:Array<{proposal_id:string;binding:CurrentFactSelection;proposals:Proposal[]}>=[];
     let candidate=selection.selected;
     if(Array.isArray(candidate)) {
         candidate=[...candidate];
         state.proposals.forEach(({id,...raw},index)=>{
-            const projection=projectCurrentFact(raw,resolved,state.turns,fields,index);
+            const projection=projectCurrentFact(raw,correctionEvidence.proposals,state.turns,fields,index);
             if(!projection) {
                 const atomic=selectCurrentProposals([raw,...candidate as Proposal[]],state.turns,fields);
                 if(atomic.superseded.some(row=>row.resolved_index===0))return;
@@ -116,6 +122,7 @@ export function recordProviderHandoffAttempt(state:Handoff,input:unknown,fields:
     if(result.accepted&&bindings.length)result.reference_bindings=structuredClone(bindings);
     if(result.accepted&&fragmentBindings.length)result.fragment_bindings=structuredClone(fragmentBindings);
     if(result.accepted&&format.bindings.length)result.format_bindings=structuredClone(format.bindings);
+    if(result.accepted&&correctionEvidence.bindings.length)result.correction_evidence_bindings=structuredClone(correctionEvidence.bindings);
     if(result.accepted&&selection.current_fact_selections.length)result.current_fact_selections=structuredClone(selection.current_fact_selections);
     if(result.accepted&&retired.length)result.prior_current_fact_selections=structuredClone(retired.map(row=>row.binding));
     if(result.accepted&&(selection.current_fact_selections.length||retired.length))
@@ -125,6 +132,8 @@ export function recordProviderHandoffAttempt(state:Handoff,input:unknown,fields:
         result.instruction+=' Earlier contradicted proposals were excluded in favor of exact supplied corrections. Only the selected current proposals await owner review; the original history remains retained.';
     }
     const attempt={request_id:requestId,...identity,request_turn_id:requestTurnId,input_sha256:inputHash,local_turns_sha256:digest(state.turns),
+        through_visitor_turn_id:state.turns.filter(t=>t.role==='user').at(-1)?.id??null,
+        correction_evidence_bindings:correctionEvidence.bindings,
         original_proposals:original,resolved_proposals:resolved,selected_proposals:structuredClone(candidate),
         current_fact_selections:selection.current_fact_selections,prior_current_fact_selections:priorSelections.map(row=>row.binding),
         superseded_proposals:selection.superseded,bindings,fragment_bindings:fragmentBindings,format_bindings:format.bindings,
