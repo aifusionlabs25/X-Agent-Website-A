@@ -2,7 +2,9 @@
  * The returned span is original visitor evidence, not a tool invocation,
  * accepted fact, approval or permission for external action. Ambiguous wording
  * returns null and stays in the retained transcript for owner review. */
-export type HandoffRequestSpan={start:number;end:number;evidence:string};
+export type HandoffRequestSpan={start:number;end:number;evidence:string;offer_turn_id?:string;offer_evidence?:string};
+export type HandoffRequestContext={hasSuccessfulHandoff?:boolean;
+    precedingTurn?:{id:string;role:'user'|'persona';content:string}};
 
 const requestPrefix=String.raw`^(?:(?:uh|um|okay|ok|yes|yeah|yep|yup|sure|alright|all right)[, ]+)?(?:(?:please\s+)|(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)|(?:i(?:['’]d| would)\s+like\s+you\s+to\s+)|(?:i\s+(?:want|need)\s+you\s+to\s+))?`;
 const requestStart=new RegExp(requestPrefix+String.raw`(?:prepare|create|draft)\s+(?:(?:a|an|the|my|our|this|that|these|those)\s+)?(?:(?:unsent|not sent|local|short|concise|human[ -]review|owner[ -]review|draft|review-ready)\s+){0,4}(?:brief|summary|review note|handoff(?: note)?|note|information|details)\b`,'i');
@@ -32,7 +34,36 @@ function sentences(raw:string) {
     return spans;
 }
 
-export function requestedHandoffSpan(raw:string,context:{hasSuccessfulHandoff?:boolean}={}):HandoffRequestSpan|null {
+/** A short answer is consent only to the immediately preceding single local
+ * preparation question. No remembered offer across an intervening turn, no
+ * contact confirmation, delivery, conditional, quoted or multi-choice offer.
+ * The offer is retained as context, never as visitor factual evidence. */
+function contextualConsent(raw:string,context:HandoffRequestContext):HandoffRequestSpan|null {
+    const offer=context.precedingTurn;
+    if(!offer||offer.role!=='persona'||!offer.id||offer.content.length>8000)return null;
+    const answer=raw.trim();
+    const affirmative=/^(?:(?:yes|yeah|yep|sure|okay|ok)(?:[, ]+(?:please|go ahead|please do|please go ahead))?|please do|go ahead|(?:yes[, ]+)?(?:please\s+)?prepare (?:that|the) update)[.!]?$/i;
+    if(!affirmative.test(answer))return null;
+    const questions=sentences(offer.content).filter(p=>offer.content.slice(p.start,p.end).trim().endsWith('?'));
+    if(questions.length!==1)return null;
+    const q=questions[0],question=offer.content.slice(q.start,q.end).trim();
+    const prefix=offer.content.slice(0,q.start).trimEnd();
+    if(/[:：]$/.test(prefix)||/\b(?:quote|he said|she said|they said|i said|it says|it said)[.!?]?$/i.test(prefix))return null;
+    if(q.quoted||offer.content.slice(q.end).trim()||conditional.test(question)||conflictingDelivery.test(question)
+        ||/\bor\b|\b(?:said|says|quote|asked)\b/i.test(question))return null;
+    const match=/^(?:would you like me to|do you want me to|shall i|may i|can i)\s+((?:prepare|create|draft|update|revise)\s+.+)\?$/i.exec(question);
+    if(!match)return null;
+    const action=match[1];
+    const scoped=requestStart.test(action)&&internalScope.test(action)
+        ||context.hasSuccessfulHandoff===true&&updateStart.test(action);
+    const referential=context.hasSuccessfulHandoff===true&&/^prepare (?:that|the) update$/i.test(action);
+    if(!scoped&&!referential)return null;
+    if(/prepare (?:that|the) update/i.test(answer)&&!/(?:updat|revis)/i.test(action))return null;
+    const start=raw.length-raw.trimStart().length;
+    return {start,end:start+answer.length,evidence:answer,offer_turn_id:offer.id,offer_evidence:offer.content};
+}
+
+export function requestedHandoffSpan(raw:string,context:HandoffRequestContext={}):HandoffRequestSpan|null {
     if(typeof raw!=='string'||!raw.trim()||raw.length>8000)return null;
     const parts=sentences(raw);
     // A later explicit retraction in this same finalized turn is ambiguous;
@@ -55,5 +86,5 @@ export function requestedHandoffSpan(raw:string,context:{hasSuccessfulHandoff?:b
         const start=part.start+leading,end=start+evidence.length;
         return {start,end,evidence:raw.slice(start,end)};
     }
-    return null;
+    return contextualConsent(raw,context);
 }

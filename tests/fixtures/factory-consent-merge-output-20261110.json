@@ -1,0 +1,545 @@
+{
+  "classification": "DERIVED_OFFLINE_FIXTURE_NOT_NEW_PROVIDER_EVIDENCE",
+  "source_session": "9f366145-7e7c-4ab4-9caf-5d445f5fd6f7",
+  "source_sha256": "0d5cd0b1593aac1c4264660d9c7eba8c252a6a7945875894a6f83d7d9e99a54c",
+  "turns": [
+    {
+      "id": "persona::engine::initial_message::9f366145-7e7c-4ab4-9caf-5d445f5fd6f7",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+      "role": "user",
+      "content": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?"
+    },
+    {
+      "id": "persona::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+      "role": "persona",
+      "content": "I’m the AIowa Service Guide, not Libby, but I can help. AIowa Agents can automate repetitive workflows like collecting quote details and drafting quotes for human approval. I can’t confirm whether your specific email and Excel setup is supported without more details. What email system do you use?"
+    },
+    {
+      "id": "user::8a97d178-608b-42bb-a952-f46413c0f474",
+      "role": "user",
+      "content": "We use Outlook."
+    },
+    {
+      "id": "persona::8a97d178-608b-42bb-a952-f46413c0f474",
+      "role": "persona",
+      "content": "I can’t confirm whether AIowa Agents supports Outlook or your specific Excel workflow without approved information. I can record that you use Outlook and want quote details collected and drafts prepared for human approval. Would you like me to prepare a human-review brief with those details?"
+    },
+    {
+      "id": "user::21640b8e-449a-403c-8d64-957ca3d22a1c",
+      "role": "user",
+      "content": "Yes, please."
+    },
+    {
+      "id": "persona::21640b8e-449a-403c-8d64-957ca3d22a1c",
+      "role": "persona",
+      "content": "The selected details are retained as proposals pending owner review. Nothing has been sent or approved.\n"
+    },
+    {
+      "id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020",
+      "role": "user",
+      "content": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API."
+    },
+    {
+      "id": "persona::2300ebe3-4713-4ffc-8b0d-aa373b615020",
+      "role": "persona",
+      "content": "Thanks—that changes my understanding from 6 staff to 4 staff handling quote requests. I also note you use a supplier portal, but I can’t confirm whether it has an API or whether AIowa Agents can connect to it without approved information. Would you like me to update the human-review brief with these corrections?\nI’ve noted the correction to 4 staff and the supplier portal detail. I can’t confirm whether the portal has an API or whether AIowa Agents can connect to it without approved information. Would you like me to update the human-review brief with these corrections?"
+    },
+    {
+      "id": "user::cd927514-e80d-4d2d-bf29-6ca592a92a09",
+      "role": "user",
+      "content": "What staff count in supplier portal details are in the brief."
+    },
+    {
+      "id": "persona::cd927514-e80d-4d2d-bf29-6ca592a92a09",
+      "role": "persona",
+      "content": "The brief currently shows 6 staff handling quote requests. It does not include the supplier portal detail. I can prepare an updated set of proposals with the corrected 4-staff count and the supplier portal note, but I can’t confirm whether the portal has an API. Would you like me to prepare that update?"
+    },
+    {
+      "id": "user::f3baecd3-eb8c-48f3-a041-9395be2e8fef",
+      "role": "user",
+      "content": "Yes, prepare that update."
+    },
+    {
+      "id": "persona::f3baecd3-eb8c-48f3-a041-9395be2e8fef",
+      "role": "persona",
+      "content": "I have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.\nI have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.\nI have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.\nI have your request, but I could not prepare a valid handoff. "
+    },
+    {
+      "id": "user::95d98ea5-72ec-4328-9265-9bdcf0e39238",
+      "role": "user",
+      "content": "Okay, thanks Olivia. That's all. Goodbye."
+    },
+    {
+      "id": "persona::95d98ea5-72ec-4328-9265-9bdcf0e39238",
+      "role": "persona",
+      "content": "Goodbye. Have a great day."
+    }
+  ],
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "attempts": [
+    {
+      "request_id": "6b2c5de1-fac2-44da-b109-0569ab5888e3",
+      "local_session_id": "b6c3a405-cf6b-42b3-a964-1c5da167e76a",
+      "provider_session_id": "9f366145-7e7c-4ab4-9caf-5d445f5fd6f7",
+      "tool_call_id": "call_e87729007b384053aa900602",
+      "request_turn_id": null,
+      "input_sha256": "216f97fdb2d054c23f03c139030031723320cd3615e79562cf0a183b6c1e0138",
+      "local_turns_sha256": "bcbc953b35ce6c42d310b40bf2625d86c2bb211839e9d63e407e21b80121d7ec",
+      "through_visitor_turn_id": "user::21640b8e-449a-403c-8d64-957ca3d22a1c",
+      "correction_evidence_bindings": [],
+      "original_proposals": [
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed.",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_38a16b2f271396177f6f571a",
+          "value": "collect the information and draft quotes for a person to approve",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "We use Outlook.",
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "value": "We use Outlook.",
+          "visitor_message_id": "user::8a97d178-608b-42bb-a952-f46413c0f474"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "value": "I run Copper Mesa Supply, plumbing supply business",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+          "value": "Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Yes, please.",
+          "field_id": "field_81624036fc30c6fe7287415a",
+          "value": "Yes, please.",
+          "visitor_message_id": "user::8a97d178-608b-42bb-a952-f46413c0f474"
+        }
+      ],
+      "resolved_proposals": [
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_38a16b2f271396177f6f571a",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "We use Outlook.",
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "value": "We use Outlook.",
+          "visitor_message_id": "user::8a97d178-608b-42bb-a952-f46413c0f474"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Yes, please.",
+          "field_id": "field_81624036fc30c6fe7287415a",
+          "value": "Yes, please.",
+          "visitor_message_id": "user::21640b8e-449a-403c-8d64-957ca3d22a1c"
+        }
+      ],
+      "selected_proposals": [
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_38a16b2f271396177f6f571a",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "We use Outlook.",
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "value": "We use Outlook.",
+          "visitor_message_id": "user::8a97d178-608b-42bb-a952-f46413c0f474"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Yes, please.",
+          "field_id": "field_81624036fc30c6fe7287415a",
+          "value": "Yes, please.",
+          "visitor_message_id": "user::21640b8e-449a-403c-8d64-957ca3d22a1c"
+        }
+      ],
+      "current_fact_selections": [],
+      "prior_current_fact_selections": [],
+      "superseded_proposals": [],
+      "bindings": [
+        {
+          "index": 5,
+          "from_message_id": "user::8a97d178-608b-42bb-a952-f46413c0f474",
+          "to_message_id": "user::21640b8e-449a-403c-8d64-957ca3d22a1c",
+          "start": 0,
+          "end": 12,
+          "source_sha256": "c547f13a5597b992300388de8ccb9c2ccf4a2d4bb3dec288bfc4c76687079908"
+        }
+      ],
+      "fragment_bindings": [],
+      "format_bindings": [
+        {
+          "resolved_index": 0,
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+          "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+          "original_value": "6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed.",
+          "evidence_start": 0,
+          "evidence_end": 253,
+          "value_start": 63,
+          "value_end": 166,
+          "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+        },
+        {
+          "resolved_index": 1,
+          "field_id": "field_38a16b2f271396177f6f571a",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+          "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+          "original_value": "collect the information and draft quotes for a person to approve",
+          "evidence_start": 0,
+          "evidence_end": 253,
+          "value_start": 188,
+          "value_end": 252,
+          "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+        },
+        {
+          "resolved_index": 3,
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+          "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+          "original_value": "I run Copper Mesa Supply, plumbing supply business",
+          "evidence_start": 0,
+          "evidence_end": 253,
+          "value_start": 11,
+          "value_end": 61,
+          "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+        },
+        {
+          "resolved_index": 4,
+          "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+          "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+          "original_value": "Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "evidence_start": 0,
+          "evidence_end": 253,
+          "value_start": 167,
+          "value_end": 253,
+          "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+        }
+      ],
+      "applied": true,
+      "result": {
+        "status": "PENDING_OWNER_REVIEW",
+        "accepted": true,
+        "accepted_proposal_count": 6,
+        "owner_approved": false,
+        "submission_status": "UNSUBMITTED",
+        "external_actions": [],
+        "issues": [],
+        "visitor_message": "The selected information is retained as proposals for owner review. Nothing has been sent or approved.",
+        "instruction": "Report only that selected proposals are retained pending owner review. Do not claim every fact was captured, a complete brief is approved, delivery occurred or anyone will follow up.",
+        "reference_bindings": [
+          {
+            "index": 5,
+            "from_message_id": "user::8a97d178-608b-42bb-a952-f46413c0f474",
+            "to_message_id": "user::21640b8e-449a-403c-8d64-957ca3d22a1c",
+            "start": 0,
+            "end": 12,
+            "source_sha256": "c547f13a5597b992300388de8ccb9c2ccf4a2d4bb3dec288bfc4c76687079908"
+          }
+        ],
+        "format_bindings": [
+          {
+            "resolved_index": 0,
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+            "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+            "original_value": "6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed.",
+            "evidence_start": 0,
+            "evidence_end": 253,
+            "value_start": 63,
+            "value_end": 166,
+            "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+          },
+          {
+            "resolved_index": 1,
+            "field_id": "field_38a16b2f271396177f6f571a",
+            "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+            "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+            "original_value": "collect the information and draft quotes for a person to approve",
+            "evidence_start": 0,
+            "evidence_end": 253,
+            "value_start": 188,
+            "value_end": 252,
+            "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+          },
+          {
+            "resolved_index": 3,
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+            "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+            "original_value": "I run Copper Mesa Supply, plumbing supply business",
+            "evidence_start": 0,
+            "evidence_end": 253,
+            "value_start": 11,
+            "value_end": 61,
+            "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+          },
+          {
+            "resolved_index": 4,
+            "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+            "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7",
+            "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+            "original_value": "Could A Iowa help us collect the information and draft quotes for a person to approve?",
+            "evidence_start": 0,
+            "evidence_end": 253,
+            "value_start": 167,
+            "value_end": 253,
+            "source_sha256": "dbdaa41a2987ed6379b7b695d53afe6278d3d8e033bd94e9753475d8fb71c6f7"
+          }
+        ]
+      }
+    },
+    {
+      "request_id": "82f7e004-0b3b-4b5f-8f88-51b6a9f60363",
+      "local_session_id": "b6c3a405-cf6b-42b3-a964-1c5da167e76a",
+      "provider_session_id": "9f366145-7e7c-4ab4-9caf-5d445f5fd6f7",
+      "tool_call_id": "call_b4dec0b5ff1a4903bf604078",
+      "request_turn_id": null,
+      "input_sha256": "e39aadf4a225cfe642c380140a4f7928832c12202d6c6711a75945c37037768a",
+      "local_turns_sha256": "0094fefe38ce94c53c8aa6e5ba3803af7c3465f0b78c85ee6a05c051950e5f31",
+      "through_visitor_turn_id": "user::f3baecd3-eb8c-48f3-a041-9395be2e8fef",
+      "correction_evidence_bindings": [],
+      "original_proposals": [
+        {
+          "evidence": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "4 staff handle those requests",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020"
+        },
+        {
+          "evidence": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "value": "We also use a supplier portal, but I don't know whether it has an API.",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020"
+        }
+      ],
+      "resolved_proposals": [
+        {
+          "evidence": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020"
+        },
+        {
+          "evidence": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "value": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020"
+        }
+      ],
+      "selected_proposals": [
+        {
+          "evidence": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020"
+        },
+        {
+          "evidence": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "value": "One correction, 4 staff handle those requests, not 6. We also use a supplier portal, but I don't know whether it has an API.",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_38a16b2f271396177f6f571a",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_79a7766c1a75986cfcdd6b58",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        },
+        {
+          "evidence": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+          "value": "Hi, Libby, I run Copper Mesa Supply, plumbing supply business. 6 staff handle quote requests by email and copy the details in Excel. Some requests are getting missed. Could A Iowa help us collect the information and draft quotes for a person to approve?",
+          "visitor_message_id": "user::e3bb82c1-a077-4a8d-b88a-acc294e982d7"
+        }
+      ],
+      "current_fact_selections": [],
+      "prior_current_fact_selections": [],
+      "superseded_proposals": [],
+      "bindings": [],
+      "fragment_bindings": [],
+      "format_bindings": [
+        {
+          "resolved_index": 0,
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020",
+          "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+          "original_value": "4 staff handle those requests",
+          "evidence_start": 0,
+          "evidence_end": 124,
+          "value_start": 16,
+          "value_end": 45,
+          "source_sha256": "8f794fd244e5da0d75f2bfdcf259395db5be5896d9493e8500e72552c4969ce0"
+        },
+        {
+          "resolved_index": 1,
+          "field_id": "field_826677e8f4ff46c2079f4825",
+          "visitor_message_id": "user::2300ebe3-4713-4ffc-8b0d-aa373b615020",
+          "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+          "original_value": "We also use a supplier portal, but I don't know whether it has an API.",
+          "evidence_start": 0,
+          "evidence_end": 124,
+          "value_start": 54,
+          "value_end": 124,
+          "source_sha256": "8f794fd244e5da0d75f2bfdcf259395db5be5896d9493e8500e72552c4969ce0"
+        }
+      ],
+      "applied": false,
+      "result": {
+        "status": "UNMAPPED_OWNER_REVIEW",
+        "accepted": false,
+        "accepted_proposal_count": 0,
+        "owner_approved": false,
+        "submission_status": "UNSUBMITTED",
+        "external_actions": [],
+        "reason": "Mapping requires a known field and an exact persisted visitor span; value must remain verbatim",
+        "issues": [
+          {
+            "index": 2,
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "problems": [
+              "LATER_EXPLICIT_CORRECTION_REQUIRES_CURRENT_EVIDENCE"
+            ]
+          },
+          {
+            "index": 3,
+            "field_id": "field_38a16b2f271396177f6f571a",
+            "problems": [
+              "LATER_EXPLICIT_CORRECTION_REQUIRES_CURRENT_EVIDENCE"
+            ]
+          },
+          {
+            "index": 4,
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "problems": [
+              "LATER_EXPLICIT_CORRECTION_REQUIRES_CURRENT_EVIDENCE"
+            ]
+          },
+          {
+            "index": 5,
+            "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+            "problems": [
+              "LATER_EXPLICIT_CORRECTION_REQUIRES_CURRENT_EVIDENCE"
+            ]
+          }
+        ],
+        "visitor_message": "I have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.",
+        "instruction": "This preparation attempt failed. Tell the visitor using visitor_message. Do not say a brief is prepared or ready, or that the information was mapped. Do not retry automatically or ask the visitor to repeat the entire intake."
+      }
+    }
+  ]
+}

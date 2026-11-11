@@ -17,7 +17,7 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
     output:(muted:boolean)=>void;notice:(text:string)=>void;report:(event:HandoffOutputEvent)=>void;
     id?:()=>string;now?:()=>string}) {
     let state:Handoff|null=null,turn:Turn|null=null,requestId:string|null=null;
-    let guarded=false,earlyReply=false,accepted=false,exiting=false,listening=false,phase:HandoffOutputEvent['phase']|null=null;
+    let guarded=false,earlyReply=false,accepted=false,settled=false,exiting=false,listening=false,phase:HandoffOutputEvent['phase']|null=null;
     const seen=new Set<string>();
     function emit(next:HandoffOutputEvent['phase'],muted:boolean,tool:string|null=null) {
         options.output(muted);
@@ -38,6 +38,7 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
             &&a.result.external_actions.length===0&&a.result.accepted_proposal_count>0
             &&state.proposals.length>0&&!state.proposals.some(p=>contradictingCorrection(state!.turns,p.visitor_message_id,p.evidence));
         accepted=valid;
+        settled=true;
         options.notice(valid?'Selected details are retained for owner review. Nothing has been sent or approved.'
             :'Preparation could not be verified. Original evidence remains available for owner review. Nothing has been sent.');
         emit(valid?'VERIFIED_RECEIPT':'FAILED_RECEIPT',!valid||earlyReply,a.tool_call_id);
@@ -46,14 +47,22 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
         speechStarted() {if(exiting)return;listening=true;emit('LISTENING',true);},
         visitor(next:Turn) {
             if(next.role!=='user'||seen.has(next.id))return;
-            seen.add(next.id);turn=next;earlyReply=false;accepted=false;listening=false;
+            seen.add(next.id);turn=next;earlyReply=false;accepted=false;settled=false;listening=false;
             if(clearExit(next.content)){exiting=true;guarded=false;emit('EXIT_REPLY',false);return;}
-            const successful=Boolean(state?.handoff_binding_attempts?.some(a=>a.applied&&a.result.accepted));
-            const request=requestedHandoffSpan(next.content,{hasSuccessfulHandoff:successful});
+            const successful=Boolean(state?.handoff_binding_attempts?.some(a=>a.applied&&a.result.accepted&&a.request_turn_id!==undefined));
+            // The browser may receive this turn before or after persistence.
+            // In either order use its immediate preceding committed turn.
+            const index=state?.turns.findIndex(t=>t.id===next.id)??-1;
+            const precedingTurn=index>=0?state?.turns[index-1]:state?.turns.at(-1);
+            const request=requestedHandoffSpan(next.content,{hasSuccessfulHandoff:successful,precedingTurn});
             const prior=state?.handoff_requests?.at(-1);
             const attempt=state?.handoff_binding_attempts?.at(-1);
-            const unresolved=Boolean(prior&&(!attempt||attempt.request_turn_id!==prior.visitor_message_id||!attempt.result.accepted));
-            const correction=Boolean(state?.proposals.some(p=>contradictingCorrection([...state!.turns,next],p.visitor_message_id,p.evidence)));
+            // A rejection is a completed attempt, not an invitation to retry or
+            // hold all future conversation. Foreign/unbound outcomes never settle it.
+            const unresolved=Boolean(prior&&(!attempt||attempt.request_turn_id!==prior.visitor_message_id
+                ||attempt.local_session_id!==state?.id||attempt.provider_session_id!==state?.provider_session_id));
+            const turns=index>=0?state!.turns:[...(state?.turns||[]),next];
+            const correction=Boolean(state?.proposals.some(p=>contradictingCorrection(turns,p.visitor_message_id,p.evidence)?.id===next.id));
             guarded=Boolean(request||unresolved||correction);
             requestId=request?next.id:prior?.visitor_message_id??null;
             if(guarded){options.notice('Handoff acknowledgment is held until preparation is verified. You can continue or say goodbye.');emit('WAITING_RECEIPT',true);}
@@ -61,7 +70,9 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
         },
         persona() {
             if(!guarded||exiting)return;
-            if(!accepted){earlyReply=true;emit('EARLY_REPLY_HELD',true);}
+            // Keep an unsafe/early reply muted, but never overwrite a terminal
+            // failure notice with the misleading "still waiting" state.
+            if(!accepted&&!settled){earlyReply=true;emit('EARLY_REPLY_HELD',true);}
         },
         committed(next:Handoff) {
             if(next.id!==options.localSessionId||!next.provider_session_id||next.provider_session_id!==options.providerSessionId())return;

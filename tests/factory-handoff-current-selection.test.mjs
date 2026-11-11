@@ -138,12 +138,17 @@ test('unsupported coordinated and qualified counts fail closed without discardin
 });
 
 test('missing, partial, duplicate or ambiguous current witnesses cannot authorize a count partition',()=>{
-    for(const mode of ['missing','partial','duplicate','ambiguous-fields','unknown-field','different-corrected-fact']) {
+    for(const mode of ['missing','partial','duplicate','conflicting-source','unknown-field','different-corrected-fact']) {
         const {s,source,current}=example();let witnesses=[p(current,'rules')];
         if(mode==='missing')witnesses=[];
         if(mode==='partial')witnesses=[p(current,'rules','we have 8 people')];
         if(mode==='duplicate')witnesses.push(structuredClone(witnesses[0]));
-        if(mode==='ambiguous-fields')witnesses.push(p(current,'tools'));
+        if(mode==='conflicting-source') {
+            // Different source assertions really are ambiguous; the identical
+            // exact source in two fields is covered as valid below.
+            const conflict=u('conflict','One correction, we have 7 people, not 8.');
+            appendTurn(s,conflict);witnesses.push(p(conflict,'tools'));
+        }
         if(mode==='unknown-field')witnesses[0].field_id='unknown';
         if(mode==='different-corrected-fact') {
             const other=u('other-correction','One correction, we have 8 locations, not 10.');appendTurn(s,other);witnesses=[p(other,'rules')];
@@ -152,6 +157,15 @@ test('missing, partial, duplicate or ambiguous current witnesses cannot authoriz
         assert.equal(result.accepted,false,mode);assert.equal(s.proposals.length,0);assert.equal(s.superseded_mappings,undefined);
         assert.deepEqual(s.quarantined_proposals[0].proposals,raw);assert.equal(s.handoff_binding_attempts[0].applied,false);pendingOnly(s,result);
     }
+});
+
+test('identical exact correction in distinct fields is one factual witness, with all mappings retained',()=>{
+    const {s,source,current}=example(),raw=[p(source),p(current,'rules'),p(current,'tools')];
+    const result=apply(s,raw);assert.equal(result.accepted,true);validProposals(s);
+    assert.deepEqual(result.current_fact_selections[0].equivalent_correction_proposal_indices,[1,2]);
+    assert.ok(s.proposals.some(q=>q.field_id==='rules'&&q.evidence===current.content));
+    assert.ok(s.proposals.some(q=>q.field_id==='tools'&&q.evidence===current.content));
+    assert.deepEqual(s.handoff_binding_attempts[0].original_proposals,raw);pendingOnly(s,result);
 });
 
 test('an unrelated numeric correction neither deletes nor partitions a still-current original fact',()=>{

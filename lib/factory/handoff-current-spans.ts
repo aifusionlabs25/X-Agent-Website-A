@@ -6,6 +6,7 @@ export type CurrentFactSelection={
     removed_span:{start:number;end:number;text:string};
     retained_spans:Array<{start:number;end:number;proposal:Proposal}>;
     correction_proposal_index:number;correction_proposal:Proposal;correction_turn:Turn;correction_turn_sha256:string;
+    equivalent_correction_proposal_indices?:number[];
     rule:'EXACT_POSITIVE_COUNT_PARTITION';
 };
 
@@ -61,7 +62,11 @@ export function projectCurrentFact(original:Proposal,input:unknown,turns:Turn[],
     const witnesses=input.map((p:Proposal,index:number)=>({p,index})).filter(({p,index})=>
         !issues.some(issue=>issue.index===index)&&p?.visitor_message_id===correction.id
         &&p.evidence===correction.content&&p.value===correction.content);
-    if(witnesses.length!==1)return null;
+    // One exact source assertion may legitimately be supplied under several
+    // configured fields. Those are not competing factual witnesses. Preserve
+    // every mapping and record all witness indices; duplicate rows in the same
+    // field remain ambiguous and invalid siblings still fail atomic validation.
+    if(!witnesses.length||new Set(witnesses.map(w=>w.p.field_id)).size!==witnesses.length)return null;
     const eligible:Array<{start:number;end:number}>=[],sourceFrames=[...source.content.matchAll(frames)];
     for(const frame of sourceFrames) {
         const frameStart=frame.index!,frameEnd=frameStart+frame[0].length;
@@ -97,10 +102,11 @@ export function projectCurrentFact(original:Proposal,input:unknown,turns:Turn[],
     }
     const proposals=retained.filter(span=>span.proposal.evidence.trim()).map(span=>span.proposal);
     if(proposals.length&&proposalIssues(proposals,turns,fields).length)return null;
-    const witness=witnesses[0];
+    const witness=witnesses.find(w=>w.p.field_id===original.field_id)||witnesses[0];
     return {proposals,binding:{resolved_index:resolvedIndex,original:structuredClone(original),source_sha256:digest(source),
         evidence_start:start,evidence_end:end,removed_span:{...removed,text:source.content.slice(removed.start,removed.end)},
         retained_spans:structuredClone(retained),correction_proposal_index:witness.index,
         correction_proposal:structuredClone(witness.p),correction_turn:structuredClone(correction),correction_turn_sha256:digest(correction),
+        ...(witnesses.length>1?{equivalent_correction_proposal_indices:witnesses.map(w=>w.index)}:{}),
         rule:'EXACT_POSITIVE_COUNT_PARTITION'}};
 }

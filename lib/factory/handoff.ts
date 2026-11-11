@@ -44,7 +44,7 @@ export type Handoff = {
     provider_evidence?:unknown;
     transcript_reconciliations?:Reconciliation[];
     tool_events?:Array<{tool_call_id:string;tool_name:string;phase:string;result:unknown;exposure:string}>;
-    handoff_requests?:Array<{visitor_message_id:string;evidence:string;start:number;end:number;
+    handoff_requests?:Array<{visitor_message_id:string;evidence:string;start:number;end:number;offer_turn_id?:string;offer_evidence?:string;
         source:'HOST_PERSISTED_VISITOR_REQUEST';status:'REQUESTED_NOT_MAPPED'}>;
     visitor_exit?:{visitor_message_id:string;evidence:string;source:'HOST_PERSISTED_VISITOR_EXIT'};
     closing_after_turn_id?:string;
@@ -107,7 +107,7 @@ export function appendTurn(state:Handoff, turn:Turn) {
     state.turns.push({...turn});
     state.approved=false; state.evidence_reviewed=false; state.provider_transcript_verified=false;
     if(turn.role==='user') {
-        const request=requestedHandoffSpan(turn.content,{hasSuccessfulHandoff:Boolean(state.handoff_binding_attempts?.some(a=>
+        const request=requestedHandoffSpan(turn.content,{precedingTurn:state.turns.at(-2),hasSuccessfulHandoff:Boolean(state.handoff_binding_attempts?.some(a=>
             a.applied===true&&a.result.accepted===true&&a.request_turn_id!==undefined))});
         if(request) {
             const row={visitor_message_id:turn.id,...request,source:'HOST_PERSISTED_VISITOR_REQUEST' as const,status:'REQUESTED_NOT_MAPPED' as const};
