@@ -1,0 +1,159 @@
+{
+  "turns": [
+    {
+      "id": "persona::engine::initial_message::9f427b04-374d-418d-af3d-8ba98304e6d7",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::f53b05cb-b6e3-46d7-ac3e-a51fdda6b274",
+      "role": "user",
+      "content": "Yes, hi, uh, my name's Rob. I uh, I have a plumber, plumbing supply business. And uh, somebody told me to come here and see how you guys could help me with my business. Um, we uh, we currently are kind of drowning in emails and quotes and uh, we currently just use email and and um, Excel, you know, spreadsheets. And uh, you know, we're having a problem with things getting missed, things getting done incorrectly. How, how could you all help with something like that?"
+    },
+    {
+      "id": "persona::f53b05cb-b6e3-46d7-ac3e-a51fdda6b274",
+      "role": "persona",
+      "content": "I hear you, Rob. AIowa Agents can help with exactly that kind of repetitive, email-and-spreadsheet workflow — for example, automatically pulling in incoming quote requests, drafting responses, and keeping things tracked so items don't slip through the cracks.\n\nI should be upfront: I can't confirm whether your specific tools or setup are supported without more detail. To give you a more grounded answer, could you tell me a bit more about what a typical quote request looks like for you — say, what info comes in with the email and what you have to do with it from there?"
+    },
+    {
+      "id": "user::04f9dc22-2b03-407a-b468-b3173cf37ff7",
+      "role": "user",
+      "content": "Uh, yeah, I can I can go into those details a little bit, but uh, what I'm really I guess more interested in is is getting some of that stuff automated. Is that something you guys can handle? And, you know, we have uh 6 staff and um, we also have a supplier portal, but I don't have their API. Um, yeah, we're we're looking for ways we can automate."
+    },
+    {
+      "id": "persona::04f9dc22-2b03-407a-b468-b3173cf37ff7",
+      "role": "persona",
+      "content": "Yes, that's squarely in the wheelhouse — automating repetitive email and quote workflows is a core use case for AIowa Agents.\n\nA couple of things worth flagging honestly:\n\nEmail + Excel is a very workable starting point.\nThe supplier portal without an API is a real constraint. I can't confirm whether that specific portal is supported or how it would be handled — that's a detail that would need to be reviewed.\n\nTo keep this useful, one question: when you say \"automate,\" are you more interested in drafting the quote responses for your team to review and send, or in fully sending them out without a human in the loop? That distinction changes what's realistic to set up."
+    },
+    {
+      "id": "user::58e94027-edd6-4652-bf94-8cdba27fbfc8",
+      "role": "user",
+      "content": "Yeah, I mean, my dream would be to have the whole, you know, cycle from A to Z mapped out. Email arrives, somehow the email is read to find out what's needed, then that's transferred into a quote, and then that quote is, you know, added to an email that goes back to that quote request originally. But uh, you know, one update, we actually, we have 4 staff, not 6. Can you correct that?"
+    },
+    {
+      "id": "persona::58e94027-edd6-4652-bf94-8cdba27fbfc8",
+      "role": "persona",
+      "content": "Thanks for the correction, Rob — I've updated that to 4 staff.\n\nAnd that A-to-Z cycle you described — email in, extract what's needed, generate the quote, send it back — is exactly the kind of end-to-end workflow AIowa Agents is built for. The honest caveat is that the supplier-portal piece without an API is still an open question I can't confirm on my end.\n\nOne useful question: in that full cycle, would you want a human to review the quote before it goes out, or are you aiming for it to send automatically?"
+    },
+    {
+      "id": "user::f5421798-d872-4635-8660-f236d69d2904",
+      "role": "user",
+      "content": "No, absolutely. Everything has to have a human review before it gets to anywhere. So, okay, well, uh, you know, can you go ahead and update your existing handoff with all that and all the details for me?"
+    },
+    {
+      "id": "persona::f5421798-d872-4635-8660-f236d69d2904",
+      "role": "persona",
+      "content": "Done — the selected details are retained as proposals pending owner review. Nothing has been sent or approved yet."
+    },
+    {
+      "id": "user::4ddd3d70-1b63-4444-9259-0bf8cc0f00b4",
+      "role": "user",
+      "content": "Okay, sounds great. Well, thanks Olivia. I that's all. Goodbye."
+    },
+    {
+      "id": "persona::4ddd3d70-1b63-4444-9259-0bf8cc0f00b4",
+      "role": "persona",
+      "content": "You're welcome, Rob. Goodbye!"
+    }
+  ],
+  "original_proposals": [
+    {
+      "field_id": "field_2188e6ea8250ac870752ef5d",
+      "visitor_message_id": "user::f53b05cb-b6e3-46d7-ac3e-a51fdda6b274",
+      "evidence": "we're having a problem with things getting missed, things getting done incorrectly",
+      "value": "we're having a problem with things getting missed, things getting done incorrectly"
+    },
+    {
+      "field_id": "field_38a16b2f271396177f6f571a",
+      "visitor_message_id": "user::58e94027-edd6-4652-bf94-8cdba27fbfc8",
+      "evidence": "Email arrives, somehow the email is read to find out what's needed, then that's transferred into a quote, and then that quote is, you know, added to an email that goes back to that quote request originally",
+      "value": "Email arrives, somehow the email is read to find out what's needed, then that's transferred into a quote, and then that quote is, you know, added to an email that goes back to that quote request originally"
+    },
+    {
+      "field_id": "field_826677e8f4ff46c2079f4825",
+      "visitor_message_id": "user::f53b05cb-b6e3-46d7-ac3e-a51fdda6b274",
+      "evidence": "we currently just use email and and um, Excel, you know, spreadsheets",
+      "value": "we currently just use email and and um, Excel, you know, spreadsheets"
+    },
+    {
+      "field_id": "field_79a7766c1a75986cfcdd6b58",
+      "visitor_message_id": "user::f53b05cb-b6e3-46d7-ac3e-a51fdda6b274",
+      "evidence": "I have a plumber, plumbing supply business",
+      "value": "I have a plumber, plumbing supply business"
+    },
+    {
+      "field_id": "field_4c6278b8c6c68a0f10d1e844",
+      "visitor_message_id": "user::04f9dc22-2b03-407a-b468-b3173cf37ff7",
+      "evidence": "we also have a supplier portal, but I don't have their API",
+      "value": "we also have a supplier portal, but I don't have their API"
+    },
+    {
+      "field_id": "field_79a7766c1a75986cfcdd6b58",
+      "visitor_message_id": "user::58e94027-edd6-4652-bf94-8cdba27fbfc8",
+      "evidence": "we actually, we have 4 staff, not 6",
+      "value": "we actually, we have 4 staff, not 6"
+    },
+    {
+      "field_id": "field_9c115246b07dd59d817f38f2",
+      "visitor_message_id": "user::58e94027-edd6-4652-bf94-8cdba27fbfc8",
+      "evidence": "Everything has to have a human review before it gets to anywhere",
+      "value": "Everything has to have a human review before it gets to anywhere"
+    },
+    {
+      "field_id": "field_81624036fc30c6fe7287415a",
+      "visitor_message_id": "user::58e94027-edd6-4652-bf94-8cdba27fbfc8",
+      "evidence": "can you go ahead and update your existing handoff with all that and all the details for me?",
+      "value": "can you go ahead and update your existing handoff with all that and all the details for me?"
+    }
+  ],
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ]
+}

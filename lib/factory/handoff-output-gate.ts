@@ -18,6 +18,7 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
     id?:()=>string;now?:()=>string}) {
     let state:Handoff|null=null,turn:Turn|null=null,requestId:string|null=null;
     let guarded=false,earlyReply=false,accepted=false,settled=false,exiting=false,listening=false,phase:HandoffOutputEvent['phase']|null=null;
+    let replyStarted=false,toolPending=false,activeToolId:string|null=null;
     const seen=new Set<string>();
     function emit(next:HandoffOutputEvent['phase'],muted:boolean,tool:string|null=null) {
         options.output(muted);
@@ -30,6 +31,7 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
         if(!guarded||!state||!turn||exiting||listening)return;
         const a=state.handoff_binding_attempts?.at(-1);
         if(!a||a.request_turn_id!==requestId||a.through_visitor_turn_id!==turn.id
+            ||activeToolId!==null&&a.tool_call_id!==activeToolId
             ||a.local_session_id!==state.id||a.provider_session_id!==state.provider_session_id
             ||state.handoff_requests?.at(-1)?.visitor_message_id!==requestId
             ||!state.turns.some(t=>t.id===turn!.id&&t.role==='user'&&t.content===turn!.content))return;
@@ -43,11 +45,20 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
             :'Preparation could not be verified. Original evidence remains available for owner review. Nothing has been sent.');
         emit(valid?'VERIFIED_RECEIPT':'FAILED_RECEIPT',!valid||earlyReply,a.tool_call_id);
     }
+    function hold() {
+        guarded=true;earlyReply=earlyReply||replyStarted;
+        options.notice('Handoff acknowledgment is held until preparation is verified. You can continue or say goodbye.');
+        emit(earlyReply?'EARLY_REPLY_HELD':'WAITING_RECEIPT',true);
+    }
     return {
-        speechStarted() {if(exiting)return;listening=true;emit('LISTENING',true);},
+        speechStarted() {if(exiting)return;listening=true;replyStarted=false;toolPending=false;activeToolId=null;emit('LISTENING',true);},
         visitor(next:Turn) {
             if(next.role!=='user'||seen.has(next.id))return;
-            seen.add(next.id);turn=next;earlyReply=false;accepted=false;settled=false;listening=false;
+            // A reply/tool can arrive before finalized visitor text. Do not
+            // forget that early output when classifying that same utterance.
+            replyStarted=listening&&replyStarted;toolPending=listening&&toolPending;
+            if(!toolPending)activeToolId=null;
+            seen.add(next.id);turn=next;earlyReply=replyStarted;accepted=false;settled=false;listening=false;
             if(clearExit(next.content)){exiting=true;guarded=false;emit('EXIT_REPLY',false);return;}
             const successful=Boolean(state?.handoff_binding_attempts?.some(a=>a.applied&&a.result.accepted&&a.request_turn_id!==undefined));
             // The browser may receive this turn before or after persistence.
@@ -63,20 +74,36 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
                 ||attempt.local_session_id!==state?.id||attempt.provider_session_id!==state?.provider_session_id));
             const turns=index>=0?state!.turns:[...(state?.turns||[]),next];
             const correction=Boolean(state?.proposals.some(p=>contradictingCorrection(turns,p.visitor_message_id,p.evidence)?.id===next.id));
-            guarded=Boolean(request||unresolved||correction);
+            guarded=Boolean(request||unresolved||correction||toolPending);
             requestId=request?next.id:prior?.visitor_message_id??null;
-            if(guarded){options.notice('Handoff acknowledgment is held until preparation is verified. You can continue or say goodbye.');emit('WAITING_RECEIPT',true);}
+            if(guarded)hold();
             else {options.notice('');emit('ORDINARY_REPLY',false);}
         },
         persona() {
+            replyStarted=true;
             if(!guarded||exiting)return;
             // Keep an unsafe/early reply muted, but never overwrite a terminal
             // failure notice with the misleading "still waiting" state.
             if(!accepted&&!settled){earlyReply=true;emit('EARLY_REPLY_HELD',true);}
         },
+        handoffStarted(providerSessionId:string,toolCallId:string) {
+            if(exiting||!providerSessionId||providerSessionId!==options.providerSessionId()
+                ||typeof toolCallId!=='string'||!/^\w[\w-]{0,199}$/.test(toolCallId)||activeToolId===toolCallId)return;
+            // Tool activity is a second safety signal, never visitor consent.
+            // Keep the tool ID absent until its persisted attempt can bind it.
+            // A new call cannot reuse an earlier call's success on this turn.
+            activeToolId=toolCallId;toolPending=true;accepted=false;settled=false;hold();
+        },
         committed(next:Handoff) {
             if(next.id!==options.localSessionId||!next.provider_session_id||next.provider_session_id!==options.providerSessionId())return;
-            state=next;verified();
+            state=next;
+            const request=next.handoff_requests?.at(-1);
+            if(!exiting&&!listening&&turn&&request?.visitor_message_id===turn.id
+                &&next.turns.some(t=>t.id===turn!.id&&t.role==='user'&&t.content===turn!.content)
+                &&(!guarded||requestId!==turn.id)) {
+                requestId=turn.id;hold();
+            }
+            verified();
         },
         snapshot:()=>({guarded,early_reply_held:earlyReply,accepted,exiting,phase,visitor_message_id:turn?.id??null}),
     };

@@ -61,9 +61,10 @@ test('independent initial information/detail wording preserves exact source offs
  for(const text of ['Prepare this information.','Create those details for my website.','Draft information about your services.'])assert.equal(requestedHandoffSpan(text),null);
 });
 
-test('definite update variants inherit scope only from recorded success',()=>{
+test('named handoff requests do not assert a prior save; generic updates inherit scope from recorded success',()=>{
  for(const text of ['Please update the existing handoff with my correction.','Could you revise the saved summary, keeping the other details?','Amend our earlier review note with the unknown access requirement.','Yeah, please correct that handoff note.']) {
-  assert.equal(requestedHandoffSpan(text),null);
+  if(/handoff/.test(text))assert.ok(requestedHandoffSpan(text));
+  else assert.equal(requestedHandoffSpan(text),null);
   const r=requestedHandoffSpan(text,{hasSuccessfulHandoff:true});assert.ok(r,text);assert.equal(text.slice(r.start,r.end),text);
  }
  const s=fresh();s.handoff_binding_attempts=[accepted()];

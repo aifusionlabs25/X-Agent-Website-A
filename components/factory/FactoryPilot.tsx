@@ -124,6 +124,7 @@ export default function FactoryPilot() {
             });
             const evidenceCallbacks=toolEvidenceCallbacks(event=>post('tool_receipt',event),e=>setError(e instanceof Error?e.message:'Tool evidence could not be retained'));
             c.registerToolCallHandler('factory_handoff',{...evidenceCallbacks,onStart:async p=>{
+                outputGate.current?.handoffStarted(p.sessionId,p.toolCallId);
                 await binding;
                 return submitHandoff(p.arguments.proposals,async proposals=>(await post('provider_handoff',{proposals,
                     local_session_id:launchState.id,provider_session_id:p.sessionId,tool_call_id:p.toolCallId})).toolResult);
