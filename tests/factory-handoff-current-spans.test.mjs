@@ -64,6 +64,37 @@ test('positive frame variants retain relative clauses and unrelated facts verbat
     }
 });
 
+test('unqualified positive work participles retain complete predicates and independent facts verbatim',()=>{
+    for(const [content,correction,removed,predicate] of [
+        ['We have 6 staff handling requests by email. The portal is unchanged.','4 staff handle requests, not 6.','We have 6 staff',' handling requests by email. The portal is unchanged.'],
+        ['Our team has 11 operators processing draft orders. A person approves them.','Actually our team has 7 operators, not 11.','Our team has 11 operators',' processing draft orders. A person approves them.'],
+        ['I have 9 assistants reviewing forms. Budget is unknown.','Correction: I have 5 assistants, not 9.','I have 9 assistants',' reviewing forms. Budget is unknown.'],
+        ['There are 8 representatives answering questions.','5 representatives answer questions, not 8.','There are 8 representatives',' answering questions.'],
+        ['7 people preparing estimates.','3 people prepare estimates, not 7.','7 people',' preparing estimates.'],
+        ['They have 12 operators managing requests.','Correction: they have 8 operators, not 12.','They have 12 operators',' managing requests.'],
+        ['We have 10 assistants receiving orders.','Correction: we have 6 assistants, not 10.','We have 10 assistants',' receiving orders.'],
+    ]) {
+        const {result,turns}=project(content,correction);coverage(result,turns);
+        assert.equal(result.binding.removed_span.text,removed);assert.ok(result.proposals.some(p=>p.value===predicate));
+        assert.equal(result.binding.correction_proposal.field_id,'constraint');
+    }
+});
+
+test('work-participle projection still declines qualified, negated, narrated or ambiguous assertions',()=>{
+    for(const content of [
+        'We do not have 6 staff handling requests.','If we have 6 staff handling requests, we can reply.',
+        'We might have 6 staff handling requests.','We have only 6 staff handling requests.',
+        'We have 6 staff handling requests only if approved.','We have 6 staff handling requests unless reassigned.',
+        'We have 6 staff handling requests temporarily.','We have 6 staff handling requests until reassignment.',
+        'We have 6 staff handling requests sometimes.','We have 6 staff handling requests, not invoices.',
+        'We have 6 staff handling 2 categories.','We have 6 staff handling requests?',
+        'My colleague said. We have 6 staff handling requests.','"We have 6 staff handling requests."',
+        'We have 6 staff handling requests. They have 6 staff handling orders.',
+    ])assert.equal(project(content).result,null,content);
+    assert.equal(project('They have 6 staff handling requests.','Correction: we have 4 staff, not 6.').result,null);
+    assert.equal(project('We have 6 staff handling requests.','Correction: we have 4 offices, not 6.').result,null);
+});
+
 test('absolute source offsets and whitespace-only residuals remain covered in the audit',()=>{
     for(const [content,evidence] of [['Background.  We have 6 staff.  End.',' We have 6 staff. '],['  We have 6 staff.  ','  We have 6 staff.  '],['We have 6 staff','We have 6 staff']]) {
         const {result,turns}=project(content,undefined,evidence);coverage(result,turns);

@@ -135,7 +135,7 @@ test('a newly spoken correction cannot be released by the previous successful re
 });
 test('rejected or absent receipt stays held; exit still gets one normal close path and ordinary discovery stays audible',()=>{
  const s=fresh(),{g,media}=gate(s);g.speechStarted();g.visitor(u('ordinary','What services are available?'));assert.equal(media.at(-1),false);
- g.visitor(request);appendTurn(s,request);recordProviderHandoffAttempt(s,[],fields,'bad',identity);g.committed(s);assert.equal(media.at(-1),true);
+ g.visitor(request);appendTurn(s,request);g.persona();recordProviderHandoffAttempt(s,[],fields,'bad',identity);g.committed(s);assert.equal(media.at(-1),true);
  g.visitor(u('exit','Thanks, Olivia. Goodbye.'));assert.equal(media.at(-1),false);g.persona();assert.equal(media.at(-1),false);
  assert.equal(g.snapshot().exiting,true);assert.equal(s.approved,false);assert.deepEqual(s.external_actions,[]);
 });

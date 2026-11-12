@@ -34,17 +34,24 @@ export function recordProviderHandoffAttempt(state:Handoff,input:unknown,fields:
         const issues=proposalIssues(resolved,state.turns,fields);
         const projections=new Map<number,Proposal[]>();
         for(const issue of issues) {
-            // Assistant IDs, invalid fields/schema/values and missing evidence
-            // never gain an alternate source. Already-valid references stay untouched.
-            if(issue.index<0||issue.problems.length!==1)continue;
+            // Compose two independently provable mechanical repairs: a unique
+            // exact quote may have both a stale source ID and a shorter exact
+            // value. Prove the excerpt before rebinding; the separate format
+            // adapter then retains the whole quote and its own provenance.
+            // Other schema/field/value faults never gain an alternate source.
+            if(issue.index<0||issue.problems.some(problem=>!['EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE',
+                'UNKNOWN_VISITOR_MESSAGE','VALUE_MUST_EQUAL_EXACT_EVIDENCE'].includes(problem)))continue;
             const p=resolved[issue.index] as Proposal;
-            const unknownNativeReference=issue.problems[0]==='UNKNOWN_VISITOR_MESSAGE'
+            const shortValue=issue.problems.includes('VALUE_MUST_EQUAL_EXACT_EVIDENCE');
+            if(shortValue&&(typeof p.value!=='string'||!p.value.trim()||!p.evidence.includes(p.value)
+                ||p.evidence.indexOf(p.value)!==p.evidence.lastIndexOf(p.value)))continue;
+            const unknownNativeReference=issue.problems.includes('UNKNOWN_VISITOR_MESSAGE')
                 && /^user::[a-f0-9-]{36}$/i.test(p.visitor_message_id)
                 && !state.turns.some(t=>t.id===p.visitor_message_id);
-            if(issue.problems[0]!=='EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE'&&!unknownNativeReference)continue;
+            if(!issue.problems.includes('EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE')&&!unknownNativeReference)continue;
             const matches=state.turns.filter(t=>t.role==='user'&&t.content.includes(p.evidence));
             if(matches.length===0) {
-                if(unknownNativeReference)continue; // Unknown IDs require one existing exact span, never fragment reconstruction.
+                if(unknownNativeReference||shortValue)continue; // Compound repairs require one existing exact span, never fragment reconstruction.
                 const projection=projectSpeechFragments(p,state.turns,issue.index);
                 if(projection){projections.set(issue.index,projection.proposals);fragmentBindings.push(projection.binding);}
                 continue;

@@ -153,12 +153,11 @@ test('ambiguous short values and repeated evidence occurrences reject instead of
     }
 });
 
-test('format adaptation cannot rescue an unknown, assistant or wrong source, invalid field/schema, or paraphrase',()=>{
+test('format adaptation cannot rescue an unresolvable source, assistant, invalid field/schema, or paraphrase',()=>{
     const evidence='Please retain unsent drafts for human review.',valid=p('source',evidence,'unsent drafts');
     const invalid=[
         {...valid,visitor_message_id:'missing'},
-        {...valid,visitor_message_id:'user::11111111-1111-4111-8111-111111111111'},
-        {...valid,visitor_message_id:'assistant'}, {...valid,visitor_message_id:'other'},
+        {...valid,visitor_message_id:'assistant'},
         {...valid,field_id:'invented'}, {...valid,extra:true}, {...valid,evidence:'Please keep unsent drafts for human review.'},
         {...valid,value:'drafts that are unsent'}, {...valid,value:'UNSENT drafts'}, {...valid,value:'  unsent drafts  '},
         {...valid,value:'unsent  drafts'}, {...valid,value:''}, {...valid,value:' '}, {...valid,value:null},
@@ -170,6 +169,19 @@ test('format adaptation cannot rescue an unknown, assistant or wrong source, inv
         const raw=[row],result=apply(s,raw);assert.equal(result.accepted,false,JSON.stringify(row));assert.equal(s.proposals.length,0);
         assert.deepEqual(s.handoff_binding_attempts[0].format_bindings,[]);assert.deepEqual(s.handoff_binding_attempts[0].bindings,[]);
         assert.deepEqual(s.handoff_binding_attempts[0].original_proposals,raw);assert.deepEqual(s.quarantined_proposals[0].proposals,raw);
+        assertPendingOnly(s,result);
+    }
+    // A separate audited reference adaptation can now compose with format
+    // preservation. The format-only helper still cannot repair either ID.
+    for(const visitor_message_id of ['other','user::11111111-1111-4111-8111-111111111111']) {
+        const s=setup(evidence);appendTurn(s,u('other','Our portal capabilities are unknown.'));
+        const raw=[{...valid,visitor_message_id}],standalone=preserveQuotedValue(raw,s.turns,fields);
+        assert.deepEqual(standalone.proposals,raw);assert.deepEqual(standalone.bindings,[]);
+        const result=apply(s,raw),attempt=s.handoff_binding_attempts[0];
+        assert.equal(result.accepted,true);assert.equal(attempt.bindings.length,1);assert.equal(attempt.format_bindings.length,1);
+        assert.equal(attempt.bindings[0].from_message_id,visitor_message_id);assert.equal(attempt.bindings[0].to_message_id,'source');
+        assertFormatProvenance(attempt.format_bindings[0],raw[0],attempt.resolved_proposals[0],s.turns);
+        assertProposal(attempt.resolved_proposals[0],s.turns,fields);assert.deepEqual(attempt.original_proposals,raw);
         assertPendingOnly(s,result);
     }
     for(const raw of [[],{},null,Array(25).fill(valid)]) {

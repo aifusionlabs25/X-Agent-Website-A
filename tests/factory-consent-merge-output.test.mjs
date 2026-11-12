@@ -116,9 +116,9 @@ test('invalid correction sibling still blocks the entire update without retiring
 });
 test('verified rejection settles waiting, holds unsafe speech, and permits the next ordinary reply without retry',()=>{
  const s=fresh(),x=gate(s),request=u('request','Please prepare a local brief.');
- x.g.visitor(request);appendTurn(s,request);attempt(s,[]);x.g.committed(s);
+ x.g.visitor(request);appendTurn(s,request);x.g.persona();attempt(s,[]);x.g.committed(s);
  assert.equal(x.events.at(-1).phase,'FAILED_RECEIPT');assert.equal(x.media.at(-1),true);
- assert.match(x.notices.at(-1),/could not be verified/);x.g.persona();assert.equal(x.events.at(-1).phase,'FAILED_RECEIPT');
+ assert.match(x.notices.at(-1),/Preparation failed/);x.g.persona();assert.equal(x.events.at(-1).phase,'FAILED_RECEIPT');
  const next=u('question','Can I continue asking questions?');x.g.speechStarted();x.g.visitor(next);appendTurn(s,next);x.g.committed(s);
  assert.equal(x.events.at(-1).phase,'ORDINARY_REPLY');assert.equal(x.media.at(-1),false);
  assert.equal(s.handoff_binding_attempts.length,1);assert.equal(s.approved,false);assert.deepEqual(s.external_actions,[]);

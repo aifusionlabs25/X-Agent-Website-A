@@ -6,6 +6,7 @@ import * as store from '@/lib/factory/store';
 import { recordProviderHandoffAttempt } from '@/lib/factory/handoff-binding';
 import {appendContextSendEvidence} from '@/lib/factory/context-send-evidence';
 import {appendHandoffOutputEvidence} from '@/lib/factory/handoff-output-gate';
+import {appendFailureSpeechEvidence} from '@/lib/factory/handoff-failure-speech';
 import { fetchAnamSessionMetadata } from '@/lib/anam/session-api';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -103,6 +104,7 @@ export async function POST(req:NextRequest) {
             case 'sdk_close_receipt': appendSdkCloseEvidence(state,b.receipt); break;
             case 'context_send_receipt': appendContextSendEvidence(state,b.receipt); break;
             case 'handoff_output_receipt': appendHandoffOutputEvidence(state,b.receipt); break;
+            case 'handoff_failure_speech_receipt': appendFailureSpeechEvidence(state,b.receipt); break;
             case 'tool_receipt': {
                 appendToolEvidence(state,{tool_call_id:b.tool_call_id,tool_name:b.tool_name,phase:b.phase,result:b.result,
                     exposure:'SDK_EVENT_NOT_PROOF_OF_MODEL_CONSUMPTION'},b.provider_session_id); break;

@@ -15,11 +15,12 @@ export type HandoffOutputReceipt=HandoffOutputEvent & {local_session_id:string;p
  * Original transcript remains intact. This is not acoustic-delivery proof. */
 export function handoffOutputGate(options:{localSessionId:string;providerSessionId:()=>string|null;
     output:(muted:boolean)=>void;notice:(text:string)=>void;report:(event:HandoffOutputEvent)=>void;
+    recoverFailure?:(toolCallId:string,visitorMessageId:string)=>void;
     id?:()=>string;now?:()=>string}) {
     let state:Handoff|null=null,turn:Turn|null=null,requestId:string|null=null;
     let guarded=false,earlyReply=false,accepted=false,settled=false,exiting=false,listening=false,phase:HandoffOutputEvent['phase']|null=null;
     let replyStarted=false,toolPending=false,activeToolId:string|null=null;
-    const seen=new Set<string>();
+    const seen=new Set<string>(),startedTools=new Set<string>();
     function emit(next:HandoffOutputEvent['phase'],muted:boolean,tool:string|null=null) {
         options.output(muted);
         if(next===phase)return;
@@ -30,20 +31,36 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
     function verified() {
         if(!guarded||!state||!turn||exiting||listening)return;
         const a=state.handoff_binding_attempts?.at(-1);
-        if(!a||a.request_turn_id!==requestId||a.through_visitor_turn_id!==turn.id
+        if(!a||a.through_visitor_turn_id!==turn.id
             ||activeToolId!==null&&a.tool_call_id!==activeToolId
             ||a.local_session_id!==state.id||a.provider_session_id!==state.provider_session_id
-            ||state.handoff_requests?.at(-1)?.visitor_message_id!==requestId
             ||!state.turns.some(t=>t.id===turn!.id&&t.role==='user'&&t.content===turn!.content))return;
-        const valid=a.applied===true&&a.result.accepted===true&&a.result.status==='PENDING_OWNER_REVIEW'
+        const requestBound=requestId!==null&&a.request_turn_id===requestId
+            &&state.handoff_requests?.at(-1)?.visitor_message_id===requestId;
+        // Rejection is terminal tool evidence, not preparation authority. A
+        // matching active tool may fail even when no visitor request was
+        // recognized. Do not turn that failure into endless waiting, nor let
+        // an unbound accepted outcome acquire consent through this path.
+        const failed=a.applied===false&&a.result.accepted===false&&a.result.status==='UNMAPPED_OWNER_REVIEW'
+            &&a.result.accepted_proposal_count===0&&a.result.owner_approved===false
+            &&a.result.submission_status==='UNSUBMITTED'&&a.result.external_actions.length===0
+            &&(requestBound||activeToolId===a.tool_call_id);
+        const valid=requestBound&&a.applied===true&&a.result.accepted===true&&a.result.status==='PENDING_OWNER_REVIEW'
             &&a.result.owner_approved===false&&a.result.submission_status==='UNSUBMITTED'
             &&a.result.external_actions.length===0&&a.result.accepted_proposal_count>0
             &&state.proposals.length>0&&!state.proposals.some(p=>contradictingCorrection(state!.turns,p.visitor_message_id,p.evidence));
+        if(!valid&&!failed)return;
+        const firstSettlement=!settled||accepted!==valid;
         accepted=valid;
-        settled=true;
-        options.notice(valid?'Selected details are retained for owner review. Nothing has been sent or approved.'
-            :'Preparation could not be verified. Original evidence remains available for owner review. Nothing has been sent.');
-        emit(valid?'VERIFIED_RECEIPT':'FAILED_RECEIPT',!valid||earlyReply,a.tool_call_id);
+        settled=true;toolPending=false;
+        if(firstSettlement)options.notice(valid?'Selected details are retained for owner review. Nothing has been sent or approved.'
+            :'Preparation failed. Original evidence remains available for owner review. Nothing has been sent. You can continue asking questions or say goodbye.');
+        // A reply that already began remains held: a late receipt cannot make
+        // its tail safe. When the receipt precedes speech, the next native
+        // response can report the terminal outcome. This is sequencing, not
+        // proof of model wording or acoustic delivery.
+        emit(valid?'VERIFIED_RECEIPT':'FAILED_RECEIPT',earlyReply,a.tool_call_id);
+        if(firstSettlement&&failed&&earlyReply)options.recoverFailure?.(a.tool_call_id,turn.id);
     }
     function hold() {
         guarded=true;earlyReply=earlyReply||replyStarted;
@@ -88,10 +105,13 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
         },
         handoffStarted(providerSessionId:string,toolCallId:string) {
             if(exiting||!providerSessionId||providerSessionId!==options.providerSessionId()
-                ||typeof toolCallId!=='string'||!/^\w[\w-]{0,199}$/.test(toolCallId)||activeToolId===toolCallId)return;
+                ||typeof toolCallId!=='string'||!/^\w[\w-]{0,199}$/.test(toolCallId)||activeToolId===toolCallId||startedTools.has(toolCallId))return;
             // Tool activity is a second safety signal, never visitor consent.
             // Keep the tool ID absent until its persisted attempt can bind it.
             // A new call cannot reuse an earlier call's success on this turn.
+            // A delayed duplicate start belongs to its original turn, even
+            // after speechStarted() has cleared the active-tool pointer.
+            startedTools.add(toolCallId);
             activeToolId=toolCallId;toolPending=true;accepted=false;settled=false;hold();
         },
         committed(next:Handoff) {
@@ -105,7 +125,7 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
             }
             verified();
         },
-        snapshot:()=>({guarded,early_reply_held:earlyReply,accepted,exiting,phase,visitor_message_id:turn?.id??null}),
+        snapshot:()=>({guarded,early_reply_held:earlyReply,accepted,settled,exiting,phase,visitor_message_id:turn?.id??null}),
     };
 }
 export type HandoffOutputGate=ReturnType<typeof handoffOutputGate>;

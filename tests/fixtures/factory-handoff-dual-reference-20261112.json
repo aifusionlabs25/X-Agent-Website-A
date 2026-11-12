@@ -1,0 +1,336 @@
+{
+  "kind": "SAVED_FICTIONAL_CAPTURE_EXTRACT_FOR_OFFLINE_REPLAY",
+  "source": "olivia-request-safeguard-voice-qa-20261112-v0.1/review/hosted-response-body.txt",
+  "source_sha256": "7c410e45bdf810bfea54d55303293b88c078b38f354d4527a3a8994330852a66",
+  "local_session_id": "35bf2be7-7f8e-4c03-a075-88f63194bb4d",
+  "provider_session_id": "5f8bd393-456e-4f7d-9058-f90a47b3ab35",
+  "launch_label": "factory:bf0dc6f8f20c57a90529a2e5c7c55026:a055686c-7c5d-41fa-9d57-91e3b6a75269",
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "turns_before_attempt": [
+    {
+      "id": "persona::engine::initial_message::5f8bd393-456e-4f7d-9058-f90a47b3ab35",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37",
+      "role": "user",
+      "content": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that."
+    },
+    {
+      "id": "persona::7ea10c6c-03e9-423c-bac9-b36ea1908c37",
+      "role": "persona",
+      "content": "I can help with that. AIowa Agents can automate repetitive workflows like processing incoming requests and organizing the details into a structured format, which could reduce the chance of missed quotes. I don't have approved information confirming whether your specific email and Excel setup is supported, so that would need a human review. Would you like me to prepare a brief for the team to look into?"
+    },
+    {
+      "id": "user::867462b9-252f-457a-ad45-7e11b3384df2",
+      "role": "user",
+      "content": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown."
+    },
+    {
+      "id": "persona::867462b9-252f-457a-ad45-7e11b3384df2",
+      "role": "persona",
+      "content": "Got it. So you'd like incoming emails automatically turned into draft quotes, with a person reviewing each one before it goes out, using Outlook and Excel. That's a clear workflow to have the team look into. I can prepare a brief with those details for owner review. Would you like me to do that?"
+    },
+    {
+      "id": "user::42c22e7b-fefd-4c44-9904-cc5086992b86",
+      "role": "user",
+      "content": "Yeah, but uh there's one correction. 4 staff handle those requests, not 6. And we also use a supplier portal, but I don't know whether it has an API."
+    }
+  ],
+  "original_attempt": {
+    "request_id": "63699b15-088f-434e-8123-71c0c634a27a",
+    "local_session_id": "35bf2be7-7f8e-4c03-a075-88f63194bb4d",
+    "provider_session_id": "5f8bd393-456e-4f7d-9058-f90a47b3ab35",
+    "tool_call_id": "call_fafb5e82f9104fe6a9d283dc",
+    "request_turn_id": null,
+    "input_sha256": "11392861473d416a83de3e64ae5f85b68f358e0bf0220bc7d9342593bc7ab551",
+    "local_turns_sha256": "fad09bf05e2ede0469e930611c7699312635d7815a5d07c2532b6e5ec2ce7216",
+    "through_visitor_turn_id": "user::42c22e7b-fefd-4c44-9904-cc5086992b86",
+    "correction_evidence_bindings": [],
+    "original_proposals": [
+      {
+        "evidence": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Sometimes requests get missed",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "incoming emails turned into draft quotes with a person reviewing every quote before anything goes out",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "we use Outlook and Excel",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copper Mesa Supply, a plumbing supply business",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person reviewing every quote before anything goes out",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+        "value": "incoming emails turned into draft quotes",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Yeah, but uh there's one correction. 4 staff handle those requests, not 6. And we also use a supplier portal, but I don't know whether it has an API.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "4 staff handle those requests, not 6. And we also use a supplier portal, but I don't know whether it has an API.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      }
+    ],
+    "resolved_proposals": [
+      {
+        "evidence": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Yeah, but uh there's one correction. 4 staff handle those requests, not 6. And we also use a supplier portal, but I don't know whether it has an API.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "4 staff handle those requests, not 6. And we also use a supplier portal, but I don't know whether it has an API.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      }
+    ],
+    "selected_proposals": [
+      {
+        "evidence": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "Hi, Libby, I run Copper Mesa Supply, a plumbing supply business. We have 6 staff handling quote requests by email and they copy the details into Excel. Sometimes requests get missed and just curious how you guys could help us out on that.",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+        "value": "Sure. Um, what we'd like is incoming emails turned into draft quotes with a person reviewing every quote before anything goes out. And uh, we use Outlook and Excel. Budget and timing are still unknown.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      },
+      {
+        "evidence": "Yeah, but uh there's one correction. 4 staff handle those requests, not 6. And we also use a supplier portal, but I don't know whether it has an API.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "4 staff handle those requests, not 6. And we also use a supplier portal, but I don't know whether it has an API.",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2"
+      }
+    ],
+    "current_fact_selections": [],
+    "prior_current_fact_selections": [],
+    "superseded_proposals": [],
+    "bindings": [],
+    "fragment_bindings": [],
+    "format_bindings": [
+      {
+        "resolved_index": 0,
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37",
+        "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+        "original_value": "Sometimes requests get missed",
+        "evidence_start": 0,
+        "evidence_end": 238,
+        "value_start": 152,
+        "value_end": 181,
+        "source_sha256": "ccf908a8e6f278dec39cbf4d70baf15a199716de977936df7f7cb625e125d552"
+      },
+      {
+        "resolved_index": 1,
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2",
+        "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+        "original_value": "incoming emails turned into draft quotes with a person reviewing every quote before anything goes out",
+        "evidence_start": 0,
+        "evidence_end": 201,
+        "value_start": 28,
+        "value_end": 129,
+        "source_sha256": "e7dea33878e41247544322cb5b1addbf7b59f6bb7f3639004c00790bacd8e7e5"
+      },
+      {
+        "resolved_index": 2,
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2",
+        "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+        "original_value": "we use Outlook and Excel",
+        "evidence_start": 0,
+        "evidence_end": 201,
+        "value_start": 139,
+        "value_end": 163,
+        "source_sha256": "e7dea33878e41247544322cb5b1addbf7b59f6bb7f3639004c00790bacd8e7e5"
+      },
+      {
+        "resolved_index": 3,
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "visitor_message_id": "user::7ea10c6c-03e9-423c-bac9-b36ea1908c37",
+        "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+        "original_value": "I run Copper Mesa Supply, a plumbing supply business",
+        "evidence_start": 0,
+        "evidence_end": 238,
+        "value_start": 11,
+        "value_end": 63,
+        "source_sha256": "ccf908a8e6f278dec39cbf4d70baf15a199716de977936df7f7cb625e125d552"
+      },
+      {
+        "resolved_index": 4,
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2",
+        "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+        "original_value": "a person reviewing every quote before anything goes out",
+        "evidence_start": 0,
+        "evidence_end": 201,
+        "value_start": 74,
+        "value_end": 129,
+        "source_sha256": "e7dea33878e41247544322cb5b1addbf7b59f6bb7f3639004c00790bacd8e7e5"
+      },
+      {
+        "resolved_index": 5,
+        "field_id": "field_4d1bbc1c0d2c10bfebf7be1d",
+        "visitor_message_id": "user::867462b9-252f-457a-ad45-7e11b3384df2",
+        "rule": "PRESERVE_FULL_VERBATIM_EVIDENCE",
+        "original_value": "incoming emails turned into draft quotes",
+        "evidence_start": 0,
+        "evidence_end": 201,
+        "value_start": 28,
+        "value_end": 68,
+        "source_sha256": "e7dea33878e41247544322cb5b1addbf7b59f6bb7f3639004c00790bacd8e7e5"
+      }
+    ],
+    "applied": false,
+    "result": {
+      "status": "UNMAPPED_OWNER_REVIEW",
+      "accepted": false,
+      "accepted_proposal_count": 0,
+      "owner_approved": false,
+      "submission_status": "UNSUBMITTED",
+      "external_actions": [],
+      "reason": "Mapping requires a known field and an exact persisted visitor span; value must remain verbatim",
+      "issues": [
+        {
+          "index": 6,
+          "field_id": "field_4c6278b8c6c68a0f10d1e844",
+          "problems": [
+            "EVIDENCE_NOT_EXACT_SPAN_OF_REFERENCED_MESSAGE",
+            "VALUE_MUST_EQUAL_EXACT_EVIDENCE"
+          ]
+        }
+      ],
+      "visitor_message": "I have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.",
+      "instruction": "This preparation attempt failed. Tell the visitor using visitor_message. Do not say a brief is prepared or ready, or that the information was mapped. Do not retry automatically or ask the visitor to repeat the entire intake."
+    }
+  },
+  "captured_request_state": [],
+  "capture_scope": "No historical attempt is retried; tests reconstruct a separate pre-attempt object."
+}

@@ -72,13 +72,21 @@ export function contradictingCorrection(turns:Turn[],sourceId:string,evidence:st
     for(const turn of turns.slice(source+1)) {
         if(turn.role!=='user'||/["“”`]|(?:^|[\s([{])['‘]/u.test(turn.content))continue;
         const starts=correctionStarts(turn.content);
-        if(!starts.length)continue;
         for(const match of turn.content.matchAll(/\bnot\s+([^.!?;,]+)(?:[.!?;,]|$)/gi)) {
-            if(!starts.some(start=>start<match.index!))continue;
             const statement=turn.content.slice(0,match.index!+match[0].length);
             if(statement.includes('?')||uncertainOrNarrated.test(statement))continue;
             const phrase=words(match[1]).replace(/^(?:the|a|an|our|my) /,'');
-            if(numericContradiction(evidence,turn.content.slice(0,match.index),phrase))return turn;
+            const beforeNot=turn.content.slice(0,match.index);
+            const explicitStart=starts.some(start=>start<match.index!);
+            // A sentence beginning with a direct numeric assertion ("4 staff,
+            // not 6") need not use a ceremonial correction prefix to block a
+            // stale count. Keep narration/negation safeguards; arbitrary embedded
+            // contrasts remain unsupported. Detection is not replacement authority.
+            const directCount=/^\s*\d+\s+\p{L}/u.test(beforeNot.split(/[;.!?]/).at(-1)||'')
+                &&!/[?:：]/.test(beforeNot)&&!disclaimedPrefix.test(beforeNot)
+                &&!/\b(?:reads?|states?|describes?|reports?)\b/i.test(beforeNot);
+            if((explicitStart||directCount)&&numericContradiction(evidence,beforeNot,phrase))return turn;
+            if(!explicitStart)continue;
             if(phrase.split(' ').length<2)continue;
             if(original.includes(' '+phrase+' ')&&!original.includes(' not '+phrase+' ')&&!original.includes(' not the '+phrase+' '))return turn;
         }

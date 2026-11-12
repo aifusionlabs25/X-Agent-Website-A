@@ -9,6 +9,7 @@ import type { FormatBinding } from './handoff-format';
 import type { CurrentFactSelection } from './handoff-current-spans';
 import type {CorrectionEvidenceBinding} from './handoff-correction-evidence';
 import type {HandoffOutputReceipt} from './handoff-output-gate';
+import type {FailureSpeechReceipt} from './handoff-failure-speech';
 import { reconcileTranscript,type ProviderTranscript,type Reconciliation } from './transcript-reconciliation.ts';
 import { clearExit,closingCourtesy } from './visitor-exit.ts';
 import { requestedHandoffSpan } from './handoff-request.ts';
@@ -51,6 +52,7 @@ export type Handoff = {
     sdk_close_events?:Array<SdkCloseReceipt & {assurance:'CLIENT_INSTRUMENTATION_NOT_PROVIDER_RELEASE'}>;
     context_send_events?:Array<ContextSendReceipt & {payload_sha256:string;source_turn_sha256:string|null;assurance:typeof contextAssurance}>;
     handoff_output_events?:HandoffOutputReceipt[];
+    handoff_failure_speech_events?:FailureSpeechReceipt[];
     quarantined_proposals?:Array<{request_id:string;proposals:unknown;reason:string}>;
     handoff_binding_attempts?:Array<{request_id:string;tool_call_id:string;local_session_id:string;provider_session_id:string;
         request_turn_id?:string|null;

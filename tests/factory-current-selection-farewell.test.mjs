@@ -127,7 +127,9 @@ test('prior replies, visitor quotes and empty chunks cannot masquerade as curren
 
 test('runtime wires incremental and finalized reply observations to the exact tool correlation',()=>{
  const src=readFileSync(new URL('../components/factory/FactoryPilot.tsx',import.meta.url),'utf8');
- assert.ok(src.includes('exitReplies.observe(e)'));assert.ok(src.includes('messages.forEach(m=>exitReplies.observe(m))'));
+ assert.ok(src.includes('if(!recovery.isHeldOrRecoveryReply(e.id))exitReplies.observe(e)'));
+ assert.ok(src.includes('messages.forEach(m=>{if(!recovery.isHeldOrRecoveryReply(m.id))exitReplies.observe(m);})'));
+ assert.ok(src.includes('if(!failureSpeech.current?.isHeldOrRecoveryReply(turn.id))farewell.current?.completeFarewell()'));
  assert.ok(src.includes('exitReplies.receipt(p.userActionCorrelationId)'));
  assert.equal((src.match(/\.stopStreaming\(/g)||[]).length,1);assert.ok(src.includes('await reconcile()'));
  const end=src.slice(src.indexOf("c.registerToolCallHandler('factory_end_session'"),src.indexOf('c.addListener(AnamEvent.CONNECTION_CLOSED'));

@@ -81,12 +81,17 @@ export function projectCurrentFact(original:Proposal,input:unknown,turns:Turn[],
         // A bare subject count may precede a positive work predicate. Remove
         // only the contradicted count; retain the predicate as an exact span.
         const direct=/^\d/.test(frame[0])&&/^[ \t]+(?:handle|process|manage|review|answer|receive|prepare)[ \t]+\p{L}/iu.test(after);
-        if(!terminal&&!relative&&!direct)continue;
+        // The same exact partition applies to an unqualified positive work
+        // participle ("We have 6 staff handling requests"). The complete work
+        // clause stays in its original field with its original source offsets.
+        const participle=/^[ \t]+(?:handling|processing|managing|reviewing|answering|receiving|preparing)[ \t]+\p{L}/iu.test(after);
+        if(!terminal&&!relative&&!direct&&!participle)continue;
         // A question or another count inside the relative clause can change
         // the scope of the assertion; leave such cases to owner review.
         const sentenceTail=after.split(/[.!]/,1)[0];
-        if((relative||direct)&&(/[?]|\d/.test(sentenceTail)))continue;
-        if(direct&&/\b(?:if|unless|maybe|might|only|except|not|never)\b/i.test(sentenceTail))continue;
+        if((relative||direct||participle)&&(/[?]|\d/.test(sentenceTail)))continue;
+        if((direct||participle)&&/\b(?:if|unless|maybe|might|only|except|not|never)\b/i.test(sentenceTail))continue;
+        if(participle&&/\b(?:formerly|previously|temporarily|sometimes|occasionally|until)\b/i.test(sentenceTail))continue;
         const removeEnd=terminal?frameEnd+terminal[0].length:frameEnd;
         if(frameStart<start||removeEnd>end)continue;
         if(contradictingCorrection(turns,source.id,frame[0])?.id!==correction.id

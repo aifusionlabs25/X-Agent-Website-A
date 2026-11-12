@@ -128,7 +128,7 @@ test('independent exact evidence embedded inside a source uses absolute offsets 
 test('unsupported coordinated and qualified counts fail closed without discarding any sibling fact',()=>{
     for(const old of ['We have 10 people and use a shared inbox.','We have 10 people, 2 branches.',
         'We have 10 people (2 branches).','We have 10 people working 2 shifts.',
-        'We have 10 people processing requests.','We have 10 people available.']) {
+        'We have 10 people processing requests only after approval.','We have 10 people available.']) {
         const {s,source,current}=example(old),raw=[p(source),p(current)],before=JSON.stringify(raw),turns=JSON.stringify(s.turns);
         const result=apply(s,raw);assert.equal(result.accepted,false,old);assert.equal(s.proposals.length,0);
         assert.deepEqual(s.quarantined_proposals[0].proposals,raw);assert.deepEqual(s.handoff_binding_attempts[0].original_proposals,raw);
@@ -226,7 +226,7 @@ test('stored same-field relative details receive the same complete partition arc
 
 test('unsupported stored qualifiers block the provider update while retaining the complete previous mapping',()=>{
     for(const old of ['We have 10 people and use a shared inbox.','We have 10 people working 2 shifts.',
-        'We have 10 people processing requests.','We have 10 people available.']) {
+        'We have 10 people processing requests only after approval.','We have 10 people available.']) {
         const s=fresh(),source=u('source',old),current=u('current','Correction: we have 8 people, not 10.');
         appendTurn(s,source);assert.equal(apply(s,[p(source)],'initial').accepted,true);
         appendTurn(s,current);appendTurn(s,u('request','Please prepare a brief for human review.'));
@@ -234,6 +234,31 @@ test('unsupported stored qualifiers block the provider update while retaining th
         const result=apply(s,raw,'update');assert.equal(result.accepted,false,old);assert.deepEqual(s.proposals,before);assert.deepEqual(s.turns,turns);
         assert.equal(s.superseded_mappings,undefined);assert.deepEqual(s.quarantined_proposals[0].proposals,raw);
         assert.equal(s.handoff_binding_attempts.at(-1).applied,false);pendingOnly(s,result);
+    }
+});
+
+test('unqualified work-participle updates preserve every residual span and historical owner decision',()=>{
+    for(const work of ['processing requests','reviewing drafts','handling email','managing orders']) {
+        const s=fresh(),source=u('source',`Our shop is in Reno. We have 10 people ${work}. Quotes stay in the shared inbox.`);
+        const sibling=u('sibling','The owner reviews every quote.'),current=u('current','Correction: we have 8 people, not 10.');
+        appendTurn(s,source);appendTurn(s,sibling);
+        assert.equal(apply(s,[p(source),p(sibling,'rules')],'initial').accepted,true);
+        s.provider_transcript_verified=true;decide(s,digest(p(source)),'ACCEPT',fields);
+        const original=structuredClone(s.proposals.find(p=>p.visitor_message_id===source.id));
+        const decision=structuredClone(s.decisions.find(d=>d.proposal_id===original.id));
+        appendTurn(s,current);appendTurn(s,u('request','Please prepare a brief for human review.'));
+        const result=apply(s,[p(current)],'update');assert.equal(result.accepted,true);
+        assert.equal(s.superseded_mappings.length,1);const archived=s.superseded_mappings[0];
+        assert.deepEqual(archived.proposal,original);assert.deepEqual(archived.prior_decision,decision);
+        partitionAudit(archived.current_fact_selection,s.turns);
+        assert.equal(archived.current_fact_selection.removed_span.text,'We have 10 people');
+        assert.ok(s.proposals.some(p=>p.value===` ${work}. Quotes stay in the shared inbox.`));
+        assert.ok(s.proposals.some(p=>p.value==='Our shop is in Reno. '));
+        assert.ok(s.proposals.some(p=>p.value===sibling.content));
+        assert.ok(s.proposals.some(p=>p.value===current.content));
+        assert.ok(s.proposals.every(p=>!p.value.includes('We have 10 people')));
+        for(const id of archived.retained_proposal_ids)assert.ok(!s.decisions.some(d=>d.proposal_id===id));
+        validProposals(s);pendingOnly(s,result);
     }
 });
 
