@@ -1,6 +1,6 @@
 # Evan 6097 public-demo release candidate
 
-Status: owner approved publication after a successful manual test on November 13. Production staging and verification are in progress; the public domain has not yet moved.
+Status: owner approved publication after a successful manual test on November 13. **Not yet published.** The attempted no-domain production stage stopped at the repository's main-only release contract. The public domain is unchanged; no production environment variables were changed.
 
 Live verification update: the first November 13 public attempt was manually ended after Evan failed to progress beyond short acknowledgments. See `evan-duration-public-test-diagnostic-2026-11-13.md`; do not count that attempt as a timeout failure or successful release test. The subsequent owner-run session `76297577-e585-4410-9293-fbf521e65365` lasted 179.876 seconds, with a runtime limit of 180 seconds, the unchanged Run57 prompt, no end-session tool call, and no interruptions/errors/warnings. This strongly supports termination at the three-minute provider limit; the API supplies only `CLOSED_BY_ENGINE`, not a more specific reason. The two public-copy calls did not overlap. Owner reported normal conversation and approved this version for publication. This does not establish that automation caused the earlier failure: separate interrupted text-only diagnostics also reproduced short replies. The unsuccessful recovery-prompt experiment remains rejected and is not part of application runtime.
 
@@ -49,6 +49,10 @@ Live verification update: the first November 13 public attempt was manually ende
 - Production rollback target remains `dpl_532oXZx47MLz9UWBmRWkzDx4dqLF`, source `eb3ce310a94acff6a98f9929f08f4a0c41f927c6`. No production settings, Anam originals, website domains, or stable refs were changed.
 
 ## Approved production staging
+
+- Attempted stage: `dpl_Ghca9P1KH5SF1AqxZtsyhN9wKLyB` (`x-agent-website-2sw49zoc2-robs-projects-e72bad73.vercel.app`), source `dbcce6990f09df09df55517731a9cca7adf2330f`. Build rejected missing `VERCEL_GIT_COMMIT_REF` / non-main source before compilation. Other production configuration checks reported no failures. Do not bypass the guard or count this as a ready deployment.
+- The production runbook requires a reviewed merge into main. Remote main is still the live `eb3ce310` commit. Its GitHub workflow runs tests/build only; Vercel Git integration handles publication. Need a controlled main-branch staging path before promotion, with any temporary project-wide auto-publishing hold explicitly agreed and restored afterward. Current auto-assignment setting is not yet confirmed because the available project summary omits it.
+- New production verification helper is ready and locally mocked, but has not run against a successful production stage. It requires matching deployment/source receipts and checks public guest/email plus protected guest entry without starting an engine or sending email.
 
 - Build with production settings and `--skip-domain`; verify before promoting that exact build. Never promote the rehearsal build with an assumption that its settings are production-ready.
 - Enable `EVAN_CAPTURE_PRODUCTION_APPROVED=true`, keep the local engine, AIFL-only routing, public 180-second copy, and protected 1800-second copy.

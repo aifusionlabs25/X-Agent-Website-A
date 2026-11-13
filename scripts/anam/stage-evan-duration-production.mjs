@@ -42,6 +42,17 @@ function main() {
             sharedSettingsOverridden: false, aliasWrite: false, projectEnvWrite: false }));
         return;
     }
+    // The repository release contract permits main only. Do not spoof Vercel's
+    // source-ref environment or discover this restriction after uploading.
+    const branch = spawnSync('git', ['branch', '--show-current'], { encoding: 'utf8', windowsHide: true });
+    if (branch.status !== 0 || branch.stdout.trim() !== 'main') {
+        throw new Error('Production staging requires the reviewed release merged into main. Do not override the branch guard.');
+    }
+    const commit = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true });
+    const status = spawnSync('git', ['status', '--porcelain'], { encoding: 'utf8', windowsHide: true });
+    if (commit.status !== 0 || status.status !== 0 || status.stdout.trim()) {
+        throw new Error('Production staging requires a clean, identified main checkout');
+    }
     // Existing production credentials/shared settings are inherited by Vercel.
     // Only explicitly named Evan values travel to this build. No namespace override.
     const result = spawnSync(process.execPath, args, { encoding: 'utf8', windowsHide: true,
@@ -53,8 +64,6 @@ function main() {
     if (result.status !== 0) process.exit(result.status ?? 1);
     const urls = result.stdout.match(/https:\/\/x-agent-website-[a-z0-9]+-robs-projects-e72bad73\.vercel\.app/g) ?? [];
     if (urls.length !== 1) throw new Error('Expected one immutable deployment URL');
-    const commit = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true });
-    if (commit.status !== 0) throw new Error('Unable to record source commit');
     writeFileSync('.vercel/evan-duration-production-stage.json', JSON.stringify({
         url: urls[0], environment: 'production', skipDomain: true, stagedAt: new Date().toISOString(),
         sourceCommit: commit.stdout.trim(), checkpointHash: copies.checkpointHash,
