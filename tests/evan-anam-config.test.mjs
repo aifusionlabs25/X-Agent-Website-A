@@ -199,7 +199,7 @@ test('knowledge manifest is complete and excludes internal/Tavus material', asyn
 test('token route allowlists personas and fails closed before minting an unready Evan session', async () => {
     const route = await readFile(new URL('../app/api/anam-token/route.ts', import.meta.url), 'utf8');
     const allowlist = route.indexOf('allowedPersonaIds: ALLOWED_PERSONA_IDS');
-    const readiness = route.indexOf('readEvanPersonaReadiness(anamApiKey)');
+    const readiness = route.indexOf('verifyEvanDemoPersona(anamApiKey, evanDemoPolicy)');
     const token = route.indexOf("fetch('https://api.anam.ai/v1/auth/session-token'");
     assert.ok(allowlist > 0 && allowlist < token);
     assert.ok(readiness > 0 && readiness < token);

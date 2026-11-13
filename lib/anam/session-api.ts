@@ -5,6 +5,8 @@ import {
     normalizeAmyTranscript,
 } from './session-spine.ts';
 import type { AmyAnamLaunchRecord, AmyTranscriptTurn } from './session-spine.ts';
+import { EVAN_PERSONA_ID } from './persona-ids.ts';
+import { isEvanDemoPolicy } from './evan-demo-policy.ts';
 
 const ANAM_API_BASE = 'https://api.anam.ai/v1';
 const DEFAULT_REQUEST_TIMEOUT_MS = 5_000;
@@ -223,7 +225,14 @@ export function verifyAnamSessionMetadata(
     if (metadata.clientLabel !== launch.clientLabel) {
         throw new AnamSessionApiError('Anam session launch identity did not match', 403);
     }
-    if (metadata.personaId !== launch.resolvedPersonaId) {
+    // Only a server-reserved Evan launch can refer to a duration-limited clone.
+    // All other personas, and historical Evan sessions, retain the strict original match.
+    if (launch.evanDemoPolicy && (launch.agentSlug !== 'evan'
+        || launch.resolvedPersonaId !== EVAN_PERSONA_ID || !isEvanDemoPolicy(launch.evanDemoPolicy))) {
+        throw new AnamSessionApiError('Evan demo policy was invalid', 403);
+    }
+    const providerPersonaId = launch.evanDemoPolicy?.providerPersonaId ?? launch.resolvedPersonaId;
+    if (metadata.personaId !== providerPersonaId) {
         throw new AnamSessionApiError('Anam session persona did not match', 403);
     }
     if (metadata.personaConfig?.enableAudioPassthrough === true) {

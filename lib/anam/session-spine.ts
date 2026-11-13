@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { DANI_PERSONA_ID, EVAN_PERSONA_ID } from './persona-ids.ts';
 import { AMY_CARA4_VARIANT } from './session-config.ts';
+import type { EvanDemoPolicy } from './evan-demo-policy.ts';
 
 export const DANI_AI_SOLUTIONS_VARIANT = 'dani-ai-solutions';
 export const EVAN_MULLINS_VARIANT = 'evan-mullins';
@@ -48,6 +49,8 @@ export type AmyAnamLaunchRecord = {
     createdAt: string;
     boundSessionId?: string;
     boundAt?: string;
+    // Server-authored only. Keep logical Evan identity for the existing planner/email pipeline.
+    evanDemoPolicy?: EvanDemoPolicy;
 };
 
 export type AmyAnamSessionRecord = {

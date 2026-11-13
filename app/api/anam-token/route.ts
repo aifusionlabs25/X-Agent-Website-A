@@ -14,12 +14,14 @@ import {
     readDaniAnamContactFromRequest,
 } from '@/lib/anam/contact-token';
 import { AMY_CARA4_VARIANT, resolveAnamSessionPersona } from '@/lib/anam/session-config';
+import { resolveEvanDemoPolicy } from '@/lib/anam/evan-demo-policy';
+import type { EvanDemoPolicy } from '@/lib/anam/evan-demo-policy';
+import { verifyEvanDemoPersona } from '@/lib/anam/evan-demo-runtime';
 import {
     DANI_PERSONA_ID,
     EVAN_PERSONA_ID,
     readAmyCara4PersonaReadiness,
     readDaniPersonaReadiness,
-    readEvanPersonaReadiness,
 } from '@/lib/anam/persona-readiness';
 import {
     AMY_ANAM_BROWSER_COOKIE,
@@ -87,6 +89,12 @@ export async function POST(req: Request) {
         const isDani = resolution.personaId === DANI_PERSONA_ID;
         const isEvan = resolution.personaId === EVAN_PERSONA_ID;
         const evanLocalTestMode = isEvan && isEvanLocalTestMode();
+        let evanDemoPolicy: EvanDemoPolicy | null = null;
+        if (isEvan) {
+            if (!spineConfig.gatesOpen) return noStoreJson({ error: 'Evan session access is temporarily unavailable' }, { status: 503 });
+            try { evanDemoPolicy = resolveEvanDemoPolicy(req); }
+            catch { return noStoreJson({ error: 'Evan demo access is temporarily unavailable' }, { status: 503 }); }
+        }
         // Disabling optional features must never disable Amy's invitation gate.
         if (isAmyCara4 && (!spineConfig.gatesOpen || !memoryConfig.gatesOpen)) {
             return noStoreJson(
@@ -118,34 +126,13 @@ export async function POST(req: Request) {
             );
         }
 
-        if (resolution.personaId === EVAN_PERSONA_ID) {
-            let personaReadiness;
+        if (evanDemoPolicy) {
             try {
-                personaReadiness = await readEvanPersonaReadiness(anamApiKey);
+                // Verify the frozen release copy, not the independently evolving
+                // 6097 rehearsal persona. Other agents retain their own preflight.
+                await verifyEvanDemoPersona(anamApiKey, evanDemoPolicy);
             } catch {
                 console.error('[Evan Anam Configuration] Preflight unavailable');
-                return noStoreJson(
-                    { error: 'Evan is temporarily unavailable while his configuration is checked.' },
-                    { status: 503 },
-                );
-            }
-            if (!personaReadiness.ready) {
-                console.error('[Evan Anam Configuration] Out of sync', {
-                    personaIdMatches: personaReadiness.personaIdMatches,
-                    identityMatches: personaReadiness.identityMatches,
-                    publishedRevisionMatches: personaReadiness.publishedRevisionMatches,
-                    cara4AvatarConfigured: personaReadiness.cara4AvatarConfigured,
-                    avatarIdMatches: personaReadiness.avatarIdMatches,
-                    voiceIdMatches: personaReadiness.voiceIdMatches,
-                    llmIdMatches: personaReadiness.llmIdMatches,
-                    promptHashMatches: personaReadiness.promptHashMatches,
-                    voiceDetectionConfigured: personaReadiness.voiceDetectionConfigured,
-                    sessionDataRetentionConfigured: personaReadiness.sessionDataRetentionConfigured,
-                    anamTranscriptionPipelineConfigured: personaReadiness.anamTranscriptionPipelineConfigured,
-                    toolAttachmentMatches: personaReadiness.toolAttachmentMatches,
-                    missingToolNames: personaReadiness.missingToolNames,
-                    missingPromptMarkers: personaReadiness.missingPromptMarkers,
-                });
                 return noStoreJson(
                     { error: 'Evan is temporarily unavailable while his configuration is checked.' },
                     { status: 503 },
@@ -377,6 +364,7 @@ export async function POST(req: Request) {
                 Date.now(),
                 isDani ? 'dani' : isEvan ? 'evan' : 'amy',
             );
+            if (evanDemoPolicy) launch.evanDemoPolicy = evanDemoPolicy;
             if (!await storeAmyAnamLaunch(launch)) {
                 throw new Error('Amy Anam launch could not be reserved');
             }
@@ -393,7 +381,7 @@ export async function POST(req: Request) {
                 body: JSON.stringify({
                     ...(launch ? { clientLabel: launch.clientLabel } : {}),
                     personaConfig: {
-                        personaId: resolution.personaId,
+                        personaId: evanDemoPolicy?.providerPersonaId ?? resolution.personaId,
                     },
                 }),
                 signal: AbortSignal.timeout(10_000),
@@ -420,6 +408,7 @@ export async function POST(req: Request) {
 
         const result = noStoreJson({
             sessionToken: data.sessionToken,
+            ...(evanDemoPolicy ? { demoPolicy: { mode: evanDemoPolicy.mode, maxSeconds: evanDemoPolicy.maxSeconds } } : {}),
             variant: resolution.variant,
             sessionSpineEnabled: Boolean(launch),
             ...(launch ? { launchId: launch.launchId } : {}),

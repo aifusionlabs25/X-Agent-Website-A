@@ -7,6 +7,7 @@ import {
     MessageStreamEvent,
 } from '@anam-ai/js-sdk';
 import { BrainCircuit, Truck } from 'lucide-react';
+import { createEvanDemoClock, formatEvanDemoTime } from '@/lib/anam/evan-demo-clock';
 import AmyAnamWorkbenchV2 from '@/components/amy/AmyAnamWorkbenchV2';
 import EvanMovePlanner from '@/components/evan/EvanMovePlanner';
 import EvanSessionExit from '@/components/evan/EvanSessionExit';
@@ -98,6 +99,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
     const [isConnecting, setIsConnecting] = useState(true);
     const [isFinalizing, setIsFinalizing] = useState(false);
     const [unexpectedEvanClose, setUnexpectedEvanClose] = useState(false);
+    const [evanDemoTime, setEvanDemoTime] = useState<{ remaining: number; mode: string } | null>(null);
     const [amyArtifactPending, setAmyArtifactPending] = useState(false);
     const [workbenchOpen, setWorkbenchOpen] = useState(false);
     const workbenchOpenRef = useRef(false);
@@ -198,6 +200,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         let removeEmailToolHandler: (() => void) | null = null;
         let removeCloseToolHandler: (() => void) | null = null;
         let requestedCloseReason: string | null = null;
+        let evanDemoClock: ReturnType<typeof createEvanDemoClock> | null = null;
+        let evanDemoTimer: number | null = null;
         let evanCloseCoordinator: ReturnType<typeof createEvanFarewellCloseCoordinator> | null = null;
         let evanResponseRecovery: ReturnType<typeof createEvanResponseRecovery> | null = null;
         let evanExplicitCloseFallback: ReturnType<typeof createEvanExplicitCloseFallback> | null = null;
@@ -266,6 +270,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
         setError(null);
         setIsConnecting(true);
         setIsFinalizing(false);
+        setEvanDemoTime(null);
         setAmyArtifactPending(false);
         setAmyWorkbenchOpen(false);
         setAmyWorkbenchView('capabilities');
@@ -651,6 +656,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     evanGuestEmailAvailable?: boolean;
                     evanMullinsHandoffConfigured?: boolean;
                     evanCaptureEnabled?: boolean;
+                    demoPolicy?: { mode: 'public' | 'extended'; maxSeconds: number };
                 };
                 if (!tokenPayload.sessionToken) {
                     throw new Error('Session token response was incomplete');
@@ -725,6 +731,22 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                                 .catch(() => console.error('[Evan Anam] Pause recovery was not confirmed'));
                         },
                     });
+                    const policy = tokenPayload.demoPolicy;
+                    if (!policy || (policy.maxSeconds !== 180 && policy.maxSeconds !== 1800)) throw new Error('Evan demo duration was not confirmed');
+                    evanDemoClock = createEvanDemoClock(policy.maxSeconds);
+                    const tick = () => {
+                        if (!isMounted || closeHandled || !evanDemoClock) return;
+                        const time = evanDemoClock.read();
+                        setEvanDemoTime(previous => previous?.remaining === time.remaining && previous.mode === policy.mode
+                            ? previous : { remaining: time.remaining, mode: policy.mode });
+                        if (!time.justExpired) return;
+                        requestedCloseReason = 'demo_time_limit';
+                        setIsFinalizing(true);
+                        // The provider cap is primary. This fallback also stops the
+                        // stream if the browser sees the deadline before its close event.
+                        void anamClient.stopStreaming().catch(() => console.error('[Evan Demo] Provider stop was not confirmed'));
+                    };
+                    evanDemoTimer = window.setInterval(tick, 250);
                     evanCloseCoordinator = createEvanFarewellCloseCoordinator({
                         stopStreaming: () => {
                             // Irreversible teardown belongs to committed closure, not a
@@ -1111,6 +1133,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 const handleConnectionEstablished = () => {
                     console.log('Anam connection established');
                     connectionEstablished = true;
+                    evanDemoClock?.start();
                     applyMemoryPolicy();
                     applyEvanHandoffPolicy();
                     if (isMounted) setIsConnecting(false);
@@ -1512,6 +1535,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
                 const handleConnectionClosed = async (reason: ConnectionClosedCode, details?: string) => {
                     if (closeHandled) return;
+                    if (evanDemoTimer !== null) window.clearInterval(evanDemoTimer);
+                    // The provider may close at the deadline before the next UI
+                    // timer tick. This is an expected demo exit, not a dropout.
+                    if (isEvan && requestedCloseReason === null && evanDemoClock?.read().remaining === 0) {
+                        requestedCloseReason = 'demo_time_limit';
+                    }
                     closeHandled = true;
                     const unexpectedEvanDisconnect = isUnexpectedEvanClose({
                         isEvan,
@@ -2135,6 +2164,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
             evanResponseRecovery?.dispose();
             evanExplicitCloseFallback?.dispose();
             evanRefusedCloseRecovery?.dispose();
+            if (evanDemoTimer !== null) window.clearInterval(evanDemoTimer);
             amyArtifactOperation.cancel();
             window.removeEventListener('pagehide', handlePageHide);
             window.removeEventListener('xagent:dani-request-end', handleDaniRequestedEnd);
@@ -2166,6 +2196,12 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
 
     return (
         <div className={`relative flex h-full w-full flex-col items-center justify-center ${evanPlannerEnabled ? 'bg-[#100718]' : personaId === DANI_PERSONA_ID ? 'bg-[#101713]' : 'bg-zinc-950'}`}>
+            {personaId === EVAN_PERSONA_ID && evanDemoTime && !error && !isConnecting && (
+                <div data-testid="evan-demo-countdown" className="pointer-events-none absolute left-2 top-2 z-[70] max-w-[calc(100%-1rem)] rounded-xl border border-[#ffc857]/30 bg-[#160925]/95 px-3 py-2 text-xs text-[#ffdc8a] shadow-lg">
+                    <p><span className="font-bold tabular-nums">{formatEvanDemoTime(evanDemoTime.remaining)}</span> remaining · {evanDemoTime.mode === 'extended' ? 'Private demo' : 'Public demo'}</p>
+                    {evanDemoTime.remaining <= 30 && <p role="status" className="mt-1 text-white">{evanDemoTime.remaining === 0 ? 'Demo time has ended. Saving your session…' : 'Your demo ends shortly. Thanks for exploring Evan.'}</p>}
+                </div>
+            )}
             {workbenchEnabled && amyArtifactPending && (
                 <div role="status" aria-live="polite" className="absolute left-1/2 top-16 z-[70] -translate-x-1/2 rounded-full bg-black/80 px-4 py-2 text-sm text-white">
                     One moment while I update your working view.

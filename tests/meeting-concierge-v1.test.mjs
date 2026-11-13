@@ -130,7 +130,10 @@ test('Evan adapter uses only Evan identity, consent, persona, and routes', () =>
   assert.match(client, /Meeting transcripts, recap emails, and returning memory are not included in Meeting Concierge v1/);
 
   const route = read(evanFiles[1]);
-  assert.match(route, /expectedPersonaId:\s*EVAN_PERSONA_ID/);
+  assert.match(route, /expectedPersonaId:\s*providerPersonaId/);
+  assert.match(route, /process.env.EVAN_EXTENDED_DEMO_PERSONA_ID\?\.trim\(\)/);
+  assert.match(route, /if \(!hasEvanDemoGrant\(request\)\) return null/);
+  assert.match(route, /Math.min\(maxSessionLengthSeconds, EVAN_EXTENDED_DEMO_SECONDS\)/);
   assert.match(route, /contact\?\.purpose\s*!==\s*['"]evan_follow_up['"]/);
   assert.match(route, /removeToolNames:\s*\[[\s\S]*['"]end_mullins_session['"][\s\S]*['"]send_mullins_follow_up_email['"][\s\S]*['"]show_move_planner['"]/);
   assert.match(route, /addToolNames:\s*\[['"]end_call['"]\]/);

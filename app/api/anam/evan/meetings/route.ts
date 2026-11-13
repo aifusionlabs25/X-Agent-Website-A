@@ -1,4 +1,4 @@
-import { EVAN_PERSONA_ID } from '@/lib/anam/persona-ids';
+import { EVAN_EXTENDED_DEMO_SECONDS, hasEvanDemoGrant, resolveEvanDemoPolicy } from '@/lib/anam/evan-demo-policy';
 import {
     isTrustedBrowserOrigin,
     readAmyAnamBrowserSession,
@@ -31,10 +31,12 @@ const evanMeetingConcierge = createMeetingConciergeHandlers({
         return readAmyAnamSpineConfig().signingSecret;
     },
     async resolvePersona({ apiKey, maxSessionLengthSeconds }) {
+        const providerPersonaId = process.env.EVAN_EXTENDED_DEMO_PERSONA_ID?.trim();
+        if (!providerPersonaId) throw new Error('Protected Evan demo is not configured');
         return {
             personaConfig: await resolveMeetingPersonaSnapshot({
                 apiKey,
-                expectedPersonaId: EVAN_PERSONA_ID,
+                expectedPersonaId: providerPersonaId,
                 removeToolNames: [
                     'end_mullins_session',
                     'send_mullins_follow_up_email',
@@ -43,11 +45,15 @@ const evanMeetingConcierge = createMeetingConciergeHandlers({
                 addToolNames: ['end_call'],
                 addToolTypes: { end_call: 'SYSTEM' },
                 systemPromptSuffix: EVAN_MEETING_EXIT_INSTRUCTIONS,
-                maxSessionLengthSeconds,
+                maxSessionLengthSeconds: Math.min(maxSessionLengthSeconds, EVAN_EXTENDED_DEMO_SECONDS),
             }),
         };
     },
     async readOrganizer(request) {
+        // A public check-in must not bypass the website's three-minute policy
+        // by creating an external meeting. Longer meetings require private access.
+        if (!hasEvanDemoGrant(request)) return null;
+        try { resolveEvanDemoPolicy(request); } catch { return null; }
         const spine = readAmyAnamSpineConfig();
         if (!spine.gatesOpen) return null;
         const browser = readAmyAnamBrowserSession(request, spine.signingSecret);

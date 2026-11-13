@@ -59,6 +59,7 @@ const ALLOWED_CLOSE_REASONS = new Set([
     'pagehide',
     'unmount',
     'user_requested_end',
+    'demo_time_limit',
     'unknown',
 ]);
 

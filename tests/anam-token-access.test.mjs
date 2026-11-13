@@ -16,6 +16,9 @@ const REDIS_URL = 'https://token-access-redis.invalid';
 const PROVIDER_URL = 'https://api.anam.ai/v1/auth/session-token';
 const ORIGIN = 'https://access-test.invalid';
 const SECRET = 'offline-token-access-signing-secret-over-32-characters';
+const EVAN_PUBLIC_COPY_ID = '11111111-1111-4111-8111-111111111111';
+const EVAN_PRIVATE_COPY_ID = '22222222-2222-4222-8222-222222222222';
+const EVAN_DEMO_CODE = 'offline-private-demo-access-code-over-32-characters';
 
 // Execute the complete routes with real resolution, configuration, cookie
 // signatures, identity storage, launch reservation and rate-limit code. A VM
@@ -32,9 +35,12 @@ function harness(options = {}) {
         AMY_ANAM_MEMORY_ENABLED: 'true', AMY_ANAM_MEMORY_KILL_SWITCH: 'false',
         AMY_ANAM_MEMORY_ACCESS_CODE: 'offline-invitation-code',
         AMY_ANAM_MEMORY_IDENTITY_SALT: 'offline-identity-salt-over-32-characters',
+        EVAN_PUBLIC_DEMO_PERSONA_ID: EVAN_PUBLIC_COPY_ID,
+        EVAN_EXTENDED_DEMO_PERSONA_ID: EVAN_PRIVATE_COPY_ID,
+        EVAN_EXTENDED_DEMO_ACCESS_KEY: EVAN_DEMO_CODE,
         ...options.env,
     };
-    const db = new Map(), providerCalls = [], readinessCalls = [], unexpected = [];
+    const db = new Map(), providerCalls = [], readinessCalls = [], evanReadinessCalls = [], unexpected = [];
     const fetch = async (url, init = {}) => {
         const target = String(url), body = init.body ? JSON.parse(init.body) : null;
         if (target === PROVIDER_URL) {
@@ -54,6 +60,13 @@ function harness(options = {}) {
                     const count = Number(db.get(command[3]) || 0) + 1;
                     db.set(command[3], count); return { result: [count, command[4]] };
                 }
+                // Capture the real binding function's serialized launch/session
+                // records without delegating Redis execution to a network.
+                if (operation === 'EVAL' && command[2] === 2 && command[1].includes("return 'bound'")) {
+                    db.set(command[3], command[9]);
+                    db.set(command[4], command[10]);
+                    return { result: 'bound' };
+                }
                 unexpected.push('Redis command: ' + operation);
                 throw new Error('Unexpected offline Redis command');
             }));
@@ -65,6 +78,13 @@ function harness(options = {}) {
         ['lib/anam/outbound-email-config.ts', { readAmyAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
         ['lib/anam/dani-agentmail.ts', { readDaniAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
         ['lib/anam/evan-agentmail.ts', { readEvanAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
+        ['lib/anam/evan-demo-runtime.ts', {
+            verifyEvanDemoPersona: async (_apiKey, policy) => {
+                evanReadinessCalls.push(JSON.parse(JSON.stringify(policy)));
+                if (options.evanCloneDrift) throw new Error('Offline clone checkpoint mismatch');
+            },
+        }],
+        ['lib/anam/evan-capture-service.ts', { readEvanCaptureConfig: () => ({ enabled: env.EVAN_CAPTURE_ENABLED === 'true' }) }],
         ['lib/anam/dani-user-memory.ts', { readDaniAnamMemoryConfig: () => ({ enabled: false, gatesOpen: false }) }],
         ['lib/anam/dani-memory-candidate.ts', { assertDaniAnamMemoryReviewArtifact: () => { throw new Error('Unexpected Dani operation'); } }],
         ['lib/anam/persona-readiness.ts', {
@@ -109,6 +129,10 @@ function harness(options = {}) {
     }
     const tokenRoute = load('app/api/anam-token/route.ts');
     const accessRoute = load('app/api/anam/amy/access/route.ts');
+    const evanAccessRoute = load('app/api/anam/evan/access/route.ts');
+    const demoPolicy = load('lib/anam/evan-demo-policy.ts');
+    const sessionApi = load('lib/anam/session-api.ts');
+    const sessionStore = load('lib/anam/session-spine-store.ts');
     const spine = load('lib/anam/session-spine.ts');
     const agents = load('lib/agents.ts').ALL_AGENTS;
     function request(path, body, cookie = '', origin = ORIGIN) {
@@ -124,8 +148,9 @@ function harness(options = {}) {
         return { response, status: response.status, data: await response.json() };
     }
     return {
-        env, db, providerCalls, readinessCalls, spine, agents,
+        env, db, providerCalls, readinessCalls, evanReadinessCalls, spine, agents, sessionApi, sessionStore,
         post: async (body, cookie = '', origin = ORIGIN) => result(await tokenRoute.POST(request('/api/anam-token', body, cookie, origin))),
+        postWithQuery: async (query, body, cookie = '') => result(await tokenRoute.POST(request('/api/anam-token?' + query, body, cookie))),
         status: async (cookie = '') => result(await accessRoute.GET(request('/api/anam/amy/access', undefined, cookie))),
         checkIn: async (memoryConsent = false, accessCode = env.AMY_ANAM_MEMORY_ACCESS_CODE) => {
             const checked = await result(await accessRoute.POST(request('/api/anam/amy/access', {
@@ -138,6 +163,12 @@ function harness(options = {}) {
             const created = spine.createAmyAnamBrowserSessionWithSecret(secret, now);
             return { ...created, cookie: `${spine.AMY_ANAM_BROWSER_COOKIE}=${encodeURIComponent(created.token)}` };
         },
+        evanGuestCheckIn: async () => {
+            const checked = await result(await evanAccessRoute.POST(request('/api/anam/evan/access', { guest: true })));
+            const cookie = checked.response.cookies.get(spine.AMY_ANAM_BROWSER_COOKIE);
+            return { ...checked, cookie: cookie ? `${cookie.name}=${encodeURIComponent(cookie.value)}` : '' };
+        },
+        demoGrantCookie: (grantOrigin = ORIGIN, now = Date.now()) => `${demoPolicy.EVAN_DEMO_COOKIE}=${demoPolicy.createEvanDemoGrant(grantOrigin, env, now)}`,
     };
 }
 
@@ -287,4 +318,120 @@ test('unknown personas, direct canonical IDs and unsupported or malformed varian
     ];
     for (const [body, status] of cases) assert.equal((await h.post(body)).status, status, JSON.stringify(body));
     assert.equal(h.providerCalls.length, 0);
+});
+
+test('public Evan guest check-in receives only the 180-second provider copy', async () => {
+    const h = harness();
+    assert.equal((await h.post({ personaId: EVAN_PERSONA_ID })).status, 401, 'normal guest check-in remains required');
+    const checked = await h.evanGuestCheckIn();
+    assert.equal(checked.status, 200);
+    const result = await h.post({ personaId: EVAN_PERSONA_ID }, checked.cookie);
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.data.demoPolicy, { mode: 'public', maxSeconds: 180 });
+    assert.equal(result.data.sessionSpineEnabled, true);
+    assert.equal(h.providerCalls.length, 1);
+    assert.equal(h.providerCalls[0].body.personaConfig.personaId, EVAN_PUBLIC_COPY_ID);
+    assert.deepEqual(h.evanReadinessCalls.at(-1), { mode: 'public', maxSeconds: 180, providerPersonaId: EVAN_PUBLIC_COPY_ID });
+    assert.equal(result.data.demoPolicy.providerPersonaId, undefined);
+});
+
+test('only the signed private grant selects the 1800-second provider copy', async () => {
+    const h = harness(), checked = await h.evanGuestCheckIn();
+    const result = await h.post({ personaId: EVAN_PERSONA_ID }, `${checked.cookie}; ${h.demoGrantCookie()}`);
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.data.demoPolicy, { mode: 'extended', maxSeconds: 1800 });
+    assert.equal(h.providerCalls[0].body.personaConfig.personaId, EVAN_PRIVATE_COPY_ID);
+    assert.deepEqual(h.evanReadinessCalls, [{ mode: 'extended', maxSeconds: 1800, providerPersonaId: EVAN_PRIVATE_COPY_ID }]);
+});
+
+test('client query/body overrides and invalid private grants never upgrade public Evan', async () => {
+    for (const mode of ['query', 'body', 'tampered', 'expired', 'cross-origin']) {
+        const h = harness(), checked = await h.evanGuestCheckIn();
+        let cookie = checked.cookie;
+        if (mode === 'tampered') cookie += `; ${h.demoGrantCookie()}x`;
+        if (mode === 'expired') cookie += `; ${h.demoGrantCookie(ORIGIN, Date.now() - 3_700_000)}`;
+        if (mode === 'cross-origin') cookie += `; ${h.demoGrantCookie('https://another-preview.invalid')}`;
+        const body = { personaId: EVAN_PERSONA_ID, ...(mode === 'body' ? { mode: 'extended', maxSeconds: 1800, providerPersonaId: EVAN_PRIVATE_COPY_ID } : {}) };
+        const result = mode === 'query'
+            ? await h.postWithQuery(`mode=extended&maxSeconds=1800&providerPersonaId=${EVAN_PRIVATE_COPY_ID}`, body, cookie)
+            : await h.post(body, cookie);
+        assert.equal(result.status, 200, mode);
+        assert.deepEqual(result.data.demoPolicy, { mode: 'public', maxSeconds: 180 }, mode);
+        assert.equal(h.providerCalls[0].body.personaConfig.personaId, EVAN_PUBLIC_COPY_ID, mode);
+    }
+});
+
+test('unconfigured Evan duration, unavailable spine, and clone drift fail closed', async () => {
+    for (const patch of [
+        { EVAN_PUBLIC_DEMO_PERSONA_ID: '' }, { EVAN_PUBLIC_DEMO_PERSONA_ID: 'invalid' },
+        { AMY_ANAM_SESSION_SPINE_ENABLED: 'false' }, { AMY_ANAM_SESSION_SPINE_KILL_SWITCH: 'true' },
+    ]) {
+        const h = harness(), checked = await h.evanGuestCheckIn();
+        Object.assign(h.env, patch);
+        const result = await h.post({ personaId: EVAN_PERSONA_ID }, checked.cookie);
+        assert.equal(result.status, 503);
+        assert.equal(h.providerCalls.length, 0);
+    }
+    const h = harness({ evanCloneDrift: true }), checked = await h.evanGuestCheckIn();
+    assert.equal((await h.post({ personaId: EVAN_PERSONA_ID }, checked.cookie)).status, 503);
+    assert.equal(h.providerCalls.length, 0);
+    assert.equal([...h.db.keys()].some(key => key.includes(':launch:')), false);
+    const privateMissing = harness(), privateChecked = await privateMissing.evanGuestCheckIn();
+    const privateCookie = `${privateChecked.cookie}; ${privateMissing.demoGrantCookie()}`;
+    privateMissing.env.EVAN_EXTENDED_DEMO_PERSONA_ID = '';
+    assert.equal((await privateMissing.post({ personaId: EVAN_PERSONA_ID }, privateCookie)).status, 503);
+    assert.equal(privateMissing.providerCalls.length, 0);
+});
+
+test('provider copy IDs cannot be requested directly even with an extended grant', async () => {
+    const h = harness(), checked = await h.evanGuestCheckIn();
+    for (const personaId of [EVAN_PUBLIC_COPY_ID, EVAN_PRIVATE_COPY_ID]) {
+        assert.equal((await h.post({ personaId }, `${checked.cookie}; ${h.demoGrantCookie()}`)).status, 403);
+    }
+    assert.equal(h.providerCalls.length, 0);
+});
+
+test('Evan launch and bound session preserve logical identity while provider metadata requires the selected copy', async () => {
+    for (const extended of [false, true]) {
+        const h = harness(), checked = await h.evanGuestCheckIn();
+        const result = await h.post({ personaId: EVAN_PERSONA_ID }, checked.cookie + (extended ? `; ${h.demoGrantCookie()}` : ''));
+        const launchKey = 'xagent:amy:anam:launch:v1:' + result.data.launchId;
+        const launch = JSON.parse(h.db.get(launchKey));
+        const providerPersonaId = extended ? EVAN_PRIVATE_COPY_ID : EVAN_PUBLIC_COPY_ID;
+        assert.equal(launch.resolvedPersonaId, EVAN_PERSONA_ID);
+        assert.equal(launch.agentSlug, 'evan');
+        assert.equal(launch.evanDemoPolicy.providerPersonaId, providerPersonaId);
+        assert.equal(h.providerCalls[0].body.clientLabel, launch.clientLabel);
+        const metadata = { id: '33333333-3333-4333-8333-333333333333', personaId: providerPersonaId,
+            clientLabel: launch.clientLabel, personaConfig: { type: 'stateful', metadata: { client: 'js-sdk' } } };
+        assert.doesNotThrow(() => h.sessionApi.verifyAnamSessionMetadata(metadata, launch));
+        for (const wrong of [EVAN_PERSONA_ID, extended ? EVAN_PUBLIC_COPY_ID : EVAN_PRIVATE_COPY_ID, SECURED_AMY_ID]) {
+            assert.throws(() => h.sessionApi.verifyAnamSessionMetadata({ ...metadata, personaId: wrong }, launch), /persona did not match/);
+        }
+        assert.throws(() => h.sessionApi.verifyAnamSessionMetadata(metadata, { ...launch, agentSlug: 'amy' }), /policy was invalid/);
+        assert.throws(() => h.sessionApi.verifyAnamSessionMetadata(metadata, { ...launch, resolvedPersonaId: SECURED_AMY_ID }), /policy was invalid/);
+        assert.throws(() => h.sessionApi.verifyAnamSessionMetadata({ ...metadata, clientLabel: 'foreign' }, launch), /identity did not match/);
+        assert.equal(await h.sessionStore.bindAmyAnamLaunch({ launch, browserSessionId: launch.browserSessionId, externalSessionId: metadata.id }), 'bound');
+        const boundLaunch = JSON.parse(h.db.get(launchKey));
+        const session = JSON.parse(h.db.get('xagent:amy:anam:session:v1:' + metadata.id));
+        assert.equal(boundLaunch.evanDemoPolicy.providerPersonaId, providerPersonaId);
+        assert.equal(session.resolvedPersonaId, EVAN_PERSONA_ID, 'capture and emails retain logical Evan');
+        assert.equal(session.agentSlug, 'evan');
+        assert.equal(session.variant, launch.variant);
+    }
+});
+
+test('missing Evan configuration and private grants cannot affect Amy or unrelated public agents', async () => {
+    const h = harness({ evanCloneDrift: true, env: { EVAN_PUBLIC_DEMO_PERSONA_ID: '', EVAN_EXTENDED_DEMO_PERSONA_ID: '' } });
+    const checked = await h.checkIn();
+    const result = await h.post({ personaId: AMY_ID }, `${checked.cookie}; ${h.demoGrantCookie()}`);
+    assert.equal(result.status, 200);
+    assert.equal(result.data.demoPolicy, undefined);
+    assert.equal(h.providerCalls[0].body.personaConfig.personaId, SECURED_AMY_ID);
+    const unrelated = h.agents.find(agent => agent.slug === 'michael').personaId;
+    const other = await h.post({ personaId: unrelated }, h.demoGrantCookie());
+    assert.equal(other.status, 200);
+    assert.equal(other.data.demoPolicy, undefined);
+    assert.equal(h.providerCalls[1].body.personaConfig.personaId, unrelated);
+    assert.deepEqual(h.evanReadinessCalls, []);
 });
