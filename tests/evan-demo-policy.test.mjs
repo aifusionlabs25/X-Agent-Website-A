@@ -7,7 +7,7 @@ import {
     EVAN_EXTENDED_DEMO_SECONDS, EVAN_PUBLIC_DEMO_SECONDS,
     hasEvanDemoGrant, isEvanDemoPolicy, resolveEvanDemoPolicy, verifyEvanDemoAccessCode,
 } from '../lib/anam/evan-demo-policy.ts';
-import { createEvanDemoClock, formatEvanDemoTime } from '../lib/anam/evan-demo-clock.ts';
+import { createEvanDemoClock, formatEvanDemoTime, isEvanDemoDeadlineClose } from '../lib/anam/evan-demo-clock.ts';
 import { isUnexpectedEvanClose } from '../lib/anam/evan-unexpected-close.ts';
 
 const origin = 'https://evan-preview.example';
@@ -154,9 +154,21 @@ test('duration UI preserves Run57 capture, recovery, and contact context wiring'
         assert.ok(player.includes(`${symbol}({`), `${symbol} remains connected`);
     }
     assert.match(player, /evanDemoClock\?\.start\(\)/);
-    assert.match(player, /evanDemoClock\?\.read\(\)\.remaining === 0/);
+    assert.match(player, /isEvanDemoDeadlineClose\(evanDemoClock\?\.read\(\), reason === ConnectionClosedCode.SERVER_CLOSED_CONNECTION\)/);
     assert.match(player, /requestedCloseReason = 'demo_time_limit'/);
     assert.match(gate, /EvanPlannerContactContext\.Provider value=\{plannerCheckIn\}/);
     assert.match(gate, /setPlannerCheckIn\(mode === 'email'/);
     assert.doesNotMatch(player + gate, /^<{7}|^={7}|^>{7}/m);
+    assert.match(gate, /Demo mode: all recap and team emails go to AI Fusion Labs/);
+});
+
+test('provider deadline skew is bounded and does not hide early or transport failures', () => {
+    assert.equal(isEvanDemoDeadlineClose({ started: true, remaining: 0 }, false), true);
+    for (const remaining of [1, 2, 3]) {
+        assert.equal(isEvanDemoDeadlineClose({ started: true, remaining }, true), true);
+        assert.equal(isEvanDemoDeadlineClose({ started: true, remaining }, false), false);
+    }
+    for (const remaining of [4, 30, 180]) assert.equal(isEvanDemoDeadlineClose({ started: true, remaining }, true), false);
+    assert.equal(isEvanDemoDeadlineClose({ started: false, remaining: 0 }, true), false);
+    assert.equal(isEvanDemoDeadlineClose(undefined, true), false);
 });

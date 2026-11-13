@@ -19,11 +19,15 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
     const [error, setError] = useState<string | null>(null);
     const [plannerCheckIn, setPlannerCheckIn] = useState<EvanPlannerCheckIn | undefined>(undefined);
     const [extendedDemo, setExtendedDemo] = useState(false);
+    const [aiflDemoRecaps, setAiflDemoRecaps] = useState(false);
 
     useEffect(() => {
         let active = true;
         void fetch('/api/anam/evan/demo-access', { cache: 'no-store' }).then(response => response.json()).then(result => {
-            if (active) setExtendedDemo(result.mode === 'extended');
+            if (active) {
+                setExtendedDemo(result.mode === 'extended');
+                setAiflDemoRecaps(result.aiflDemoRecaps === true);
+            }
         }).catch(() => undefined);
         return () => { active = false; };
     }, []);
@@ -148,7 +152,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                     }}>Switch back to the public demo</button>}
                     <h2 className="mt-2 font-[Georgia] text-[clamp(1.8rem,2.5vw,2.45rem)] font-bold leading-tight tracking-tight">Choose how you want to begin.</h2>
                     <p className="mt-2 max-w-2xl text-sm leading-5 text-[#d7cbe2]">
-                        Add your name and email for a written recap, or continue without email. Evan and the Live Move Planner are available either way.
+                        {aiflDemoRecaps ? 'Try the contact and recap workflow, or continue without email. Evan and the Live Move Planner are available either way.' : 'Add your name and email for a written recap, or continue without email. Evan and the Live Move Planner are available either way.'}
                     </p>
 
                     <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={submitEmail}>
@@ -176,7 +180,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                             />
                         </label>
                         <p className="rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-[#d7cbe2] sm:col-span-2">
-                            By choosing the email recap, you ask us to send one post-call summary to this address and route a move brief for team review. No quote or booking is created.
+                            {aiflDemoRecaps ? 'Demo mode: all recap and team emails go to AI Fusion Labs for review, not to the entered address or Mullins Moving. No quote or booking is created.' : 'By choosing the email recap, you ask us to send one post-call summary to this address and route a move brief for team review. No quote or booking is created.'}
                         </p>
                         {error && <p role="alert" className="rounded-xl border border-red-300/20 bg-red-300/10 px-4 py-3 text-sm text-red-200 sm:col-span-2">{error}</p>}
                         <button
@@ -184,7 +188,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
                             disabled={submitting !== null}
                             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#ffc857] px-5 font-extrabold text-[#2b1043] shadow-[0_12px_30px_rgba(255,200,87,.14)] transition hover:-translate-y-0.5 hover:bg-[#ffd77d] disabled:translate-y-0 disabled:opacity-60 sm:col-span-2"
                         >
-                            {submitting === 'email' ? 'Securing your recap...' : 'Email my recap and continue'}
+                            {submitting === 'email' ? 'Securing your recap...' : aiflDemoRecaps ? 'Continue with demo recap' : 'Email my recap and continue'}
                             {submitting !== 'email' && <ArrowRight className="h-4 w-4" />}
                         </button>
                     </form>
@@ -207,7 +211,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
 
                     <p className="mt-3 flex gap-2 text-[11px] leading-5 text-white/38">
                         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-[#ffc857]/75" />
-                        Email is optional. If you later give Evan an email address during the conversation, we can use it for one post-call recap. You can decline or correct it at any time.
+                        {aiflDemoRecaps ? 'Email is optional. Details shared here demonstrate the intake workflow; demo emails are routed only to AI Fusion Labs.' : 'Email is optional. If you later give Evan an email address during the conversation, we can use it for one post-call recap. You can decline or correct it at any time.'}
                     </p>
                 </div>
             </section>

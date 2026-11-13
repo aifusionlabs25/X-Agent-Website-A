@@ -7,7 +7,7 @@ import {
     MessageStreamEvent,
 } from '@anam-ai/js-sdk';
 import { BrainCircuit, Truck } from 'lucide-react';
-import { createEvanDemoClock, formatEvanDemoTime } from '@/lib/anam/evan-demo-clock';
+import { createEvanDemoClock, formatEvanDemoTime, isEvanDemoDeadlineClose } from '@/lib/anam/evan-demo-clock';
 import AmyAnamWorkbenchV2 from '@/components/amy/AmyAnamWorkbenchV2';
 import EvanMovePlanner from '@/components/evan/EvanMovePlanner';
 import EvanSessionExit from '@/components/evan/EvanSessionExit';
@@ -1538,7 +1538,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                     if (evanDemoTimer !== null) window.clearInterval(evanDemoTimer);
                     // The provider may close at the deadline before the next UI
                     // timer tick. This is an expected demo exit, not a dropout.
-                    if (isEvan && requestedCloseReason === null && evanDemoClock?.read().remaining === 0) {
+                    if (isEvan && requestedCloseReason === null && isEvanDemoDeadlineClose(evanDemoClock?.read(), reason === ConnectionClosedCode.SERVER_CLOSED_CONNECTION)) {
                         requestedCloseReason = 'demo_time_limit';
                     }
                     closeHandled = true;
