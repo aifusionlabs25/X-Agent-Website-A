@@ -36,7 +36,9 @@ try {
         } });
         assert.deepEqual(token.demoPolicy, { mode, maxSeconds: seconds });
         assert.equal(token.evanCaptureEnabled, true);
-        assert.equal(typeof token.sessionToken, 'string');
+        assert.equal(token.sessionSpineEnabled, true);
+        assert.ok(typeof token.sessionToken === 'string' && token.sessionToken.trim(), 'Nonempty provider token required');
+        assert.ok(typeof token.launchId === 'string' && token.launchId.trim(), 'Session-bound launch reservation required');
         // Inspect only if Anam exposes config in its signed token. Never print
         // or persist the token, launch ID, cookies or private access code.
         let configVerified = false;
@@ -47,7 +49,7 @@ try {
                 configVerified = true;
             }
         } catch (error) { if (error.code === 'ERR_ASSERTION') throw error; }
-        results.push(`${mode} token policy ${seconds}s; capture on; embedded persona verified=${configVerified}`);
+        results.push(`${mode} token policy ${seconds}s; capture on; nonempty token and tracked launch; embedded persona verified=${configVerified}`);
         token.sessionToken = ''; token.launchId = '';
     }
     await client.json('Remove private grant', '/api/anam/evan/demo-access', { method: 'DELETE' });
