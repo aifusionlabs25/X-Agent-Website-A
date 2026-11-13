@@ -1,0 +1,536 @@
+{
+  "kind": "DERIVED_MINIMAL_SAVED_SESSION_FIXTURE",
+  "source_commit": "37febba70036346596b14be9ce1873a08a77f3cc",
+  "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+  "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+  "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7",
+  "package_sha256": "a6f9de88eba99e7490343d773ea299e69914873640218a17b87dd33d67d747ee",
+  "persona_id": "b0a9f53d-13f6-4566-9263-47e8cddd5db2",
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "turns": [
+    {
+      "id": "persona::engine::initial_message::467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189",
+      "role": "user",
+      "content": "Hi Lydia, I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel."
+    },
+    {
+      "id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307",
+      "role": "user",
+      "content": "Sometimes requests get missed though. Can you guys help with that?"
+    },
+    {
+      "id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+      "role": "user",
+      "content": "We're looking to have help drafting quotes, but a person must review every quote before it goes out. And we use Outlook and Excel. Budget and timing are unknown at this point."
+    },
+    {
+      "id": "persona::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+      "role": "persona",
+      "content": "I’m Olivia, not Lydia. I can help with the documented workflow.\n\nI can explain how AIowa Agents can support quote drafting with human review, but I don’t have approved information confirming whether Outlook and Excel are supported integrations. Your requirement that a person reviews every quote before sending is an important constraint.\n\nWould you like me to prepare a human-review note with your stated needs and the unresolved Outlook/Excel question?"
+    },
+    {
+      "id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+      "role": "user",
+      "content": "Yes, I would, please. And uh, let me know when you're ready with that."
+    },
+    {
+      "id": "persona::55afb198-486a-4e78-afd0-7cedabd3f64a",
+      "role": "persona",
+      "content": "I’ve prepared the selected details for owner review. They’re retained as proposals, but nothing has been sent or approved yet."
+    },
+    {
+      "id": "user::b3f8f819-cbea-43d6-ba2a-ff3886357f83",
+      "role": "user",
+      "content": "One correction, we uh have 4 staff to handle this request, not 6. And we also use a supplier portal, but I don't know whether it has an API."
+    },
+    {
+      "id": "persona::b3f8f819-cbea-43d6-ba2a-ff3886357f83",
+      "role": "persona",
+      "content": "Thanks—that"
+    },
+    {
+      "id": "user::15105c7d-9293-4ae8-b265-e8b1bfa3fe07",
+      "role": "user",
+      "content": "Please update the summary with that correction. and keep the other details."
+    },
+    {
+      "id": "persona::15105c7d-9293-4ae8-b265-e8b1bfa3fe07",
+      "role": "persona",
+      "content": "I’ve updated the working summary to 4 staff and added the supplier portal, with its API status unknown. The other details remain.\nI can’t update the already-prepared handoff automatically. I can prepare a corrected local note if you’d like.\nI can’t update the already-prepared handoff automatically. I can prepare a corrected local note if you’d like.\nI can’t update the already-prepared handoff automatically. I can prepare a corrected local note if you’d like.\nI can’t update the already-prepared handoff automatically. "
+    },
+    {
+      "id": "user::a81e8611-d346-46f4-ab3d-aac32bff5883",
+      "role": "user",
+      "content": "Okay, thanks Olivia, that's all. Goodbye."
+    },
+    {
+      "id": "persona::a81e8611-d346-46f4-ab3d-aac32bff5883",
+      "role": "persona",
+      "content": "Goodbye."
+    }
+  ],
+  "original_initial_attempt": {
+    "request_id": "2ce3867f-6e8c-42d1-94d4-bada922f794a",
+    "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+    "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+    "tool_call_id": "call_dfea5c222e644441b2c8a5a4",
+    "request_turn_id": null,
+    "input_sha256": "9d155fc333dc324e602f146a93ff9cad78800f54ba9ec100c137c64aa3baa1aa",
+    "local_turns_sha256": "011045b3789f00dfb89091d54863b697c3a854b5fa84999b6d64e11a3d6745c3",
+    "through_visitor_turn_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+    "correction_evidence_bindings": [],
+    "original_proposals": [
+      {
+        "evidence": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189"
+      },
+      {
+        "evidence": "Sometimes requests get missed though. Can you guys help with that?",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Sometimes requests get missed though. Can you guys help with that?",
+        "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307"
+      },
+      {
+        "evidence": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "And we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And we use Outlook and Excel.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "a person must review every quote before it goes out",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must review every quote before it goes out",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Budget and timing are unknown at this point.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Budget and timing are unknown at this point.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Yes, I would, please.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, I would, please.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      }
+    ],
+    "resolved_proposals": [
+      {
+        "evidence": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189"
+      },
+      {
+        "evidence": "Sometimes requests get missed though. Can you guys help with that?",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Sometimes requests get missed though. Can you guys help with that?",
+        "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307"
+      },
+      {
+        "evidence": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "And we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And we use Outlook and Excel.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "a person must review every quote before it goes out",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must review every quote before it goes out",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Budget and timing are unknown at this point.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Budget and timing are unknown at this point.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Yes, I would, please.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, I would, please.",
+        "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a"
+      }
+    ],
+    "selected_proposals": [
+      {
+        "evidence": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189"
+      },
+      {
+        "evidence": "Sometimes requests get missed though. Can you guys help with that?",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Sometimes requests get missed though. Can you guys help with that?",
+        "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307"
+      },
+      {
+        "evidence": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "And we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And we use Outlook and Excel.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "a person must review every quote before it goes out",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must review every quote before it goes out",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Budget and timing are unknown at this point.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Budget and timing are unknown at this point.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Yes, I would, please.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, I would, please.",
+        "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a"
+      }
+    ],
+    "current_fact_selections": [],
+    "prior_current_fact_selections": [],
+    "superseded_proposals": [],
+    "bindings": [
+      {
+        "index": 6,
+        "from_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+        "to_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+        "start": 0,
+        "end": 21,
+        "source_sha256": "9dee54eebc1ee1be3af0e41b4d2f3d435bc026c54a179eefe20a8e648d4a65c8"
+      }
+    ],
+    "fragment_bindings": [],
+    "format_bindings": [],
+    "applied": true,
+    "result": {
+      "status": "PENDING_OWNER_REVIEW",
+      "accepted": true,
+      "accepted_proposal_count": 7,
+      "owner_approved": false,
+      "submission_status": "UNSUBMITTED",
+      "external_actions": [],
+      "issues": [],
+      "visitor_message": "The selected information is retained as proposals for owner review. Nothing has been sent or approved.",
+      "instruction": "Report only that selected proposals are retained pending owner review. Do not claim every fact was captured, a complete brief is approved, delivery occurred or anyone will follow up.",
+      "reference_bindings": [
+        {
+          "index": 6,
+          "from_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+          "to_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+          "start": 0,
+          "end": 21,
+          "source_sha256": "9dee54eebc1ee1be3af0e41b4d2f3d435bc026c54a179eefe20a8e648d4a65c8"
+        }
+      ]
+    }
+  },
+  "original_output_events": [
+    {
+      "event_id": "3e3b72a5-7a91-4588-b567-b02e125ba69f",
+      "at": "2026-11-12T23:00:47.339Z",
+      "visitor_message_id": null,
+      "phase": "LISTENING",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "e00e84df-b170-4185-9e8b-6c0d8b4799c5",
+      "at": "2026-11-12T23:00:56.624Z",
+      "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189",
+      "phase": "ORDINARY_REPLY",
+      "muted": false,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "9dc4911d-7192-4786-afc3-4279ccce007d",
+      "at": "2026-11-12T23:00:56.953Z",
+      "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189",
+      "phase": "LISTENING",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "143cb340-d350-4c02-b846-6ac54f8a6512",
+      "at": "2026-11-12T23:01:00.470Z",
+      "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307",
+      "phase": "ORDINARY_REPLY",
+      "muted": false,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "71127890-f02b-4500-8fd7-c0e47d372b0b",
+      "at": "2026-11-12T23:01:01.116Z",
+      "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307",
+      "phase": "LISTENING",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "33f95eb2-e453-4731-abb0-71a3e0d9cbdd",
+      "at": "2026-11-12T23:01:12.300Z",
+      "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+      "phase": "ORDINARY_REPLY",
+      "muted": false,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "f1fd401f-f720-40c5-85fa-9b38d28eb868",
+      "at": "2026-11-12T23:01:40.621Z",
+      "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+      "phase": "LISTENING",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "e964e508-7cce-4ac4-929f-02773559da20",
+      "at": "2026-11-12T23:01:44.782Z",
+      "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+      "phase": "ORDINARY_REPLY",
+      "muted": false,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "7a61d10a-0eba-4d3d-a3b8-f8256effc055",
+      "at": "2026-11-12T23:01:53.316Z",
+      "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+      "phase": "WAITING_RECEIPT",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "b2022545-b991-496c-8642-229966ee1db9",
+      "at": "2026-11-12T23:01:54.710Z",
+      "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+      "phase": "EARLY_REPLY_HELD",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "184257d0-26b0-460d-8efe-6881d44befe1",
+      "at": "2026-11-12T23:02:13.098Z",
+      "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+      "phase": "LISTENING",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "3afa95eb-0a41-46c3-8300-1b756821464b",
+      "at": "2026-11-12T23:02:22.541Z",
+      "visitor_message_id": "user::b3f8f819-cbea-43d6-ba2a-ff3886357f83",
+      "phase": "WAITING_RECEIPT",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "b73ee33b-124a-4a14-8517-153e1a255022",
+      "at": "2026-11-12T23:02:23.513Z",
+      "visitor_message_id": "user::b3f8f819-cbea-43d6-ba2a-ff3886357f83",
+      "phase": "LISTENING",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "c1d412bb-2934-4c72-b911-ac0d52a85b63",
+      "at": "2026-11-12T23:02:23.514Z",
+      "visitor_message_id": "user::b3f8f819-cbea-43d6-ba2a-ff3886357f83",
+      "phase": "EARLY_REPLY_HELD",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "929e0e3f-ed53-4f19-b7a3-1952f37363dc",
+      "at": "2026-11-12T23:02:55.511Z",
+      "visitor_message_id": "user::15105c7d-9293-4ae8-b265-e8b1bfa3fe07",
+      "phase": "LISTENING",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "865a2c4f-7f92-4f27-9ac0-57b31f7c7c60",
+      "at": "2026-11-12T23:02:55.671Z",
+      "visitor_message_id": "user::15105c7d-9293-4ae8-b265-e8b1bfa3fe07",
+      "phase": "EARLY_REPLY_HELD",
+      "muted": true,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    },
+    {
+      "event_id": "3e6ada3c-46d0-4d13-aa71-28a8f234c41d",
+      "at": "2026-11-12T23:02:57.428Z",
+      "visitor_message_id": "user::a81e8611-d346-46f4-ab3d-aac32bff5883",
+      "phase": "EXIT_REPLY",
+      "muted": false,
+      "tool_call_id": null,
+      "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+      "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7"
+    }
+  ],
+  "original_handoff_requests": [
+    {
+      "visitor_message_id": "user::15105c7d-9293-4ae8-b265-e8b1bfa3fe07",
+      "start": 0,
+      "end": 47,
+      "evidence": "Please update the summary with that correction.",
+      "source": "HOST_PERSISTED_VISITOR_REQUEST",
+      "status": "REQUESTED_NOT_MAPPED"
+    }
+  ],
+  "original_failure_speech_events": [],
+  "source_references": [
+    {
+      "path": "HERMES_X_FACTORY/verification/olivia-spoken-failure-voice-qa-20261112-v0.1/review/hosted-response-body.txt",
+      "sha256": "8a2b6fdba4b2cc310ddedcc053f00730b7410a4376666c52a2d14fc1afb276be"
+    },
+    {
+      "path": "HERMES_X_FACTORY/verification/olivia-spoken-failure-voice-qa-20261112-v0.1/review/provider-session.json",
+      "sha256": "05c476f09649ac1abad7a30c6ce990e75406c4a991586354b8ab028376d0cbec"
+    },
+    {
+      "path": "HERMES_X_FACTORY/verification/olivia-spoken-failure-voice-qa-20261112-v0.1/review/provider-transcript.json",
+      "sha256": "44cde78dd647b7430523018c7ca8fa1876f8545a908d43094b7116d10694cd3b"
+    },
+    {
+      "path": "HERMES_X_FACTORY/verification/olivia-spoken-failure-voice-qa-20261112-v0.1/review/owner-observation.json",
+      "sha256": "ca55dfa4771d7b1c72558301d5951c0692db37cc44c165d8e94651ec842c3329"
+    }
+  ],
+  "baseline_offline_reconstruction": {
+    "kind": "OFFLINE_REPLAY_NOT_CAPTURED_DELIVERY",
+    "source_commit": "37febba70036346596b14be9ce1873a08a77f3cc",
+    "replayed_path": "appendTurn -> recordProviderHandoffAttempt -> handoffOutputGate",
+    "accepted": true,
+    "request_turn_id": null,
+    "gate_accepted": false,
+    "gate_settled": false,
+    "phase": "WAITING_RECEIPT",
+    "muted": true
+  },
+  "limits": "Historical captures are preserved. This subset proves application behavior offline, not model consumption or acoustic delivery."
+}

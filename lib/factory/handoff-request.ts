@@ -17,6 +17,7 @@ const internalScope=/\b(?:unsent|not sent|local|human[ -]review|owner[ -]review)
 const conditional=/\b(?:if|unless|once)\b|\b(?:when|after)\s+(?:i|we|you)\b/i;
 const negatedPreparation=/\b(?:do not|don['’]t|never|not to|stop|cancel)\s+(?:(?:actually|please)\s+)*(?:go ahead and\s+)?(?:prepare|create|draft|preparing|creating|drafting|update|updating|revise|revising|amend|amending|correct|correcting)\b/i;
 const conflictingDelivery=/\b(?:and|then|also)\s+(?:please\s+)?(?:send|email|submit|book|deliver)\b/i;
+const externalActionRequest=new RegExp(requestPrefix+String.raw`(?:send|email|submit|book|deliver|call|phone|text|notify|contact|schedule)\b`,'i');
 
 /** Returns sentence spans outside quotation/code delimiters. Apostrophes in
  * contractions are ordinary text; raw punctuation and all offsets are kept. */
@@ -38,16 +39,41 @@ function sentences(raw:string) {
     return spans;
 }
 
-/** A short answer is consent only to the immediately preceding single local
+/** Keep the affirmative clause separate from accompanying facts or a request
+ * for a status explanation. A continuation must not turn a qualified, revoked
+ * or external-action answer into unconditional local preparation consent. */
+function affirmativeSpan(raw:string):{start:number;end:number;evidence:string}|null {
+    const first=sentences(raw)[0];
+    if(!first||first.quoted)return null;
+    const text=raw.slice(first.start,first.end);
+    const separator=/\s*(?:;|,?\s+\b(?:and|but)\b)\s*/i.exec(text);
+    const clause=(separator?text.slice(0,separator.index):text).trim();
+    const affirmative=/^(?:(?:uh|um|well)[, ]+){0,3}(?:(?:yes|yeah|yep|yup|sure|okay|ok|absolutely|certainly)(?:[, ]+(?:i(?:['’]d| would)(?: like that)?|i do|please|go ahead|please do|please go ahead)){0,2}|please do|go ahead|(?:yes[, ]+)?(?:please\s+)?prepare (?:that|the) update)[.!]?$/i;
+    if(!affirmative.test(clause))return null;
+    const start=first.start+text.length-text.trimStart().length,end=start+clause.length;
+    const remaining=raw.slice(end);
+    for(const part of sentences(remaining)) {
+        if(part.quoted)continue;
+        const continuation=remaining.slice(part.start,part.end).replace(/^[\s,;.!?]+/,'')
+            .replace(/^(?:(?:and|but|then|also|actually|uh|um|please|well|so)[,\s]+){0,8}/i,'').trim();
+        const noRestriction=/^no\s+(?:emails?|calls?|messages?|texts?|external actions?|sending|booking)\b/i.test(continuation);
+        if(/^no\b/i.test(continuation)&&!noRestriction
+            ||/^(?:not\b|maybe\b|perhaps\b|possibly\b|wait\b|hold on\b|never mind\b|forget it\b|(?:only\s+)?(?:if|unless|once|after|provided(?:\s+that)?|providing(?:\s+that)?|as long as|subject to)\b|when\s+(?:i|we|you)\b)/i.test(continuation)
+            ||externalActionRequest.test(continuation)||conflictingDelivery.test(continuation)
+            ||/\b(?:i|we)\s+(?:(?:do not|don['’]t)\s+(?:want|authorize|agree|consent)|(?:have\s+)?changed\s+(?:my|our)\s+mind)\b/i.test(continuation))return null;
+    }
+    return {start,end,evidence:raw.slice(start,end)};
+}
+
+/** A contextual answer is consent only to the immediately preceding single local
  * preparation question. No remembered offer across an intervening turn, no
  * contact confirmation, delivery, conditional, quoted or multi-choice offer.
  * The offer is retained as context, never as visitor factual evidence. */
 function contextualConsent(raw:string,context:HandoffRequestContext):HandoffRequestSpan|null {
     const offer=context.precedingTurn;
     if(!offer||offer.role!=='persona'||!offer.id||offer.content.length>8000)return null;
-    const answer=raw.trim();
-    const affirmative=/^(?:(?:yes|yeah|yep|sure|okay|ok)(?:[, ]+(?:please|go ahead|please do|please go ahead))?|please do|go ahead|(?:yes[, ]+)?(?:please\s+)?prepare (?:that|the) update)[.!]?$/i;
-    if(!affirmative.test(answer))return null;
+    const answer=affirmativeSpan(raw);
+    if(!answer)return null;
     const questions=sentences(offer.content).filter(p=>offer.content.slice(p.start,p.end).trim().endsWith('?'));
     if(questions.length!==1)return null;
     const q=questions[0],question=offer.content.slice(q.start,q.end).trim();
@@ -62,9 +88,8 @@ function contextualConsent(raw:string,context:HandoffRequestContext):HandoffRequ
         ||context.hasSuccessfulHandoff===true&&updateStart.test(action);
     const referential=context.hasSuccessfulHandoff===true&&/^prepare (?:that|the) update$/i.test(action);
     if(!scoped&&!referential)return null;
-    if(/prepare (?:that|the) update/i.test(answer)&&!/(?:updat|revis)/i.test(action))return null;
-    const start=raw.length-raw.trimStart().length;
-    return {start,end:start+answer.length,evidence:answer,offer_turn_id:offer.id,offer_evidence:offer.content};
+    if(/prepare (?:that|the) update/i.test(answer.evidence)&&!/(?:updat|revis)/i.test(action))return null;
+    return {...answer,offer_turn_id:offer.id,offer_evidence:offer.content};
 }
 
 export function requestedHandoffSpan(raw:string,context:HandoffRequestContext={}):HandoffRequestSpan|null {

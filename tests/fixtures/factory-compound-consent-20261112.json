@@ -1,0 +1,269 @@
+{
+  "source": "olivia-spoken-failure-voice-qa-20261112-v0.1/review/hosted-response-body.txt",
+  "source_sha256": "8a2b6fdba4b2cc310ddedcc053f00730b7410a4376666c52a2d14fc1afb276be",
+  "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+  "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+  "launch_label": "factory:602657035c51db356fd668d9ce2b27ab:ad897ee1-077f-4230-b775-b76f88c42ed7",
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "turns": [
+    {
+      "id": "persona::engine::initial_message::467b01b2-e617-416b-ae87-7f02e6aacc29",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189",
+      "role": "user",
+      "content": "Hi Lydia, I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel."
+    },
+    {
+      "id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307",
+      "role": "user",
+      "content": "Sometimes requests get missed though. Can you guys help with that?"
+    },
+    {
+      "id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+      "role": "user",
+      "content": "We're looking to have help drafting quotes, but a person must review every quote before it goes out. And we use Outlook and Excel. Budget and timing are unknown at this point."
+    },
+    {
+      "id": "persona::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+      "role": "persona",
+      "content": "I’m Olivia, not Lydia. I can help with the documented workflow.\n\nI can explain how AIowa Agents can support quote drafting with human review, but I don’t have approved information confirming whether Outlook and Excel are supported integrations. Your requirement that a person reviews every quote before sending is an important constraint.\n\nWould you like me to prepare a human-review note with your stated needs and the unresolved Outlook/Excel question?"
+    },
+    {
+      "id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+      "role": "user",
+      "content": "Yes, I would, please. And uh, let me know when you're ready with that."
+    }
+  ],
+  "attempt": {
+    "request_id": "2ce3867f-6e8c-42d1-94d4-bada922f794a",
+    "local_session_id": "e20b99e1-4ead-4379-a0d4-8b00b4197334",
+    "provider_session_id": "467b01b2-e617-416b-ae87-7f02e6aacc29",
+    "tool_call_id": "call_dfea5c222e644441b2c8a5a4",
+    "request_turn_id": null,
+    "input_sha256": "9d155fc333dc324e602f146a93ff9cad78800f54ba9ec100c137c64aa3baa1aa",
+    "local_turns_sha256": "011045b3789f00dfb89091d54863b697c3a854b5fa84999b6d64e11a3d6745c3",
+    "through_visitor_turn_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+    "correction_evidence_bindings": [],
+    "original_proposals": [
+      {
+        "evidence": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189"
+      },
+      {
+        "evidence": "Sometimes requests get missed though. Can you guys help with that?",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Sometimes requests get missed though. Can you guys help with that?",
+        "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307"
+      },
+      {
+        "evidence": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "And we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And we use Outlook and Excel.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "a person must review every quote before it goes out",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must review every quote before it goes out",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Budget and timing are unknown at this point.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Budget and timing are unknown at this point.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Yes, I would, please.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, I would, please.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      }
+    ],
+    "resolved_proposals": [
+      {
+        "evidence": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189"
+      },
+      {
+        "evidence": "Sometimes requests get missed though. Can you guys help with that?",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Sometimes requests get missed though. Can you guys help with that?",
+        "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307"
+      },
+      {
+        "evidence": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "And we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And we use Outlook and Excel.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "a person must review every quote before it goes out",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must review every quote before it goes out",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Budget and timing are unknown at this point.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Budget and timing are unknown at this point.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Yes, I would, please.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, I would, please.",
+        "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a"
+      }
+    ],
+    "selected_proposals": [
+      {
+        "evidence": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copper Mesa Supply, a plumbing supply business. 6 staff handle quote requests by email. We track them in Excel.",
+        "visitor_message_id": "user::23aa6b6c-05bc-4af4-b45b-728fac3ef189"
+      },
+      {
+        "evidence": "Sometimes requests get missed though. Can you guys help with that?",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "Sometimes requests get missed though. Can you guys help with that?",
+        "visitor_message_id": "user::c1f4fd3a-9844-417e-9fc3-7c5c92481307"
+      },
+      {
+        "evidence": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "value": "We're looking to have help drafting quotes, but a person must review every quote before it goes out.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "And we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And we use Outlook and Excel.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "a person must review every quote before it goes out",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must review every quote before it goes out",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Budget and timing are unknown at this point.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Budget and timing are unknown at this point.",
+        "visitor_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb"
+      },
+      {
+        "evidence": "Yes, I would, please.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, I would, please.",
+        "visitor_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a"
+      }
+    ],
+    "current_fact_selections": [],
+    "prior_current_fact_selections": [],
+    "superseded_proposals": [],
+    "bindings": [
+      {
+        "index": 6,
+        "from_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+        "to_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+        "start": 0,
+        "end": 21,
+        "source_sha256": "9dee54eebc1ee1be3af0e41b4d2f3d435bc026c54a179eefe20a8e648d4a65c8"
+      }
+    ],
+    "fragment_bindings": [],
+    "format_bindings": [],
+    "applied": true,
+    "result": {
+      "status": "PENDING_OWNER_REVIEW",
+      "accepted": true,
+      "accepted_proposal_count": 7,
+      "owner_approved": false,
+      "submission_status": "UNSUBMITTED",
+      "external_actions": [],
+      "issues": [],
+      "visitor_message": "The selected information is retained as proposals for owner review. Nothing has been sent or approved.",
+      "instruction": "Report only that selected proposals are retained pending owner review. Do not claim every fact was captured, a complete brief is approved, delivery occurred or anyone will follow up.",
+      "reference_bindings": [
+        {
+          "index": 6,
+          "from_message_id": "user::2be054e5-fb19-4c5e-b345-2f84e878c9cb",
+          "to_message_id": "user::55afb198-486a-4e78-afd0-7cedabd3f64a",
+          "start": 0,
+          "end": 21,
+          "source_sha256": "9dee54eebc1ee1be3af0e41b4d2f3d435bc026c54a179eefe20a8e648d4a65c8"
+        }
+      ]
+    }
+  }
+}

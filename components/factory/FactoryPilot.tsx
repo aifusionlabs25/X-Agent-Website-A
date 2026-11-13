@@ -30,6 +30,7 @@ export default function FactoryPilot() {
     const contextSender=useRef<ContextSendTracker|null>(null);
     const outputGate=useRef<HandoffOutputGate|null>(null);
     const failureSpeech=useRef<HandoffFailureSpeech|null>(null);
+    const speechGeneration=useRef(0);
     const pendingOutputEvents=useRef<HandoffOutputEvent[]>([]);
     const accept=(s:Handoff|null)=>{
         current.current=s;setState(s);
@@ -37,19 +38,22 @@ export default function FactoryPilot() {
         outputGate.current?.committed(s);
         // Early output control precedes persistence. Retain its telemetry only
         // once the referenced visitor turn is actually committed.
+        flushOutputEvents(s);
+    };
+    function flushOutputEvents(s:Handoff) {
         if(s.provider_session_id){
             const ready=pendingOutputEvents.current.filter(e=>e.visitor_message_id===null||s.turns.some(t=>t.id===e.visitor_message_id));
             pendingOutputEvents.current=pendingOutputEvents.current.filter(e=>!ready.includes(e));
             for(const e of ready)void post('handoff_output_receipt',{receipt:{...e,local_session_id:s.id,
                 provider_session_id:s.provider_session_id,launch_label:s.launch_label}}).catch(()=>setError('Handoff output evidence could not be saved.'));
         }
-    };
+    }
     async function refresh() {
         const r=await fetch('/api/factory/pilot',{cache:'no-store'}), v=await r.json();
         if(!r.ok) throw new Error(v.error||'Preview unavailable'); setManifest(v.manifest);accept(v.state);setHistory(v.history||[]);
         setStatus(v.state?.status==='CLOSED'?closedSessionStatus(v.state):v.state?.status||'Ready when you are. No session has started.');
     }
-    useEffect(()=>{void refresh().catch(e=>setError(e.message));return()=>{failureSpeech.current?.dispose();farewell.current?.dispose();if(client.current&&!stopping.current){stopping.current=true;void closer.current?.close('UNMOUNT').catch(()=>{});}};},[]); // only hydrate, never auto-launch
+    useEffect(()=>{const generation=speechGeneration;void refresh().catch(e=>setError(e.message));return()=>{generation.current++;outputGate.current?.dispose();failureSpeech.current?.dispose();farewell.current?.dispose();if(client.current&&!stopping.current){stopping.current=true;void closer.current?.close('UNMOUNT').catch(()=>{});}};},[]); // only hydrate, never auto-launch
     function post(action:string, data:Record<string,unknown>={}) {
         const request_id=crypto.randomUUID();
         const run=async()=>{
@@ -61,7 +65,7 @@ export default function FactoryPilot() {
     async function reconcile() {setStatus('Checking provider release and original transcript…');const r=await post('reconcile');setStatus(closedSessionStatus(r.state));}
     async function stop(reason:CloseReason='OWNER_FINISH') {
         if(stopping.current||!client.current)return;stopping.current=true;farewell.current?.dispose();
-        failureSpeech.current?.cancel('SESSION_CLOSE');
+        speechGeneration.current++;outputGate.current?.dispose();failureSpeech.current?.cancel('SESSION_CLOSE');
         setStatus('Closing the Anam session…');
         // Storage/context failure must not prevent the actual SDK release.
         if(current.current?.status==='ACTIVE')try{await post('closing');}catch(e){setError(e instanceof Error?e.message:'Closing state not retained; provider reconciliation is required.');}
@@ -98,7 +102,34 @@ export default function FactoryPilot() {
             outputGate.current=handoffOutputGate({localSessionId:launchState.id,providerSessionId:()=>boundProviderId,
                 output:audioOutput.gate,
                 recoverFailure:(tool,visitor)=>{if(current.current)recovery.rejected(current.current,tool,visitor);},
-                notice:setHandoffNotice,report:e=>{pendingOutputEvents.current.push(e);}});
+                recoverAccepted:(tool,visitor)=>{
+                    const generation=speechGeneration.current;
+                    void queue.current.then(()=>{
+                        if(generation===speechGeneration.current&&!stopping.current&&current.current)recovery.accepted(current.current,tool,visitor);
+                    }).catch(()=>setError('The saved handoff acknowledgment could not be verified for speech.'));
+                },
+                recoverUnverified:visitor=>{
+                    // Persist the explicit unknown audio disposition first. A
+                    // missing result is never logged as a provider rejection.
+                    // A later visitor/exit cannot inherit this queued speech.
+                    const generation=speechGeneration.current;
+                    void queue.current.then(()=>{
+                        if(generation!==speechGeneration.current||stopping.current||!current.current)return;
+                        const saved=current.current;
+                        if(recovery.unverified(saved,visitor))return;
+                        // A receipt may have arrived while its audio evidence
+                        // was saving. Report that exact outcome, not stale
+                        // uncertainty; each controller still validates binding.
+                        const attempt=saved.handoff_binding_attempts?.at(-1);
+                        if(attempt?.through_visitor_turn_id===visitor
+                            &&!recovery.accepted(saved,attempt.tool_call_id,visitor))
+                            recovery.rejected(saved,attempt.tool_call_id,visitor);
+                    }).catch(()=>setError('The handoff outcome and spoken recovery could not be verified. Original evidence remains available.'));
+                },
+                notice:setHandoffNotice,report:e=>{
+                    pendingOutputEvents.current.push(e);
+                    if(current.current)flushOutputEvents(current.current);
+                }});
             const contextTracker=contextSendTracker({send:message=>c.addContext(message),report:event=>{
                 if(!boundProviderId)throw new Error('Context evidence requires a bound provider session');
                 return post('context_send_receipt',{receipt:{...event,local_session_id:launchState.id,
@@ -122,7 +153,7 @@ export default function FactoryPilot() {
             }).catch(e=>{setError(e.message);if(!stopping.current){stopping.current=true;void tracker.close('BIND_FAILED').catch(()=>{});}});});
             const persist=(turns:Turn[])=>{
                 for(const turn of turns) {
-                    if(turn.role==='user'){recovery.cancel('VISITOR_TURN');outputGate.current?.visitor(turn);}
+                    if(turn.role==='user'){speechGeneration.current++;recovery.cancel('VISITOR_TURN');outputGate.current?.visitor(turn);}
                     void binding.then(()=>post('turn',{turn})).then(v=>{
                         afterTurn(v.state,turn);
                     }).catch(e=>setError(e.message));
@@ -132,7 +163,7 @@ export default function FactoryPilot() {
             c.addListener(AnamEvent.MESSAGE_STREAM_EVENT_RECEIVED,e=>{
                 try{recovery.stream(e);if(e.role==='persona')outputGate.current?.persona();if(!recovery.isHeldOrRecoveryReply(e.id))exitReplies.observe(e);persist(transcript.stream(e));}catch(e){setError(e instanceof Error?e.message:'Transcript stream failed');}
             });
-            c.addListener(AnamEvent.USER_SPEECH_STARTED,()=>{recovery.cancel('VISITOR_SPEECH');outputGate.current?.speechStarted();});
+            c.addListener(AnamEvent.USER_SPEECH_STARTED,()=>{speechGeneration.current++;recovery.cancel('VISITOR_SPEECH');outputGate.current?.speechStarted();});
             c.addListener(AnamEvent.MESSAGE_HISTORY_UPDATED,messages=>{
                 try{messages.forEach(m=>{if(!recovery.isHeldOrRecoveryReply(m.id))exitReplies.observe(m);});persist(transcript.history(messages));}catch(e){setError(e instanceof Error?e.message:'Transcript history failed');}
             });
@@ -145,11 +176,11 @@ export default function FactoryPilot() {
                     local_session_id:launchState.id,provider_session_id:p.sessionId,tool_call_id:p.toolCallId})).toolResult);
             }});
             c.registerToolCallHandler('factory_end_session',{...evidenceCallbacks,onStart:async p=>{
-                recovery.cancel('EXIT_TOOL');
+                speechGeneration.current++;recovery.cancel('EXIT_TOOL');
                 await binding; await post('closing');armClose();
                 return JSON.stringify(exitReceipt(exitReplies.receipt(p.userActionCorrelationId)));
             }});
-            c.addListener(AnamEvent.CONNECTION_CLOSED,()=>{recovery.dispose();if(!stopping.current){stopping.current=true;void reconcile().catch(e=>setError(e.message));}});
+            c.addListener(AnamEvent.CONNECTION_CLOSED,()=>{outputGate.current?.dispose();recovery.dispose();if(!stopping.current){stopping.current=true;void reconcile().catch(e=>setError(e.message));}});
             await c.streamToVideoElement('factory-olivia-video');
         }catch(e){setError(e instanceof Error?e.message:'Launch failed. Do not retry an unknown launch.');}
         finally{setBusy(false);}
@@ -177,7 +208,7 @@ export default function FactoryPilot() {
         if(!active||!c||!text.trim()||submitting.current)return;
         submitting.current=true;const content=text.trim();setText('');setError('');
         const turn:Turn={id:'typed-visitor::'+crypto.randomUUID(),role:'user',content};
-        failureSpeech.current?.cancel('TYPED_VISITOR_TURN');
+        speechGeneration.current++;failureSpeech.current?.cancel('TYPED_VISITOR_TURN');
         outputGate.current?.visitor(turn);
         try {
             await submitTypedTurn(turn,t=>post('turn',{turn:t}),t=>{
