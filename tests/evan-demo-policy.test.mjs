@@ -80,13 +80,49 @@ test('public mode ignores requested duration, mode, and provider identity', () =
     assert.deepEqual(resolveEvanDemoPolicy(input, env), { mode: 'public', maxSeconds: EVAN_PUBLIC_DEMO_SECONDS, providerPersonaId: publicId });
 });
 
-test('only an active grant selects the server-configured extended persona', () => {
+test('a private grant cannot upgrade the default public policy', () => {
     const token = createEvanDemoGrant(origin, env);
-    assert.deepEqual(resolveEvanDemoPolicy(request(token), env), { mode: 'extended', maxSeconds: EVAN_EXTENDED_DEMO_SECONDS, providerPersonaId: extendedId });
+    for (const url of [`${origin}/api/anam-token`, `${origin}/api/anam-token?mode=extended`, `${origin}/api/anam/evan/extended/token`]) {
+        assert.deepEqual(resolveEvanDemoPolicy(request(token, url), env), {
+            mode: 'public', maxSeconds: EVAN_PUBLIC_DEMO_SECONDS, providerPersonaId: publicId,
+        }, 'the resolver requires explicit trusted server intent, not a URL or cookie alone');
+    }
+    assert.equal(hasEvanDemoGrant(request(token), env), true, 'reading public policy does not revoke private access');
+});
+
+test('only explicit protected intent plus an active grant selects the extended persona', () => {
+    const token = createEvanDemoGrant(origin, env);
+    assert.deepEqual(resolveEvanDemoPolicy(request(token), env, 'extended'), { mode: 'extended', maxSeconds: EVAN_EXTENDED_DEMO_SECONDS, providerPersonaId: extendedId });
     const expired = createEvanDemoGrant(origin, env, Date.now() - (EVAN_DEMO_GRANT_SECONDS + 10) * 1000);
     assert.equal(resolveEvanDemoPolicy(request(expired), env).mode, 'public');
+    for (const input of [request(), request(expired), request(`${token}x`), request(token, 'https://other.example/api/anam-token')]) {
+        assert.throws(() => resolveEvanDemoPolicy(input, env, 'extended'), 'private access must fail closed, not downgrade');
+    }
     assert.throws(() => resolveEvanDemoPolicy(request(undefined), {}), /not configured/);
-    assert.throws(() => resolveEvanDemoPolicy(request(token), { ...env, EVAN_EXTENDED_DEMO_PERSONA_ID: '' }), /not configured/);
+    assert.throws(() => resolveEvanDemoPolicy(request(token), { ...env, EVAN_EXTENDED_DEMO_PERSONA_ID: '' }, 'extended'), /not configured/);
+});
+
+test('missing private configuration does not affect public mode and no lane falls back to the other copy', () => {
+    const token = createEvanDemoGrant(origin, env);
+    for (const configuration of ['', undefined, 'invalid']) {
+        const withoutPrivate = { ...env, EVAN_EXTENDED_DEMO_PERSONA_ID: configuration };
+        assert.equal(resolveEvanDemoPolicy(request(token), withoutPrivate).providerPersonaId, publicId);
+        assert.throws(() => resolveEvanDemoPolicy(request(token), withoutPrivate, 'extended'));
+        const withoutPublic = { ...env, EVAN_PUBLIC_DEMO_PERSONA_ID: configuration };
+        assert.throws(() => resolveEvanDemoPolicy(request(token), withoutPublic));
+        assert.equal(resolveEvanDemoPolicy(request(token), withoutPublic, 'extended').providerPersonaId, extendedId);
+    }
+});
+
+test('mixed public and private tabs can reuse the same grant without changing each other', () => {
+    const token = createEvanDemoGrant(origin, env);
+    const input = request(token);
+    for (const mode of ['extended', 'public', 'extended', 'public']) {
+        const policy = resolveEvanDemoPolicy(input, env, mode);
+        assert.equal(policy.mode, mode);
+        assert.equal(policy.maxSeconds, mode === 'public' ? 180 : 1800);
+        assert.equal(hasEvanDemoGrant(input, env), true);
+    }
 });
 
 test('stored policy validates the exact mode/duration pair', () => {

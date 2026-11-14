@@ -83,6 +83,7 @@ interface AnamPlayerProps {
     personaId: string;
     sessionVariant?: string;
     audioBridge?: AnamAudioBridge;
+    evanDemoMode?: 'public' | 'extended';
     onClose?: () => void;
 }
 
@@ -93,7 +94,7 @@ const WORKBENCH_TRANSCRIPT_SETTLE_MAX_PASSES = 10;
 const AMY_EXACT_TERMINAL_FAREWELL = 'Thanks for talking this through with me. Take care.';
 const AMY_EXACT_TERMINAL_FAREWELL_PATTERN = /thanks for talking this through with me\.\s*take care\.?$/i;
 
-export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onClose }: AnamPlayerProps) {
+export default function AnamPlayer({ personaId, sessionVariant, audioBridge, evanDemoMode = 'public', onClose }: AnamPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [error, setError] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(true);
@@ -631,7 +632,8 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 if (!isMounted) return;
 
                 // 1. Fetch Session Token
-                const tokenRes = await fetch('/api/anam-token', {
+                const tokenRes = await fetch(personaId === EVAN_PERSONA_ID && evanDemoMode === 'extended'
+                    ? '/api/anam/evan/extended/token' : '/api/anam-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ personaId, variant: sessionVariant }),
@@ -2192,7 +2194,7 @@ export default function AnamPlayer({ personaId, sessionVariant, audioBridge, onC
                 videoElement.srcObject = null;
             }
         };
-    }, [personaId, sessionVariant, audioBridge, workbenchEnabled, evanPlannerEnabled, setAmyWorkbenchOpen, setAmyWorkbenchView]);
+    }, [personaId, sessionVariant, audioBridge, evanDemoMode, workbenchEnabled, evanPlannerEnabled, setAmyWorkbenchOpen, setAmyWorkbenchView]);
 
     return (
         <div className={`relative flex h-full w-full flex-col items-center justify-center ${evanPlannerEnabled ? 'bg-[#100718]' : personaId === DANI_PERSONA_ID ? 'bg-[#101713]' : 'bg-zinc-950'}`}>

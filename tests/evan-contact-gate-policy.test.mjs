@@ -13,7 +13,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const response = (payload, ok = true) => ({ ok, json: async () => payload });
 
 // Run the real component and its effects without a browser, network or email.
-function createHarness() {
+function createHarness(props = {}) {
     const slots = [];
     const effects = [];
     const calls = [];
@@ -44,6 +44,7 @@ function createHarness() {
         },
         'react/jsx-runtime': { jsx, jsxs: jsx },
         'next/image': 'image',
+        'next/link': 'link',
         'lucide-react': new Proxy({}, { get: (_target, name) => String(name) }),
         '@/lib/anam/evan-local-test-mode': { isEvanLocalTestMode: () => false },
         '@/components/evan/EvanPlannerContactContext': { EvanPlannerContactContext: { Provider: 'contact-provider' } },
@@ -65,7 +66,7 @@ function createHarness() {
     });
     const render = () => {
         cursor = 0;
-        const tree = exports.default({ children: 'authorized-children' });
+        const tree = exports.default({ children: 'authorized-children', ...props });
         while (effects.length) effects.shift()();
         return tree;
     };
@@ -186,4 +187,33 @@ test('late policy responses cannot update an unmounted gate', async () => {
     harness.resolvePolicy(response({ mode: 'extended', aiflDemoRecaps: true }));
     await flush();
     assert.equal(harness.stateWrites, writesBeforeResponse);
+});
+
+for (const payload of [
+    { mode: 'public', maxSeconds: 180, extendedAccess: true, aiflDemoRecaps: true },
+    { mode: 'extended', maxSeconds: 1800, extendedAccess: true, aiflDemoRecaps: true },
+]) {
+    test(`public check-in stays three minutes despite cookie status ${payload.mode}`, async () => {
+        const harness = createHarness();
+        assert.match(text(await harness.mount()), /Public demo.*up to 3 minutes/);
+        harness.resolvePolicy(response(payload));
+        const tree = await harness.settle();
+        assert.match(text(tree), /Public demo.*up to 3 minutes/);
+        assert.doesNotMatch(text(tree), /Private demo.*30 minutes|Switch back to the public demo/);
+        assert.equal(harness.calls.some(call => call.url === '/api/anam/evan/demo-access' && call.method === 'DELETE'), false,
+            'a public tab must not revoke another private tab');
+        harness.dispose();
+    });
+}
+
+test('explicit private check-in keeps its label and offers a plain return-to-public link without revoking the grant', async () => {
+    const harness = createHarness({ evanDemoMode: 'extended' });
+    assert.match(text(await harness.mount()), /Private demo.*up to 30 minutes/);
+    harness.resolvePolicy(response({ mode: 'public', maxSeconds: 180, extendedAccess: true, aiflDemoRecaps: true }));
+    const tree = await harness.settle();
+    assert.match(text(tree), /Private demo.*up to 30 minutes/);
+    const link = nodes(tree).find(node => ['link', 'a'].includes(node.type) && node.props.href === '/demo/evan');
+    assert.ok(link, 'private check-in provides the canonical public route');
+    assert.equal(harness.calls.some(call => call.url === '/api/anam/evan/demo-access' && call.method === 'DELETE'), false);
+    harness.dispose();
 });

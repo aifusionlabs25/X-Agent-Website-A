@@ -31,7 +31,7 @@ function harness(options = {}) {
         '@/lib/anam/evan-demo-policy': {
             EVAN_EXTENDED_DEMO_SECONDS,
             hasEvanDemoGrant: request => hasEvanDemoGrant(request, env),
-            resolveEvanDemoPolicy: request => resolveEvanDemoPolicy(request, env),
+            resolveEvanDemoPolicy: (request, _runtimeEnv, mode) => resolveEvanDemoPolicy(request, env, mode),
         },
         '@/lib/anam/session-spine': {
             readAmyAnamSpineConfig: () => ({ gatesOpen: options.gatesOpen !== false, signingSecret: 'offline-spine-secret' }),
@@ -127,6 +127,13 @@ test('missing or malformed extended configuration fails closed despite a signed 
     const request = h.request({ grant: true });
     h.env.EVAN_EXTENDED_DEMO_ACCESS_KEY = '';
     assert.equal(await h.adapter.readOrganizer(request), null);
+});
+
+test('protected meeting validation remains private and does not depend on public persona configuration', async () => {
+    const h = harness({ env: { EVAN_PUBLIC_DEMO_PERSONA_ID: '' } });
+    const organizer = await h.adapter.readOrganizer(h.request({ grant: true }));
+    assert.equal(organizer?.authenticated, true);
+    assert.deepEqual(h.snapshotCalls, [], 'organizer validation must not start the meeting');
 });
 
 test('60-minute request is clamped to30 and snapshots only the isolated private copy', async () => {

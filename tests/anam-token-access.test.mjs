@@ -19,6 +19,7 @@ const SECRET = 'offline-token-access-signing-secret-over-32-characters';
 const EVAN_PUBLIC_COPY_ID = '11111111-1111-4111-8111-111111111111';
 const EVAN_PRIVATE_COPY_ID = '22222222-2222-4222-8222-222222222222';
 const EVAN_DEMO_CODE = 'offline-private-demo-access-code-over-32-characters';
+const PRIVATE_TOKEN_PATH = '/api/anam/evan/extended/token';
 
 // Execute the complete routes with real resolution, configuration, cookie
 // signatures, identity storage, launch reservation and rate-limit code. A VM
@@ -38,6 +39,7 @@ function harness(options = {}) {
         EVAN_PUBLIC_DEMO_PERSONA_ID: EVAN_PUBLIC_COPY_ID,
         EVAN_EXTENDED_DEMO_PERSONA_ID: EVAN_PRIVATE_COPY_ID,
         EVAN_EXTENDED_DEMO_ACCESS_KEY: EVAN_DEMO_CODE,
+        EVAN_PUBLIC_DEMO_ENABLED: 'true', EVAN_PUBLIC_DEMO_MAIL_ROUTING: 'all-aifl',
         ...options.env,
     };
     const db = new Map(), providerCalls = [], readinessCalls = [], evanReadinessCalls = [], unexpected = [];
@@ -77,7 +79,7 @@ function harness(options = {}) {
     const mocks = new Map([
         ['lib/anam/outbound-email-config.ts', { readAmyAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
         ['lib/anam/dani-agentmail.ts', { readDaniAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
-        ['lib/anam/evan-agentmail.ts', { readEvanAnamAgentMailConfig: () => ({ effectiveGateOpen: false }) }],
+        ['lib/anam/evan-agentmail.ts', { readEvanAnamAgentMailConfig: () => ({ effectiveGateOpen: options.evanEmailAvailable === true }) }],
         ['lib/anam/evan-demo-runtime.ts', {
             verifyEvanDemoPersona: async (_apiKey, policy) => {
                 evanReadinessCalls.push(JSON.parse(JSON.stringify(policy)));
@@ -128,6 +130,8 @@ function harness(options = {}) {
         return module.exports;
     }
     const tokenRoute = load('app/api/anam-token/route.ts');
+    const privateTokenRoute = load('app/api/anam/evan/extended/token/route.ts');
+    const demoAccessRoute = load('app/api/anam/evan/demo-access/route.ts');
     const accessRoute = load('app/api/anam/amy/access/route.ts');
     const evanAccessRoute = load('app/api/anam/evan/access/route.ts');
     const demoPolicy = load('lib/anam/evan-demo-policy.ts');
@@ -135,10 +139,10 @@ function harness(options = {}) {
     const sessionStore = load('lib/anam/session-spine-store.ts');
     const spine = load('lib/anam/session-spine.ts');
     const agents = load('lib/agents.ts').ALL_AGENTS;
-    function request(path, body, cookie = '', origin = ORIGIN) {
+    function request(path, body, cookie = '', origin = ORIGIN, extraHeaders = {}) {
         return new Request(ORIGIN + path, {
             method: body === undefined ? 'GET' : 'POST',
-            headers: { 'Content-Type': 'application/json', ...(origin ? { origin } : {}), ...(cookie ? { cookie } : {}) },
+            headers: { 'Content-Type': 'application/json', ...(origin ? { origin } : {}), ...(cookie ? { cookie } : {}), ...extraHeaders },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
     }
@@ -151,6 +155,10 @@ function harness(options = {}) {
         env, db, providerCalls, readinessCalls, evanReadinessCalls, spine, agents, sessionApi, sessionStore,
         post: async (body, cookie = '', origin = ORIGIN) => result(await tokenRoute.POST(request('/api/anam-token', body, cookie, origin))),
         postWithQuery: async (query, body, cookie = '') => result(await tokenRoute.POST(request('/api/anam-token?' + query, body, cookie))),
+        postWithHeaders: async (body, cookie, headers) => result(await tokenRoute.POST(request('/api/anam-token', body, cookie, ORIGIN, headers))),
+        postPrivate: async (body, cookie = '', origin = ORIGIN) => result(await privateTokenRoute.POST(request(PRIVATE_TOKEN_PATH, body, cookie, origin))),
+        postPrivateWithQuery: async (query, body, cookie = '') => result(await privateTokenRoute.POST(request(PRIVATE_TOKEN_PATH + '?' + query, body, cookie))),
+        demoStatus: async (cookie = '') => result(await demoAccessRoute.GET(request('/api/anam/evan/demo-access', undefined, cookie))),
         status: async (cookie = '') => result(await accessRoute.GET(request('/api/anam/amy/access', undefined, cookie))),
         checkIn: async (memoryConsent = false, accessCode = env.AMY_ANAM_MEMORY_ACCESS_CODE) => {
             const checked = await result(await accessRoute.POST(request('/api/anam/amy/access', {
@@ -167,6 +175,13 @@ function harness(options = {}) {
             const checked = await result(await evanAccessRoute.POST(request('/api/anam/evan/access', { guest: true })));
             const cookie = checked.response.cookies.get(spine.AMY_ANAM_BROWSER_COOKIE);
             return { ...checked, cookie: cookie ? `${cookie.name}=${encodeURIComponent(cookie.value)}` : '' };
+        },
+        evanEmailCheckIn: async () => {
+            const checked = await result(await evanAccessRoute.POST(request('/api/anam/evan/access', {
+                displayName: 'Offline Visitor', email: 'visitor@example.test', followUpConsent: true,
+            })));
+            return { ...checked, cookie: checked.response.cookies.getAll()
+                .map(cookie => `${cookie.name}=${encodeURIComponent(cookie.value)}`).join('; ') };
         },
         demoGrantCookie: (grantOrigin = ORIGIN, now = Date.now()) => `${demoPolicy.EVAN_DEMO_COOKIE}=${demoPolicy.createEvanDemoGrant(grantOrigin, env, now)}`,
     };
@@ -335,30 +350,138 @@ test('public Evan guest check-in receives only the 180-second provider copy', as
     assert.equal(result.data.demoPolicy.providerPersonaId, undefined);
 });
 
-test('only the signed private grant selects the 1800-second provider copy', async () => {
+test('only the explicit private route plus signed grant selects the 1800-second provider copy', async () => {
     const h = harness(), checked = await h.evanGuestCheckIn();
-    const result = await h.post({ personaId: EVAN_PERSONA_ID }, `${checked.cookie}; ${h.demoGrantCookie()}`);
+    const result = await h.postPrivate({ personaId: EVAN_PERSONA_ID }, `${checked.cookie}; ${h.demoGrantCookie()}`);
     assert.equal(result.status, 200);
     assert.deepEqual(result.data.demoPolicy, { mode: 'extended', maxSeconds: 1800 });
     assert.equal(h.providerCalls[0].body.personaConfig.personaId, EVAN_PRIVATE_COPY_ID);
     assert.deepEqual(h.evanReadinessCalls, [{ mode: 'extended', maxSeconds: 1800, providerPersonaId: EVAN_PRIVATE_COPY_ID }]);
 });
 
-test('client query/body overrides and invalid private grants never upgrade public Evan', async () => {
-    for (const mode of ['query', 'body', 'tampered', 'expired', 'cross-origin']) {
+test('client query/body/header overrides and any private grant never upgrade public Evan', async () => {
+    for (const mode of ['valid', 'query', 'body', 'headers', 'tampered', 'expired', 'cross-origin']) {
         const h = harness(), checked = await h.evanGuestCheckIn();
         let cookie = checked.cookie;
+        if (['valid', 'query', 'body', 'headers'].includes(mode)) cookie += `; ${h.demoGrantCookie()}`;
         if (mode === 'tampered') cookie += `; ${h.demoGrantCookie()}x`;
         if (mode === 'expired') cookie += `; ${h.demoGrantCookie(ORIGIN, Date.now() - 3_700_000)}`;
         if (mode === 'cross-origin') cookie += `; ${h.demoGrantCookie('https://another-preview.invalid')}`;
         const body = { personaId: EVAN_PERSONA_ID, ...(mode === 'body' ? { mode: 'extended', maxSeconds: 1800, providerPersonaId: EVAN_PRIVATE_COPY_ID } : {}) };
         const result = mode === 'query'
             ? await h.postWithQuery(`mode=extended&maxSeconds=1800&providerPersonaId=${EVAN_PRIVATE_COPY_ID}`, body, cookie)
+            : mode === 'headers' ? await h.postWithHeaders(body, cookie, {
+                referer: ORIGIN + '/demo/evan/extended', 'x-evan-demo-mode': 'extended',
+                'x-original-url': PRIVATE_TOKEN_PATH, 'x-forwarded-uri': PRIVATE_TOKEN_PATH,
+            })
             : await h.post(body, cookie);
         assert.equal(result.status, 200, mode);
         assert.deepEqual(result.data.demoPolicy, { mode: 'public', maxSeconds: 180 }, mode);
         assert.equal(h.providerCalls[0].body.personaConfig.personaId, EVAN_PUBLIC_COPY_ID, mode);
     }
+});
+
+test('private token route rejects absent, malformed, expired, future, and foreign grants before preflight or launch', async () => {
+    for (const kind of ['absent', 'malformed', 'tampered', 'expired', 'future', 'foreign-host', 'foreign-port', 'foreign-protocol']) {
+        const h = harness(), checked = await h.evanGuestCheckIn();
+        const grants = {
+            absent: '', malformed: 'xagent_evan_extended_demo=not-a-grant', tampered: h.demoGrantCookie() + 'x',
+            expired: h.demoGrantCookie(ORIGIN, Date.now() - 3_700_000),
+            future: h.demoGrantCookie(ORIGIN, Date.now() + 60_000),
+            'foreign-host': h.demoGrantCookie('https://foreign.invalid'),
+            'foreign-port': h.demoGrantCookie(ORIGIN + ':8443'),
+            'foreign-protocol': h.demoGrantCookie(ORIGIN.replace('https:', 'http:')),
+        };
+        const result = await h.postPrivateWithQuery('mode=extended&maxSeconds=1800', {
+            personaId: EVAN_PERSONA_ID, mode: 'extended', maxSeconds: 1800,
+        }, `${checked.cookie}; ${grants[kind]}`);
+        assert.equal(result.status, 403, kind);
+        assert.equal(result.data.sessionToken, undefined, kind);
+        assert.equal(result.data.demoPolicy, undefined, 'a denied private call must not silently become public');
+        assert.deepEqual(h.evanReadinessCalls, [], kind);
+        assert.equal(h.providerCalls.length, 0, kind);
+        assert.equal([...h.db.keys()].some(key => key.includes(':launch:')), false, kind);
+    }
+});
+
+test('private token route requires its own trusted origin, Evan identity, and no variant', async () => {
+    const h = harness(), checked = await h.evanGuestCheckIn();
+    const cookie = `${checked.cookie}; ${h.demoGrantCookie()}`;
+    for (const origin of ['', 'https://foreign.invalid', 'null']) {
+        assert.equal((await h.postPrivate({ personaId: EVAN_PERSONA_ID }, cookie, origin)).status, 403);
+    }
+    for (const body of [{}, { personaId: AMY_ID }, { personaId: DANI_PERSONA_ID },
+        { personaId: EVAN_PUBLIC_COPY_ID }, { personaId: EVAN_PRIVATE_COPY_ID },
+        ...['amy-cara4', 'extended', '', null, false].map(variant => ({ personaId: EVAN_PERSONA_ID, variant }))]) {
+        assert.equal((await h.postPrivate(body, cookie)).status, 403, JSON.stringify(body));
+    }
+    assert.deepEqual(h.evanReadinessCalls, []);
+    assert.deepEqual(h.readinessCalls, []);
+    assert.equal(h.providerCalls.length, 0);
+    assert.equal([...h.db.keys()].some(key => key.includes(':launch:')), false);
+});
+
+test('a private grant alone does not replace the existing guest check-in', async () => {
+    const h = harness();
+    const result = await h.postPrivate({ personaId: EVAN_PERSONA_ID }, h.demoGrantCookie());
+    assert.equal(result.status, 401);
+    assert.equal(h.providerCalls.length, 0);
+    assert.equal([...h.db.keys()].some(key => key.includes(':launch:')), false);
+});
+
+test('private email check-in preserves email eligibility and ignores duration inflation', async () => {
+    const h = harness({ evanEmailAvailable: true }), checked = await h.evanEmailCheckIn();
+    assert.equal(checked.status, 200);
+    const result = await h.postPrivateWithQuery('maxSeconds=86400&mode=public', {
+        personaId: EVAN_PERSONA_ID, maxSeconds: 86400, mode: 'public', providerPersonaId: EVAN_PUBLIC_COPY_ID,
+    }, `${checked.cookie}; ${h.demoGrantCookie()}`);
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.data.demoPolicy, { mode: 'extended', maxSeconds: 1800 });
+    assert.equal(result.data.agentMailAvailable, true);
+    assert.equal(result.data.rawEmailReturned, false);
+    assert.equal(h.providerCalls[0].body.personaConfig.personaId, EVAN_PRIVATE_COPY_ID);
+});
+
+test('same-browser public and private launches remain separate without clearing access', async () => {
+    const h = harness(), checked = await h.evanGuestCheckIn();
+    const cookie = `${checked.cookie}; ${h.demoGrantCookie()}`;
+    for (const extended of [true, false, true, false]) {
+        const status = await h.demoStatus(cookie);
+        assert.equal(status.status, 200);
+        assert.deepEqual(status.data, { mode: 'public', maxSeconds: 180, extendedAccess: true, aiflDemoRecaps: true });
+        assert.equal(status.response.headers.get('set-cookie'), null, 'public status must not revoke a private tab');
+        const launched = await (extended ? h.postPrivate : h.post)({ personaId: EVAN_PERSONA_ID }, cookie);
+        assert.equal(launched.status, 200);
+        assert.deepEqual(launched.data.demoPolicy, { mode: extended ? 'extended' : 'public', maxSeconds: extended ? 1800 : 180 });
+        assert.equal(launched.response.cookies.get('xagent_evan_extended_demo'), undefined);
+    }
+    assert.deepEqual(h.providerCalls.map(call => call.body.personaConfig.personaId),
+        [EVAN_PRIVATE_COPY_ID, EVAN_PUBLIC_COPY_ID, EVAN_PRIVATE_COPY_ID, EVAN_PUBLIC_COPY_ID]);
+});
+
+test('private access expiration after a successful status check fails closed at token issuance', async () => {
+    const h = harness(), checked = await h.evanGuestCheckIn();
+    const status = await h.demoStatus(`${checked.cookie}; ${h.demoGrantCookie()}`);
+    assert.equal(status.data.extendedAccess, true);
+    const expiredCookie = `${checked.cookie}; ${h.demoGrantCookie(ORIGIN, Date.now() - 3_700_000)}`;
+    const failed = await h.postPrivate({ personaId: EVAN_PERSONA_ID }, expiredCookie);
+    assert.equal(failed.status, 403);
+    assert.equal(failed.data.sessionToken, undefined);
+    assert.deepEqual(h.evanReadinessCalls, []);
+    assert.equal(h.providerCalls.length, 0);
+    const publicStatus = await h.demoStatus(expiredCookie);
+    assert.deepEqual(publicStatus.data, { mode: 'public', maxSeconds: 180, extendedAccess: false, aiflDemoRecaps: true });
+});
+
+test('public and private token routes share the same per-browser launch limit', async () => {
+    const h = harness(), checked = await h.evanGuestCheckIn();
+    const cookie = `${checked.cookie}; ${h.demoGrantCookie()}`;
+    for (let index = 0; index < 5; index++) {
+        const result = await (index % 2 ? h.postPrivate : h.post)({ personaId: EVAN_PERSONA_ID }, cookie);
+        assert.equal(result.status, 200);
+    }
+    assert.equal((await h.postPrivate({ personaId: EVAN_PERSONA_ID }, cookie)).status, 429);
+    assert.equal(h.providerCalls.length, 5, 'switching endpoint cannot double the existing launch allowance');
 });
 
 test('unconfigured Evan duration, unavailable spine, and clone drift fail closed', async () => {
@@ -379,8 +502,10 @@ test('unconfigured Evan duration, unavailable spine, and clone drift fail closed
     const privateMissing = harness(), privateChecked = await privateMissing.evanGuestCheckIn();
     const privateCookie = `${privateChecked.cookie}; ${privateMissing.demoGrantCookie()}`;
     privateMissing.env.EVAN_EXTENDED_DEMO_PERSONA_ID = '';
-    assert.equal((await privateMissing.post({ personaId: EVAN_PERSONA_ID }, privateCookie)).status, 503);
+    assert.equal((await privateMissing.postPrivate({ personaId: EVAN_PERSONA_ID }, privateCookie)).status, 503);
     assert.equal(privateMissing.providerCalls.length, 0);
+    assert.equal((await privateMissing.post({ personaId: EVAN_PERSONA_ID }, privateCookie)).status, 200,
+        'missing private configuration does not break the public lane');
 });
 
 test('provider copy IDs cannot be requested directly even with an extended grant', async () => {
@@ -394,7 +519,7 @@ test('provider copy IDs cannot be requested directly even with an extended grant
 test('Evan launch and bound session preserve logical identity while provider metadata requires the selected copy', async () => {
     for (const extended of [false, true]) {
         const h = harness(), checked = await h.evanGuestCheckIn();
-        const result = await h.post({ personaId: EVAN_PERSONA_ID }, checked.cookie + (extended ? `; ${h.demoGrantCookie()}` : ''));
+        const result = await (extended ? h.postPrivate : h.post)({ personaId: EVAN_PERSONA_ID }, checked.cookie + (extended ? `; ${h.demoGrantCookie()}` : ''));
         const launchKey = 'xagent:amy:anam:launch:v1:' + result.data.launchId;
         const launch = JSON.parse(h.db.get(launchKey));
         const providerPersonaId = extended ? EVAN_PRIVATE_COPY_ID : EVAN_PUBLIC_COPY_ID;

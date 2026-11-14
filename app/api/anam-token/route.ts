@@ -14,7 +14,7 @@ import {
     readDaniAnamContactFromRequest,
 } from '@/lib/anam/contact-token';
 import { AMY_CARA4_VARIANT, resolveAnamSessionPersona } from '@/lib/anam/session-config';
-import { resolveEvanDemoPolicy } from '@/lib/anam/evan-demo-policy';
+import { hasEvanDemoGrant, resolveEvanDemoPolicy } from '@/lib/anam/evan-demo-policy';
 import type { EvanDemoPolicy } from '@/lib/anam/evan-demo-policy';
 import { verifyEvanDemoPersona } from '@/lib/anam/evan-demo-runtime';
 import {
@@ -88,11 +88,15 @@ export async function POST(req: Request) {
         const isAmyCara4 = resolution.variant === AMY_CARA4_VARIANT;
         const isDani = resolution.personaId === DANI_PERSONA_ID;
         const isEvan = resolution.personaId === EVAN_PERSONA_ID;
+        const privateEvanEntry = new URL(req.url).pathname === '/api/anam/evan/extended/token';
+        if (privateEvanEntry && (!isEvan || !hasEvanDemoGrant(req))) {
+            return noStoreJson({ error: 'Unlock the private Evan demo before starting a longer session.' }, { status: 403 });
+        }
         const evanLocalTestMode = isEvan && isEvanLocalTestMode();
         let evanDemoPolicy: EvanDemoPolicy | null = null;
         if (isEvan) {
             if (!spineConfig.gatesOpen) return noStoreJson({ error: 'Evan session access is temporarily unavailable' }, { status: 503 });
-            try { evanDemoPolicy = resolveEvanDemoPolicy(req); }
+            try { evanDemoPolicy = resolveEvanDemoPolicy(req, process.env, privateEvanEntry ? 'extended' : 'public'); }
             catch { return noStoreJson({ error: 'Evan demo access is temporarily unavailable' }, { status: 503 }); }
         }
         // Disabling optional features must never disable Amy's invitation gate.

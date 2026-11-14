@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail, ShieldCheck, Truck, UserRound } from 'lucide-react';
 import { isEvanLocalTestMode } from '@/lib/anam/evan-local-test-mode';
@@ -10,7 +11,7 @@ import type { EvanPlannerCheckIn } from '@/lib/anam/evan-planner-contact';
 type SubmitMode = 'email' | 'guest' | null;
 type RecapPolicy = 'loading' | 'unavailable' | 'aifl' | 'visitor';
 
-export default function EvanContactGate({ children }: { children: ReactNode }) {
+export default function EvanContactGate({ children, evanDemoMode = 'public' }: { children: ReactNode; evanDemoMode?: 'public' | 'extended' }) {
     const localTestMode = isEvanLocalTestMode();
     const [ready, setReady] = useState(localTestMode);
     const [checking, setChecking] = useState(!localTestMode);
@@ -19,7 +20,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
     const [email, setEmail] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [plannerCheckIn, setPlannerCheckIn] = useState<EvanPlannerCheckIn | undefined>(undefined);
-    const [extendedDemo, setExtendedDemo] = useState(false);
+    const extendedDemo = evanDemoMode === 'extended';
     const [recapPolicy, setRecapPolicy] = useState<RecapPolicy>('loading');
     const aiflDemoRecaps = recapPolicy === 'aifl';
     const recapPolicyKnown = recapPolicy === 'aifl' || recapPolicy === 'visitor';
@@ -31,7 +32,6 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
             const result = await response.json();
             if (typeof result?.aiflDemoRecaps !== 'boolean') throw new Error('Recap policy is unavailable');
             if (active) {
-                setExtendedDemo(result.mode === 'extended');
                 setRecapPolicy(result.aiflDemoRecaps ? 'aifl' : 'visitor');
             }
         }).catch(() => {
@@ -160,10 +160,7 @@ export default function EvanContactGate({ children }: { children: ReactNode }) {
 
                     <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#ffc857] lg:mt-0">Before you meet Evan</p>
                     <p className="mt-2 text-xs text-[#ffdc8a]">{extendedDemo ? 'Private demo · up to 30 minutes' : 'Public demo · up to 3 minutes'} · The timer starts when Evan connects.</p>
-                    {extendedDemo && <button type="button" className="mt-1 self-start text-xs text-white/60 underline" onClick={async () => {
-                        const response = await fetch('/api/anam/evan/demo-access', { method: 'DELETE' });
-                        if (response.ok) setExtendedDemo(false);
-                    }}>Switch back to the public demo</button>}
+                    {extendedDemo && <Link href="/demo/evan" className="mt-1 self-start text-xs text-white/60 underline">Switch back to the public demo</Link>}
                     <h2 className="mt-2 font-[Georgia] text-[clamp(1.8rem,2.5vw,2.45rem)] font-bold leading-tight tracking-tight">Choose how you want to begin.</h2>
                     <p className="mt-2 max-w-2xl text-sm leading-5 text-[#d7cbe2]">
                         {!recapPolicyKnown ? 'Continue without email to speak with Evan and use the Live Move Planner.' : aiflDemoRecaps ? 'Try the contact and recap workflow, or continue without email. Evan and the Live Move Planner are available either way.' : 'Add your name and email for a written recap, or continue without email. Evan and the Live Move Planner are available either way.'}

@@ -53,8 +53,11 @@ export function hasEvanDemoGrant(request: Request, env: NodeJS.ProcessEnv = proc
     } catch { return false; }
 }
 
-export function resolveEvanDemoPolicy(request: Request, env: NodeJS.ProcessEnv = process.env): EvanDemoPolicy {
-    const extended = hasEvanDemoGrant(request, env);
+export function resolveEvanDemoPolicy(request: Request, env: NodeJS.ProcessEnv = process.env, mode: 'public' | 'extended' = 'public'): EvanDemoPolicy {
+    // Permission alone never upgrades an ordinary public launch. Private entry
+    // must be selected by a server route, not body/query/header/browser storage.
+    const extended = mode === 'extended';
+    if (extended && !hasEvanDemoGrant(request, env)) throw new Error('Private Evan demo access is required');
     const providerPersonaId = (extended ? env.EVAN_EXTENDED_DEMO_PERSONA_ID : env.EVAN_PUBLIC_DEMO_PERSONA_ID)?.trim() ?? '';
     if (!uuid.test(providerPersonaId)) throw new Error('Evan duration policy is not configured');
     return { mode: extended ? 'extended' : 'public', maxSeconds: extended ? EVAN_EXTENDED_DEMO_SECONDS : EVAN_PUBLIC_DEMO_SECONDS, providerPersonaId };

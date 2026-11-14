@@ -53,7 +53,7 @@ const evanMeetingConcierge = createMeetingConciergeHandlers({
         // A public check-in must not bypass the website's three-minute policy
         // by creating an external meeting. Longer meetings require private access.
         if (!hasEvanDemoGrant(request)) return null;
-        try { resolveEvanDemoPolicy(request); } catch { return null; }
+        try { resolveEvanDemoPolicy(request, process.env, 'extended'); } catch { return null; }
         const spine = readAmyAnamSpineConfig();
         if (!spine.gatesOpen) return null;
         const browser = readAmyAnamBrowserSession(request, spine.signingSecret);

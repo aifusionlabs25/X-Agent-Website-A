@@ -9,7 +9,7 @@ function json(body: unknown, status = 200) {
 
 export async function GET(request: Request) {
     const extended = hasEvanDemoGrant(request);
-    return json({ mode: extended ? 'extended' : 'public', maxSeconds: extended ? 1800 : 180,
+    return json({ mode: 'public', maxSeconds: 180, extendedAccess: extended,
         aiflDemoRecaps: process.env.EVAN_PUBLIC_DEMO_ENABLED === 'true' && process.env.EVAN_PUBLIC_DEMO_MAIL_ROUTING === 'all-aifl' });
 }
 

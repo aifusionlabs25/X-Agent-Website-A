@@ -11,6 +11,7 @@ import {
 const LIVE_ORIGIN = 'https://xagent.aifusionlabs.app';
 const ACCESS = '/api/anam/evan/access';
 const POLICY = '/api/anam/evan/demo-access';
+const PRIVATE_TOKEN = '/api/anam/evan/extended/token';
 const IMMUTABLE_HOST = /^x-agent-website-[a-z0-9]+-robs-projects-e72bad73\.vercel\.app$/;
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const stageReceiptPath = path.join(root, '.vercel/evan-duration-production-stage.json');
@@ -61,16 +62,24 @@ export async function runProductionDurationVerification({
     receipt, privateCode, live = false, stageVerification, shareUrl, fetchImpl = fetch,
 }) {
     const { target, immutableOrigin } = productionVerificationTarget(receipt, { live, stageVerification });
+    return runDurationBoundaryVerification({ target, privateCode, shareUrl, fetchImpl, resultInfo: {
+        mode: live ? 'live' : 'stage', immutableOrigin, environment: 'production',
+        sourceCommit: receipt.sourceCommit, deploymentId: receipt.deploymentId,
+    } });
+}
+
+// Shared read/launch-reservation checks. Public entry is tested both before and
+// after unlocking the private path, using one in-memory browser cookie jar.
+export async function runDurationBoundaryVerification({ target, privateCode, shareUrl, fetchImpl = fetch, resultInfo }) {
     const share = verifiedShare(shareUrl, target);
     expect(typeof privateCode === 'string' && privateCode.length >= 32 && privateCode.length <= 256, 'private-code-configuration');
     const client = createWebsiteClient(target, fetchImpl);
     const result = {
-        schema: 1, mode: live ? 'live' : 'stage', url: target.origin, immutableOrigin,
-        environment: 'production', sourceCommit: receipt.sourceCommit, deploymentId: receipt.deploymentId,
+        schema: 2, ...resultInfo, url: target.origin,
         verifiedAt: new Date().toISOString(), passed: false, checks: [], tokenReservations: 0,
         engineStarted: false, emailSent: false, productionConfigurationChanged: false,
         limitations: [
-            'Checks create three short-lived launch reservations and consume access/token rate limits.',
+            'Checks create at most four short-lived launch reservations and consume access/token rate limits.',
             'No live audio, actual timeout, planner conversation, or email delivery is exercised.',
             'AIFL routing disclosure and email eligibility are checked, not recipient delivery.',
             'Deployment identity is supplied by the release-owner receipt; this script does not query Vercel aliases.',
@@ -83,7 +92,17 @@ export async function runProductionDurationVerification({
         activeStage = stage;
         return client.json(stage, endpoint, options);
     };
-    const expectPolicy = (payload, mode, maxSeconds, stage) => fields(payload, { mode, maxSeconds, aiflDemoRecaps: true }, stage);
+    const expectPolicy = (payload, extendedAccess, stage) => fields(payload, {
+        mode: 'public', maxSeconds: 180, extendedAccess, aiflDemoRecaps: true,
+    }, stage);
+    async function denyPrivate(stage) {
+        activeStage = stage;
+        const response = await client.request(stage, PRIVATE_TOKEN, {
+            method: 'POST', body: { personaId: EVAN_DEMO_SOURCE_PERSONA_ID },
+        });
+        try { expect(response.status === 403, stage); } finally { await response.body?.cancel(); }
+        result.checks.push({ check: stage, passed: true });
+    }
     async function checkIn(lane) {
         const stage = `${lane}-check-in`;
         const email = lane === 'email';
@@ -100,12 +119,13 @@ export async function runProductionDurationVerification({
         fields(await json(`${lane}-logout-round-trip`, ACCESS), { authenticated: false, rawEmailReturned: false }, `${lane}-logout-round-trip`);
         accessTouched = false;
     }
-    async function tokenCheck(mode, email, tamper = false) {
-        const stage = `${mode}-${email ? 'email' : 'guest'}-token`;
+    async function tokenCheck(mode, email, tamper = false, suffix = '') {
+        const stage = `${mode}-${email ? 'email' : 'guest'}-token${suffix}`;
         const expectedId = mode === 'public' ? EVAN_DEMO_PUBLIC_PERSONA_ID : EVAN_DEMO_EXTENDED_PERSONA_ID;
         let token;
         try {
-            token = await json(stage, `/api/anam-token${tamper ? '?mode=extended&maxSeconds=86400' : ''}`, {
+            const endpoint = mode === 'extended' ? PRIVATE_TOKEN : '/api/anam-token';
+            token = await json(stage, `${endpoint}${tamper ? '?mode=extended&maxSeconds=86400' : ''}`, {
                 method: 'POST', body: { personaId: EVAN_DEMO_SOURCE_PERSONA_ID,
                     ...(tamper ? { mode: 'extended', maxSeconds: 86400, providerPersonaId: EVAN_DEMO_EXTENDED_PERSONA_ID } : {}) },
             });
@@ -136,18 +156,19 @@ export async function runProductionDurationVerification({
             const response = await client.request(activeStage, share, { allowRedirects: true });
             try { expect(response.ok, activeStage); } finally { await response.body?.cancel(); }
         }
-        expectPolicy(await json('initial-policy', POLICY), 'public', 180, 'initial-policy');
+        expectPolicy(await json('initial-policy', POLICY), false, 'initial-policy');
         fields(await json('initial-check-in-status', ACCESS), { authenticated: false, optional: true, rawEmailReturned: false }, 'initial-check-in-status');
         activeStage = 'wrong-private-code';
         grantTouched = true;
         const denied = await client.request(activeStage, POLICY, { method: 'POST', body: { code: 'invalid-production-verification-code' } });
         try { expect(denied.status === 403, activeStage); } finally { await denied.body?.cancel(); }
-        expectPolicy(await json('wrong-code-remains-public', POLICY), 'public', 180, 'wrong-code-remains-public');
+        expectPolicy(await json('wrong-code-remains-public', POLICY), false, 'wrong-code-remains-public');
         await json('remove-invalid-grant', POLICY, { method: 'DELETE' });
         grantTouched = false;
         result.checks.push({ check: 'public-180-aifl-disclosure-wrong-code-403', passed: true });
 
         await checkIn('guest');
+        await denyPrivate('private-without-grant-denied');
         activeStage = 'public-external-meeting-denied';
         const meeting = await client.request(activeStage, '/api/anam/evan/meetings', { method: 'POST', body: {} });
         try { expect(meeting.status === 401, activeStage); } finally { await meeting.body?.cancel(); }
@@ -161,12 +182,15 @@ export async function runProductionDurationVerification({
 
         grantTouched = true;
         fields(await json('private-code-unlock', POLICY, { method: 'POST', body: { code: privateCode } }), { mode: 'extended', maxSeconds: 1800 }, 'private-code-unlock');
-        expectPolicy(await json('private-cookie-round-trip', POLICY), 'extended', 1800, 'private-cookie-round-trip');
+        expectPolicy(await json('private-cookie-round-trip', POLICY), true, 'private-cookie-round-trip');
         await checkIn('private-guest');
         await tokenCheck('extended', false);
+        await tokenCheck('public', false, true, '-with-private-grant');
+        expectPolicy(await json('public-visit-preserves-private-grant', POLICY), true, 'public-visit-preserves-private-grant');
         await json('private-grant-removal', POLICY, { method: 'DELETE' });
-        expectPolicy(await json('public-policy-restored', POLICY), 'public', 180, 'public-policy-restored');
+        expectPolicy(await json('public-policy-restored', POLICY), false, 'public-policy-restored');
         grantTouched = false;
+        await denyPrivate('private-after-revocation-denied');
         await logout('private-guest');
         result.checks.push({ check: 'private-1800-public-restoration-and-all-logouts', passed: true });
         result.passed = true;
