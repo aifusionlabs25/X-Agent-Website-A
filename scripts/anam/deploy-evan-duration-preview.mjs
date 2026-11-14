@@ -13,6 +13,9 @@ for (const id of [EVAN_DEMO_PUBLIC_PERSONA_ID, EVAN_DEMO_EXTENDED_PERSONA_ID]) {
     if (!receipt.clones.some(row => row.id === id && row.verified)) throw new Error('Provider copy is not verified');
 }
 const privateFile = '.vercel/evan-duration-private-access.json';
+const savedAccess = existsSync(privateFile) ? JSON.parse(readFileSync(privateFile, 'utf8')) : undefined;
+const customKeys = savedAccess?.accessCode === undefined ? [] : ['EVAN_EXTENDED_DEMO_ACCESS_CODE'];
+if (customKeys.length && (typeof savedAccess.accessCode !== 'string' || savedAccess.accessCode.length < 6 || savedAccess.accessCode.length > 256 || savedAccess.accessCode !== savedAccess.accessCode.trim())) throw new Error('Invalid custom demo code');
 const env = {
     ...process.env,
     EVAN_PUBLIC_DEMO_PERSONA_ID: EVAN_DEMO_PUBLIC_PERSONA_ID,
@@ -40,15 +43,18 @@ const explicitKeys = keys.filter(key => Object.hasOwn({
     EVAN_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH:1, ANAM_RECOVERY_NAMESPACE:1,
 }, key));
 if (!process.argv.includes('--apply')) {
-    console.log(JSON.stringify({ target: 'amy-ceo-rehearsal', skipDomain: true, overrideKeys: [...explicitKeys, 'EVAN_EXTENDED_DEMO_ACCESS_KEY'], productionWrite: false }));
+    console.log(JSON.stringify({ target: 'amy-ceo-rehearsal', skipDomain: true, overrideKeys: [...explicitKeys, 'EVAN_EXTENDED_DEMO_ACCESS_KEY', ...customKeys], productionWrite: false }));
 } else {
-    const access = existsSync(privateFile) ? JSON.parse(readFileSync(privateFile, 'utf8')) : { code: randomBytes(32).toString('base64url') };
+    const access = savedAccess ?? { code: randomBytes(32).toString('base64url') };
     if (typeof access.code !== 'string' || access.code.length < 32) throw new Error('Invalid private demo key');
     if (!existsSync(privateFile)) writeFileSync(privateFile, JSON.stringify(access, null, 2), { mode: 0o600, flag: 'wx' });
     env.EVAN_EXTENDED_DEMO_ACCESS_KEY = access.code;
+    if (access.accessCode !== undefined) {
+        env.EVAN_EXTENDED_DEMO_ACCESS_CODE = access.accessCode;
+    }
     const cli = resolve(process.env.APPDATA, 'npm/node_modules/vercel/dist/index.js');
     const args = [cli, 'deploy', '.', '--target', 'amy-ceo-rehearsal', '--skip-domain', '--yes', '--force', '--no-wait', '--scope', 'robs-projects-e72bad73'];
-    for (const key of [...explicitKeys, 'EVAN_EXTENDED_DEMO_ACCESS_KEY']) args.push('--env', key);
+    for (const key of [...explicitKeys, 'EVAN_EXTENDED_DEMO_ACCESS_KEY', ...customKeys]) args.push('--env', key);
     const result = spawnSync(process.execPath, args, { env, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, windowsHide: true });
     // CLI logs key names, never secret values (values travel in the child environment).
     if (result.stdout) process.stdout.write(result.stdout);

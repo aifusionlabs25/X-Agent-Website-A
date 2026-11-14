@@ -1,7 +1,7 @@
 // Import-safe, immutable rehearsal verification. No engine/call/email is started.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { runDurationBoundaryVerification } from './verify-evan-duration-production.mjs';
+import { runDurationBoundaryVerification, verificationAccessCode } from './verify-evan-duration-production.mjs';
 
 export function previewVerificationTarget(preview) {
     let target;
@@ -28,8 +28,8 @@ export async function runPreviewDurationVerification({ preview, privateCode, fet
 async function main() {
     if (process.argv.length !== 2) throw new Error('No CLI arguments are supported');
     const preview = JSON.parse(readFileSync('.vercel/evan-duration-preview.json', 'utf8'));
-    const { code } = JSON.parse(readFileSync('.vercel/evan-duration-private-access.json', 'utf8'));
-    const result = await runPreviewDurationVerification({ preview, privateCode: code, shareUrl: process.env.EVAN_PREVIEW_SHARE_URL });
+    const privateCode = verificationAccessCode(JSON.parse(readFileSync('.vercel/evan-duration-private-access.json', 'utf8')));
+    const result = await runPreviewDurationVerification({ preview, privateCode, shareUrl: process.env.EVAN_PREVIEW_SHARE_URL });
     writeFileSync('.vercel/evan-duration-verification.json', JSON.stringify(result, null, 2), { mode: 0o600 });
     console.log(JSON.stringify(result, null, 2));
     if (!result.passed) process.exitCode = 1;

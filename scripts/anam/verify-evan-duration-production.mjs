@@ -21,6 +21,19 @@ class VerificationFailure extends Error {
     constructor(stage) { super(`Verification failed at ${stage}; response details redacted.`); this.stage = stage; }
 }
 function expect(condition, stage) { if (!condition) throw new VerificationFailure(stage); }
+function validPrivateCode(value) {
+    return typeof value === 'string' && value.length >= 6 && value.length <= 256 && value === value.trim();
+}
+
+// The legacy `code` field remains the deployment signing secret. A separately
+// configured human access code takes precedence without modifying that secret.
+export function verificationAccessCode(access) {
+    expect(access && typeof access === 'object' && !Array.isArray(access), 'private-code-configuration');
+    const value = Object.hasOwn(access, 'accessCode') ? access.accessCode : access.code;
+    expect(validPrivateCode(value), 'private-code-configuration');
+    return value;
+}
+
 function fields(payload, expected, stage) {
     expect(payload && typeof payload === 'object' && !Array.isArray(payload), stage);
     for (const [key, value] of Object.entries(expected)) expect(payload[key] === value, stage);
@@ -72,7 +85,7 @@ export async function runProductionDurationVerification({
 // after unlocking the private path, using one in-memory browser cookie jar.
 export async function runDurationBoundaryVerification({ target, privateCode, shareUrl, fetchImpl = fetch, resultInfo }) {
     const share = verifiedShare(shareUrl, target);
-    expect(typeof privateCode === 'string' && privateCode.length >= 32 && privateCode.length <= 256, 'private-code-configuration');
+    expect(validPrivateCode(privateCode), 'private-code-configuration');
     const client = createWebsiteClient(target, fetchImpl);
     const result = {
         schema: 2, ...resultInfo, url: target.origin,
@@ -232,8 +245,8 @@ async function main() {
     const live = args[0] === '--live';
     const receipt = JSON.parse(readFileSync(stageReceiptPath, 'utf8'));
     const stageVerification = live ? JSON.parse(readFileSync(stageVerificationPath, 'utf8')) : undefined;
-    const { code } = JSON.parse(readFileSync(path.join(root, '.vercel/evan-duration-private-access.json'), 'utf8'));
-    const result = await runProductionDurationVerification({ receipt, privateCode: code, live, stageVerification,
+    const privateCode = verificationAccessCode(JSON.parse(readFileSync(path.join(root, '.vercel/evan-duration-private-access.json'), 'utf8')));
+    const result = await runProductionDurationVerification({ receipt, privateCode, live, stageVerification,
         shareUrl: process.env.EVAN_PREVIEW_SHARE_URL });
     const output = live ? path.join(root, '.vercel/evan-duration-live-verification.json') : stageVerificationPath;
     writeFileSync(output, JSON.stringify(result, null, 2), { mode: 0o600 });

@@ -39,6 +39,48 @@ test('extended access requires an exact sufficiently strong configured code', ()
     assert.throws(() => createEvanDemoGrant(origin, {}), /not configured/);
 });
 
+test('custom human code is exact and replaces legacy login without replacing the signing key', () => {
+    const custom = { ...env, EVAN_EXTENDED_DEMO_ACCESS_CODE: 'Review7' };
+    assert.equal(verifyEvanDemoAccessCode('Review7', custom), true);
+    for (const value of [secret, 'review7', 'REVIEW7', 'Review7 ', ' Review7', '', null, 123, 'x'.repeat(257)]) {
+        assert.equal(verifyEvanDemoAccessCode(value, custom), false);
+    }
+    assert.equal(verifyEvanDemoAccessCode(secret, env), true, 'unset custom code retains compatibility');
+    for (const key of ['', undefined, 'short']) {
+        assert.equal(verifyEvanDemoAccessCode('Review7', { ...custom, EVAN_EXTENDED_DEMO_ACCESS_KEY: key }), false);
+    }
+});
+
+test('invalid configured human codes fail closed rather than falling back to legacy login', () => {
+    for (const code of ['', ' ', 'short', ' Review7', 'Review7 ', 'x'.repeat(257), null, 123]) {
+        const custom = { ...env, EVAN_EXTENDED_DEMO_ACCESS_CODE: code };
+        assert.equal(verifyEvanDemoAccessCode(code, custom), false);
+        assert.equal(verifyEvanDemoAccessCode(secret, custom), false);
+    }
+});
+
+test('knowing the human code cannot sign grants or upgrade public entry', () => {
+    const custom = { ...env, EVAN_EXTENDED_DEMO_ACCESS_CODE: 'Review7' };
+    const token = createEvanDemoGrant(origin, custom);
+    assert.equal(hasEvanDemoGrant(request(token), custom), true);
+    assert.equal(resolveEvanDemoPolicy(request(token), custom).maxSeconds, 180);
+    assert.equal(resolveEvanDemoPolicy(request(token), custom, 'extended').maxSeconds, 1800);
+    const [payload] = token.split('.');
+    const forged = `${payload}.${createHmac('sha256', custom.EVAN_EXTENDED_DEMO_ACCESS_CODE).update(`evan-demo:v1:${payload}`).digest('base64url')}`;
+    assert.equal(hasEvanDemoGrant(request(forged), custom), false);
+    assert.throws(() => resolveEvanDemoPolicy(request(forged), custom, 'extended'));
+});
+
+test('human-code changes preserve existing grant expiry and require the new code for new unlocks', () => {
+    const first = { ...env, EVAN_EXTENDED_DEMO_ACCESS_CODE: 'Review7' };
+    const second = { ...env, EVAN_EXTENDED_DEMO_ACCESS_CODE: 'Review8' };
+    const token = createEvanDemoGrant(origin, first, 10_000);
+    assert.equal(hasEvanDemoGrant(request(token), second, 10_001), true);
+    assert.equal(hasEvanDemoGrant(request(token), second, 10_000 + EVAN_DEMO_GRANT_SECONDS * 1000), false);
+    assert.equal(verifyEvanDemoAccessCode('Review7', second), false);
+    assert.equal(verifyEvanDemoAccessCode('Review8', second), true);
+});
+
 test('a valid grant expires at its one-hour boundary and cannot start in the future', () => {
     const now = 10_000;
     const token = createEvanDemoGrant(origin, env, now);

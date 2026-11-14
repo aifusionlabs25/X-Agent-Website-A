@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { previewVerificationTarget, runPreviewDurationVerification } from '../scripts/anam/verify-evan-duration-preview.mjs';
-import { productionVerificationTarget, runProductionDurationVerification } from '../scripts/anam/verify-evan-duration-production.mjs';
+import { productionVerificationTarget, runProductionDurationVerification, verificationAccessCode } from '../scripts/anam/verify-evan-duration-production.mjs';
 import { EVAN_DEMO_SOURCE_PERSONA_ID } from '../lib/anam/evan-demo-persona.ts';
 
 const origin = 'https://x-agent-website-unit123-robs-projects-e72bad73.vercel.app';
@@ -13,7 +13,7 @@ const ACCESS = '/api/anam/evan/access';
 const POLICY = '/api/anam/evan/demo-access';
 const PRIVATE = '/api/anam/evan/extended/token';
 
-function fixture({ publicUpgradeBug = false, privatePermissionBug = false, revokedPermissionBug = false, cookieLostBug = false } = {}) {
+function fixture({ expectedCode = privateCode, publicUpgradeBug = false, privatePermissionBug = false, revokedPermissionBug = false, cookieLostBug = false } = {}) {
     const calls = [];
     const issued = [];
     let unlockedOnce = false;
@@ -38,7 +38,7 @@ function fixture({ publicUpgradeBug = false, privatePermissionBug = false, revok
                 aiflDemoRecaps: true });
             if (method === 'DELETE') return json({ mode: 'public', maxSeconds: 180 }, 200, 'private=; Path=/; Max-Age=0; Secure; HttpOnly');
             assert.equal(method, 'POST');
-            if (body.code !== privateCode) return json({ error: 'Invalid' }, 403);
+            if (body.code !== expectedCode) return json({ error: 'Invalid' }, 403);
             unlockedOnce = true;
             return json({ mode: 'extended', maxSeconds: 1800 }, 200, 'private=allowed; Path=/; Secure; HttpOnly; Max-Age=3600');
         }
@@ -127,8 +127,52 @@ test('mismatched share URL and invalid private code configuration are rejected b
     const fetchImpl = () => { calls++; throw new Error('No calls expected'); };
     await assert.rejects(runPreviewDurationVerification({ preview, privateCode, fetchImpl,
         shareUrl: 'https://different.vercel.app/?_vercel_share=secret' }));
-    await assert.rejects(runPreviewDurationVerification({ preview, privateCode: 'short', fetchImpl }));
+    for (const invalid of ['', 'short', ' Cedar7', 'Cedar7 ', '\tCedar7', 'Cedar7\n', 'a'.repeat(257), null, undefined, 123456]) {
+        await assert.rejects(runPreviewDurationVerification({ preview, privateCode: invalid, fetchImpl }));
+    }
     assert.equal(calls, 0);
+});
+
+test('access receipts preserve the signing secret and prefer only a valid separate access code', () => {
+    const legacy = { code: privateCode };
+    assert.equal(verificationAccessCode(legacy), privateCode);
+    for (const accessCode of ['Cedar7', 'a'.repeat(256)]) {
+        const access = { code: privateCode, accessCode };
+        assert.equal(verificationAccessCode(access), accessCode);
+        assert.equal(access.code, privateCode, 'the signing secret must never be replaced');
+    }
+    for (const accessCode of ['', 'short', ' Cedar7', 'Cedar7 ', '\tCedar7', 'Cedar7\n', 'a'.repeat(257), null, undefined, 123456]) {
+        assert.throws(() => verificationAccessCode({ code: privateCode, accessCode }), /private-code-configuration/,
+            'a present but invalid custom code must not fall back to the signing secret');
+    }
+    for (const access of [null, undefined, [], {}, { code: 'short' }]) {
+        assert.throws(() => verificationAccessCode(access), /private-code-configuration/);
+    }
+});
+
+test('short human code completes the unchanged preview and staged boundary matrix without secret disclosure', async () => {
+    const accessCode = 'Cedar7';
+    const selected = verificationAccessCode({ code: privateCode, accessCode });
+    const previewResult = await runPreviewDurationVerification({ preview, privateCode: selected,
+        fetchImpl: fixture({ expectedCode: accessCode }).fetchImpl });
+    const stageResult = await runProductionDurationVerification({ receipt: stage, privateCode: selected,
+        fetchImpl: fixture({ expectedCode: accessCode }).fetchImpl });
+    for (const result of [previewResult, stageResult]) {
+        assert.equal(result.passed, true);
+        assert.equal(result.tokenReservations, 4);
+        assert.equal(result.engineStarted, false);
+        assert.equal(result.emailSent, false);
+        assert.equal(result.serverCleanupConfirmed, true);
+        const serialized = JSON.stringify(result);
+        for (const value of [accessCode, privateCode, 'opaque-session-token-do-not-print', 'private=allowed']) {
+            assert.ok(!serialized.includes(value));
+        }
+    }
+    const wrongCase = await runPreviewDurationVerification({ preview, privateCode: accessCode.toLowerCase(),
+        fetchImpl: fixture({ expectedCode: accessCode }).fetchImpl });
+    assert.equal(wrongCase.passed, false, 'the verifier must send the exact code without case normalization');
+    assert.equal(wrongCase.failureStage, 'private-code-unlock');
+    assert.equal(wrongCase.serverCleanupConfirmed, true);
 });
 
 test('production staged and live checks use the same explicit route matrix with strict promotion receipts', async () => {

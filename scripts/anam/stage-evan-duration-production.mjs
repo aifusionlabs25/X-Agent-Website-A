@@ -19,10 +19,10 @@ export const PRODUCTION_EVAN_SETTINGS = Object.freeze({
     EVAN_ANAM_OUTBOUND_ACTIONS_ENABLED: 'true', EVAN_ANAM_OUTBOUND_ACTIONS_KILL_SWITCH: 'false',
 });
 
-export function productionStageArgs(cli) {
+export function productionStageArgs(cli, { customAccessCode = false } = {}) {
     return [cli, 'deploy', '.', '--prod', '--skip-domain', '--yes', '--force', '--no-wait',
         '--scope', 'robs-projects-e72bad73',
-        ...[...Object.keys(PRODUCTION_EVAN_SETTINGS), 'EVAN_EXTENDED_DEMO_ACCESS_KEY'].flatMap(key => ['--env', key])];
+        ...[...Object.keys(PRODUCTION_EVAN_SETTINGS), 'EVAN_EXTENDED_DEMO_ACCESS_KEY', ...(customAccessCode ? ['EVAN_EXTENDED_DEMO_ACCESS_CODE'] : [])].flatMap(key => ['--env', key])];
 }
 
 function main() {
@@ -33,12 +33,14 @@ function main() {
     for (const id of [EVAN_DEMO_PUBLIC_PERSONA_ID, EVAN_DEMO_EXTENDED_PERSONA_ID]) {
         if (!copies.clones.some(row => row.id === id && row.verified)) throw new Error('Unverified provider copy');
     }
-    const { code } = JSON.parse(readFileSync('.vercel/evan-duration-private-access.json', 'utf8'));
+    const { code, accessCode } = JSON.parse(readFileSync('.vercel/evan-duration-private-access.json', 'utf8'));
     if (typeof code !== 'string' || code.length < 32) throw new Error('Private key missing or invalid');
-    const args = productionStageArgs(resolve(process.env.APPDATA, 'npm/node_modules/vercel/dist/index.js'));
+    if (accessCode !== undefined && (typeof accessCode !== 'string' || accessCode.length < 6 || accessCode.length > 256 || accessCode !== accessCode.trim())) throw new Error('Invalid custom demo code');
+    const customSettings = accessCode === undefined ? {} : { EVAN_EXTENDED_DEMO_ACCESS_CODE: accessCode };
+    const args = productionStageArgs(resolve(process.env.APPDATA, 'npm/node_modules/vercel/dist/index.js'), { customAccessCode: accessCode !== undefined });
     if (!process.argv.includes('--apply')) {
         console.log(JSON.stringify({ environment: 'production', skipDomain: true,
-            overrideKeys: [...Object.keys(PRODUCTION_EVAN_SETTINGS), 'EVAN_EXTENDED_DEMO_ACCESS_KEY'],
+            overrideKeys: [...Object.keys(PRODUCTION_EVAN_SETTINGS), 'EVAN_EXTENDED_DEMO_ACCESS_KEY', ...Object.keys(customSettings)],
             sharedSettingsOverridden: false, aliasWrite: false, projectEnvWrite: false }));
         return;
     }
@@ -56,7 +58,7 @@ function main() {
     // Existing production credentials/shared settings are inherited by Vercel.
     // Only explicitly named Evan values travel to this build. No namespace override.
     const result = spawnSync(process.execPath, args, { encoding: 'utf8', windowsHide: true,
-        env: { ...process.env, ...PRODUCTION_EVAN_SETTINGS, EVAN_EXTENDED_DEMO_ACCESS_KEY: code },
+        env: { ...process.env, ...PRODUCTION_EVAN_SETTINGS, ...customSettings, EVAN_EXTENDED_DEMO_ACCESS_KEY: code },
         maxBuffer: 4 * 1024 * 1024 });
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
@@ -68,7 +70,7 @@ function main() {
         url: urls[0], environment: 'production', skipDomain: true, stagedAt: new Date().toISOString(),
         sourceCommit: commit.stdout.trim(), checkpointHash: copies.checkpointHash,
         rollbackDeployment: 'dpl_532oXZx47MLz9UWBmRWkzDx4dqLF',
-        overrideKeys: [...Object.keys(PRODUCTION_EVAN_SETTINGS), 'EVAN_EXTENDED_DEMO_ACCESS_KEY'],
+        overrideKeys: [...Object.keys(PRODUCTION_EVAN_SETTINGS), 'EVAN_EXTENDED_DEMO_ACCESS_KEY', ...Object.keys(customSettings)],
         aliasWrite: false, projectEnvWrite: false,
     }, null, 2));
 }

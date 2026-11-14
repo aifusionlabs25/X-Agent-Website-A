@@ -24,7 +24,12 @@ function equal(left: string, right: string): boolean {
 
 export function verifyEvanDemoAccessCode(code: unknown, env: NodeJS.ProcessEnv = process.env): boolean {
     const key = accessKey(env);
-    return Boolean(key) && typeof code === 'string' && code.length <= 256 && equal(code, key);
+    // Human access codes are not cookie-signing secrets. Keep the existing strong
+    // key for grants, and use the legacy code only when no custom code is set.
+    const expected = env.EVAN_EXTENDED_DEMO_ACCESS_CODE === undefined ? key : env.EVAN_EXTENDED_DEMO_ACCESS_CODE;
+    return Boolean(key) && typeof expected === 'string' && expected.length >= 6 && expected.length <= 256
+        && expected === expected.trim()
+        && typeof code === 'string' && code.length <= 256 && equal(code, expected);
 }
 
 export function createEvanDemoGrant(origin: string, env: NodeJS.ProcessEnv = process.env, now = Date.now()): string {
