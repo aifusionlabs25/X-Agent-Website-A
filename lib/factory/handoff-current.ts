@@ -1,6 +1,7 @@
 import { digest,proposalIssues,type Field,type Proposal,type Turn } from './handoff.ts';
-import { contradictingCorrection } from './handoff-corrections.ts';
+import { contradictingCorrection,exactCorrectionWitness } from './handoff-corrections.ts';
 import { projectCurrentFact,type CurrentFactSelection } from './handoff-current-spans.ts';
+import {countTokens} from './handoff-counts.ts';
 
 export type SupersededProposal = {
     resolved_index:number;replacement_resolved_index:number;field_id:string;
@@ -21,10 +22,12 @@ export function selectCurrentProposals(input:unknown,turns:Turn[],fields:Field[]
         const original=input[issue.index] as Proposal;
         const correction=contradictingCorrection(turns,original.visitor_message_id,original.evidence);
         if(!correction)continue;
+        const source=turns.find(t=>t.id===original.visitor_message_id&&t.role==='user');
+        if(!source)continue;
         const candidates=input.map((p:Proposal,index:number)=>({p,index})).filter(({p,index})=>
             index!==issue.index&&!issues.some(i=>i.index===index)
             &&p.field_id===original.field_id&&p.visitor_message_id===correction.id
-            &&p.evidence===correction.content&&p.value===correction.content);
+            &&p.value===p.evidence&&exactCorrectionWitness(source,correction,original.evidence,p.evidence));
         const projection=projectCurrentFact(original,input,turns,fields,issue.index);
         if(projection?.proposals.length) {
             current_fact_selections.push(projection.binding);residuals.set(issue.index,projection.proposals);
@@ -32,8 +35,8 @@ export function selectCurrentProposals(input:unknown,turns:Turn[],fields:Field[]
         }
         const atomic=original.evidence.split(/[.!?;\n]+/).filter(s=>s.trim()).length===1
             &&!(/[,;:()\n]|\b(?:and|but|also|plus|with|that|who|which|where|when|while|if|unless|because|near|for|in|at|on|under|over|before|after|during|until|without|except|including|since|to|from|by|through|between|within|outside|beside|around|beyond|only|currently|formerly)\b/i.test(original.evidence))
-            &&(original.evidence.match(/\b\d+\b/g)||[]).length<=1
-            &&(!/\d/.test(original.evidence)||Boolean(projection));
+            &&countTokens(original.evidence).length<=1
+            &&(!countTokens(original.evidence).length||Boolean(projection));
         if(candidates.length===1&&atomic) {
             const replacement=candidates[0];
             superseded.push({resolved_index:issue.index,replacement_resolved_index:replacement.index,

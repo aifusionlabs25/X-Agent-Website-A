@@ -71,7 +71,7 @@ export function appendSdkCloseEvidence(state:Handoff,event:SdkCloseReceipt) {
         ||event.local_session_id!==state.id||event.launch_label!==state.launch_label
         ||event.provider_session_id!==state.provider_session_id||event.method!=='stopStreaming'
         ||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(event.invocation_id||'')
-        ||!['VISITOR_EXIT','OWNER_FINISH','UNMOUNT','BIND_FAILED'].includes(event.reason)
+        ||!['VISITOR_EXIT','OWNER_FINISH','UNMOUNT','BIND_FAILED','RECOVERY_FAILED'].includes(event.reason)
         ||!['INVOKED','RESOLVED','REJECTED'].includes(event.phase)
         ||typeof event.at!=='string'||!Number.isFinite(Date.parse(event.at))
         ||!['TOKEN_READY','ACTIVE','CLOSING_PENDING','CLOSED'].includes(state.status))
@@ -110,7 +110,8 @@ export function appendTurn(state:Handoff, turn:Turn) {
     state.approved=false; state.evidence_reviewed=false; state.provider_transcript_verified=false;
     if(turn.role==='user') {
         const request=requestedHandoffSpan(turn.content,{precedingTurn:state.turns.at(-2),hasSuccessfulHandoff:Boolean(state.handoff_binding_attempts?.some(a=>
-            a.applied===true&&a.result.accepted===true&&a.request_turn_id!==undefined))});
+            a.applied===true&&a.result.accepted===true&&typeof a.request_turn_id==='string'
+                &&state.handoff_requests?.some(r=>r.visitor_message_id===a.request_turn_id)))});
         if(request) {
             const row={visitor_message_id:turn.id,...request,source:'HOST_PERSISTED_VISITOR_REQUEST' as const,status:'REQUESTED_NOT_MAPPED' as const};
             state.handoff_requests=[...(state.handoff_requests||[]),row];

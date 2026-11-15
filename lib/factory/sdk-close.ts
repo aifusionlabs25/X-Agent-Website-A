@@ -2,7 +2,7 @@
  * A receipt is emitted only after the SDK function has actually been invoked.
  * Telemetry failures never block cleanup, retry the SDK, or imply CLOSED.
  */
-export type CloseReason='VISITOR_EXIT'|'OWNER_FINISH'|'UNMOUNT'|'BIND_FAILED';
+export type CloseReason='VISITOR_EXIT'|'OWNER_FINISH'|'UNMOUNT'|'BIND_FAILED'|'RECOVERY_FAILED';
 export type SdkCloseEvent={invocation_id:string;method:'stopStreaming';reason:CloseReason;
     phase:'INVOKED'|'RESOLVED'|'REJECTED';at:string};
 export type SdkCloseReceipt=SdkCloseEvent & {local_session_id:string;launch_label:string;provider_session_id:string|null};

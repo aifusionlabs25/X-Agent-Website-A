@@ -9,8 +9,15 @@ export type HandoffRequestContext={hasSuccessfulHandoff?:boolean;
 // Match conversational lead-ins without stripping them from the evidence.
 // Bounded filler tokens cannot swallow a negation, condition or narrator.
 const requestPrefix=String.raw`^(?:(?:uh|um|okay|ok|yes|yeah|yep|yup|sure|alright|all right|so|well|you know)[, ]+){0,8}(?:(?:please\s+)|(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)|(?:i(?:['’]d| would)\s+like\s+you\s+to\s+)|(?:i\s+(?:want|need)\s+you\s+to\s+))?(?:go ahead and\s+)?`;
-const requestStart=new RegExp(requestPrefix+String.raw`(?:prepare|create|draft)\s+(?:(?:a|an|the|my|our|this|that|these|those)\s+)?(?:(?:unsent|not sent|local|short|concise|human[ -]review|owner[ -]review|draft|review-ready)\s+){0,4}(?:brief|summary|review note|handoff(?: note)?|note|information|details)\b`,'i');
-const updatePrefix=String.raw`(?:update|revise|amend|correct)\s+(?:the|my|our|your|this|that)\s+(?:(?:existing|earlier|previous|saved|current|local|unsent|human[ -]review|owner[ -]review)\s+){0,3}`;
+// Share the artifact grammar between initial preparation, amendment and an
+// amendment's correction envelope. A pronoun is a local target only when its
+// following clause supplies review scope; it must not consume another noun.
+const artifact=String.raw`(?:brief|summary|review note|handoff(?: note)?|note|information|details)\b`;
+const modifiers=String.raw`(?:(?:existing|earlier|previous|saved|current|unsent|not sent|local|short|concise|human[ -]review|owner[ -]review|draft|review-ready|review)\s+){0,4}`;
+const namedTarget=String.raw`(?:(?:a|an|the|my|our|your|this|that|these|those)\s+)?`+modifiers+artifact;
+const scopedReference=String.raw`(?:this|that|these|those|it)(?=\s+(?:for|as|only)\b|[.!?;:]|$)`;
+const requestStart=new RegExp(requestPrefix+String.raw`(?:prepare|create|draft)\s+(?:`+namedTarget+'|'+scopedReference+')','i');
+const updatePrefix=String.raw`(?:update|revise|amend|correct)\s+(?:the|my|our|your|this|that)\s+`+modifiers;
 const updateStart=new RegExp(requestPrefix+updatePrefix+String.raw`(?:handoff(?: note)?|brief|summary|review note|note)\b`,'i');
 const handoffUpdateStart=new RegExp(requestPrefix+updatePrefix+String.raw`handoff(?: note)?\b`,'i');
 const internalScope=/\b(?:unsent|not sent|local|human[ -]review|owner[ -]review)\b|\bfor\s+(?:(?:a|the)\s+)?(?:human|owner)(?:[ -]review|\s+to\s+review)\b/i;
@@ -18,6 +25,16 @@ const conditional=/\b(?:if|unless|once)\b|\b(?:when|after)\s+(?:i|we|you)\b/i;
 const negatedPreparation=/\b(?:do not|don['’]t|never|not to|stop|cancel)\s+(?:(?:actually|please)\s+)*(?:go ahead and\s+)?(?:prepare|create|draft|preparing|creating|drafting|update|updating|revise|revising|amend|amending|correct|correcting)\b/i;
 const conflictingDelivery=/\b(?:and|then|also)\s+(?:please\s+)?(?:send|email|submit|book|deliver)\b/i;
 const externalActionRequest=new RegExp(requestPrefix+String.raw`(?:send|email|submit|book|deliver|call|phone|text|notify|contact|schedule)\b`,'i');
+
+/** A positive amendment command can introduce a factual correction after a
+ * colon. This is syntax evidence only: request linking still requires the
+ * normal local scope/context checks and no action or approval is granted. */
+export function isHandoffAmendmentCommand(raw:string):boolean {
+    if(typeof raw!=='string'||!raw.trim()||raw.length>8000)return false;
+    const parts=sentences(raw);
+    return parts.length===1&&!parts[0].quoted&&updateStart.test(raw.trim())
+        &&!conditional.test(raw)&&!negatedPreparation.test(raw)&&!conflictingDelivery.test(raw);
+}
 
 /** Returns sentence spans outside quotation/code delimiters. Apostrophes in
  * contractions are ordinary text; raw punctuation and all offsets are kept. */

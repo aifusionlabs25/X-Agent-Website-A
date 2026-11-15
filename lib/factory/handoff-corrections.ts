@@ -1,7 +1,9 @@
 import type {Turn} from './handoff';
+import {countView} from './handoff-counts.ts';
+import {isHandoffAmendmentCommand} from './handoff-request.ts';
 
 const words=(s:string)=>s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-const correctionStart=/^(?:(?:(?:one|a|small|quick)\s+)?correction\b|actually\b|(?:just\s+)?to correct\b|i (?:meant|mean|need to correct)\b)/i;
+const correctionStart=/^(?:(?:(?:one|1|a|small|quick)\s+)?correction\b|actually\b|(?:just\s+)?to correct\b|i (?:meant|mean|need to correct)\b)/i;
 const uncertainOrNarrated=/\b(?:if|maybe|perhaps|might|unsure|uncertain|think|guess|said|says|told|quoted|wrote|asked)\b/i;
 const disclaimedPrefix=/\b(?:no|not|never|without|cannot|can['’]t|don['’]t|doesn['’]t|didn['’]t|isn['’]t|aren['’]t|wasn['’]t|weren['’]t|won['’]t|wouldn['’]t|shouldn['’]t|ignore|disregard|deny|reject|pretend|imagine|suppose|example|hypothetical|say|saying|quote|quoting)\b/i;
 const scaffold=new Set(['we','i','you','they','it','our','my','the','a','an','there','is','are','was','were','has','have','had','of','to','be','now','actually','correction','one','quick','small','just','correct']);
@@ -68,28 +70,57 @@ function numericContradiction(evidence:string,beforeNot:string,negated:string):b
 export function contradictingCorrection(turns:Turn[],sourceId:string,evidence:string):Turn|null {
     const source=turns.findIndex(t=>t.id===sourceId&&t.role==='user');
     if(source<0)return null;
-    const original=' '+words(evidence)+' ';
+    const normalizedEvidence=countView(evidence),original=' '+words(normalizedEvidence)+' ';
     for(const turn of turns.slice(source+1)) {
         if(turn.role!=='user'||/["“”`]|(?:^|[\s([{])['‘]/u.test(turn.content))continue;
-        const starts=correctionStarts(turn.content);
-        for(const match of turn.content.matchAll(/\bnot\s+([^.!?;,]+)(?:[.!?;,]|$)/gi)) {
-            const statement=turn.content.slice(0,match.index!+match[0].length);
+        const content=countView(turn.content),starts=correctionStarts(content);
+        for(const match of content.matchAll(/\bnot\s+([^.!?;,]+)(?:[.!?;,]|$)/gi)) {
+            const statement=content.slice(0,match.index!+match[0].length);
             if(statement.includes('?')||uncertainOrNarrated.test(statement))continue;
             const phrase=words(match[1]).replace(/^(?:the|a|an|our|my) /,'');
-            const beforeNot=turn.content.slice(0,match.index);
+            const beforeNot=content.slice(0,match.index);
             const explicitStart=starts.some(start=>start<match.index!);
             // A sentence beginning with a direct numeric assertion ("4 staff,
             // not 6") need not use a ceremonial correction prefix to block a
             // stale count. Keep narration/negation safeguards; arbitrary embedded
             // contrasts remain unsupported. Detection is not replacement authority.
-            const directCount=/^\s*\d+\s+\p{L}/u.test(beforeNot.split(/[;.!?]/).at(-1)||'')
-                &&!/[?:：]/.test(beforeNot)&&!disclaimedPrefix.test(beforeNot)
+            const clause=beforeNot.split(/[;.!?:：]/).at(-1)||'';
+            const colon=beforeNot.search(/[:：]/);
+            const amendmentEnvelope=colon>=0&&isHandoffAmendmentCommand(beforeNot.slice(0,colon));
+            const directCount=(/^\s*(?:(?:it|this|that)\s+is\s+)?\d+\s+\p{L}/iu.test(clause)
+                ||amendmentEnvelope&&/^\s*(?:(?:(?:we|i|they)\s+(?:have|are)|there\s+are)\s+)?\d+\s+\p{L}/iu.test(clause))
+                &&!beforeNot.includes('?')&&(colon<0||amendmentEnvelope)
+                &&!starts.some(start=>start>match.index!)
+                &&!disclaimedPrefix.test(beforeNot)
                 &&!/\b(?:reads?|states?|describes?|reports?)\b/i.test(beforeNot);
-            if((explicitStart||directCount)&&numericContradiction(evidence,beforeNot,phrase))return turn;
+            if((explicitStart||directCount)&&numericContradiction(normalizedEvidence,beforeNot,phrase))return turn;
             if(!explicitStart)continue;
             if(phrase.split(' ').length<2)continue;
             if(original.includes(' '+phrase+' ')&&!original.includes(' not '+phrase+' ')&&!original.includes(' not the '+phrase+' '))return turn;
         }
     }
     return null;
+}
+
+/** A witness may be one complete exact correction statement within a compound
+ * turn. Require both full-source and statement-level proof; a cropped number,
+ * omitted negation, narrated statement or arbitrary quote is not sufficient.
+ * This inspects a detection view only and never changes the retained turn. */
+export function exactCorrectionWitness(source:Turn,correction:Turn,original:string,evidence:string):boolean {
+    if(contradictingCorrection([source,correction],source.id,original)?.id!==correction.id)return false;
+    if(evidence===correction.content)return true;
+    const start=correction.content.indexOf(evidence),end=start+evidence.length;
+    if(!evidence.trim()||start<0||start!==correction.content.lastIndexOf(evidence))return false;
+    const before=correction.content.slice(0,start),after=correction.content.slice(end);
+    if(before.trim()&&!/[,:：.!;][ \t]*(?:(?:and|but)[ \t]+)?$/i.test(before))return false;
+    if(after.trim()&&!/[.!;][ \t]*$/.test(evidence))return false;
+    if(/^[ \t]*(?:if|unless|maybe|perhaps|pending|depending|temporarily)\b/i.test(after))return false;
+    // A declarative fragment may rely on its original amendment prefix. Keep
+    // that exact raw prefix for detection, rather than treating an arbitrary
+    // standalone assertion as authority or inventing a new correction marker.
+    const commandPrefix=before.trimEnd();
+    const scoped=commandPrefix.endsWith(':')||commandPrefix.endsWith('：');
+    const content=scoped&&isHandoffAmendmentCommand(commandPrefix.slice(0,-1))
+        ?correction.content.slice(0,end):evidence;
+    return contradictingCorrection([source,{...correction,content}],source.id,original)?.id===correction.id;
 }

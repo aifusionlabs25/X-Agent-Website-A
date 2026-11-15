@@ -1,0 +1,458 @@
+{
+  "assurance": "CAPTURED_INPUTS_FOR_OFFLINE_REPLAY_NOT_NEW_PROVIDER_EVIDENCE",
+  "initial_state": {
+    "approved": false,
+    "assurance": "LOCAL_TEXT_SIMULATION_NOT_ANAM_OR_OWNER_APPROVAL",
+    "decisions": [],
+    "evidence_reviewed": false,
+    "external_actions": [],
+    "id": "dojo-text-d789ea73-3614-4a7b-aeb8-92cd9aa210e1",
+    "launch_label": "dojo-text-only:28871a8d-84e9-4a96-8cc2-0b34d99460c1",
+    "manifest_sha256": "91a1dcccbccf744e3a7b6f6955e2a0f9fa03c1e4f53970cc8b19e26df05a66b7",
+    "package_sha256": "dbb7384920ae5bcd23dca21b7d57874c2846ba945fe561bf3c81d279cfa7ab1d",
+    "persona_id": "LOCAL_PACKAGE_ONLY_dbb7384920ae5bcd23dca21b",
+    "processed": [],
+    "proposals": [],
+    "provider_release_verified": false,
+    "provider_session_id": "TEXT_SIMULATION_NO_PROVIDER_SESSION",
+    "provider_transcript_verified": false,
+    "receipts": [],
+    "simulation_contract": "factory.dojo-text-tools.v0.1",
+    "source_hashes_sha256": "83a213b2ae1e8c4c978f49bfe6d10e87623b0c296523d86352b6001c97edecaa",
+    "status": "ACTIVE",
+    "submission_status": "UNSUBMITTED",
+    "text_close_evidence": {
+      "arm_count": 0,
+      "final_reply_count": 0,
+      "provider_release_verified": false,
+      "sdk_close_invoked": false
+    },
+    "turns": [],
+    "version": 1
+  },
+  "fields": [
+    {
+      "id": "field_2188e6ea8250ac870752ef5d",
+      "label": "Primary business problem or repetitive work"
+    },
+    {
+      "id": "field_38a16b2f271396177f6f571a",
+      "label": "Desired workflow or outcome"
+    },
+    {
+      "id": "field_826677e8f4ff46c2079f4825",
+      "label": "Relevant tools currently used"
+    },
+    {
+      "id": "field_79a7766c1a75986cfcdd6b58",
+      "label": "Business or organization context"
+    },
+    {
+      "id": "field_3041972dcf03da6de6f69fcc",
+      "label": "Preferred level of automation"
+    },
+    {
+      "id": "field_9c115246b07dd59d817f38f2",
+      "label": "Human approval requirements"
+    },
+    {
+      "id": "field_4d1bbc1c0d2c10bfebf7be1d",
+      "label": "Primary service or workflow of interest"
+    },
+    {
+      "id": "field_bd7bb66666cf498e4a67ad45",
+      "label": "Technical question or topic"
+    },
+    {
+      "id": "field_d3e520db582317c04d1c4446",
+      "label": "Requested next step"
+    },
+    {
+      "id": "field_d13778e754f76733aa3b61a1",
+      "label": "Preferred contact route"
+    },
+    {
+      "id": "field_81624036fc30c6fe7287415a",
+      "label": "Consent to prepare a human-review brief"
+    },
+    {
+      "id": "field_4c6278b8c6c68a0f10d1e844",
+      "label": "Additional questions or constraints"
+    }
+  ],
+  "turns": [
+    {
+      "id": "handbook-revise-draft-v1",
+      "raw_text": "I run a fictional equipment-rental desk. Five staff manually sort incoming forms. We want draft routing for human approval. Please prepare that for human review only; no sending.",
+      "speaker": "visitor",
+      "text": "I run a fictional equipment-rental desk. Five staff manually sort incoming forms. We want draft routing for human approval. Please prepare that for human review only; no sending."
+    },
+    {
+      "id": "handbook-revise-draft-v2",
+      "raw_text": "Please amend that review brief: it is two staff, not five. The forms, routing goal and human approval requirement are unchanged. We do not know API availability.",
+      "speaker": "visitor",
+      "text": "Please amend that review brief: it is two staff, not five. The forms, routing goal and human approval requirement are unchanged. We do not know API availability."
+    },
+    {
+      "id": "handbook-revise-draft-v3",
+      "raw_text": "Leave the API question unresolved. Thank you, goodbye.",
+      "speaker": "visitor",
+      "text": "Leave the API question unresolved. Thank you, goodbye."
+    }
+  ],
+  "handoff_calls": [
+    {
+      "call_id": "call_dobj7jshHkLtwbeFIuZ987s1",
+      "arguments_json": "{\"proposals\":[{\"field_id\":\"field_2188e6ea8250ac870752ef5d\",\"value\":\"Five staff manually sort incoming forms.\",\"evidence\":\"Five staff manually sort incoming forms.\",\"visitor_message_id\":\"handbook-revise-draft-v1\"},{\"field_id\":\"field_38a16b2f271396177f6f571a\",\"value\":\"We want draft routing for human approval.\",\"evidence\":\"We want draft routing for human approval.\",\"visitor_message_id\":\"handbook-revise-draft-v1\"},{\"field_id\":\"field_79a7766c1a75986cfcdd6b58\",\"value\":\"I run a fictional equipment-rental desk.\",\"evidence\":\"I run a fictional equipment-rental desk.\",\"visitor_message_id\":\"handbook-revise-draft-v1\"},{\"field_id\":\"field_d3e520db582317c04d1c4446\",\"value\":\"Please prepare that for human review only; no sending.\",\"evidence\":\"Please prepare that for human review only; no sending.\",\"visitor_message_id\":\"handbook-revise-draft-v1\"}]}"
+    },
+    {
+      "call_id": "call_x7b24PzLF1ydJfIeVr0AnXVz",
+      "arguments_json": "{\"proposals\":[{\"field_id\":\"field_2188e6ea8250ac870752ef5d\",\"value\":\"it is two staff, not five.\",\"evidence\":\"it is two staff, not five.\",\"visitor_message_id\":\"handbook-revise-draft-v2\"},{\"field_id\":\"field_4c6278b8c6c68a0f10d1e844\",\"value\":\"We do not know API availability.\",\"evidence\":\"We do not know API availability.\",\"visitor_message_id\":\"handbook-revise-draft-v2\"}]}"
+    }
+  ],
+  "historical_receipts": [
+    {
+      "at": "2026-11-14T18:27:56.926Z",
+      "kind": "HANDOFF_REFERENCE_BINDING",
+      "sha256": "d47c8912058ff699ac230f11a292fabbffc8893e93f79d316f226e3c4e75587e"
+    },
+    {
+      "at": "2026-11-14T18:28:01.406Z",
+      "kind": "HANDOFF_REFERENCE_BINDING",
+      "sha256": "fd16fb89600ffc6363e541a2a4ea06ae68beadf58c41a520e455d33383b4a542"
+    }
+  ],
+  "captured_final_state": {
+    "approved": false,
+    "assurance": "LOCAL_TEXT_SIMULATION_NOT_ANAM_OR_OWNER_APPROVAL",
+    "closing_after_turn_id": "handbook-revise-draft-v3",
+    "decisions": [],
+    "evidence_reviewed": false,
+    "external_actions": [],
+    "handoff_binding_attempts": [
+      {
+        "applied": true,
+        "bindings": [],
+        "correction_evidence_bindings": [],
+        "current_fact_selections": [],
+        "format_bindings": [],
+        "fragment_bindings": [],
+        "input_sha256": "89989574fd01117b847d9ab8b55b6f1159f87371a314f50a8d415083b3f83aa8",
+        "local_session_id": "dojo-text-d789ea73-3614-4a7b-aeb8-92cd9aa210e1",
+        "local_turns_sha256": "aa486cb11fbcfd2247c70d76bdb2e0084fd9fe1f89a13000385998216acb8625",
+        "original_proposals": [
+          {
+            "evidence": "Five staff manually sort incoming forms.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "Five staff manually sort incoming forms.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "We want draft routing for human approval.",
+            "field_id": "field_38a16b2f271396177f6f571a",
+            "value": "We want draft routing for human approval.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "I run a fictional equipment-rental desk.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run a fictional equipment-rental desk.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "Please prepare that for human review only; no sending.",
+            "field_id": "field_d3e520db582317c04d1c4446",
+            "value": "Please prepare that for human review only; no sending.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          }
+        ],
+        "prior_current_fact_selections": [],
+        "provider_session_id": "TEXT_SIMULATION_NO_PROVIDER_SESSION",
+        "request_id": "call_dobj7jshHkLtwbeFIuZ987s1",
+        "request_turn_id": null,
+        "resolved_proposals": [
+          {
+            "evidence": "Five staff manually sort incoming forms.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "Five staff manually sort incoming forms.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "We want draft routing for human approval.",
+            "field_id": "field_38a16b2f271396177f6f571a",
+            "value": "We want draft routing for human approval.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "I run a fictional equipment-rental desk.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run a fictional equipment-rental desk.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "Please prepare that for human review only; no sending.",
+            "field_id": "field_d3e520db582317c04d1c4446",
+            "value": "Please prepare that for human review only; no sending.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          }
+        ],
+        "result": {
+          "accepted": true,
+          "accepted_proposal_count": 4,
+          "external_actions": [],
+          "instruction": "Report only that selected proposals are retained pending owner review. Do not claim every fact was captured, a complete brief is approved, delivery occurred or anyone will follow up.",
+          "issues": [],
+          "owner_approved": false,
+          "status": "PENDING_OWNER_REVIEW",
+          "submission_status": "UNSUBMITTED",
+          "visitor_message": "The selected information is retained as proposals for owner review. Nothing has been sent or approved."
+        },
+        "selected_proposals": [
+          {
+            "evidence": "Five staff manually sort incoming forms.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "Five staff manually sort incoming forms.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "We want draft routing for human approval.",
+            "field_id": "field_38a16b2f271396177f6f571a",
+            "value": "We want draft routing for human approval.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "I run a fictional equipment-rental desk.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run a fictional equipment-rental desk.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          },
+          {
+            "evidence": "Please prepare that for human review only; no sending.",
+            "field_id": "field_d3e520db582317c04d1c4446",
+            "value": "Please prepare that for human review only; no sending.",
+            "visitor_message_id": "handbook-revise-draft-v1"
+          }
+        ],
+        "superseded_proposals": [],
+        "through_visitor_turn_id": "handbook-revise-draft-v1",
+        "tool_call_id": "call_dobj7jshHkLtwbeFIuZ987s1"
+      },
+      {
+        "applied": true,
+        "bindings": [],
+        "correction_evidence_bindings": [],
+        "current_fact_selections": [],
+        "format_bindings": [],
+        "fragment_bindings": [],
+        "input_sha256": "e5207c2f1ea9e11f558f211ca6db95d1ef3c147b85812fa8b282d1d9767e2c71",
+        "local_session_id": "dojo-text-d789ea73-3614-4a7b-aeb8-92cd9aa210e1",
+        "local_turns_sha256": "ae09b6a7ef1b14355896f75bbe43af47220ef641d539eca261765bcaa1432696",
+        "original_proposals": [
+          {
+            "evidence": "it is two staff, not five.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "it is two staff, not five.",
+            "visitor_message_id": "handbook-revise-draft-v2"
+          },
+          {
+            "evidence": "We do not know API availability.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "We do not know API availability.",
+            "visitor_message_id": "handbook-revise-draft-v2"
+          }
+        ],
+        "prior_current_fact_selections": [],
+        "provider_session_id": "TEXT_SIMULATION_NO_PROVIDER_SESSION",
+        "request_id": "call_x7b24PzLF1ydJfIeVr0AnXVz",
+        "request_turn_id": null,
+        "resolved_proposals": [
+          {
+            "evidence": "it is two staff, not five.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "it is two staff, not five.",
+            "visitor_message_id": "handbook-revise-draft-v2"
+          },
+          {
+            "evidence": "We do not know API availability.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "We do not know API availability.",
+            "visitor_message_id": "handbook-revise-draft-v2"
+          }
+        ],
+        "result": {
+          "accepted": true,
+          "accepted_proposal_count": 2,
+          "external_actions": [],
+          "instruction": "Report only that selected proposals are retained pending owner review. Do not claim every fact was captured, a complete brief is approved, delivery occurred or anyone will follow up.",
+          "issues": [],
+          "owner_approved": false,
+          "status": "PENDING_OWNER_REVIEW",
+          "submission_status": "UNSUBMITTED",
+          "visitor_message": "The selected information is retained as proposals for owner review. Nothing has been sent or approved."
+        },
+        "selected_proposals": [
+          {
+            "evidence": "it is two staff, not five.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "it is two staff, not five.",
+            "visitor_message_id": "handbook-revise-draft-v2"
+          },
+          {
+            "evidence": "We do not know API availability.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "We do not know API availability.",
+            "visitor_message_id": "handbook-revise-draft-v2"
+          }
+        ],
+        "superseded_proposals": [],
+        "through_visitor_turn_id": "handbook-revise-draft-v2",
+        "tool_call_id": "call_x7b24PzLF1ydJfIeVr0AnXVz"
+      }
+    ],
+    "id": "dojo-text-d789ea73-3614-4a7b-aeb8-92cd9aa210e1",
+    "launch_label": "dojo-text-only:28871a8d-84e9-4a96-8cc2-0b34d99460c1",
+    "manifest_sha256": "91a1dcccbccf744e3a7b6f6955e2a0f9fa03c1e4f53970cc8b19e26df05a66b7",
+    "package_sha256": "dbb7384920ae5bcd23dca21b7d57874c2846ba945fe561bf3c81d279cfa7ab1d",
+    "persona_id": "LOCAL_PACKAGE_ONLY_dbb7384920ae5bcd23dca21b",
+    "processed": [
+      "call_dobj7jshHkLtwbeFIuZ987s1",
+      "call_x7b24PzLF1ydJfIeVr0AnXVz"
+    ],
+    "proposals": [
+      {
+        "evidence": "Five staff manually sort incoming forms.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "id": "c541990f5e80c1be14b28cb8084ecf19bb949fc27c762df9eb6b06b53921eea5",
+        "value": "Five staff manually sort incoming forms.",
+        "visitor_message_id": "handbook-revise-draft-v1"
+      },
+      {
+        "evidence": "We want draft routing for human approval.",
+        "field_id": "field_38a16b2f271396177f6f571a",
+        "id": "3a0093c291f553126e3a2ccb45c28f4bd1cc40834b78c59a844c30c86bc39ecb",
+        "value": "We want draft routing for human approval.",
+        "visitor_message_id": "handbook-revise-draft-v1"
+      },
+      {
+        "evidence": "I run a fictional equipment-rental desk.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "id": "66dbad1d17b24fce2952d034f400fa7cddfaa7e89ee48b58bc12bebee18cb851",
+        "value": "I run a fictional equipment-rental desk.",
+        "visitor_message_id": "handbook-revise-draft-v1"
+      },
+      {
+        "evidence": "Please prepare that for human review only; no sending.",
+        "field_id": "field_d3e520db582317c04d1c4446",
+        "id": "9c4892108ae81f385d9262affca1971b024f7466f6b914406d7090959a9a4b5c",
+        "value": "Please prepare that for human review only; no sending.",
+        "visitor_message_id": "handbook-revise-draft-v1"
+      },
+      {
+        "evidence": "it is two staff, not five.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "id": "9e39aee5cdaa231ea4a783f777f3c0a5a9eb86da3da243c2a2bf04672e74cf89",
+        "value": "it is two staff, not five.",
+        "visitor_message_id": "handbook-revise-draft-v2"
+      },
+      {
+        "evidence": "We do not know API availability.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "id": "038efd2dbf14541143bf1d74f0138a9229c84cd9bc9bbd55ae44de85b34d8c13",
+        "value": "We do not know API availability.",
+        "visitor_message_id": "handbook-revise-draft-v2"
+      }
+    ],
+    "provider_release_verified": false,
+    "provider_session_id": "TEXT_SIMULATION_NO_PROVIDER_SESSION",
+    "provider_transcript_verified": false,
+    "receipts": [
+      {
+        "at": "2026-11-14T18:27:56.926Z",
+        "kind": "HANDOFF_REFERENCE_BINDING",
+        "sha256": "d47c8912058ff699ac230f11a292fabbffc8893e93f79d316f226e3c4e75587e"
+      },
+      {
+        "at": "2026-11-14T18:28:01.406Z",
+        "kind": "HANDOFF_REFERENCE_BINDING",
+        "sha256": "fd16fb89600ffc6363e541a2a4ea06ae68beadf58c41a520e455d33383b4a542"
+      },
+      {
+        "at": "2026-11-14T18:28:03.374Z",
+        "kind": "VISITOR_EXIT_REQUESTED",
+        "sha256": "9c1a6a4449ebbf33ed56c492565153dadf13d999dff2fbaaca86024dcd33ef2c"
+      }
+    ],
+    "simulation_contract": "factory.dojo-text-tools.v0.1",
+    "source_hashes_sha256": "83a213b2ae1e8c4c978f49bfe6d10e87623b0c296523d86352b6001c97edecaa",
+    "status": "CLOSING_PENDING",
+    "submission_status": "UNSUBMITTED",
+    "text_close_evidence": {
+      "arm_count": 1,
+      "end_receipt_issued": true,
+      "final_reply_count": 1,
+      "provider_release_verified": false,
+      "sdk_close_invoked": false
+    },
+    "turns": [
+      {
+        "content": "I run a fictional equipment-rental desk. Five staff manually sort incoming forms. We want draft routing for human approval. Please prepare that for human review only; no sending.",
+        "id": "handbook-revise-draft-v1",
+        "role": "user"
+      },
+      {
+        "content": "The selected details are retained as proposals pending owner review. Nothing has been sent or approved.",
+        "id": "a1",
+        "role": "persona"
+      },
+      {
+        "content": "Please amend that review brief: it is two staff, not five. The forms, routing goal and human approval requirement are unchanged. We do not know API availability.",
+        "id": "handbook-revise-draft-v2",
+        "role": "user"
+      },
+      {
+        "content": "The updated selected details are retained as proposals pending owner review. Nothing has been sent or approved.",
+        "id": "a2",
+        "role": "persona"
+      },
+      {
+        "content": "Leave the API question unresolved. Thank you, goodbye.",
+        "id": "handbook-revise-draft-v3",
+        "role": "user"
+      },
+      {
+        "content": "Goodbye!",
+        "id": "a3",
+        "role": "persona"
+      }
+    ],
+    "version": 1,
+    "visitor_exit": {
+      "evidence": "Leave the API question unresolved. Thank you, goodbye.",
+      "source": "HOST_PERSISTED_VISITOR_EXIT",
+      "visitor_message_id": "handbook-revise-draft-v3"
+    }
+  },
+  "source_run_sha256": "58e5c8a3247250e200d11ab5449522af039007e0b2e545981677ab733ecf6128",
+  "historical_candidate_sha256": "2d988f08c9aa336974eb5d0140e5056cdbdd7731f5d2090ab17f75d7a173ffba",
+  "historical_source_pin": {
+    "contract": "factory.local-runtime-pin.v0.1",
+    "root": "C:\\Users\\AI Fusion Labs\\.codex\\worktrees\\olivia-current-fact-repair\\AIowa_VOICE_CITATION_PREVIEW",
+    "hashes": {
+      "lib/factory/exit-receipt.ts": "4ed45aa1ef53d71262da5841676561d7f92a34c4bbac7e0d50482777c273ceb5",
+      "lib/factory/handoff-binding.ts": "3c5a828c68b28ab9fceb70e93b29cce4d02142735c67bb3ac76a0d723cb486ac",
+      "lib/factory/handoff-context.ts": "5b4692d41f40bed3c746268ab84c60ee56ceee2dc71aa4c8a1db3779a07fdebc",
+      "lib/factory/handoff-correction-evidence.ts": "49469d93a6e692a0ebcc46fa97173db42ff3edb398cfed48f12ee9fc476bd6f1",
+      "lib/factory/handoff-corrections.ts": "eb068dfe515d96e74f69f649269e0ffb809ac34d949ab0000decfbcfd3795419",
+      "lib/factory/handoff-counts.ts": "ddd939fc235c6a5f518394ccd236ad8d4e61880df7de6c31ab553e37a3d59f19",
+      "lib/factory/handoff-current-spans.ts": "d11456f437d14efb97e8eb2d59d6c7c52d8f829f53f7d55e2dedb4ab2673a48e",
+      "lib/factory/handoff-current.ts": "f7132b7e9800bc5bcea0d70e2c6570f4a7742c27ccf232d8151f6a7e18cc5f75",
+      "lib/factory/handoff-format.ts": "3cc4e88e2463dc3808b44e255c1e2b4ee0ffffe888b32da8d9c8d0feae02f86b",
+      "lib/factory/handoff-fragments.ts": "e56e9a5a6dc2c2ebf35b2edc5a3fb89719e99c9d6536b8502eaa7869f2ac0ed5",
+      "lib/factory/handoff-request.ts": "61aa7963cfa1fbf29a4db54f917ce0ab1dd275eb3f9241de3cbb1f5e177b6b9f",
+      "lib/factory/handoff.ts": "9ca26726677bc74048cfffc02292724847253476f18ef1dd98d4d5e1d8f17fa1",
+      "lib/factory/transcript-reconciliation.ts": "cd24b8e4d9858cb55de94a1ea5febc9af8994e58120b60f5765c6e2585fb9730",
+      "lib/factory/turn-effects.ts": "043376f77f863605cf4c5c1dc356e5e7cfc8b3c7030edd56a99e992f6e0aff04",
+      "lib/factory/visitor-exit.ts": "62d8090943c566a9e6effc54459bf3982b0e60d274e3d6f199d213b704e13780"
+    }
+  }
+}

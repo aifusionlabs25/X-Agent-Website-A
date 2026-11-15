@@ -65,12 +65,16 @@ export default function FactoryPilot() {
     async function reconcile() {setStatus('Checking provider release and original transcript…');const r=await post('reconcile');setStatus(closedSessionStatus(r.state));}
     async function stop(reason:CloseReason='OWNER_FINISH') {
         if(stopping.current||!client.current)return;stopping.current=true;farewell.current?.dispose();
-        speechGeneration.current++;outputGate.current?.dispose();failureSpeech.current?.cancel('SESSION_CLOSE');
+        speechGeneration.current++;
+        const failedRecovery=reason==='RECOVERY_FAILED';
+        if(!failedRecovery){outputGate.current?.dispose();failureSpeech.current?.cancel('SESSION_CLOSE');}
         setStatus('Closing the Anam session…');
         // Storage/context failure must not prevent the actual SDK release.
-        if(current.current?.status==='ACTIVE')try{await post('closing');}catch(e){setError(e instanceof Error?e.message:'Closing state not retained; provider reconciliation is required.');}
+        const closing=current.current?.status==='ACTIVE'?post('closing').catch(e=>{setError(e instanceof Error?e.message:'Closing state not retained; provider reconciliation is required.');}):Promise.resolve();
         if(!closer.current)throw new Error('SDK close tracker unavailable; preserve the session for reconciliation');
         await closer.current.close(reason);
+        if(failedRecovery){outputGate.current?.dispose();failureSpeech.current?.cancel('SESSION_CLOSE');}
+        await closing;
         await reconcile();
     }
     function armClose() {farewell.current?.arm();}
@@ -93,7 +97,10 @@ export default function FactoryPilot() {
             const recovery=handoffFailureSpeech({localSessionId:launchState.id,providerSessionId:()=>boundProviderId,
                 interrupt:()=>c.interruptPersona(),
                 speak:(id,message)=>c.createTalkMessageStream(id).streamMessageChunk(message,true),
-                output:audioOutput.recovery,notice:setHandoffNotice,report:event=>{
+                output:audioOutput.recovery,notice:setHandoffNotice,
+                failed:()=>{setHandoffNotice('The spoken handoff response could not be verified. This session is closing. Your saved conversation remains available; nothing has been sent.');
+                    void stop('RECOVERY_FAILED').catch(()=>setError('Audio recovery failed; provider closure needs reconciliation.'));},
+                report:event=>{
                     void post('handoff_failure_speech_receipt',{receipt:{...event,local_session_id:launchState.id,
                         provider_session_id:boundProviderId,launch_label:launchState.launch_label}})
                         .catch(()=>setError('Failure-speech evidence could not be saved. Spoken delivery is unverified.'));

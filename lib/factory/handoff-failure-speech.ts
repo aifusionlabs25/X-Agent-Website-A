@@ -7,7 +7,7 @@ export const acceptedSpeechText="The selected details are retained as proposals 
 export type FailureSpeechPhase='REQUESTED'|'INTERRUPT_INVOKED'|'NATIVE_REPLY_ENDED'|'TALK_INVOKED'|'TALK_RETURNED'
     |'RECOVERY_TEXT_STARTED'|'RECOVERY_TEXT_ENDED'|'CANCELED'|'BLOCKED';
 export type FailureSpeechEvent={event_id:string;at:string;tool_call_id:string|null;visitor_message_id:string;
-    native_reply_id:string;recovery_reply_id:string;phase:FailureSpeechPhase;detail:string;outcome?:'UNVERIFIED'|'ACCEPTED'};
+    native_reply_id:string;recovery_reply_id:string;phase:FailureSpeechPhase;detail:string;outcome?:'UNVERIFIED'|'ACCEPTED';observed_reply_id?:string};
 export type FailureSpeechReceipt=FailureSpeechEvent & {local_session_id:string;provider_session_id:string;launch_label:string};
 type SpeechEvent={id:string;role:string;content:string;endOfSpeech:boolean;interrupted?:boolean};
 type Timer=ReturnType<typeof setTimeout>;
@@ -59,14 +59,14 @@ export function handoffFailureSpeech(options:{
     localSessionId:string;providerSessionId:()=>string|null;
     interrupt:()=>void;speak:(correlationId:string,text:string)=>Promise<void>;
     output:(mode:'HOLD'|'ALLOW'|'RELEASE')=>void;notice:(text:string)=>void;
-    report:(event:FailureSpeechEvent)=>void;id?:()=>string;now?:()=>string;
+    report:(event:FailureSpeechEvent)=>void;failed?:(reason:string)=>void;id?:()=>string;now?:()=>string;
     schedule?:typeof setTimeout;cancel?:typeof clearTimeout;timeoutMs?:number;
 }) {
     const starts=new Map<string,{provider:string;correlation:string}>(),attempted=new Set<string>();
     const ended=new Set<string>(),recoveryIds=new Set<string>(),heldReplyIds=new Set<string>();
     const schedule=options.schedule||setTimeout,cancel=options.cancel||clearTimeout;
     let timer:Timer|null=null,disposed=false;
-    type Active={tool:string|null;visitor:string;native:string;reply:string;correlation:string;text:string;submitted:boolean;
+    type Active={tool:string|null;visitor:string;native:string;reply:string;external:string;provider:string;observed?:string;correlation:string;text:string;submitted:boolean;
         outcome?:'UNVERIFIED'|'ACCEPTED';expected:string;
         stage:'WAIT_NATIVE'|'SENDING'|'SPEAKING'|'TEXT_ENDED'|'BLOCKED';};
     let active:Active|null=null;
@@ -74,13 +74,16 @@ export function handoffFailureSpeech(options:{
     function emit(a:Active,phase:FailureSpeechPhase,detail='') {
         options.report({event_id:(options.id||(()=>crypto.randomUUID()))(),at:(options.now||(()=>new Date().toISOString()))(),
             tool_call_id:a.tool,visitor_message_id:a.visitor,native_reply_id:a.native,recovery_reply_id:a.reply,phase,detail,
-            ...(a.outcome?{outcome:a.outcome}:{})});
+            ...(a.outcome?{outcome:a.outcome}:{}),...(a.observed?{observed_reply_id:a.observed}:{})});
     }
     function block(a:Active,reason:string) {
         if(active!==a||a.stage==='BLOCKED')return;clear();a.stage='BLOCKED';options.output('HOLD');
         options.notice((a.outcome==='UNVERIFIED'?'Preparation remains unverified. ':a.outcome==='ACCEPTED'?'Selected proposals remain saved for owner review. ':'Preparation failed. ')
             +'The spoken explanation could not be verified. Nothing has been sent. You can continue or say goodbye.');
         emit(a,'BLOCKED',reason);
+        // Keep native audio held. The page closes a failed recovery rather than
+        // releasing an unverified native success tail or retrying direct speech.
+        options.failed?.(reason);
     }
     function deadline(a:Active) {clear();timer=schedule(()=>block(a,'EXPECTED_SPEECH_EVENT_TIMEOUT'),options.timeoutMs??10000);}
     function speak(a:Active) {
@@ -100,9 +103,11 @@ export function handoffFailureSpeech(options:{
     function begin(tool:string|null,visitor:string,expected:string,outcome?:'UNVERIFIED'|'ACCEPTED') {
         attempted.add('visitor:'+visitor);if(tool)attempted.add(tool);
         const correlation='factory-failure-'+(options.id||(()=>crypto.randomUUID()))();
+        const provider=options.providerSessionId()!;
         const next:Active={tool,visitor,native:'persona::'+visitor.slice(6),correlation,reply:'persona::'+correlation,
+            provider,external:`persona::external::${correlation}::${provider}`,
             text:'',submitted:false,stage:'WAIT_NATIVE',expected,...(outcome?{outcome}:{})};
-        recoveryIds.add(next.reply);heldReplyIds.add(next.native);active=next;options.output('HOLD');emit(next,'REQUESTED');
+        recoveryIds.add(next.reply);recoveryIds.add(next.external);heldReplyIds.add(next.native);active=next;options.output('HOLD');emit(next,'REQUESTED');
         if(ended.has(next.native)){emit(next,'NATIVE_REPLY_ENDED','PREVIOUSLY_OBSERVED_TEXT_END');speak(next);}
         else {deadline(next);emit(next,'INTERRUPT_INVOKED');try{options.interrupt();}catch{block(next,'INTERRUPT_FAILED');}}
         return true;
@@ -161,6 +166,7 @@ export function handoffFailureSpeech(options:{
             if(event.role!=='persona')return;
             if(event.endOfSpeech&&ended.size<200)ended.add(event.id);
             const a=active;if(!a||disposed||a.stage==='BLOCKED')return;
+            if(options.providerSessionId()!==a.provider){block(a,'PROVIDER_SESSION_CHANGED');return;}
             if(event.id===a.native) {
                 // Do not replay or expose the original reply, even after the
                 // direct response begins. A later native chunk fails closed.
@@ -168,8 +174,10 @@ export function handoffFailureSpeech(options:{
                 if(event.endOfSpeech){emit(a,'NATIVE_REPLY_ENDED',event.interrupted?'INTERRUPTED_TEXT_END':'TEXT_END');speak(a);}
                 return;
             }
-            if(event.id!==a.reply){if(event.content.trim())block(a,'UNEXPECTED_PERSONA_CORRELATION');return;}
+            if(event.id!==a.reply&&event.id!==a.external){if(event.content.trim())block(a,'UNEXPECTED_PERSONA_CORRELATION');return;}
             if(a.stage!=='SENDING'&&a.stage!=='SPEAKING')return;
+            if(a.observed&&event.id!==a.observed){block(a,'RECOVERY_REPLY_ID_CHANGED');return;}
+            if(event.content||event.endOfSpeech)a.observed=event.id;
             const candidate=a.text+event.content;
             if(event.interrupted||!a.expected.startsWith(candidate)||event.endOfSpeech&&candidate!==a.expected) {
                 block(a,'UNEXPECTED_RECOVERY_TEXT');return;
@@ -193,6 +201,7 @@ export function appendFailureSpeechEvidence(state:Handoff,event:FailureSpeechRec
     const phases:FailureSpeechPhase[]=['REQUESTED','INTERRUPT_INVOKED','NATIVE_REPLY_ENDED','TALK_INVOKED','TALK_RETURNED','RECOVERY_TEXT_STARTED','RECOVERY_TEXT_ENDED','CANCELED','BLOCKED'];
     const unverified=event?.outcome==='UNVERIFIED',accepted=event?.outcome==='ACCEPTED';
     if(unverified||accepted)keys.push('outcome');
+    if(event?.observed_reply_id!==undefined)keys.push('observed_reply_id');
     const a=state.handoff_binding_attempts?.find(a=>a.tool_call_id===event?.tool_call_id);
     if(!event||Object.keys(event).sort().join()!==keys.sort().join()||event.local_session_id!==state.id
         ||!state.provider_session_id||event.provider_session_id!==state.provider_session_id||event.launch_label!==state.launch_label
@@ -201,6 +210,9 @@ export function appendFailureSpeechEvidence(state:Handoff,event:FailureSpeechRec
         ||event.native_reply_id!=='persona::'+event.visitor_message_id.slice(6)
         ||!/^persona::factory-failure-[-a-f0-9]{36}$/.test(event.recovery_reply_id))
         throw new Error(unverified||accepted?'Failure speech evidence requires exact session and reply identities':'Failure speech evidence requires an exact rejected attempt');
+    if(event.observed_reply_id!==undefined&&event.observed_reply_id!==event.recovery_reply_id
+        &&event.observed_reply_id!==`persona::external::${event.recovery_reply_id.slice(9)}::${state.provider_session_id}`)
+        throw new Error('Failure speech phase or identity conflict');
     const rows=state.handoff_failure_speech_events||[],same=rows.filter(r=>unverified
         ?r.outcome==='UNVERIFIED'&&r.visitor_message_id===event.visitor_message_id:r.tool_call_id===event.tool_call_id);
     const prior=rows.find(r=>r.event_id===event.event_id);
@@ -231,13 +243,15 @@ export function appendFailureSpeechEvidence(state:Handoff,event:FailureSpeechRec
         ||a.result.accepted_proposal_count!==0||a.result.owner_approved!==false||a.result.submission_status!=='UNSUBMITTED'||a.result.external_actions.length)
         throw new Error('Failure speech evidence requires an exact rejected attempt');
     if(rows.length>=256||same.some(r=>r.recovery_reply_id!==event.recovery_reply_id||r.visitor_message_id!==event.visitor_message_id)
+        ||same.some(r=>r.observed_reply_id!==undefined&&r.observed_reply_id!==event.observed_reply_id)
         ||rows.some(r=>r.recovery_reply_id===event.recovery_reply_id&&(r.tool_call_id!==event.tool_call_id||r.visitor_message_id!==event.visitor_message_id||r.outcome!==event.outcome))
         ||rows.some(r=>r.visitor_message_id===event.visitor_message_id&&r.outcome!==event.outcome)
         ||same.some(r=>r.outcome!==event.outcome)
         ||event.phase==='REQUESTED'&&same.length||event.phase!=='REQUESTED'&&!same.some(r=>r.phase==='REQUESTED')
         ||same.some(r=>r.phase===event.phase))throw new Error('Failure speech phase or identity conflict');
     const has=(phase:FailureSpeechPhase)=>same.some(r=>r.phase===phase);
-    if(has('CANCELED')||has('BLOCKED')&&event.phase!=='CANCELED'
+    if(event.observed_reply_id!==undefined&&!has('TALK_INVOKED')
+        ||has('CANCELED')||has('BLOCKED')&&event.phase!=='CANCELED'
         ||event.phase==='INTERRUPT_INVOKED'&&has('NATIVE_REPLY_ENDED')
         ||event.phase==='TALK_INVOKED'&&!has('NATIVE_REPLY_ENDED')
         ||['TALK_RETURNED','RECOVERY_TEXT_STARTED'].includes(event.phase)&&!has('TALK_INVOKED')
