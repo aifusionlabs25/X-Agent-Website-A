@@ -73,6 +73,20 @@ export function handoffOutputGate(options:{localSessionId:string;providerSession
             &&a.result.accepted_proposal_count===0&&a.result.owner_approved===false
             &&a.result.submission_status==='UNSUBMITTED'&&a.result.external_actions.length===0
             &&(requestBound||activeToolId===a.tool_call_id);
+        const terminalAccepted=a.applied===true&&a.result.accepted===true&&a.result.status==='PENDING_OWNER_REVIEW'
+            &&a.result.owner_approved===false&&a.result.submission_status==='UNSUBMITTED'
+            &&a.result.external_actions.length===0&&a.result.accepted_proposal_count>0;
+        // An exact terminal save can be unbound to consent. It grants no
+        // successful acknowledgment, but must not leave output waiting forever.
+        // Route this known ambiguity through the existing independently checked
+        // inability-to-verify explanation; never manufacture a request binding.
+        if(!requestBound&&activeToolId===a.tool_call_id&&terminalAccepted) {
+            clearDeadline();outcomeUnverified=true;settled=true;accepted=false;toolPending=false;
+            options.notice('The handoff outcome could not be verified for this request. Original evidence remains for owner review. Nothing has been sent.');
+            emit('UNVERIFIED_OUTCOME',true);
+            options.recoverUnverified?.(turn.id);
+            return;
+        }
         const valid=requestBound&&a.applied===true&&a.result.accepted===true&&a.result.status==='PENDING_OWNER_REVIEW'
             &&a.result.owner_approved===false&&a.result.submission_status==='UNSUBMITTED'
             &&a.result.external_actions.length===0&&a.result.accepted_proposal_count>0

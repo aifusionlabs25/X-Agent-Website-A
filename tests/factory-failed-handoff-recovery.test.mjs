@@ -11,10 +11,11 @@ const user=(id,content)=>({id,role:'user',content});
 function fresh(){return {id:'local',version:1,package_sha256:'fictional',persona_id:'persona',launch_label:'launch',status:'ACTIVE',provider_session_id:'provider',
  turns:[],proposals:[],decisions:[],receipts:[],processed:[],provider_release_verified:false,provider_transcript_verified:false,evidence_reviewed:false,
  approved:false,submission_status:'UNSUBMITTED',external_actions:[]};}
-function gate(s){const events=[],media=[],notices=[];
+function gate(s){const events=[],media=[],notices=[],recoveries=[];
  const g=handoffOutputGate({localSessionId:s.id,providerSessionId:()=>s.provider_session_id,
-  output:m=>media.push(m),notice:n=>notices.push(n),report:e=>events.push(e)});
- g.committed(structuredClone(s));return {g,events,media,notices};}
+  output:m=>media.push(m),notice:n=>notices.push(n),report:e=>events.push(e),
+  recoverFailure:()=>recoveries.push('failure'),recoverAccepted:()=>recoveries.push('accepted')});
+ g.committed(structuredClone(s));return {g,events,media,notices,recoveries};}
 function savedFailure(){
  const s={...fresh(),id:saved.local_session_id,provider_session_id:saved.provider_session_id,launch_label:saved.launch_label,
   turns:structuredClone(saved.turns_before_attempt.slice(0,-1))};
@@ -63,7 +64,14 @@ test('foreign, stale, unknown and unbound accepted outcomes cannot use the failu
   if(mutation==='unknown')a.result.status='UNKNOWN';
   if(mutation==='accepted'){a.applied=true;a.result.accepted=true;a.result.status='PENDING_OWNER_REVIEW';a.result.accepted_proposal_count=1;}
   if(mutation==='external-action')a.result.external_actions=['sent'];
-  x.g.committed(receipt);assert.equal(x.g.snapshot().settled,false,mutation);assert.equal(x.media.at(-1),true,mutation);
+  x.g.committed(receipt);
+  if(mutation==='accepted') {
+   assert.equal(x.g.snapshot().settled,true);assert.equal(x.g.snapshot().outcome_unverified,true);
+   assert.equal(x.g.snapshot().accepted,false);assert.equal(x.events.at(-1).phase,'UNVERIFIED_OUTCOME');
+   assert.equal(x.events.at(-1).tool_call_id,null);assert.equal(receipt.handoff_requests,undefined);
+   assert.deepEqual(x.recoveries,[],'unbound accepted outcome grants neither success nor rejection speech');
+  } else assert.equal(x.g.snapshot().settled,false,mutation);
+  assert.equal(x.media.at(-1),true,mutation);
  }
 });
 

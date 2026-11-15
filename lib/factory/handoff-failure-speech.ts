@@ -5,7 +5,7 @@ export const failureSpeechText="I couldn't prepare the handoff. Your original co
 export const unverifiedSpeechText="I can't verify that the handoff is up to date. Your conversation is saved for owner review. Nothing has been sent.";
 export const acceptedSpeechText="The selected details are retained as proposals for owner review. Nothing has been approved or sent.";
 export type FailureSpeechPhase='REQUESTED'|'INTERRUPT_INVOKED'|'NATIVE_REPLY_ENDED'|'TALK_INVOKED'|'TALK_RETURNED'
-    |'RECOVERY_TEXT_STARTED'|'RECOVERY_TEXT_ENDED'|'CANCELED'|'BLOCKED';
+    |'RECOVERY_OUTPUT_ALLOWED'|'RECOVERY_TEXT_STARTED'|'RECOVERY_TEXT_ENDED'|'CANCELED'|'BLOCKED';
 export type FailureSpeechEvent={event_id:string;at:string;tool_call_id:string|null;visitor_message_id:string;
     native_reply_id:string;recovery_reply_id:string;phase:FailureSpeechPhase;detail:string;outcome?:'UNVERIFIED'|'ACCEPTED';observed_reply_id?:string};
 export type FailureSpeechReceipt=FailureSpeechEvent & {local_session_id:string;provider_session_id:string;launch_label:string};
@@ -30,9 +30,20 @@ export function hasUnverifiedHandoffContext(state:Handoff,visitor:string) {
 
 function acceptedAttempt(state:Handoff,tool:string,visitor:string,checkCurrentFacts:boolean) {
     const a=state.handoff_binding_attempts?.find(a=>a.tool_call_id===tool);
+    const request=state.handoff_requests?.at(-1);
+    const requestIndex=state.turns.findIndex(t=>t.role==='user'&&t.id===request?.visitor_message_id);
+    const visitorIndex=state.turns.findIndex(t=>t.role==='user'&&t.id===visitor);
+    // A source-bound request may precede a continuation such as 'Nothing
+    // should be sent.' The attempt still must name that exact latest request
+    // and the current SDK-correlated visitor; an unrelated receipt cannot move.
+    const requestBound=Boolean(request&&request.source==='HOST_PERSISTED_VISITOR_REQUEST'&&request.status==='REQUESTED_NOT_MAPPED'
+        &&requestIndex>=0&&visitorIndex>=requestIndex
+        &&a?.request_turn_id===request.visitor_message_id
+        &&Number.isInteger(request.start)&&Number.isInteger(request.end)
+        &&request.start>=0&&request.end>request.start&&request.end<=state.turns[requestIndex].content.length
+        &&state.turns[requestIndex].content.slice(request.start,request.end)===request.evidence);
     return Boolean(a&&a.local_session_id===state.id&&a.provider_session_id===state.provider_session_id
-        &&a.through_visitor_turn_id===visitor&&a.request_turn_id===visitor
-        &&state.handoff_requests?.some(r=>r.visitor_message_id===visitor)
+        &&a.through_visitor_turn_id===visitor&&requestBound
         &&a.applied===true&&a.result.accepted===true&&a.result.status==='PENDING_OWNER_REVIEW'
         &&a.result.accepted_proposal_count>0&&a.result.owner_approved===false
         &&a.result.submission_status==='UNSUBMITTED'&&a.result.external_actions.length===0
@@ -58,7 +69,7 @@ export function handoffAudioOutput(apply:(muted:boolean)=>void) {
 export function handoffFailureSpeech(options:{
     localSessionId:string;providerSessionId:()=>string|null;
     interrupt:()=>void;speak:(correlationId:string,text:string)=>Promise<void>;
-    output:(mode:'HOLD'|'ALLOW'|'RELEASE')=>void;notice:(text:string)=>void;
+    output:(mode:'HOLD'|'ALLOW'|'RELEASE')=>void;outputMuted?:()=>boolean|null;notice:(text:string)=>void;
     report:(event:FailureSpeechEvent)=>void;failed?:(reason:string)=>void;id?:()=>string;now?:()=>string;
     schedule?:typeof setTimeout;cancel?:typeof clearTimeout;timeoutMs?:number;
 }) {
@@ -183,7 +194,20 @@ export function handoffFailureSpeech(options:{
                 block(a,'UNEXPECTED_RECOVERY_TEXT');return;
             }
             a.text=candidate;
-            if(a.text&&a.stage==='SENDING') {a.stage='SPEAKING';options.output('ALLOW');emit(a,'RECOVERY_TEXT_STARTED','CORRELATED_TEXT_NOT_ACOUSTIC_PROOF');}
+            if(a.text&&a.stage==='SENDING') {
+                a.stage='SPEAKING';
+                try {
+                    options.output('ALLOW');
+                    // The ordinary gate may still be held. Record the effective
+                    // media property separately, rather than treating that gate
+                    // intent (or generated text) as proof of audible playback.
+                    if(options.outputMuted) {
+                        if(options.outputMuted()!==false){block(a,'RECOVERY_OUTPUT_NOT_ALLOWED');return;}
+                        emit(a,'RECOVERY_OUTPUT_ALLOWED','MEDIA_UNMUTED_NOT_ACOUSTIC_PROOF');
+                    }
+                } catch {block(a,'RECOVERY_OUTPUT_APPLICATION_FAILED');return;}
+                emit(a,'RECOVERY_TEXT_STARTED','CORRELATED_TEXT_NOT_ACOUSTIC_PROOF');
+            }
             if(event.endOfSpeech){clear();a.stage='TEXT_ENDED';emit(a,'RECOVERY_TEXT_ENDED','TEXT_COMPLETION_NOT_AUDIO_DRAIN');}
         },
         cancel:stop,
@@ -198,7 +222,7 @@ export type HandoffFailureSpeech=ReturnType<typeof handoffFailureSpeech>;
 /** Recovery telemetry is not action authority or proof of heard audio. */
 export function appendFailureSpeechEvidence(state:Handoff,event:FailureSpeechReceipt) {
     const keys=['event_id','at','tool_call_id','visitor_message_id','native_reply_id','recovery_reply_id','phase','detail','local_session_id','provider_session_id','launch_label'];
-    const phases:FailureSpeechPhase[]=['REQUESTED','INTERRUPT_INVOKED','NATIVE_REPLY_ENDED','TALK_INVOKED','TALK_RETURNED','RECOVERY_TEXT_STARTED','RECOVERY_TEXT_ENDED','CANCELED','BLOCKED'];
+    const phases:FailureSpeechPhase[]=['REQUESTED','INTERRUPT_INVOKED','NATIVE_REPLY_ENDED','TALK_INVOKED','TALK_RETURNED','RECOVERY_OUTPUT_ALLOWED','RECOVERY_TEXT_STARTED','RECOVERY_TEXT_ENDED','CANCELED','BLOCKED'];
     const unverified=event?.outcome==='UNVERIFIED',accepted=event?.outcome==='ACCEPTED';
     if(unverified||accepted)keys.push('outcome');
     if(event?.observed_reply_id!==undefined)keys.push('observed_reply_id');
@@ -254,7 +278,8 @@ export function appendFailureSpeechEvidence(state:Handoff,event:FailureSpeechRec
         ||has('CANCELED')||has('BLOCKED')&&event.phase!=='CANCELED'
         ||event.phase==='INTERRUPT_INVOKED'&&has('NATIVE_REPLY_ENDED')
         ||event.phase==='TALK_INVOKED'&&!has('NATIVE_REPLY_ENDED')
-        ||['TALK_RETURNED','RECOVERY_TEXT_STARTED'].includes(event.phase)&&!has('TALK_INVOKED')
+        ||['TALK_RETURNED','RECOVERY_OUTPUT_ALLOWED','RECOVERY_TEXT_STARTED'].includes(event.phase)&&!has('TALK_INVOKED')
+        ||event.phase==='RECOVERY_OUTPUT_ALLOWED'&&(has('RECOVERY_TEXT_STARTED')||event.detail!=='MEDIA_UNMUTED_NOT_ACOUSTIC_PROOF'||event.observed_reply_id===undefined)
         ||event.phase==='RECOVERY_TEXT_ENDED'&&!has('RECOVERY_TEXT_STARTED'))
         throw new Error('Failure speech phase order is not supported by prior evidence');
     state.handoff_failure_speech_events=[...rows,structuredClone(event)];

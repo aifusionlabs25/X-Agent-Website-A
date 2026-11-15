@@ -1,0 +1,768 @@
+{
+  "provenance": "Exact selected state from saved session 56047a29-d979-4300-948a-2c7ffb476bad; metadata omitted; status rewound to ACTIVE for offline replay only",
+  "initial_state": {
+    "id": "6bc94d9f-0334-4966-9e2d-8f0ec47db7c3",
+    "version": 106,
+    "package_sha256": "a6f9de88eba99e7490343d773ea299e69914873640218a17b87dd33d67d747ee",
+    "persona_id": "b0a9f53d-13f6-4566-9263-47e8cddd5db2",
+    "launch_label": "factory:dd63fbee5deab46bca32259d29951ac1:bd5d622f-6b9b-45a2-86ba-b05e5123312d",
+    "status": "ACTIVE",
+    "provider_session_id": "56047a29-d979-4300-948a-2c7ffb476bad",
+    "turns": [
+      {
+        "id": "persona::engine::initial_message::56047a29-d979-4300-948a-2c7ffb476bad",
+        "role": "persona",
+        "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+      },
+      {
+        "id": "user::a8875d75-1895-4d39-bd92-8ca393023765",
+        "role": "user",
+        "content": "Hi, Olivia."
+      },
+      {
+        "id": "user::8314214a-e885-4406-8732-8a410dd7bffe",
+        "role": "user",
+        "content": "I run Copermasa Supply."
+      },
+      {
+        "id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+        "role": "user",
+        "content": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel."
+      },
+      {
+        "id": "persona::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+        "role": "persona",
+        "content": "Thanks. That"
+      },
+      {
+        "id": "user::493a7d1f-0ade-4199-9302-230b96996460",
+        "role": "user",
+        "content": "Some request, sorry, some requests are getting missed."
+      },
+      {
+        "id": "user::8eeafce7-fa9c-42d5-993a-9322ec8fcc0d",
+        "role": "user",
+        "content": "Tell me how you guys could help us."
+      },
+      {
+        "id": "persona::8eeafce7-fa9c-42d5-993a-9322ec8fcc0d",
+        "role": "persona",
+        "content": "I can explain the documented workflow, but I do not have approved information confirming whether your specific tool is supported.\n\nLet me check the owner-approved knowledge for AIowa Agents services relevant to handling quote requests.\n\nAIowa Agents builds AI agents for small businesses that handle inbox triage and follow-ups. For your situation, that could mean reading, sorting, and flagging incoming quote-request emails, then chasing unanswered ones with timed, polite nudges. The agent works inside tools you already use, and you choose the approval level\u2014so it can draft responses for your team to review before anything goes out.\n\nI can\u2019t confirm whether Excel specifically is supported without more detail. Would it help to know how the follow-up automation works in more detail?"
+      },
+      {
+        "id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "role": "user",
+        "content": "Well, we won't help drafting quotes. but a person must approve every quote before it goes out. And yeah, we use Outlook and Excel. Budget and timing are unknown."
+      },
+      {
+        "id": "persona::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "role": "persona",
+        "content": "Thanks\u2014that clarifies the approval requirement. With human approval on every quote, the documented workflow would have the agent read and sort incoming quote requests, then draft responses or flags for your team to review before anything is sent. It can also chase unanswered requests with timed nudges, again based on your approval settings.\n\nI can\u2019t confirm Outlook or Excel support specifically, and I don\u2019t have approved pricing or timing information to share. Would you like me to prepare a short human-review note with what you\u2019ve shared so far?"
+      },
+      {
+        "id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+        "role": "user",
+        "content": "Yes, please prepare those details. as an unsent brief for human review."
+      },
+      {
+        "id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+        "role": "user",
+        "content": "Nothing should be sent."
+      }
+    ],
+    "proposals": [
+      {
+        "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+        "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+        "id": "e6c54457f681eb935b8a08f5ceabbe3bc92d6ec225a6e504070a254f1022c85b"
+      },
+      {
+        "evidence": "I run Copermasa Supply.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copermasa Supply.",
+        "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe",
+        "id": "b8aeff6a5fa8fdc035a7b1a6e0af7d790b557b0b453cdedc1ca9897d309a530f"
+      },
+      {
+        "evidence": "And yeah, we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And yeah, we use Outlook and Excel.",
+        "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "id": "3ea667e13419b1dca01c3cfca769c2546292526bc49f7845a57c275222551f55"
+      },
+      {
+        "evidence": "a person must approve every quote before it goes out.",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must approve every quote before it goes out.",
+        "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "id": "667334215ad20d62e8f3e47f9aaa8825912c7a7bc356fde6798a33048697a7d0"
+      },
+      {
+        "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, please prepare those details. as an unsent brief for human review.",
+        "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+        "id": "68082c86ce1bd95578efd4488e0ba5c4c53941298d9a6e367a61cec6cdf745ec"
+      },
+      {
+        "evidence": "Nothing should be sent.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Nothing should be sent.",
+        "visitor_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+        "id": "4de7263de335fb85809d138b35da6a87e8627d717a525aefecac1d842d1c1b96"
+      }
+    ],
+    "decisions": [],
+    "receipts": [],
+    "processed": [],
+    "provider_release_verified": false,
+    "provider_transcript_verified": false,
+    "evidence_reviewed": false,
+    "approved": false,
+    "submission_status": "UNSUBMITTED",
+    "external_actions": [],
+    "handoff_binding_attempts": [
+      {
+        "request_id": "c441e3c3-c439-4732-89df-8d7bc86573da",
+        "local_session_id": "6bc94d9f-0334-4966-9e2d-8f0ec47db7c3",
+        "provider_session_id": "56047a29-d979-4300-948a-2c7ffb476bad",
+        "tool_call_id": "call_8b8cefa378f144edba2ff886",
+        "request_turn_id": null,
+        "input_sha256": "83501361b60629a4ec77707afbdd4a7fbb619d9d51bd8c20d1413b818bf784ad",
+        "local_turns_sha256": "a3fe3b5cd14347a1e23ad855017931eed530fac8c308d847ce3ad02cc93ca692",
+        "through_visitor_turn_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+        "correction_evidence_bindings": [],
+        "original_proposals": [
+          {
+            "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1"
+          },
+          {
+            "evidence": "I run Copermasa Supply.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run Copermasa Supply.",
+            "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe"
+          },
+          {
+            "evidence": "And yeah, we use Outlook and Excel.",
+            "field_id": "field_826677e8f4ff46c2079f4825",
+            "value": "And yeah, we use Outlook and Excel.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "a person must approve every quote before it goes out.",
+            "field_id": "field_9c115246b07dd59d817f38f2",
+            "value": "a person must approve every quote before it goes out.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+            "field_id": "field_81624036fc30c6fe7287415a",
+            "value": "Yes, please prepare those details. as an unsent brief for human review.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          },
+          {
+            "evidence": "Nothing should be sent.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "Nothing should be sent.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          }
+        ],
+        "resolved_proposals": [
+          {
+            "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1"
+          },
+          {
+            "evidence": "I run Copermasa Supply.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run Copermasa Supply.",
+            "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe"
+          },
+          {
+            "evidence": "And yeah, we use Outlook and Excel.",
+            "field_id": "field_826677e8f4ff46c2079f4825",
+            "value": "And yeah, we use Outlook and Excel.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "a person must approve every quote before it goes out.",
+            "field_id": "field_9c115246b07dd59d817f38f2",
+            "value": "a person must approve every quote before it goes out.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+            "field_id": "field_81624036fc30c6fe7287415a",
+            "value": "Yes, please prepare those details. as an unsent brief for human review.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          },
+          {
+            "evidence": "Nothing should be sent.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "Nothing should be sent.",
+            "visitor_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f"
+          }
+        ],
+        "selected_proposals": [
+          {
+            "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1"
+          },
+          {
+            "evidence": "I run Copermasa Supply.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run Copermasa Supply.",
+            "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe"
+          },
+          {
+            "evidence": "And yeah, we use Outlook and Excel.",
+            "field_id": "field_826677e8f4ff46c2079f4825",
+            "value": "And yeah, we use Outlook and Excel.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "a person must approve every quote before it goes out.",
+            "field_id": "field_9c115246b07dd59d817f38f2",
+            "value": "a person must approve every quote before it goes out.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+            "field_id": "field_81624036fc30c6fe7287415a",
+            "value": "Yes, please prepare those details. as an unsent brief for human review.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          },
+          {
+            "evidence": "Nothing should be sent.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "Nothing should be sent.",
+            "visitor_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f"
+          }
+        ],
+        "current_fact_selections": [],
+        "prior_current_fact_selections": [],
+        "superseded_proposals": [],
+        "bindings": [
+          {
+            "index": 5,
+            "from_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+            "to_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+            "start": 0,
+            "end": 23,
+            "source_sha256": "56778cb196cde38eb55667a974aeaa40c9d434fe1c694520f6c91a328c8508bf"
+          }
+        ],
+        "fragment_bindings": [],
+        "format_bindings": [],
+        "applied": true,
+        "result": {
+          "status": "PENDING_OWNER_REVIEW",
+          "accepted": true,
+          "accepted_proposal_count": 6,
+          "owner_approved": false,
+          "submission_status": "UNSUBMITTED",
+          "external_actions": [],
+          "issues": [],
+          "visitor_message": "The selected information is retained as proposals for owner review. Nothing has been sent or approved.",
+          "instruction": "Report only that selected proposals are retained pending owner review. Do not claim every fact was captured, a complete brief is approved, delivery occurred or anyone will follow up.",
+          "reference_bindings": [
+            {
+              "index": 5,
+              "from_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+              "to_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+              "start": 0,
+              "end": 23,
+              "source_sha256": "56778cb196cde38eb55667a974aeaa40c9d434fe1c694520f6c91a328c8508bf"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "failure_attempt": {
+    "request_id": "77e335c8-1938-4003-a7d2-4336d93593fe",
+    "local_session_id": "6bc94d9f-0334-4966-9e2d-8f0ec47db7c3",
+    "provider_session_id": "56047a29-d979-4300-948a-2c7ffb476bad",
+    "tool_call_id": "call_4dfb4dcfb7804767bf95f587",
+    "request_turn_id": null,
+    "input_sha256": "11994e9cac86733fd74ce73413a7126f4cfcf0ea500f5fd9de546c9f5ab9f69a",
+    "local_turns_sha256": "7fb6b89d1bd928e6e455e85df4c37684eec21cd5136689d9cba417e899e93d52",
+    "through_visitor_turn_id": "user::d93d3e85-2747-487b-b8b4-8edc620ab306",
+    "correction_evidence_bindings": [],
+    "original_proposals": [
+      {
+        "evidence": "One correction, we have 4 staff, not 6.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "One correction, we have 4 staff, not 6.",
+        "visitor_message_id": "user::141fce77-7741-41db-be69-7eb05c13599e"
+      },
+      {
+        "evidence": "We also don't know whether the supply portal has an API.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "We also don't know whether the supply portal has an API.",
+        "visitor_message_id": "user::141fce77-7741-41db-be69-7eb05c13599e"
+      }
+    ],
+    "resolved_proposals": [
+      {
+        "evidence": "One correction, we have 4 staff, not 6.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "One correction, we have 4 staff, not 6.",
+        "visitor_message_id": "user::141fce77-7741-41db-be69-7eb05c13599e"
+      },
+      {
+        "evidence": "We also don't know whether the supply portal has an API.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "We also don't know whether the supply portal has an API.",
+        "visitor_message_id": "user::141fce77-7741-41db-be69-7eb05c13599e"
+      }
+    ],
+    "selected_proposals": [
+      {
+        "evidence": "One correction, we have 4 staff, not 6.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "One correction, we have 4 staff, not 6.",
+        "visitor_message_id": "user::141fce77-7741-41db-be69-7eb05c13599e"
+      },
+      {
+        "evidence": "We also don't know whether the supply portal has an API.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "We also don't know whether the supply portal has an API.",
+        "visitor_message_id": "user::141fce77-7741-41db-be69-7eb05c13599e"
+      },
+      {
+        "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+        "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1"
+      }
+    ],
+    "current_fact_selections": [],
+    "prior_current_fact_selections": [],
+    "superseded_proposals": [],
+    "bindings": [],
+    "fragment_bindings": [],
+    "format_bindings": [],
+    "applied": false,
+    "result": {
+      "status": "UNMAPPED_OWNER_REVIEW",
+      "accepted": false,
+      "accepted_proposal_count": 0,
+      "owner_approved": false,
+      "submission_status": "UNSUBMITTED",
+      "external_actions": [],
+      "reason": "Mapping requires a known field and an exact persisted visitor span; value must remain verbatim",
+      "issues": [
+        {
+          "index": 2,
+          "field_id": "field_2188e6ea8250ac870752ef5d",
+          "problems": [
+            "LATER_EXPLICIT_CORRECTION_REQUIRES_CURRENT_EVIDENCE"
+          ]
+        }
+      ],
+      "visitor_message": "I have your request, but I could not prepare a valid handoff. Your original conversation is retained for owner review. Nothing has been sent.",
+      "instruction": "This preparation attempt failed. Tell the visitor using visitor_message. Do not say a brief is prepared or ready, or that the information was mapped. Do not retry automatically or ask the visitor to repeat the entire intake."
+    }
+  },
+  "failure_turns": [
+    {
+      "id": "persona::engine::initial_message::56047a29-d979-4300-948a-2c7ffb476bad",
+      "role": "persona",
+      "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+    },
+    {
+      "id": "user::a8875d75-1895-4d39-bd92-8ca393023765",
+      "role": "user",
+      "content": "Hi, Olivia."
+    },
+    {
+      "id": "user::8314214a-e885-4406-8732-8a410dd7bffe",
+      "role": "user",
+      "content": "I run Copermasa Supply."
+    },
+    {
+      "id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+      "role": "user",
+      "content": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel."
+    },
+    {
+      "id": "persona::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+      "role": "persona",
+      "content": "Thanks. That"
+    },
+    {
+      "id": "user::493a7d1f-0ade-4199-9302-230b96996460",
+      "role": "user",
+      "content": "Some request, sorry, some requests are getting missed."
+    },
+    {
+      "id": "user::8eeafce7-fa9c-42d5-993a-9322ec8fcc0d",
+      "role": "user",
+      "content": "Tell me how you guys could help us."
+    },
+    {
+      "id": "persona::8eeafce7-fa9c-42d5-993a-9322ec8fcc0d",
+      "role": "persona",
+      "content": "I can explain the documented workflow, but I do not have approved information confirming whether your specific tool is supported.\n\nLet me check the owner-approved knowledge for AIowa Agents services relevant to handling quote requests.\n\nAIowa Agents builds AI agents for small businesses that handle inbox triage and follow-ups. For your situation, that could mean reading, sorting, and flagging incoming quote-request emails, then chasing unanswered ones with timed, polite nudges. The agent works inside tools you already use, and you choose the approval level\u2014so it can draft responses for your team to review before anything goes out.\n\nI can\u2019t confirm whether Excel specifically is supported without more detail. Would it help to know how the follow-up automation works in more detail?"
+    },
+    {
+      "id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+      "role": "user",
+      "content": "Well, we won't help drafting quotes. but a person must approve every quote before it goes out. And yeah, we use Outlook and Excel. Budget and timing are unknown."
+    },
+    {
+      "id": "persona::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+      "role": "persona",
+      "content": "Thanks\u2014that clarifies the approval requirement. With human approval on every quote, the documented workflow would have the agent read and sort incoming quote requests, then draft responses or flags for your team to review before anything is sent. It can also chase unanswered requests with timed nudges, again based on your approval settings.\n\nI can\u2019t confirm Outlook or Excel support specifically, and I don\u2019t have approved pricing or timing information to share. Would you like me to prepare a short human-review note with what you\u2019ve shared so far?"
+    },
+    {
+      "id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+      "role": "user",
+      "content": "Yes, please prepare those details. as an unsent brief for human review."
+    },
+    {
+      "id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+      "role": "user",
+      "content": "Nothing should be sent."
+    },
+    {
+      "id": "persona::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+      "role": "persona",
+      "content": "I\u2019ll prepare the local, unsent human-review brief now.\n\nThe selected details are retained as proposals pending owner review. Nothing has been sent or approved. Is there anything else you\u2019d like to add or clarify?"
+    },
+    {
+      "id": "user::141fce77-7741-41db-be69-7eb05c13599e",
+      "role": "user",
+      "content": "One correction, we have 4 staff, not 6. We also don't know whether the supply portal has an API."
+    },
+    {
+      "id": "user::d93d3e85-2747-487b-b8b4-8edc620ab306",
+      "role": "user",
+      "content": "Please update the same brief and keep the other details."
+    }
+  ],
+  "recovery_turn": {
+    "id": "persona::external::factory-failure-dc08f762-e021-4f78-95fd-9720a94b5c38::56047a29-d979-4300-948a-2c7ffb476bad",
+    "role": "persona",
+    "content": "I couldn't prepare the handoff. Your original conversation is saved for owner review. Nothing has been sent."
+  },
+  "repaired_initial_state": {
+    "id": "6bc94d9f-0334-4966-9e2d-8f0ec47db7c3",
+    "version": 106,
+    "package_sha256": "a6f9de88eba99e7490343d773ea299e69914873640218a17b87dd33d67d747ee",
+    "persona_id": "b0a9f53d-13f6-4566-9263-47e8cddd5db2",
+    "launch_label": "factory:dd63fbee5deab46bca32259d29951ac1:bd5d622f-6b9b-45a2-86ba-b05e5123312d",
+    "provider_session_id": "56047a29-d979-4300-948a-2c7ffb476bad",
+    "status": "ACTIVE",
+    "turns": [
+      {
+        "id": "persona::engine::initial_message::56047a29-d979-4300-948a-2c7ffb476bad",
+        "role": "persona",
+        "content": "Hi, I'm the AIowa Service Guide, an AI assistant. What would you like help with?"
+      },
+      {
+        "id": "user::a8875d75-1895-4d39-bd92-8ca393023765",
+        "role": "user",
+        "content": "Hi, Olivia."
+      },
+      {
+        "id": "user::8314214a-e885-4406-8732-8a410dd7bffe",
+        "role": "user",
+        "content": "I run Copermasa Supply."
+      },
+      {
+        "id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+        "role": "user",
+        "content": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel."
+      },
+      {
+        "id": "persona::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+        "role": "persona",
+        "content": "Thanks. That"
+      },
+      {
+        "id": "user::493a7d1f-0ade-4199-9302-230b96996460",
+        "role": "user",
+        "content": "Some request, sorry, some requests are getting missed."
+      },
+      {
+        "id": "user::8eeafce7-fa9c-42d5-993a-9322ec8fcc0d",
+        "role": "user",
+        "content": "Tell me how you guys could help us."
+      },
+      {
+        "id": "persona::8eeafce7-fa9c-42d5-993a-9322ec8fcc0d",
+        "role": "persona",
+        "content": "I can explain the documented workflow, but I do not have approved information confirming whether your specific tool is supported.\n\nLet me check the owner-approved knowledge for AIowa Agents services relevant to handling quote requests.\n\nAIowa Agents builds AI agents for small businesses that handle inbox triage and follow-ups. For your situation, that could mean reading, sorting, and flagging incoming quote-request emails, then chasing unanswered ones with timed, polite nudges. The agent works inside tools you already use, and you choose the approval level\u2014so it can draft responses for your team to review before anything goes out.\n\nI can\u2019t confirm whether Excel specifically is supported without more detail. Would it help to know how the follow-up automation works in more detail?"
+      },
+      {
+        "id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "role": "user",
+        "content": "Well, we won't help drafting quotes. but a person must approve every quote before it goes out. And yeah, we use Outlook and Excel. Budget and timing are unknown."
+      },
+      {
+        "id": "persona::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "role": "persona",
+        "content": "Thanks\u2014that clarifies the approval requirement. With human approval on every quote, the documented workflow would have the agent read and sort incoming quote requests, then draft responses or flags for your team to review before anything is sent. It can also chase unanswered requests with timed nudges, again based on your approval settings.\n\nI can\u2019t confirm Outlook or Excel support specifically, and I don\u2019t have approved pricing or timing information to share. Would you like me to prepare a short human-review note with what you\u2019ve shared so far?"
+      },
+      {
+        "id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+        "role": "user",
+        "content": "Yes, please prepare those details. as an unsent brief for human review."
+      },
+      {
+        "id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+        "role": "user",
+        "content": "Nothing should be sent."
+      }
+    ],
+    "proposals": [
+      {
+        "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+        "field_id": "field_2188e6ea8250ac870752ef5d",
+        "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+        "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1",
+        "id": "e6c54457f681eb935b8a08f5ceabbe3bc92d6ec225a6e504070a254f1022c85b"
+      },
+      {
+        "evidence": "I run Copermasa Supply.",
+        "field_id": "field_79a7766c1a75986cfcdd6b58",
+        "value": "I run Copermasa Supply.",
+        "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe",
+        "id": "b8aeff6a5fa8fdc035a7b1a6e0af7d790b557b0b453cdedc1ca9897d309a530f"
+      },
+      {
+        "evidence": "And yeah, we use Outlook and Excel.",
+        "field_id": "field_826677e8f4ff46c2079f4825",
+        "value": "And yeah, we use Outlook and Excel.",
+        "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "id": "3ea667e13419b1dca01c3cfca769c2546292526bc49f7845a57c275222551f55"
+      },
+      {
+        "evidence": "a person must approve every quote before it goes out.",
+        "field_id": "field_9c115246b07dd59d817f38f2",
+        "value": "a person must approve every quote before it goes out.",
+        "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e",
+        "id": "667334215ad20d62e8f3e47f9aaa8825912c7a7bc356fde6798a33048697a7d0"
+      },
+      {
+        "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+        "field_id": "field_81624036fc30c6fe7287415a",
+        "value": "Yes, please prepare those details. as an unsent brief for human review.",
+        "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+        "id": "68082c86ce1bd95578efd4488e0ba5c4c53941298d9a6e367a61cec6cdf745ec"
+      },
+      {
+        "evidence": "Nothing should be sent.",
+        "field_id": "field_4c6278b8c6c68a0f10d1e844",
+        "value": "Nothing should be sent.",
+        "visitor_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+        "id": "4de7263de335fb85809d138b35da6a87e8627d717a525aefecac1d842d1c1b96"
+      }
+    ],
+    "decisions": [],
+    "receipts": [
+      {
+        "at": "2026-11-15T04:21:52.193Z",
+        "kind": "HANDOFF_REQUESTED",
+        "sha256": "0a2502e932cd3302eac1c53b6ba3337c502fd469dfee7129250ef4a0a59414d2"
+      },
+      {
+        "at": "2026-11-15T04:21:52.198Z",
+        "kind": "HANDOFF_REFERENCE_BINDING",
+        "sha256": "0bd6d035a93eee99c6d6e460799e0933a0210d08fdaf7081df14be0bb640d3af"
+      }
+    ],
+    "processed": [],
+    "provider_release_verified": false,
+    "provider_transcript_verified": false,
+    "evidence_reviewed": false,
+    "approved": false,
+    "submission_status": "UNSUBMITTED",
+    "external_actions": [],
+    "handoff_requests": [
+      {
+        "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+        "start": 0,
+        "end": 71,
+        "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+        "source": "HOST_PERSISTED_VISITOR_REQUEST",
+        "status": "REQUESTED_NOT_MAPPED"
+      }
+    ],
+    "handoff_binding_attempts": [
+      {
+        "request_id": "c441e3c3-c439-4732-89df-8d7bc86573da",
+        "local_session_id": "6bc94d9f-0334-4966-9e2d-8f0ec47db7c3",
+        "provider_session_id": "56047a29-d979-4300-948a-2c7ffb476bad",
+        "tool_call_id": "call_8b8cefa378f144edba2ff886",
+        "request_turn_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+        "input_sha256": "83501361b60629a4ec77707afbdd4a7fbb619d9d51bd8c20d1413b818bf784ad",
+        "local_turns_sha256": "a3fe3b5cd14347a1e23ad855017931eed530fac8c308d847ce3ad02cc93ca692",
+        "through_visitor_turn_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+        "correction_evidence_bindings": [],
+        "original_proposals": [
+          {
+            "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1"
+          },
+          {
+            "evidence": "I run Copermasa Supply.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run Copermasa Supply.",
+            "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe"
+          },
+          {
+            "evidence": "And yeah, we use Outlook and Excel.",
+            "field_id": "field_826677e8f4ff46c2079f4825",
+            "value": "And yeah, we use Outlook and Excel.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "a person must approve every quote before it goes out.",
+            "field_id": "field_9c115246b07dd59d817f38f2",
+            "value": "a person must approve every quote before it goes out.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+            "field_id": "field_81624036fc30c6fe7287415a",
+            "value": "Yes, please prepare those details. as an unsent brief for human review.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          },
+          {
+            "evidence": "Nothing should be sent.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "Nothing should be sent.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          }
+        ],
+        "resolved_proposals": [
+          {
+            "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1"
+          },
+          {
+            "evidence": "I run Copermasa Supply.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run Copermasa Supply.",
+            "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe"
+          },
+          {
+            "evidence": "And yeah, we use Outlook and Excel.",
+            "field_id": "field_826677e8f4ff46c2079f4825",
+            "value": "And yeah, we use Outlook and Excel.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "a person must approve every quote before it goes out.",
+            "field_id": "field_9c115246b07dd59d817f38f2",
+            "value": "a person must approve every quote before it goes out.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+            "field_id": "field_81624036fc30c6fe7287415a",
+            "value": "Yes, please prepare those details. as an unsent brief for human review.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          },
+          {
+            "evidence": "Nothing should be sent.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "Nothing should be sent.",
+            "visitor_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f"
+          }
+        ],
+        "selected_proposals": [
+          {
+            "evidence": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "field_id": "field_2188e6ea8250ac870752ef5d",
+            "value": "We're a plumbing supply business. We got 6 staff handling quote requests by email and we track them in Excel.",
+            "visitor_message_id": "user::f03504c7-1398-41d7-a230-71c2d3cc73e1"
+          },
+          {
+            "evidence": "I run Copermasa Supply.",
+            "field_id": "field_79a7766c1a75986cfcdd6b58",
+            "value": "I run Copermasa Supply.",
+            "visitor_message_id": "user::8314214a-e885-4406-8732-8a410dd7bffe"
+          },
+          {
+            "evidence": "And yeah, we use Outlook and Excel.",
+            "field_id": "field_826677e8f4ff46c2079f4825",
+            "value": "And yeah, we use Outlook and Excel.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "a person must approve every quote before it goes out.",
+            "field_id": "field_9c115246b07dd59d817f38f2",
+            "value": "a person must approve every quote before it goes out.",
+            "visitor_message_id": "user::4368f0c4-6954-4c27-866c-d2ed4cc3731e"
+          },
+          {
+            "evidence": "Yes, please prepare those details. as an unsent brief for human review.",
+            "field_id": "field_81624036fc30c6fe7287415a",
+            "value": "Yes, please prepare those details. as an unsent brief for human review.",
+            "visitor_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f"
+          },
+          {
+            "evidence": "Nothing should be sent.",
+            "field_id": "field_4c6278b8c6c68a0f10d1e844",
+            "value": "Nothing should be sent.",
+            "visitor_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f"
+          }
+        ],
+        "current_fact_selections": [],
+        "prior_current_fact_selections": [],
+        "superseded_proposals": [],
+        "bindings": [
+          {
+            "index": 5,
+            "from_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+            "to_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+            "start": 0,
+            "end": 23,
+            "source_sha256": "56778cb196cde38eb55667a974aeaa40c9d434fe1c694520f6c91a328c8508bf"
+          }
+        ],
+        "fragment_bindings": [],
+        "format_bindings": [],
+        "applied": true,
+        "result": {
+          "status": "PENDING_OWNER_REVIEW",
+          "accepted": true,
+          "accepted_proposal_count": 6,
+          "owner_approved": false,
+          "submission_status": "UNSUBMITTED",
+          "external_actions": [],
+          "issues": [],
+          "visitor_message": "The selected information is retained as proposals for owner review. Nothing has been sent or approved.",
+          "instruction": "Report only that selected proposals are retained pending owner review. Do not claim every fact was captured, a complete brief is approved, delivery occurred or anyone will follow up.",
+          "reference_bindings": [
+            {
+              "index": 5,
+              "from_message_id": "user::e080111b-d5d6-49f3-b4bf-80959a850b1f",
+              "to_message_id": "user::952e8ca9-dbc2-45b2-abff-c5dd2eebf18f",
+              "start": 0,
+              "end": 23,
+              "source_sha256": "56778cb196cde38eb55667a974aeaa40c9d434fe1c694520f6c91a328c8508bf"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

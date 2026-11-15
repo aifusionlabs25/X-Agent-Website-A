@@ -97,7 +97,9 @@ export default function FactoryPilot() {
             const recovery=handoffFailureSpeech({localSessionId:launchState.id,providerSessionId:()=>boundProviderId,
                 interrupt:()=>c.interruptPersona(),
                 speak:(id,message)=>c.createTalkMessageStream(id).streamMessageChunk(message,true),
-                output:audioOutput.recovery,notice:setHandoffNotice,
+                output:audioOutput.recovery,
+                outputMuted:()=>{const video=document.getElementById('factory-olivia-video') as HTMLVideoElement|null;return video?.muted??null;},
+                notice:setHandoffNotice,
                 failed:()=>{setHandoffNotice('The spoken handoff response could not be verified. This session is closing. Your saved conversation remains available; nothing has been sent.');
                     void stop('RECOVERY_FAILED').catch(()=>setError('Audio recovery failed; provider closure needs reconciliation.'));},
                 report:event=>{

@@ -11,7 +11,14 @@ export type CurrentFactSelection={
     rule:'EXACT_POSITIVE_COUNT_PARTITION';
 };
 
-const frames=new RegExp(`\\b(?:(?:(?:we|i|they)[ \\t]+have|(?:our|the)[ \\t]+team[ \\t]+has|there[ \\t]+are|has)[ \\t]+)?(${countPattern})[ \\t]+([\\p{L}]+)\\b`,'giu');
+// Keep the complete possessive subject/verb in the removable assertion. A
+// bare count found after an unrecognized subject cannot safely lose that
+// subject or its scope. Speech commonly realizes present possession as
+// "we got", "we have got" or "we've got"; their actor and scope checks are
+// identical to "we have", and the retained evidence is never normalized.
+const possession=`(?:have(?:[ \\t]+got)?|got)`;
+const personPossession=`(?:(?:we|i|they)[ \\t]+${possession}|(?:we|i|they)['’]ve[ \\t]+got)`;
+const frames=new RegExp(`\\b(?:(?:${personPossession}|(?:our|the)[ \\t]+team[ \\t]+has|there[ \\t]+are|has)[ \\t]+)?(${countPattern})[ \\t]+([\\p{L}]+)\\b`,'giu');
 const quoted=/["“”`]|(?:^|[\s([{])['‘]/u;
 // These scopes can govern a later sentence. A narrow projection should decline
 // narrated or hypothetical source material, rather than detach its frame.
@@ -21,7 +28,7 @@ const narrated=/\b(?:said|says|told|quoted|wrote|asked|imagine|suppose|pretend|h
  * The guard also recognizes multiword negations, which alone do not establish
  * a replacement count. This helper only inspects source text; it rewrites none. */
 function explicitActor(text:string):string|null {
-    const person=/\b(we|i|they)[ \t]+(?:have|are)[ \t]*$/i.exec(text);
+    const person=/\b(we|i|they)(?:[ \t]+(?:have(?:[ \t]+got)?|got|are)|['’]ve[ \t]+got)[ \t]*$/i.exec(text);
     if(person)return person[1].toLowerCase();
     const team=/\b(our|my|their)[ \t]+team[ \t]+(?:has|is)[ \t]*$/i.exec(text);
     return team?({our:'we',my:'i',their:'they'} as Record<string,string>)[team[1].toLowerCase()]:null;

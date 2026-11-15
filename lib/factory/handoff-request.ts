@@ -13,7 +13,7 @@ const requestPrefix=String.raw`^(?:(?:uh|um|okay|ok|yes|yeah|yep|yup|sure|alrigh
 // amendment's correction envelope. A pronoun is a local target only when its
 // following clause supplies review scope; it must not consume another noun.
 const artifact=String.raw`(?:brief|summary|review note|handoff(?: note)?|note|information|details)\b`;
-const modifiers=String.raw`(?:(?:existing|earlier|previous|saved|current|unsent|not sent|local|short|concise|human[ -]review|owner[ -]review|draft|review-ready|review)\s+){0,4}`;
+const modifiers=String.raw`(?:(?:same|existing|earlier|previous|saved|current|unsent|not sent|local|short|concise|human[ -]review|owner[ -]review|draft|review-ready|review)\s+){0,4}`;
 const namedTarget=String.raw`(?:(?:a|an|the|my|our|your|this|that|these|those)\s+)?`+modifiers+artifact;
 const scopedReference=String.raw`(?:this|that|these|those|it)(?=\s+(?:for|as|only)\b|[.!?;:]|$)`;
 const requestStart=new RegExp(requestPrefix+String.raw`(?:prepare|create|draft)\s+(?:`+namedTarget+'|'+scopedReference+')','i');
@@ -25,6 +25,8 @@ const conditional=/\b(?:if|unless|once)\b|\b(?:when|after)\s+(?:i|we|you)\b/i;
 const negatedPreparation=/\b(?:do not|don['’]t|never|not to|stop|cancel)\s+(?:(?:actually|please)\s+)*(?:go ahead and\s+)?(?:prepare|create|draft|preparing|creating|drafting|update|updating|revise|revising|amend|amending|correct|correcting)\b/i;
 const conflictingDelivery=/\b(?:and|then|also)\s+(?:please\s+)?(?:send|email|submit|book|deliver)\b/i;
 const externalActionRequest=new RegExp(requestPrefix+String.raw`(?:send|email|submit|book|deliver|call|phone|text|notify|contact|schedule)\b`,'i');
+const reviewPurpose=String.raw`for\s+(?:(?:a|the)\s+)?(?:human|owner)(?:[ -]review|\s+to\s+review)`;
+const scopeContinuation=new RegExp(String.raw`^(?:as\s+`+namedTarget+String.raw`(?:\s+`+reviewPurpose+String.raw`)?|`+reviewPurpose+String.raw`)(?:\s+only)?[.!]?$`,'i');
 
 /** A positive amendment command can introduce a factual correction after a
  * colon. This is syntax evidence only: request linking still requires the
@@ -69,6 +71,13 @@ function affirmativeSpan(raw:string):{start:number;end:number;evidence:string}|n
     if(!affirmative.test(clause))return null;
     const start=first.start+text.length-text.trimStart().length,end=start+clause.length;
     const remaining=raw.slice(end);
+    if(unsafeContinuation(remaining))return null;
+    return {start,end,evidence:raw.slice(start,end)};
+}
+
+/** Later restrictions qualify a whole local request, even when speech
+ * recognition inserts punctuation. Positive facts/questions do not cancel it. */
+function unsafeContinuation(remaining:string):boolean {
     for(const part of sentences(remaining)) {
         if(part.quoted)continue;
         const continuation=remaining.slice(part.start,part.end).replace(/^[\s,;.!?]+/,'')
@@ -77,9 +86,9 @@ function affirmativeSpan(raw:string):{start:number;end:number;evidence:string}|n
         if(/^no\b/i.test(continuation)&&!noRestriction
             ||/^(?:not\b|maybe\b|perhaps\b|possibly\b|wait\b|hold on\b|never mind\b|forget it\b|(?:only\s+)?(?:if|unless|once|after|provided(?:\s+that)?|providing(?:\s+that)?|as long as|subject to)\b|when\s+(?:i|we|you)\b)/i.test(continuation)
             ||externalActionRequest.test(continuation)||conflictingDelivery.test(continuation)
-            ||/\b(?:i|we)\s+(?:(?:do not|don['’]t)\s+(?:want|authorize|agree|consent)|(?:have\s+)?changed\s+(?:my|our)\s+mind)\b/i.test(continuation))return null;
+            ||/\b(?:i|we)\s+(?:(?:do not|don['’]t)\s+(?:want|authorize|agree|consent)|(?:have\s+)?changed\s+(?:my|our)\s+mind)\b/i.test(continuation))return true;
     }
-    return {start,end,evidence:raw.slice(start,end)};
+    return false;
 }
 
 /** A contextual answer is consent only to the immediately preceding single local
@@ -115,10 +124,27 @@ export function requestedHandoffSpan(raw:string,context:HandoffRequestContext={}
     // A later explicit retraction in this same finalized turn is ambiguous;
     // retain it for review rather than manufacture affirmative request state.
     if(parts.some(p=>!p.quoted&&negatedPreparation.test(raw.slice(p.start,p.end))))return null;
-    for(const part of parts) {
+    for(const [index,part] of parts.entries()) {
         if(part.quoted)continue;
         const text=raw.slice(part.start,part.end),leading=text.length-text.trimStart().length;
-        const evidence=text.trim();
+        let evidence=text.trim();
+        // ASR can punctuate a grammatical continuation inside one finalized
+        // visitor turn: "prepare those details. as an unsent brief ...".
+        // Combine only an otherwise complete preparation command and its
+        // immediately adjacent explicit scope phrase. Preserve the punctuation
+        // and offsets; never borrow scope across speakers/turns or from a quote.
+        const command=requestStart.exec(evidence),next=parts[index+1];
+        if(command&&!internalScope.test(evidence)&&/^[.!]$/.test(evidence.slice(command[0].length).trim())
+            &&next&&!next.quoted) {
+            const scope=raw.slice(next.start,next.end).trim();
+            const combined=raw.slice(part.start+leading,next.end).trimEnd();
+            const tail=raw.slice(next.end);
+            const unsafeTail=unsafeContinuation(tail);
+            if(scopeContinuation.test(scope)&&internalScope.test(scope)&&!conditional.test(combined)
+                &&!conflictingDelivery.test(combined)&&!unsafeTail) {
+                evidence=combined;
+            }
+        }
         // This application's handoff is a local review artifact. A direct
         // request to update it is a request even before its first preparation;
         // "existing" is not proof of a prior save. Generic briefs/notes still
